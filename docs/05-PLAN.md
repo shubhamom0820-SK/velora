@@ -39,12 +39,12 @@ never done silently.
 # Sprint 1 — Foundation (weeks 1–2)
 
 ### T-1.1 · Monorepo skeleton
-- [ ] **Needs:** —
-- [ ] Create folders exactly as in `CLAUDE.md` "Repo layout". Empty folders get a `.gitkeep`.
-- [ ] Root files: `.gitignore` (Python, Node, `.env*` except `.env.example`, `.DS_Store`), `.editorconfig`, `README.md` (one paragraph + `make dev`), `Makefile` with the targets from `CLAUDE.md` (stubs that `echo "not yet"` are fine).
-- [ ] Copy `CLAUDE.md`, `docs/`, `.claude/commands/` into the repo.
-- [ ] **Done when:** `git status` shows the tree; `make` lists targets.
-- [ ] **Commit:** `chore(repo): monorepo skeleton [T-1.1]`
+- [x] **Needs:** —
+- [x] Create folders exactly as in `CLAUDE.md` "Repo layout". Empty folders get a `.gitkeep`.
+- [x] Root files: `.gitignore` (Python, Node, `.env*` except `.env.example`, `.DS_Store`), `.editorconfig`, `README.md` (one paragraph + `make dev`), `Makefile` with the targets from `CLAUDE.md` (stubs that `echo "not yet"` are fine).
+- [x] Copy `CLAUDE.md`, `docs/`, `.claude/commands/` into the repo.
+- [x] **Done when:** `git status` shows the tree; `make` lists targets.
+- [x] **Commit:** `chore(repo): monorepo skeleton [T-1.1]`
 
 ### T-1.2 · Local infrastructure
 - [ ] **Needs:** T-1.1

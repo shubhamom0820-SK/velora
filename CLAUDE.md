@@ -40,21 +40,23 @@ velora/
   CLAUDE.md
   docs/                 plan, contracts, decisions
   .claude/commands/     /task /review /done
+  .github/workflows/    CI pipelines
   api/                  FastAPI app
     app/core/           config, db, redis, security, errors, deps
     app/modules/<name>/ router.py service.py repository.py schemas.py models.py
     app/workers/        ARQ tasks + cron
     alembic/            migrations
     tests/              mirrors app/
-  web/                  Next.js app
-    src/app/            routes: (marketing) (auth) (app) admin
-    src/components/     ui/ (primitives) + feature folders
-    src/lib/            api client, ws client, query keys, utils
-    src/types/api.ts    GENERATED — never edit by hand
-    src/styles/tokens.css  design tokens — the only place colours live
-  infra/                docker-compose.yml, fly.toml, CI
+  web/                  Next.js app — empty until T-1.17 scaffolds into it
+  infra/                docker-compose.yml, fly.toml
   Makefile
 ```
+
+`web/` is deliberately empty: `pnpm create next-app` (T-1.17) needs a clean directory. It creates
+`src/app/` (route groups `(marketing)` `(auth)` `(app)` `admin`), `src/components/` (`ui/`
+primitives + feature folders), `src/lib/` (api client, ws client, query keys, utils),
+`src/types/api.ts` (GENERATED — never edit by hand) and `src/styles/tokens.css` (design tokens —
+the only place colours live).
 
 ## Commands
 
