@@ -8,3 +8,5 @@ Finish task $ARGUMENTS.
 5. Show `git log -1 --stat`.
 6. Tell me the next task: the first unticked task in `docs/05-PLAN.md` whose Needs are all ticked.
    Say its ID and title only. Suggest I start a fresh session for it.
+7. Push the branch: run `git push -u origin HEAD`. If the push fails because
+   no remote is configured, tell me instead of guessing a URL.
