@@ -1,0 +1,246 @@
+# 01 · Decisions
+
+Every decision that shapes the code. **Locked** means do not re-open it in a coding session —
+if it seems wrong, raise it with the founder, don't change it. **Open** means a default is in
+place so work can continue; the founder will confirm.
+
+Format: Decision · Why · Rejected alternatives.
+
+---
+
+## Product
+
+### D-001 · Web first, native later — Locked
+Ship a responsive, installable web app (PWA). Native Android only after beta metrics hold (month 7+).
+**Why:** app stores take 15–30% of every credit sale; web pays ~2% + GST. No store review, no
+closed-testing requirement, instant updates, shareable `velora.app/@username` links.
+**Rejected:** React Native first.
+
+### D-002 · Women free, men pay credits — Locked
+**Why:** the core supply/demand balance of the product. No payout programme for women.
+**Rejected:** paying women per message (creates fake-engagement incentives).
+
+### D-003 · Threads and Knots — Locked
+Every conversation opens as a **Thread** that expires 24h after opening. Both people tapping
+"Tie the knot" converts it to a **Velora**: permanent, free messaging for both, forever.
+An expired thread is archived read-only, never deleted, and can be re-opened for 3 credits.
+**Rule:** permanence is granted by the other person, never bought.
+
+### D-004 · Action prices — Locked (values tunable)
+Prices live in the `action_prices` table, not in code, so they can change without a deploy.
+
+| Action | Credits |
+|---|---|
+| Open a thread from a match | 5 |
+| Direct message (no match) | 5 |
+| Re-open an expired thread | 3 |
+| Unlock a voice note | 5 |
+| Request private album | 5 (refunded if declined) |
+| Super Like | 5 |
+| Reveal one "liked you" | 20 |
+| Tie the knot / message in a knot | Free |
+
+Women pay nothing for any action.
+
+### D-005 · Credit packs — Locked
+| Credits | Price | Per credit | Cost of one thread (5 cr) |
+|---|---|---|---|
+| 25 | ₹1,500 | ₹60 | ₹300 |
+| 50 | ₹2,500 | ₹50 | ₹250 |
+| 75 | ₹3,375 | ₹45 | ₹225 |
+| 100 | ₹4,000 | ₹40 | ₹200 |
+
+First purchase gets +20% bonus credits.
+
+**Why this ladder:** each larger pack is cheaper per credit, so buying up is rewarded and the big
+packs actually sell. The earlier draft had the 50 pack cheaper per credit than the 75 and 100 packs,
+which would have made those two dead inventory.
+
+Optional cosmetic rounding if you prefer 9-endings: ₹1,499 · ₹2,499 · ₹3,399 · ₹3,999. Keep the
+descending per-credit order whatever you choose.
+
+Packs live in `credit_packs`, so price changes are a row update, not a deploy. Beta runs a cheaper
+entry variant (₹999 / 25) against variant A — see T-10.4. The number to watch is what a man pays
+for his first real conversation: ₹300 at the entry pack, ₹200 at the largest.
+
+### D-006 · Clearing is one-sided — Locked
+Clearing hides a chat from *your* list only. The other person keeps their copy. The server keeps
+everything for moderation. UI copy says "Cleared from your chats", never "Deleted".
+**Why:** two-sided delete lets an abuser destroy the victim's evidence before a report.
+
+### D-016 · Gifts — Locked (catalogue is data)
+Six gifts, sendable **from a woman's profile** by men. Two are free, two cost 2 credits, two cost
+4 credits. Prices live in the `gifts` table, not in code.
+
+- Free gifts exist to let a man open a conversation without paying, and to give women a low-noise
+  signal of interest. They are rate-limited (see below) or they become spam.
+- A gift does **not** open a thread and does not bypass the credit wall for messaging.
+  It creates a notification and appears on her profile if she allows it (`profiles.show_gifts`,
+  default on) — the same rule as kudos: the recipient controls what is shown.
+- Women pay nothing for anything, so gifts are one-directional in MVP: men → women.
+- Anti-spam (values in `app_config`): `gift_free_daily_limit = 3`,
+  `gift_same_recipient_cooldown_h = 24` (per gift kind), blocked users can't send, frozen users
+  can't send. Paid gifts have no daily cap but respect the cooldown.
+- Gift sends are permanent records (`gift_sends`) and are visible to moderation.
+
+**Rejected:** gifts that unlock private photos or messaging (that would make permanence buyable,
+against D-003), and gifts sent anonymously (a gift with no name is a harassment vector).
+
+### D-007 · Kudos, not reviews — Locked
+After a few messages the sender may pick one of four fixed positive notes. It goes privately to
+the recipient, who alone decides whether it shows on their profile.
+**Rejected permanently:** public ratings or written reviews of people; paying to remove a review;
+fake or operated profiles.
+
+### D-008 · Gender locked, selfie rules — Locked
+Gender is chosen once at signup and cannot be changed by the user. Selfie liveness verification is
+mandatory for women before the profile goes live, optional (but encouraged) for men.
+
+### D-009 · Hard 18+ gate — Locked
+Date of birth under 18 → signup refused; the phone hash is added to `banned_identities`.
+Age is recomputed server-side; the browser's value is never trusted.
+
+### D-010 · MVP scope — Locked
+**In MVP:** gifts on profiles (D-016), landing + legal, OTP signup, 12-step onboarding, photos + moderation, selfie
+verification, discovery + swipe + match, search + @username, filters, liked-you (paid reveal),
+Threads + Knots + real-time chat, voice notes (women send, men unlock), private album requests,
+kudos, report + block, one-sided clearing, credits + wallet + ledger, Razorpay, first-purchase
+bonus, referral codes, web push, PIN lock, privacy basics (hide profile, hide age, hide distance),
+admin panel, fraud scoring v1, contact masking.
+**After beta (backlog, Sprint 11+):** voice/video calls, Vibe Room, boost, who-viewed-you,
+wink, paid incognito, streaks, rewarded ads, auto top-up, view-once photos, Hindi UI, native Android.
+
+### D-011 · Screenshots can't be blocked on web — Locked
+Mitigation: private album images are rendered with the viewer's username watermarked in,
+server-side, per viewer.
+
+### D-012 · PIN lock — Locked
+Optional 4-digit PIN locks the app on this device. Stored as an argon2 hash server-side.
+5 wrong attempts → session revoked, must re-login by OTP.
+
+### D-013 · Launch city — Open (default: Bengaluru)
+One city only for beta and launch. Discovery radius default 25 km.
+
+### D-014 · Theme — Open (default: black · white · red blend)
+Three prototypes exist (dark, soft light, blend). Colours live only in `web/src/styles/tokens.css`,
+so switching is a one-file change. See `08-DESIGN.md`.
+
+### D-015 · Name "Velora" — Open
+Trademark search pending ("The Velora" is an established wedding brand). Keep the name in one
+constant (`APP_NAME`) in both apps so a rename is trivial.
+
+---
+
+## Architecture
+
+### D-020 · Modular monolith — Locked
+One FastAPI app, split into modules with router → service → repository layers. One database.
+**Rejected:** microservices (distributed transactions and deploy overhead for a solo founder).
+
+### D-021 · PostgreSQL with row-locked ledger — Locked
+Credits change only inside a transaction that locks the wallet row (`SELECT … FOR UPDATE`) and
+appends a ledger entry. `wallets.balance` has `CHECK (balance >= 0)`.
+**Rejected:** Firebase/Firestore (no geo+filter queries, no true row lock, per-read billing),
+MongoDB.
+
+### D-022 · Async everywhere — Locked
+asyncpg, httpx, aioboto3, ARQ. **Rejected:** psycopg2, requests, Celery.
+
+### D-023 · Hosting split — Locked
+Web on Vercel. API + worker on Fly.io Mumbai (`bom`). Postgres on Supabase Mumbai. Redis on Upstash.
+**Why the split:** serverless platforms cannot hold long-lived WebSocket connections.
+
+### D-024 · Domains and auth cookies — Locked
+Web at `velora.app`, API at `api.velora.app` (same site). Access token: JWT, 15 min, kept in memory,
+sent as `Authorization: Bearer`. Refresh token: opaque random, 30 days, rotating, stored hashed in
+`sessions`, delivered as an `HttpOnly; Secure; SameSite=Lax` cookie scoped to `.velora.app`.
+Refresh endpoint also requires the `X-CSRF` double-submit header.
+
+### D-025 · Real-time via WebSocket — Locked
+Client gets a single-use 30-second ticket from `POST /v1/ws/ticket`, then connects to
+`wss://api.velora.app/ws?ticket=…` (never a JWT in a URL). Fan-out across API instances via Redis
+pub/sub, one channel per user. A message is persisted before it is acknowledged.
+
+### D-026 · Payments — Locked
+Razorpay (primary), second gateway applied for as backup. The server creates the order.
+**Credits are granted only by the verified webhook**, idempotent on `razorpay_payment_id`.
+The browser's success callback only triggers a status poll.
+
+### D-027 · Storage — Locked
+Cloudflare R2, two buckets: `velora-public` (moderated profile photos, served via CDN) and
+`velora-private` (originals, selfies, private album, voice notes — signed GET, 10 min).
+Uploads go browser → R2 via presigned PUT (5 min). Every image is re-encoded server-side.
+
+### D-028 · External providers behind adapters — Locked
+SMS, payments, moderation, face-match and push each sit behind an interface in `app/core/providers/`
+with a **fake** implementation used locally and in tests. Real keys are swapped in by environment.
+**Why:** coding never waits for DLT or gateway approval.
+
+### D-029 · Numbers — Locked
+Credits are integers. Money is integer paise. No floats for either, anywhere.
+IDs are UUID (`gen_random_uuid()`). Timestamps are `timestamptz` in UTC; display in IST.
+
+### D-030 · Contact masking — Locked
+In a thread's first 20 messages, phone numbers, emails, UPI IDs and social handles are masked
+server-side before storing the display text (original kept in `body_raw` for moderation).
+Messages matching abuse or payment-solicitation patterns are rejected with an error code.
+
+### D-037 · No reach throttling as a sales tactic — Locked
+Visibility is never reduced to push someone toward a paid product. The fraud model's `shadow` band
+exists **only** for suspected fraud and abuse, never for monetisation, inactivity or "desirability".
+How ranking works is published in plain words (B-19).
+**Why:** users across every major app already believe they are being hidden to sell boosts, and that
+belief is the category's deepest trust problem (see `09-RESEARCH.md` §C6, R3).
+
+### D-031 · Fraud scoring v1 — Locked
+Rule-based weighted score (0–100) over behavioural signals, recomputed by a worker.
+Bands: <30 normal · 30–60 monitor · 60–80 shadow-limit · >80 freeze. Three independent reports in
+24h auto-freezes regardless of score. **Rejected for now:** ML models (no training data yet).
+
+### D-032 · Discovery ranking v1 — Locked
+PostGIS radius filter, then a rule score: distance decay + recency of activity + verified +
+profile completeness. Excludes: already swiped, blocked either way, hidden, frozen, underage-banned.
+
+### D-033 · Strings — Locked
+All user-facing strings in `web/src/i18n/en.ts`. Hindi file added after beta. No i18n library in MVP.
+
+### D-035 · Phone sign-in via Firebase first, own SMS later — Locked
+OTP is delivered by **Firebase Phone Authentication** at launch. The browser runs the Firebase JS
+SDK, gets a Firebase ID token, and our API exchanges it for our own access + refresh tokens. Our
+session model (D-024) does not change — Firebase only proves the phone number.
+
+**Why:** TRAI DLT registration takes weeks and blocks the very first screen. Firebase needs no DLT
+paperwork of ours, so signup can be built and launched immediately.
+
+**Costs (verify before launch):** published rates for India range from $0.01 to $0.07 per SMS
+depending on the source; Google's Identity Platform page is the authority — check the IN row in the
+billing console. Domestic gateways (MSG91, Plivo) are ₹0.10–0.20. Only the first 10 SMS per day are
+free, and phone auth requires the Blaze (billing-attached) plan.
+
+**The trade-off to watch:** with Firebase the SMS is triggered **from the browser**, so our
+server-side OTP rate limits do not apply. Mitigations are mandatory, not optional:
+- Firebase **App Check** (reCAPTCHA Enterprise) enforced on Authentication
+- Firebase console quotas set to a sane daily SMS cap, and a billing alert at a fixed rupee amount
+- Allow only `+91` numbers in the client and reject anything else server-side
+- Our own per-IP and per-phone throttle on `/auth/firebase` so a stolen token can't be replayed
+
+**Other trade-offs:** the sender ID is Google's, not `VELORA`, so the SMS is unbranded and there is
+no DLT registration of ours to show a carrier if asked. Per-OTP cost is far above a domestic
+gateway at volume.
+
+**Migration path:** `AUTH_PHONE_PROVIDER = firebase | msg91`. Both paths are built in Sprint 3 and
+both create the same session. Switch to MSG91 when DLT is approved, or when monthly SMS spend
+exceeds roughly ₹10,000 — whichever comes first. No user is affected: the phone number is the
+identity, not the provider.
+
+### D-034 · Location — Locked
+Browser geolocation on onboarding, stored as a PostGIS point. Distances shown rounded to whole km,
+minimum "1 km". If permission is denied, the user picks their area from a seeded list of
+neighbourhoods with centroids.
+
+---
+
+## Adding a decision
+
+Append `D-0NN · Title — Locked|Open`, with Decision, Why, Rejected. Never edit a Locked entry —
+supersede it with a new one that references the old ID.
