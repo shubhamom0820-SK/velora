@@ -1,18 +1,24 @@
 # Velora — developer entry points.
-# Every target is a stub until the task that owns it lands. See docs/05-PLAN.md.
+# Targets tagged [T-x.y] are stubs until that task lands. See docs/05-PLAN.md.
 
 .DEFAULT_GOAL := help
-.PHONY: help infra-up infra-down dev worker seed test lint migrate migrate-down migration types e2e
+.PHONY: help infra-up infra-down infra-reset dev worker seed test lint migrate migrate-down migration types e2e
+
+COMPOSE := docker compose -f infra/docker-compose.yml
 
 help: ## List the available targets
 	@echo "Velora — make targets:"
 	@grep -E '^[a-z][a-zA-Z0-9_-]*:.*?## ' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*?## "}; {printf "  %-13s %s\n", $$1, $$2}'
 
-infra-up: ## Start docker: postgres+postgis, redis, minio [T-1.2]
-	@echo "not yet — T-1.2"
+infra-up: ## Start docker: postgres+postgis, redis, minio
+	$(COMPOSE) up -d --wait db redis minio
+	$(COMPOSE) run --rm minio-init
 
-infra-down: ## Stop the docker stack [T-1.2]
-	@echo "not yet — T-1.2"
+infra-down: ## Stop the docker stack, keeping data
+	$(COMPOSE) down
+
+infra-reset: ## Stop the docker stack and DROP all data volumes
+	$(COMPOSE) down -v
 
 dev: ## Run infra + api + worker + web [T-1.17]
 	@echo "not yet — T-1.17"

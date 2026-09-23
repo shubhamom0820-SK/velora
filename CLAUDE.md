@@ -61,16 +61,17 @@ the only place colours live).
 ## Commands
 
 ```
-make infra-up   # docker: postgres+postgis, redis, minio   (make infra-down to stop)
-make dev        # infra + api + worker + web
-make worker     # ARQ worker only
-make seed       # dev data: 20 profiles, test users (refuses in production)
-make test       # api pytest + web vitest
-make lint       # ruff + mypy + eslint + tsc --noEmit
-make migrate    # alembic upgrade head   (make migrate-down to step back)
+make infra-up    # docker: postgres+postgis, redis, minio   (make infra-down to stop)
+make infra-reset # stop the stack and DROP all data volumes (clean database)
+make dev         # infra + api + worker + web
+make worker      # ARQ worker only
+make seed        # dev data: 20 profiles, test users (refuses in production)
+make test        # api pytest + web vitest
+make lint        # ruff + mypy + eslint + tsc --noEmit
+make migrate     # alembic upgrade head   (make migrate-down to step back)
 make migration m="message"   # new alembic revision
-make types      # regenerate web/src/types/api.ts from OpenAPI
-make e2e        # Playwright
+make types       # regenerate web/src/types/api.ts from OpenAPI
+make e2e         # Playwright
 ```
 
 ## Golden rules — non-negotiable

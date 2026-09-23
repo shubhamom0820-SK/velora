@@ -238,6 +238,18 @@ Browser geolocation on onboarding, stored as a PostGIS point. Distances shown ro
 minimum "1 km". If permission is denied, the user picks their area from a seeded list of
 neighbourhoods with centroids.
 
+### D-036 · Local infrastructure binds to loopback only — Locked
+Every port published by `infra/docker-compose.yml` is bound to `127.0.0.1`, never the Docker
+default of `0.0.0.0`: Postgres 5432, Redis 6379, MinIO 9000 and 9001.
+**Why:** the dev stack runs with development credentials and a Redis with no password at all. Bound
+to `0.0.0.0`, all three are reachable by anyone on the same network — a café, a coworking space, a
+shared flat. This was measured during T-1.2, not assumed: from the host's own LAN address the dev
+Redis answered `PING`, Postgres accepted `velora`/`velora`, and the public bucket served anonymous
+reads. Nothing outside the host needs these ports; the API, worker and web all run on the host or
+inside the compose network.
+**If a service ever must be reachable from another device** (a phone on the same wifi testing the
+web app), publish that one port deliberately and say why — do not revert the whole file.
+
 ---
 
 ## Adding a decision

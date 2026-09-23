@@ -1,0 +1,92 @@
+# Local development stack for Velora. Stands in for the managed services used in
+# staging and production: Supabase Postgres, Upstash Redis and Cloudflare R2.
+#
+#   make infra-up      start everything and wait until healthy
+#   make infra-down    stop, keeping the data volumes
+#   make infra-reset   stop and DROP the data volumes
+#
+# Credentials are development defaults on purpose. Real values live in the
+# environment and are never committed (CLAUDE.md rule 13).
+#
+# Every port is published on 127.0.0.1 only (D-036): Docker's default binds to
+# 0.0.0.0, which would expose this password-less Redis and the dev database to
+# anyone on the same network.
+
+name: velora
+
+services:
+  db:
+    image: postgis/postgis:16-3.4
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-velora}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-velora}
+      POSTGRES_DB: ${POSTGRES_DB:-velora}
+    ports:
+      - "127.0.0.1:5432:5432"
+    volumes:
+      - velora_pgdata:/var/lib/postgresql/data
+      - ./postgres/init:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-velora} -d ${POSTGRES_DB:-velora}"]
+      interval: 5s
+      timeout: 5s
+      retries: 12
+      start_period: 10s
+
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "127.0.0.1:6379:6379"
+    volumes:
+      - velora_redisdata:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 12
+
+  # Pulled from quay.io: minio/minio on Docker Hub is no longer publicly pullable.
+  # quay.io is MinIO's own registry and serves the same images.
+  minio:
+    image: quay.io/minio/minio:RELEASE.2025-04-22T22-12-26Z
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER:-minioadmin}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-minioadmin}
+    ports:
+      - "127.0.0.1:9000:9000"
+      - "127.0.0.1:9001:9001"
+    volumes:
+      - velora_miniodata:/data
+    healthcheck:
+      test: ["CMD", "mc", "ready", "local"]
+      interval: 5s
+      timeout: 5s
+      retries: 12
+
+  # One-shot: creates the two buckets, then exits. velora-public is anonymous
+  # read to mirror the CDN-served R2 bucket in D-027; velora-private stays shut.
+  minio-init:
+    image: quay.io/minio/mc:RELEASE.2025-04-16T18-13-26Z
+    depends_on:
+      minio:
+        condition: service_healthy
+    entrypoint:
+      - /bin/sh
+      - -c
+      - |
+        set -e
+        mc alias set local http://minio:9000 "$${MINIO_ROOT_USER:-minioadmin}" "$${MINIO_ROOT_PASSWORD:-minioadmin}"
+        mc mb --ignore-existing local/velora-public
+        mc mb --ignore-existing local/velora-private
+        mc anonymous set download local/velora-public
+        echo "init: buckets ready"
+        mc ls local
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER:-minioadmin}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-minioadmin}
+
+volumes:
+  velora_pgdata:
+  velora_redisdata:
+  velora_miniodata:

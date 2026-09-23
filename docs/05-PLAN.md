@@ -47,12 +47,12 @@ never done silently.
 - [x] **Commit:** `chore(repo): monorepo skeleton [T-1.1]`
 
 ### T-1.2 · Local infrastructure
-- [ ] **Needs:** T-1.1
-- [ ] `infra/docker-compose.yml`: `postgis/postgis:16-3.4` (db `velora`, plus `velora_test` via init script), `redis:7-alpine`, `minio/minio` (S3-compatible stand-in for R2, buckets `velora-public`, `velora-private` created by an init container).
-- [ ] Healthchecks on all three; named volumes; ports 5432, 6379, 9000/9001.
-- [ ] `make infra-up` / `make infra-down`.
-- [ ] **Done when:** `make infra-up` → all healthy; `psql` connects; MinIO console shows both buckets.
-- [ ] **Commit:** `chore(infra): docker compose for postgres, redis, minio [T-1.2]`
+- [x] **Needs:** T-1.1
+- [x] `infra/docker-compose.yml`: `postgis/postgis:16-3.4` (db `velora`, plus `velora_test` via init script), `redis:7-alpine`, `minio/minio` (S3-compatible stand-in for R2, buckets `velora-public`, `velora-private` created by an init container).
+- [x] Healthchecks on all three; named volumes; ports 5432, 6379, 9000/9001.
+- [x] `make infra-up` / `make infra-down`.
+- [x] **Done when:** `make infra-up` → all healthy; `psql` connects; MinIO console shows both buckets.
+- [x] **Commit:** `chore(infra): docker compose for postgres, redis, minio [T-1.2]`
 
 ### T-1.3 · API skeleton
 - [ ] **Needs:** T-1.2
@@ -783,3 +783,11 @@ roughly double. Re-estimate after Sprint 2 using your real pace.
 Claude Code adds items here instead of doing unplanned work. Format:
 `- [ ] P?-NN · short title — why it's needed — found during T-x.y`
 
+- [ ] P-01 · Decide the Postgres image for Apple Silicon — `postgis/postgis:16-3.4` publishes no
+  arm64 manifest, so it runs under emulation on the dev Mac. It works, but it is slow, and T-1.5
+  targets `make test` green in under 10 s. Either accept the cost, switch to an arm64 PostGIS
+  image, or build one — needs a D-entry either way — found during T-1.2
+- [ ] P-02 · Record the MinIO registry and pinning in `01-DECISIONS.md` — `minio/minio` on Docker
+  Hub is no longer publicly pullable, so the stack pulls from `quay.io/minio/*` at pinned RELEASE
+  tags. The tag also matters because newer MinIO community builds drop the web console that T-1.2's
+  acceptance depends on — found during T-1.2
