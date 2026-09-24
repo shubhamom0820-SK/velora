@@ -796,3 +796,6 @@ Claude Code adds items here instead of doing unplanned work. Format:
   responses, so every error response currently emits a `FastAPIDeprecationWarning`. Either keep it
   and silence the warning, or drop `default_response_class` and keep orjson only where we serialise
   by hand. Worth settling before T-1.20 turns warnings into CI noise — found during T-1.3
+- [ ] P-04 · Exception logging may leak values — tracebacks currently log exception messages
+  verbatim, which can carry row values or tokens once real data exists. Violates CLAUDE.md rule 15.
+  Found during T-1.3.
