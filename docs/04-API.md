@@ -174,3 +174,4 @@ the source for `web/src/types/api.ts`.
 | `PIN_INVALID` | 401 | `details.attempts_left` |
 | `INTERNAL` | 500 | unexpected server error; the message never contains internals |
 | `PROVIDER_UNAVAILABLE` | 503 | SMS/payment provider down |
+| `NOT_READY` | 503 | a dependency of ours is not ready (`/readyz` only); `details` = `{"database": "ok"\|"fail", "redis": "ok"\|"fail"}` |

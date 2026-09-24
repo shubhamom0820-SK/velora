@@ -94,6 +94,8 @@ make e2e         # Playwright
    Read time only via `core.clock.now()` — never `datetime.now()`.
 8. **Layers.** Router = parse + auth + call service. Service = business rules. Repository = SQL.
    Routers never touch the DB. Repositories never contain business rules.
+   The one documented exception: `modules/health/` calls `core.db.check_database()` and
+   `core.redis.check_redis()` directly — probes have no business rules and no tables.
 9. **Every endpoint** has a Pydantic request + response schema, an auth dependency, a rate limit if
    it can be abused, and at least one test. Errors use the format in `docs/02-ARCHITECTURE.md`.
 10. **Types follow the API.** Any change to a response schema → `make types` in the same commit.

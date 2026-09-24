@@ -59,6 +59,8 @@ session and never commit.
 ## 3. API conventions
 
 - Base path `/v1`. JSON only. `snake_case` fields.
+- **Except the probes:** `/healthz` and `/readyz` are mounted at the root, unversioned. They
+  are read by Fly and uptime checks, not clients, so they are not part of the versioned API.
 - Auth: `Authorization: Bearer <access_jwt>` on every route except those marked public.
 - **Pagination:** cursor-based. Request `?cursor=<opaque>&limit=20` (max 50).
   Response `{ "items": [...], "next_cursor": "..." | null }`.
