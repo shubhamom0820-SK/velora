@@ -65,11 +65,11 @@ never done silently.
 - [x] **Commit:** `feat(api): app factory, config, logging, error envelope [T-1.3]`
 
 ### T-1.4 · Health endpoints
-- [ ] **Needs:** T-1.3
-- [ ] `app/core/db.py` async engine + `get_session` dependency; `app/core/redis.py` client.
-- [ ] `GET /healthz` → 200 always. `GET /readyz` → checks `SELECT 1` and Redis `PING`, 503 if either fails.
-- [ ] **Done when:** `/readyz` is 200 with infra up and 503 with Redis stopped.
-- [ ] **Commit:** `feat(api): health and readiness [T-1.4]`
+- [x] **Needs:** T-1.3
+- [x] `app/core/db.py` async engine + `get_session` dependency; `app/core/redis.py` client.
+- [x] `GET /healthz` → 200 always. `GET /readyz` → checks `SELECT 1` and Redis `PING`, 503 if either fails.
+- [x] **Done when:** `/readyz` is 200 with infra up and 503 with Redis stopped.
+- [x] **Commit:** `feat(api): health and readiness [T-1.4]`
 
 ### T-1.5 · Test harness
 - [ ] **Needs:** T-1.4
@@ -799,3 +799,14 @@ Claude Code adds items here instead of doing unplanned work. Format:
 - [ ] P-04 · Exception logging may leak values — tracebacks currently log exception messages
   verbatim, which can carry row values or tokens once real data exists. Violates CLAUDE.md rule 15.
   Found during T-1.3.
+- [ ] P-05 · `create_app(settings)` does not reach the database or Redis — the lifespan calls
+  `get_engine()` / `get_redis()`, which read the global `get_settings()`, so settings passed to
+  `create_app` drive CORS, logging and docs but not the connections. Verified: `create_app` given
+  `velora_test` connected to `velora`. A T-1.5 harness passing test settings would silently run
+  against the dev database. Fix with a test, and add the missing test for `get_session`.
+  **Fix before or at the start of T-1.5.** Found in review of T-1.4.
+- [ ] P-06 · Harden the public `/readyz` — it is unauthenticated and unthrottled, and each call
+  checks out a pooled Postgres connection and hits Redis, so a flood during a slow-database incident
+  can hold connections up to 2 s each and starve real requests. It also tells anyone which
+  dependency is down. Rate-limit it with the rate-limit work, and decide whether production should
+  hide per-dependency details before T-1.22 exposes `api.velora.app`. Found in review of T-1.4.
