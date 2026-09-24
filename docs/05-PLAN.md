@@ -72,12 +72,12 @@ never done silently.
 - [x] **Commit:** `feat(api): health and readiness [T-1.4]`
 
 ### T-1.5 · Test harness
-- [ ] **Needs:** T-1.4
-- [ ] `pytest.ini`/`pyproject` config: asyncio mode auto, test DB `velora_test`.
-- [ ] Fixtures in `tests/conftest.py`: migrated test DB once per session; per-test transaction rolled back; `client` (httpx AsyncClient on the app); `fake_providers` (overrides); `make_user(gender=…, onboarded=True)` factory returning user + access token.
-- [ ] One sample test for `/healthz`.
-- [ ] **Done when:** `make test` runs green in < 10 s.
-- [ ] **Commit:** `test(api): pytest harness and fixtures [T-1.5]`
+- [x] **Needs:** T-1.4
+- [x] `pytest.ini`/`pyproject` config: asyncio mode auto, test DB `velora_test`, `@pytest.mark.critical` registered.
+- [x] Fixtures in `tests/conftest.py`: per-test transaction rolled back; `client` (httpx AsyncClient on the app, sharing the test's transaction); `clock` (freeze/advance, always unfrozen). Moved to the tasks that build what they need: migrating once per session → T-1.7, `fake_providers` → T-1.21, `make_user` → T-3.1.
+- [x] One sample test for `/healthz`.
+- [x] **Done when:** `make test` runs green in < 10 s.
+- [x] **Commit:** `test(api): pytest harness and fixtures [T-1.5]`
 
 ### T-1.6 · Lint, types, hooks
 - [ ] **Needs:** T-1.3
@@ -90,6 +90,7 @@ never done silently.
 - [ ] **Needs:** T-1.4
 - [ ] `alembic init -t async`; `env.py` reads `DATABASE_URL`; `target_metadata` from a shared `Base` with naming convention (`pk_`, `fk_`, `uq_`, `ix_`, `ck_`).
 - [ ] `make migrate`, `make migration m="…"`, `make migrate-down`.
+- [ ] Test harness: `test_engine` in `tests/conftest.py` migrates `velora_test` to head once per session (moved from T-1.5).
 - [ ] **Done when:** an empty revision upgrades and downgrades cleanly.
 - [ ] **Commit:** `chore(db): alembic async setup [T-1.7]`
 
@@ -154,6 +155,7 @@ One migration per task, each with a working `downgrade()`. Build exactly `03-SCH
 ### T-1.21 · Provider adapters
 - [ ] **Needs:** T-1.3
 - [ ] `app/core/providers/`: `SmsProvider`, `PaymentsProvider`, `ModerationProvider`, `FaceMatchProvider`, `PushProvider`, `StorageProvider` as `Protocol`s. Each has `Fake…` (in-memory, records calls; fake SMS logs the OTP to console in local only) and a real implementation stub raising `NotImplementedError`. Selection by env var.
+- [ ] `fake_providers` fixture in `tests/conftest.py` overriding every provider with its fake (moved from T-1.5).
 - [ ] **Done when:** tests can assert "an SMS was sent to X" via the fake.
 - [ ] **Commit:** `feat(api): provider interfaces with fakes [T-1.21]`
 
@@ -214,6 +216,7 @@ One migration per task, each with a working `downgrade()`. Build exactly `03-SCH
 - [ ] **Needs:** T-1.21
 - [ ] `core/security.py`: `normalize_phone()` (phonenumbers, India only, E.164), `hash_phone()` (SHA-256 + pepper), `encrypt_phone()`/`decrypt_phone()`, `make_access_token(user_id, role)` (15 min), `decode_access_token()`, `new_refresh_token()` (32 random bytes, urlsafe), `hash_token()`, `hash_pin()`/`verify_pin()` (argon2), `new_csrf()`.
 - [ ] Unit tests for each, including invalid/expired JWT and non-Indian numbers.
+- [ ] `make_user(gender=…, onboarded=True, credits=0, verified=False)` factory in `tests/conftest.py` returning `(user, access_token)` (moved from T-1.5; needs `users` from T-1.9).
 - [ ] **Commit:** `feat(auth): security primitives [T-3.1]`
 
 ### T-3.2 · OTP send
@@ -810,3 +813,13 @@ Claude Code adds items here instead of doing unplanned work. Format:
   can hold connections up to 2 s each and starve real requests. It also tells anyone which
   dependency is down. Rate-limit it with the rate-limit work, and decide whether production should
   hide per-dependency details before T-1.22 exposes `api.velora.app`. Found in review of T-1.4.
+- [ ] P-07 · Harness mode for concurrency tests — the `db` fixture is one session inside one
+  rolled-back transaction, so concurrent requests through it fail (measured: 5 concurrent requests →
+  `[200, 500, 500, 500, 500]`, `InvalidRequestError`), and row locks inside a single transaction never
+  contend anyway. The 🔒 tests #1–#3 in `06-TESTING.md` (wallet concurrency and idempotency, T-5.4;
+  webhook idempotency, T-8.2) need genuinely committed transactions on separate connections, with
+  the tables truncated afterwards. **Needed before T-5.4.** Found in review of T-1.5.
+- [ ] P-08 · `TEST_REDIS_URL` override — `TEST_DATABASE_URL` can be overridden but the test Redis
+  is fixed at `127.0.0.1:6379/1`. If T-1.20's CI runs Redis anywhere else, the harness reports the
+  stack unreachable and CI hard-fails by design. Add the override alongside T-1.20. Found in review
+  of T-1.5.

@@ -18,6 +18,19 @@ A task isn't done until its tests pass. Tests are written in the same task as th
 No mocking of the database — tests use a real Postgres (`velora_test`). External services always
 use the **fake** providers from `app/core/providers/`.
 
+## Test database (api)
+
+- Tests run on `velora_test` (created by `make infra-up`). Override the location with
+  `TEST_DATABASE_URL` — test-only, so it is documented here, not in `02-ARCHITECTURE.md` §11.
+- The harness **refuses to start** unless the database name ends in `_test`, and it forces
+  `DATABASE_URL`/`REDIS_URL` to the test values, so an exported dev `DATABASE_URL` can never
+  put tests on the dev database.
+- Every test runs inside a transaction that is rolled back, commits included (savepoints).
+  The app under test shares it: a route sees what the test wrote. A test that reaches the
+  database without the `db` fixture fails instead of writing for real.
+- Postgres or Redis down: **skipped locally, listed by `-ra`; a hard failure when `CI` is
+  set.** A missing database in CI must never pass quietly.
+
 ## Fixtures (api)
 
 - `db` — session inside a transaction rolled back after each test.

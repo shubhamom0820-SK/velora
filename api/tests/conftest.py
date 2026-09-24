@@ -1,52 +1,141 @@
-"""Minimal fixtures for T-1.3.
+"""The test harness.
 
-T-1.5 owns the real harness — migrated test database, per-test transaction
-rollback, `make_user`, fake providers. Everything here is only what this task's
-tests need, and is expected to be absorbed into that work.
+Every test that touches Postgres runs inside a transaction that is rolled back,
+on `velora_test`, never anything else. The app under test is built from explicit
+test settings and shares that transaction.
+
+Fixtures still to come, each with the task that builds what it needs:
+migrating `velora_test` once per session (T-1.7), `fake_providers` (T-1.21) and
+`make_user` (T-3.1).
 """
 
 from __future__ import annotations
 
 import os
 from collections.abc import AsyncIterator, Iterator
+from types import ModuleType
 
 import pytest
+from fastapi import FastAPI
 from httpx import ASGITransport, AsyncClient
+from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession
 
-# Settings are read at import time, so the environment must exist before any
-# application module is imported.
-_TEST_ENV = {
+from tests.infra import (
+    INFRA_DOWN_REASON,
+    INFRA_UP,
+    TEST_DATABASE_URL,
+    TEST_REDIS_URL,
+    ActiveSession,
+    ensure_test_database,
+    in_ci,
+    infra_policy,
+    session_for_the_app,
+    transactional_session,
+)
+
+# --- Make the environment safe before anything imports the app ---------------
+#
+# Overridden, not defaulted: a developer with the dev DATABASE_URL exported in
+# their shell must still get tests on the test database.
+ensure_test_database(TEST_DATABASE_URL)
+os.environ["DATABASE_URL"] = TEST_DATABASE_URL
+os.environ["REDIS_URL"] = TEST_REDIS_URL
+for _key, _value in {
     "ENV": "local",
-    "DATABASE_URL": "postgresql+asyncpg://velora:velora@127.0.0.1:5432/velora_test",
-    "REDIS_URL": "redis://127.0.0.1:6379/1",
     "JWT_SECRET": "test-secret-not-a-real-key",
     "PHONE_PEPPER": "test-pepper",
     "PHONE_ENC_KEY": "test-enc-key",
     "CORS_ORIGINS": "http://localhost:3000",
-}
-for _key, _value in _TEST_ENV.items():
+}.items():
     os.environ.setdefault(_key, _value)
 
+from app.core.config import Settings
+from app.core.db import build_engine, get_session
+from app.main import close_resources, create_app
+
+
+def pytest_configure(config: pytest.Config) -> None:
+    if infra_policy(reachable=INFRA_UP, ci=in_ci()) == "fail":
+        pytest.exit(
+            "CI requires Postgres and Redis, and they are not reachable "
+            f"({INFRA_DOWN_REASON}). Refusing to skip database tests in CI.",
+            returncode=3,
+        )
+
+
+def make_test_settings() -> Settings:
+    """Explicit settings for the app under test — never read from `.env`."""
+    return Settings(
+        _env_file=None,  # type: ignore[call-arg]
+        ENV="local",
+        DATABASE_URL=TEST_DATABASE_URL,
+        REDIS_URL=TEST_REDIS_URL,
+        JWT_SECRET="test-secret-not-a-real-key",
+        PHONE_PEPPER="test-pepper",
+        PHONE_ENC_KEY="test-enc-key",
+        CORS_ORIGINS=["http://localhost:3000"],
+    )
+
+
+# --- Database -----------------------------------------------------------------
+
+
+@pytest.fixture(scope="session")
+async def test_engine() -> AsyncIterator[AsyncEngine]:
+    """One engine on `velora_test` for the whole run.
+
+    T-1.7 adds migrating `velora_test` to head here, once per session.
+    """
+    if not INFRA_UP:
+        pytest.skip(INFRA_DOWN_REASON)
+    engine = build_engine(TEST_DATABASE_URL)
+    yield engine
+    await engine.dispose()
+
 
 @pytest.fixture
-def app_settings() -> Iterator[None]:
-    from app.core.config import get_settings
+async def db(test_engine: AsyncEngine) -> AsyncIterator[AsyncSession]:
+    """A session whose every write — commits included — is rolled back."""
+    async with transactional_session(test_engine) as session:
+        ActiveSession.session = session
+        try:
+            yield session
+        finally:
+            ActiveSession.session = None
 
-    get_settings.cache_clear()
-    yield
-    get_settings.cache_clear()
+
+# --- App and client -----------------------------------------------------------
 
 
 @pytest.fixture
-async def client() -> AsyncIterator[AsyncClient]:
-    """An HTTP client bound to the app, without going over the network."""
-    from app.main import close_resources, create_app
-
-    application = create_app()
-    transport = ASGITransport(app=application, raise_app_exceptions=False)
+async def app() -> AsyncIterator[FastAPI]:
+    """The app, built from test settings; requests share the test's `db`."""
+    application = create_app(make_test_settings())
+    application.dependency_overrides[get_session] = session_for_the_app
     try:
-        async with AsyncClient(transport=transport, base_url="http://test") as c:
-            yield c
+        yield application
     finally:
         # The in-process transport does not run the lifespan, so close here.
         await close_resources(application)
+
+
+@pytest.fixture
+async def client(app: FastAPI) -> AsyncIterator[AsyncClient]:
+    """An HTTP client bound to `app`, without going over the network."""
+    transport = ASGITransport(app=app, raise_app_exceptions=False)
+    async with AsyncClient(transport=transport, base_url="http://test") as c:
+        yield c
+
+
+# --- Time ---------------------------------------------------------------------
+
+
+@pytest.fixture
+def clock() -> Iterator[ModuleType]:
+    """`core.clock`, to freeze and advance. Always unfrozen after the test."""
+    from app.core import clock as clock_module
+
+    try:
+        yield clock_module
+    finally:
+        clock_module.unfreeze()

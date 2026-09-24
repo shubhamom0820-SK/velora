@@ -27,8 +27,15 @@ dev = [
     "ruff>=0.16.8",
 ]
 
-# Minimal: enough to run this task's tests. T-1.5 owns the full harness
-# (test database, transactional fixtures, factories).
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
+# One event loop for the whole run: asyncpg connections belong to the loop that
+# opened them, and the test engine is shared across the session.
+asyncio_default_fixture_loop_scope = "session"
+asyncio_default_test_loop_scope = "session"
 testpaths = ["tests"]
+# -ra: always list skips, so "green" never hides tests that did not run.
+addopts = "-ra --strict-markers"
+markers = [
+    "critical: must never be skipped; CI runs these first (06-TESTING.md)",
+]

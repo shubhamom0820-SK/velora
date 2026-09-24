@@ -29,8 +29,8 @@ worker: ## Run the ARQ worker only [T-4.4]
 seed: ## Dev data: 20 profiles, test users (refuses in production) [T-1.15]
 	@echo "not yet — T-1.15"
 
-test: ## api pytest + web vitest [T-1.5]
-	@echo "not yet — T-1.5"
+test: ## api pytest (web vitest joins with T-1.19)
+	cd api && uv run pytest
 
 lint: ## ruff + mypy + eslint + tsc --noEmit [T-1.6]
 	@echo "not yet — T-1.6"
