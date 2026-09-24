@@ -1,8 +1,12 @@
 """Database engine, sessions, and the readiness check.
 
-One async engine per process, created lazily from `DATABASE_URL` so that tests
-and scripts that never start the app's lifespan still get a working engine.
-The app's lifespan creates it eagerly on startup and disposes it on shutdown.
+Each app owns its engine: `create_app()` builds it from the settings the app was
+created with and keeps it on `app.state`, and the lifespan disposes it. There is
+deliberately no process-wide engine — a global one read `get_settings()`, so an
+app built with test settings silently connected to the dev database (P-05).
+
+Building an engine opens no connection; the first query does. So an app starts
+even when Postgres is down, and `/readyz` is what reports it.
 
 Transactions are opened in the service layer (`async with session.begin():`);
 repositories receive a session and never commit (`02-ARCHITECTURE.md` §2).
@@ -12,6 +16,7 @@ from __future__ import annotations
 
 from collections.abc import AsyncIterator
 
+from fastapi import Request
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import (
     AsyncEngine,
@@ -20,39 +25,23 @@ from sqlalchemy.ext.asyncio import (
     create_async_engine,
 )
 
-from app.core.config import get_settings
 
-_engine: AsyncEngine | None = None
-_sessionmaker: async_sessionmaker[AsyncSession] | None = None
-
-
-def get_engine() -> AsyncEngine:
-    """The process-wide engine, created on first use."""
-    global _engine, _sessionmaker
-    if _engine is None:
-        _engine = create_async_engine(get_settings().DATABASE_URL, pool_pre_ping=True)
-        _sessionmaker = async_sessionmaker(_engine, expire_on_commit=False)
-    return _engine
+def build_engine(url: str) -> AsyncEngine:
+    return create_async_engine(url, pool_pre_ping=True)
 
 
-async def dispose_engine() -> None:
-    """Close every pooled connection. Safe to call when no engine exists."""
-    global _engine, _sessionmaker
-    if _engine is not None:
-        await _engine.dispose()
-    _engine = None
-    _sessionmaker = None
+def build_sessionmaker(engine: AsyncEngine) -> async_sessionmaker[AsyncSession]:
+    return async_sessionmaker(engine, expire_on_commit=False)
 
 
-async def get_session() -> AsyncIterator[AsyncSession]:
-    """FastAPI dependency: one session per request, closed afterwards."""
-    get_engine()
-    assert _sessionmaker is not None
-    async with _sessionmaker() as session:
+async def get_session(request: Request) -> AsyncIterator[AsyncSession]:
+    """FastAPI dependency: one session per request, on this app's database."""
+    sessionmaker: async_sessionmaker[AsyncSession] = request.app.state.sessionmaker
+    async with sessionmaker() as session:
         yield session
 
 
-async def check_database() -> None:
+async def check_database(engine: AsyncEngine) -> None:
     """Raise if Postgres cannot answer `SELECT 1`. Used only by `/readyz`."""
-    async with get_engine().connect() as conn:
+    async with engine.connect() as conn:
         await conn.execute(text("SELECT 1"))

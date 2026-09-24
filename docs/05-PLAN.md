@@ -799,7 +799,7 @@ Claude Code adds items here instead of doing unplanned work. Format:
 - [ ] P-04 · Exception logging may leak values — tracebacks currently log exception messages
   verbatim, which can carry row values or tokens once real data exists. Violates CLAUDE.md rule 15.
   Found during T-1.3.
-- [ ] P-05 · `create_app(settings)` does not reach the database or Redis — the lifespan calls
+- [x] P-05 · `create_app(settings)` does not reach the database or Redis — the lifespan calls
   `get_engine()` / `get_redis()`, which read the global `get_settings()`, so settings passed to
   `create_app` drive CORS, logging and docs but not the connections. Verified: `create_app` given
   `velora_test` connected to `velora`. A T-1.5 harness passing test settings would silently run

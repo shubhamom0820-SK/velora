@@ -1,35 +1,19 @@
 """Redis client and the readiness check.
 
-One async client per process, created lazily from `REDIS_URL` for the same
-reason as the database engine: code that never runs the app's lifespan still
-gets a working client. The lifespan closes it on shutdown.
+Each app owns its client, built by `create_app()` from the app's own settings and
+kept on `app.state` — for the same reason as the database engine (P-05). Building
+the client opens no connection; the first command does.
 """
 
 from __future__ import annotations
 
 from redis.asyncio import Redis
 
-from app.core.config import get_settings
 
-_client: Redis | None = None
-
-
-def get_redis() -> Redis:
-    """The process-wide client, created on first use."""
-    global _client
-    if _client is None:
-        _client = Redis.from_url(get_settings().REDIS_URL)
-    return _client
+def build_redis(url: str) -> Redis:
+    return Redis.from_url(url)
 
 
-async def close_redis() -> None:
-    """Close the connection pool. Safe to call when no client exists."""
-    global _client
-    if _client is not None:
-        await _client.aclose()
-    _client = None
-
-
-async def check_redis() -> None:
+async def check_redis(client: Redis) -> None:
     """Raise if Redis does not answer `PING`. Used only by `/readyz`."""
-    await get_redis().ping()
+    await client.ping()

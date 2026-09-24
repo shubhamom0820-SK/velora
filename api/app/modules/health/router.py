@@ -14,7 +14,7 @@ import asyncio
 from collections.abc import Awaitable, Callable
 
 import structlog
-from fastapi import APIRouter
+from fastapi import APIRouter, Request
 
 from app.core.db import check_database
 from app.core.errors import AppError
@@ -66,11 +66,15 @@ async def _probe(name: str, check: Callable[[], Awaitable[None]]) -> CheckResult
         503: {"description": "A dependency is not ready; error code NOT_READY."}
     },
 )
-async def readyz() -> ReadyResponse:
-    """Readiness: Postgres and Redis both answer. 503 `NOT_READY` otherwise."""
+async def readyz(request: Request) -> ReadyResponse:
+    """Readiness: Postgres and Redis both answer. 503 `NOT_READY` otherwise.
+
+    Checks this app's own connections, so a test app probes the test database.
+    """
+    state = request.app.state
     database, redis = await asyncio.gather(
-        _probe("database", check_database),
-        _probe("redis", check_redis),
+        _probe("database", lambda: check_database(state.engine)),
+        _probe("redis", lambda: check_redis(state.redis)),
     )
     checks = ReadinessChecks(database=database, redis=redis)
 

@@ -40,9 +40,13 @@ def app_settings() -> Iterator[None]:
 @pytest.fixture
 async def client() -> AsyncIterator[AsyncClient]:
     """An HTTP client bound to the app, without going over the network."""
-    from app.main import create_app
+    from app.main import close_resources, create_app
 
     application = create_app()
     transport = ASGITransport(app=application, raise_app_exceptions=False)
-    async with AsyncClient(transport=transport, base_url="http://test") as c:
-        yield c
+    try:
+        async with AsyncClient(transport=transport, base_url="http://test") as c:
+            yield c
+    finally:
+        # The in-process transport does not run the lifespan, so close here.
+        await close_resources(application)

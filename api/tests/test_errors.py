@@ -8,7 +8,7 @@ from httpx import ASGITransport, AsyncClient
 from pydantic import BaseModel
 
 from app.core.errors import AppError
-from app.main import create_app
+from app.main import close_resources, create_app
 
 
 class Body(BaseModel):
@@ -45,8 +45,11 @@ async def failing_client() -> AsyncClient:
         raise ZeroDivisionError("internal detail that must not leak")
 
     transport = ASGITransport(app=app, raise_app_exceptions=False)
-    async with AsyncClient(transport=transport, base_url="http://test") as c:
-        yield c
+    try:
+        async with AsyncClient(transport=transport, base_url="http://test") as c:
+            yield c
+    finally:
+        await close_resources(app)
 
 
 async def test_unknown_route_returns_envelope(client: AsyncClient) -> None:

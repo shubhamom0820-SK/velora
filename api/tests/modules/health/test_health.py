@@ -9,47 +9,15 @@ quiet (T-1.20).
 from __future__ import annotations
 
 import asyncio
-import socket
-from collections.abc import AsyncIterator
 from typing import Any
-from urllib.parse import urlsplit
 
 import pytest
 from httpx import AsyncClient
 
-from app.core.config import get_settings
-from app.core.db import dispose_engine
-from app.core.redis import close_redis
 from app.modules.health import router as health_router
+from tests.infra import requires_infra
 
 _FAKE_DSN = "postgresql+asyncpg://velora:hunter2@db.internal.example:6543/velora"
-
-
-def _reachable(url: str) -> bool:
-    parts = urlsplit(url)
-    if parts.hostname is None or parts.port is None:
-        return False
-    try:
-        with socket.create_connection((parts.hostname, parts.port), timeout=0.5):
-            return True
-    except OSError:
-        return False
-
-
-_settings = get_settings()
-requires_infra = pytest.mark.skipif(
-    not (_reachable(_settings.DATABASE_URL) and _reachable(_settings.REDIS_URL)),
-    reason="Postgres or Redis not reachable — start them with `make infra-up`",
-)
-
-
-@pytest.fixture(autouse=True)
-async def _release_connections() -> AsyncIterator[None]:
-    """Pools are bound to the event loop that opened them, and each test gets a
-    fresh loop — so close them after every test rather than share them."""
-    yield
-    await close_redis()
-    await dispose_engine()
 
 
 def _patch_checks(
@@ -61,12 +29,12 @@ def _patch_checks(
     """Replace both checks; return the list each call is recorded into."""
     calls: list[str] = []
 
-    async def fake_database() -> None:
+    async def fake_database(_engine: object) -> None:
         calls.append("database")
         if database_fails:
             raise ConnectionRefusedError(f"could not connect to {_FAKE_DSN}")
 
-    async def fake_redis() -> None:
+    async def fake_redis(_client: object) -> None:
         calls.append("redis")
         if redis_fails:
             raise ConnectionError(
@@ -175,7 +143,7 @@ async def test_readyz_times_out_a_hung_dependency(
     """A dependency that never answers counts as down instead of hanging /readyz."""
     _patch_checks(monkeypatch)
 
-    async def hangs() -> None:
+    async def hangs(_client: object) -> None:
         await asyncio.sleep(3600)
 
     monkeypatch.setattr(health_router, "check_redis", hangs)
