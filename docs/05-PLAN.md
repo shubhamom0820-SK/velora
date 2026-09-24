@@ -55,14 +55,14 @@ never done silently.
 - [x] **Commit:** `chore(infra): docker compose for postgres, redis, minio [T-1.2]`
 
 ### T-1.3 · API skeleton
-- [ ] **Needs:** T-1.2
-- [ ] `uv init api`; add runtime deps from `02-ARCHITECTURE.md` stack; dev deps pytest, pytest-asyncio, httpx, polyfactory, faker, ruff, mypy.
-- [ ] `app/core/config.py` — `Settings` with every var in `02-ARCHITECTURE.md §11`; fail fast on missing required vars; `.env.example`.
-- [ ] `app/main.py` — app factory `create_app()`; CORS from settings; request-id middleware (header `X-Request-ID`, generated if missing); structlog JSON logging with request id; orjson responses.
-- [ ] `app/core/clock.py` — `now()` returning timezone-aware UTC; the **only** way app code reads the time (tests freeze/advance it). `today_ist()` helper.
-- [ ] `app/core/errors.py` — `AppError(code, message, status, details)`; handlers for `AppError`, `RequestValidationError` (→ `VALIDATION_ERROR`), and unhandled (→ 500 `INTERNAL`, logged, Sentry).
-- [ ] **Done when:** `uvicorn app.main:app` starts; unknown route returns the error envelope.
-- [ ] **Commit:** `feat(api): app factory, config, logging, error envelope [T-1.3]`
+- [x] **Needs:** T-1.2
+- [x] `uv init api`; add runtime deps from `02-ARCHITECTURE.md` stack; dev deps pytest, pytest-asyncio, httpx, polyfactory, faker, ruff, mypy.
+- [x] `app/core/config.py` — `Settings` with every var in `02-ARCHITECTURE.md §11`; fail fast on missing required vars; `.env.example`.
+- [x] `app/main.py` — app factory `create_app()`; CORS from settings; request-id middleware (header `X-Request-ID`, generated if missing); structlog JSON logging with request id; orjson responses.
+- [x] `app/core/clock.py` — `now()` returning timezone-aware UTC; the **only** way app code reads the time (tests freeze/advance it). `today_ist()` helper.
+- [x] `app/core/errors.py` — `AppError(code, message, status, details)`; handlers for `AppError`, `RequestValidationError` (→ `VALIDATION_ERROR`), and unhandled (→ 500 `INTERNAL`, logged, Sentry).
+- [x] **Done when:** `uvicorn app.main:app` starts; unknown route returns the error envelope.
+- [x] **Commit:** `feat(api): app factory, config, logging, error envelope [T-1.3]`
 
 ### T-1.4 · Health endpoints
 - [ ] **Needs:** T-1.3
@@ -791,3 +791,8 @@ Claude Code adds items here instead of doing unplanned work. Format:
   Hub is no longer publicly pullable, so the stack pulls from `quay.io/minio/*` at pinned RELEASE
   tags. The tag also matters because newer MinIO community builds drop the web console that T-1.2's
   acceptance depends on — found during T-1.2
+- [ ] P-03 · Decide the response-class strategy — FastAPI 0.141 deprecates `ORJSONResponse`
+  ("FastAPI now serializes data directly to JSON bytes via Pydantic"), but T-1.3 specifies orjson
+  responses, so every error response currently emits a `FastAPIDeprecationWarning`. Either keep it
+  and silence the warning, or drop `default_response_class` and keep orjson only where we serialise
+  by hand. Worth settling before T-1.20 turns warnings into CI noise — found during T-1.3

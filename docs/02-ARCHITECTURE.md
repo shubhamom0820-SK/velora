@@ -240,16 +240,23 @@ that person in the last 7 days → `wallet.credit(reason=refund_banned_partner)`
 | `AUTH_PHONE_PROVIDER` | api, web | `firebase` \| `msg91` \| `fake` |
 | `FIREBASE_PROJECT_ID`, `FIREBASE_SERVICE_ACCOUNT_JSON` | api | token verification |
 | `NEXT_PUBLIC_FIREBASE_*` | web | apiKey, authDomain, projectId, appId, App Check site key — public by design |
-| `SMS_PROVIDER` + `MSG91_*` | api | `fake` locally |
-| `PAYMENTS_PROVIDER` + `RAZORPAY_KEY_ID`, `RAZORPAY_KEY_SECRET`, `RAZORPAY_WEBHOOK_SECRET` | api | `fake` locally |
-| `MODERATION_PROVIDER` + `SIGHTENGINE_*` | worker | |
-| `FACEMATCH_PROVIDER` + `AWS_*` | worker | |
+| `SMS_PROVIDER` | api | `msg91` \| `fake` (`fake` locally) |
+| `MSG91_AUTH_KEY`, `MSG91_TEMPLATE_ID`, `MSG91_SENDER_ID` | api | Path B only |
+| `PAYMENTS_PROVIDER` | api | `razorpay` \| `fake` (`fake` locally) |
+| `RAZORPAY_KEY_ID`, `RAZORPAY_KEY_SECRET`, `RAZORPAY_WEBHOOK_SECRET` | api | |
+| `MODERATION_PROVIDER` | worker | `sightengine` \| `fake` |
+| `SIGHTENGINE_API_USER`, `SIGHTENGINE_API_SECRET` | worker | |
+| `FACEMATCH_PROVIDER` | worker | `rekognition` \| `fake` |
+| `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, `AWS_REGION` | worker | `AWS_REGION` defaults to `ap-south-1` |
 | `R2_ACCOUNT_ID`, `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY`, `R2_BUCKET_PUBLIC`, `R2_BUCKET_PRIVATE`, `PUBLIC_CDN_URL` | api, worker | |
+| `R2_ENDPOINT_URL` | api, worker | S3 endpoint override; points at local MinIO, empty for real R2 |
 | `VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY`, `VAPID_SUBJECT` | api, worker | public key also in web |
 | `SENTRY_DSN` | all | |
 | `NEXT_PUBLIC_API_URL`, `NEXT_PUBLIC_WS_URL`, `NEXT_PUBLIC_VAPID_PUBLIC_KEY`, `NEXT_PUBLIC_RAZORPAY_KEY_ID`, `NEXT_PUBLIC_SENTRY_DSN` | web | public by definition |
 
-`.env.example` in each app lists every var with an empty value. Real values never committed.
+`.env.example` in each app lists every var. Values that point at local infrastructure from
+`infra/docker-compose.yml` are filled in so a fresh clone runs with no setup; every genuine
+secret is left empty. Real secret values are never committed.
 
 ## 12. Security baseline
 

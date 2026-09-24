@@ -172,4 +172,5 @@ the source for `web/src/types/api.ts`.
 | `FIREBASE_TOKEN_INVALID` | 401 | bad signature, expired, wrong audience, or already used |
 | `PHONE_NOT_SUPPORTED` | 422 | non-`+91` number |
 | `PIN_INVALID` | 401 | `details.attempts_left` |
+| `INTERNAL` | 500 | unexpected server error; the message never contains internals |
 | `PROVIDER_UNAVAILABLE` | 503 | SMS/payment provider down |

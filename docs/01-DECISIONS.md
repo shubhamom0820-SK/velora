@@ -238,6 +238,17 @@ Browser geolocation on onboarding, stored as a PostGIS point. Distances shown ro
 minimum "1 km". If permission is denied, the user picks their area from a seeded list of
 neighbourhoods with centroids.
 
+### D-038 · structlog and orjson; Sentry SDK deferred — Locked
+The API logs through **structlog** (JSON in deployed environments, console locally) and serialises
+responses with **orjson**. Both were named in T-1.3's plan text but were missing from the pinned
+stack table in `CLAUDE.md`, which has now been corrected.
+
+**sentry-sdk is deliberately not a dependency yet.** `SENTRY_DSN` is declared in `Settings` and the
+unhandled-exception handler logs with the request id already bound, so T-9.12 adds the SDK and one
+reporting call with nothing else to change.
+**Why defer:** a dependency that is installed but not configured is a liability — it ships code,
+CVEs and import cost for no behaviour. It arrives when it is actually wired up.
+
 ### D-036 · Local infrastructure binds to loopback only — Locked
 Every port published by `infra/docker-compose.yml` is bound to `127.0.0.1`, never the Docker
 default of `0.0.0.0`: Postgres 5432, Redis 6379, MinIO 9000 and 9001.
