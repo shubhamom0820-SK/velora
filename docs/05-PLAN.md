@@ -103,6 +103,8 @@ One migration per task, each with a working `downgrade()`. Build exactly `03-SCH
 - [ ] **T-1.11** Album, kudos, safety: `album_requests`, `kudos`, `gifts`, `gift_sends`, `blocks`, `reports`, `fraud_scores`, `fraud_events`. — `[T-1.11]`
 - [ ] **T-1.12** Money: `wallets`, `ledger_entries` (+ no-update/delete trigger), `action_prices`, `credit_packs`, `payments`, `refund_requests`, `referrals`. — `[T-1.12]`
 - [ ] **T-1.13** Notifications + ops: `push_subscriptions`, `notification_prefs`, `notifications`, `audit_log`, `app_config`, `waitlist`. — `[T-1.13]`
+- **For T-1.10 → T-1.13 (from T-1.9):** autogenerate drops `create_type=False` on every enum column,
+  and the line wrapping varies, so **parse the migration file to verify it — never eyeball it.**
 - [ ] **Done when (each):** `make migrate && make migrate-down && make migrate` succeeds; SQLAlchemy models match.
 
 ### T-1.14 · Reference data migration
@@ -851,10 +853,12 @@ Claude Code adds items here instead of doing unplanned work. Format:
   template with `|` and no `Union` import. Found during T-1.8 (removed by hand there).
   **Done:** template now imports `Sequence` from `collections.abc` and writes `str | Sequence[str] | None`;
   a generated revision has no `Union` and passes strict mypy and ruff.
-- [ ] P-13 · Public photos must have a position — `ck_photos_public_position_range` is
+- [x] P-13 · Public photos must have a position — `ck_photos_public_position_range` is
   `kind <> 'public' OR position BETWEEN 0 AND 5`; with `position` NULL, `BETWEEN` is unknown and
   Postgres passes a CHECK on unknown, and the partial unique index treats NULLs as distinct. So any
   number of slot-less public photos can be inserted, though 03-SCHEMA.md ("0–5 for public; 0 =
   main") implies every public photo holds a slot. Needs a **new** migration now that T-1.9 is
   merged (rule 11): `… OR (position IS NOT NULL AND position BETWEEN 0 AND 5)`, plus a test.
   **Before T-4.x (photo upload).** Found in review of T-1.9.
+  **Done:** migration `36af56c36916` recreates the check with `position IS NOT NULL AND …`;
+  a public photo with no position is now refused (`23514`), other kinds still need none.

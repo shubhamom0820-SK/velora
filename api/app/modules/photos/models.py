@@ -31,7 +31,8 @@ class Photo(Timestamps, Base):
         nullable=False,
     )
     kind: Mapped[PhotoKind] = mapped_column(pg_enum(PhotoKind), nullable=False)
-    # 0–5 for public photos; 0 is the main one. No range is set for other kinds.
+    # Public photos must hold a slot, 0–5, where 0 is the main one (P-13: NULL
+    # would pass a plain BETWEEN check). No range is set for other kinds.
     position: Mapped[int | None] = mapped_column(SmallInteger)
     raw_key: Mapped[str] = mapped_column(Text, nullable=False)
     public_key: Mapped[str | None] = mapped_column(Text)
@@ -47,7 +48,7 @@ class Photo(Timestamps, Base):
 
     __table_args__ = (
         CheckConstraint(
-            "kind <> 'public' OR position BETWEEN 0 AND 5",
+            "kind <> 'public' OR (position IS NOT NULL AND position BETWEEN 0 AND 5)",
             name="public_position_range",
         ),
         Index("ix_photos_user_id_kind_position", "user_id", "kind", "position"),

@@ -304,6 +304,32 @@ async def test_public_photo_position_is_0_to_5(db: AsyncSession) -> None:
     assert state == CHECK_VIOLATION
 
 
+async def test_a_public_photo_must_have_a_position(db: AsyncSession) -> None:
+    """P-13: NULL passed the old `position BETWEEN 0 AND 5` check (unknown)."""
+    user = await _user(db)
+
+    state = await _rejected(
+        db,
+        "insert into photos (user_id, kind, position, raw_key) "
+        "values (:u, 'public', null, 'k')",
+        {"u": user.id},
+    )
+
+    assert state == CHECK_VIOLATION
+
+
+async def test_other_photo_kinds_need_no_position(db: AsyncSession) -> None:
+    user = await _user(db)
+
+    await db.execute(
+        text(
+            "insert into photos (user_id, kind, position, raw_key) "
+            "values (:u, 'selfie', null, 'k')"
+        ),
+        {"u": user.id},
+    )
+
+
 # foreign keys: sessions cascade with their user; everything else restricts.
 
 
