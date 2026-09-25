@@ -98,7 +98,7 @@ never done silently.
 ### T-1.8 → T-1.13 · Schema migrations
 One migration per task, each with a working `downgrade()`. Build exactly `03-SCHEMA.md`.
 - [x] **T-1.8** Extensions, all enums, `set_updated_at()` trigger function. — `feat(db): extensions and enums [T-1.8]`
-- [ ] **T-1.9** Identity + profile: `users`, `sessions`, `banned_identities`, `profiles`, `areas`, `interests`, `profile_interests`, `photos`, `verifications`, plus trigger making `users.gender`/`users.dob` immutable once non-null. — `[T-1.9]`
+- [x] **T-1.9** Identity + profile: `users`, `sessions`, `banned_identities`, `profiles`, `areas`, `interests`, `profile_interests`, `photos`, `verifications`, plus trigger making `users.gender`/`users.dob` immutable once non-null. — `[T-1.9]`
 - [ ] **T-1.10** Discovery + conversations: `swipes`, `profile_views`, `liked_you_reveals`, `matches`, `threads`, `messages`, `message_unlocks`, `thread_clears`. — `[T-1.10]`
 - [ ] **T-1.11** Album, kudos, safety: `album_requests`, `kudos`, `gifts`, `gift_sends`, `blocks`, `reports`, `fraud_scores`, `fraud_events`. — `[T-1.11]`
 - [ ] **T-1.12** Money: `wallets`, `ledger_entries` (+ no-update/delete trigger), `action_prices`, `credit_packs`, `payments`, `refund_requests`, `referrals`. — `[T-1.12]`
@@ -119,7 +119,7 @@ One migration per task, each with a working `downgrade()`. Build exactly `03-SCH
 
 ### T-1.16 · Schema tests
 - [ ] **Needs:** T-1.13, T-1.5
-- [ ] Tests that prove: `wallets.balance` can't go negative; ledger UPDATE/DELETE raises; `threads` rejects `user_low >= user_high`; `users.gender` can't change once set; username regex enforced; unique `(sender_id, client_msg_id)`.
+- [ ] Tests that prove: `wallets.balance` can't go negative; ledger UPDATE/DELETE raises; `threads` rejects `user_low >= user_high`; `users.gender` can't change once set *(covered in T-1.9, `tests/test_schema.py`)*; username regex enforced *(covered in T-1.9)*; unique `(sender_id, client_msg_id)`.
 - [ ] **Commit:** `test(db): constraint tests [T-1.16]`
 
 ### T-1.17 · Web skeleton
@@ -255,6 +255,7 @@ One migration per task, each with a working `downgrade()`. Build exactly `03-SCH
 - [ ] **Needs:** T-3.5
 - [ ] `POST /me/dob`: compute age in IST; < 18 → add phone hash to `banned_identities`, set status `banned`, revoke sessions, return `UNDERAGE`. Advance step.
 - [ ] `POST /me/gender`: only if null → set, advance; else `IMMUTABLE_FIELD`.
+- [ ] The database also refuses the change (T-1.9's `users_identity_immutable` trigger) with SQLSTATE `23514` `check_violation`, which SQLAlchemy raises as `IntegrityError`. Map it to `IMMUTABLE_FIELD` by that SQLSTATE — never by the message text, which Postgres can reword.
 - [ ] `POST /me/seeking {seeking, intent}` → advance.
 - [ ] Steps must happen in order; out-of-order → `ONBOARDING_INCOMPLETE` with the expected step.
 - [ ] Tests for each branch, including "17 years 364 days" and "exactly 18 today".
@@ -850,3 +851,10 @@ Claude Code adds items here instead of doing unplanned work. Format:
   template with `|` and no `Union` import. Found during T-1.8 (removed by hand there).
   **Done:** template now imports `Sequence` from `collections.abc` and writes `str | Sequence[str] | None`;
   a generated revision has no `Union` and passes strict mypy and ruff.
+- [ ] P-13 · Public photos must have a position — `ck_photos_public_position_range` is
+  `kind <> 'public' OR position BETWEEN 0 AND 5`; with `position` NULL, `BETWEEN` is unknown and
+  Postgres passes a CHECK on unknown, and the partial unique index treats NULLs as distinct. So any
+  number of slot-less public photos can be inserted, though 03-SCHEMA.md ("0–5 for public; 0 =
+  main") implies every public photo holds a slot. Needs a **new** migration now that T-1.9 is
+  merged (rule 11): `… OR (position IS NOT NULL AND position BETWEEN 0 AND 5)`, plus a test.
+  **Before T-4.x (photo upload).** Found in review of T-1.9.

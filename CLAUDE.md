@@ -25,7 +25,7 @@ Permanence is granted by the other person, never bought.
 | Web | Next.js (App Router) + React + TypeScript strict + Tailwind |
 | Web data | TanStack Query (server state), Zustand (client state), Zod, React Hook Form |
 | Swipe | @use-gesture/react + @react-spring/web |
-| API | Python 3.12, FastAPI, Pydantic v2, SQLAlchemy 2.0 async, asyncpg, Alembic |
+| API | Python 3.12, FastAPI, Pydantic v2, SQLAlchemy 2.0 async, asyncpg, Alembic, GeoAlchemy2 (D-040) |
 | API logging | structlog (JSON logs); responses serialised by FastAPI/Pydantic — D-038 |
 | DB | PostgreSQL 16 + PostGIS + pg_trgm + pgcrypto + citext |
 | Cache/queue | Redis + ARQ |

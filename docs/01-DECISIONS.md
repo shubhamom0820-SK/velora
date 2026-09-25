@@ -273,6 +273,17 @@ the tooling row in `CLAUDE.md`, which has now been corrected.
 
 **Why:** a rule that only a reviewer catches is a rule that eventually gets missed.
 
+### D-040 · GeoAlchemy2 for geography columns — Locked
+`profiles.location` and `areas.centroid` are `geography(Point,4326)`, which SQLAlchemy has no
+type for. **GeoAlchemy2** provides it: the models declare real `Geography` columns, the
+models-match test can reflect and compare them, and discovery queries (`ST_DWithin`, T-4.x) are
+typed. Columns set `spatial_index=False` and declare their GIST index explicitly, so index names
+follow our naming convention rather than GeoAlchemy2's `idx_…`.
+
+**Rejected: a hand-written `geography` type with no dependency.** The models-match test could not
+compare those two columns — silently, which is exactly the drift it exists to catch — and
+discovery would lose typing.
+
 ### D-036 · Local infrastructure binds to loopback only — Locked
 Every port published by `infra/docker-compose.yml` is bound to `127.0.0.1`, never the Docker
 default of `0.0.0.0`: Postgres 5432, Redis 6379, MinIO 9000 and 9001.
