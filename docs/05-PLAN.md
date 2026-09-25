@@ -97,7 +97,7 @@ never done silently.
 
 ### T-1.8 → T-1.13 · Schema migrations
 One migration per task, each with a working `downgrade()`. Build exactly `03-SCHEMA.md`.
-- [ ] **T-1.8** Extensions, all enums, `set_updated_at()` trigger function. — `feat(db): extensions and enums [T-1.8]`
+- [x] **T-1.8** Extensions, all enums, `set_updated_at()` trigger function. — `feat(db): extensions and enums [T-1.8]`
 - [ ] **T-1.9** Identity + profile: `users`, `sessions`, `banned_identities`, `profiles`, `areas`, `interests`, `profile_interests`, `photos`, `verifications`, plus trigger making `users.gender`/`users.dob` immutable once non-null. — `[T-1.9]`
 - [ ] **T-1.10** Discovery + conversations: `swipes`, `profile_views`, `liked_you_reveals`, `matches`, `threads`, `messages`, `message_unlocks`, `thread_clears`. — `[T-1.10]`
 - [ ] **T-1.11** Album, kudos, safety: `album_requests`, `kudos`, `gifts`, `gift_sends`, `blocks`, `reports`, `fraud_scores`, `fraud_events`. — `[T-1.11]`
@@ -165,6 +165,7 @@ One migration per task, each with a working `downgrade()`. Build exactly `03-SCH
 - [ ] **Needs:** T-1.4, T-1.17, P-0.6
 - [ ] `api/Dockerfile` (multi-stage, uv, non-root, gunicorn + uvicorn workers). `infra/fly.api.toml` and `infra/fly.worker.toml`, region `bom`, health check `/readyz`, release command `alembic upgrade head`.
 - [ ] Supabase staging project (enable PostGIS, pg_trgm, citext); Upstash staging DB; R2 staging buckets.
+- [ ] Note: Supabase manages extensions from its dashboard. T-1.8's migration uses `create extension if not exists`, so upgrade is a no-op there — but its `downgrade()` drops them, so never downgrade a Supabase database to base.
 - [ ] Vercel project for `web/` with staging env vars.
 - [ ] GitHub Actions `deploy.yml`: on push to `main` → deploy staging API + worker; Vercel deploys web itself.
 - [ ] **Done when:** staging web loads and staging `/readyz` is 200.
@@ -843,3 +844,7 @@ Claude Code adds items here instead of doing unplanned work. Format:
   disposable, so the harness should detect an unknown stamp and rebuild the schema (drop and
   recreate `public`, migrate to head) rather than fail. Until then, recover with
   `make infra-reset`. Found during T-1.7.
+- [ ] P-12 · Drop `typing.Union` from the revision template — `api/alembic/script.py.mako` imports
+  `Union`, the post-write ruff hook rewrites the annotations to `X | Y`, and T-1.7's F401 exemption
+  for `alembic/versions/*` then keeps the now-unused import in every new revision. Write the
+  template with `|` and no `Union` import. Found during T-1.8 (removed by hand there).

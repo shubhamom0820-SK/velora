@@ -93,7 +93,8 @@ make e2e         # Playwright
 6. **The server decides.** Prices, balances, expiry, gender, age, permissions — always computed
    server-side. Never trust a value the browser sends for these.
 7. **Async only.** asyncpg, httpx, `asyncio.sleep`. Never `requests`, `psycopg2`, `time.sleep`.
-   Read time only via `core.clock.now()` — never `datetime.now()`.
+   Read time only via `core.clock.now()` — never `datetime.now()`. This governs **Python** code;
+   database defaults and triggers use `now()` (transaction start time) by design — don't "fix" them.
 8. **Layers.** Router = parse + auth + call service. Service = business rules. Repository = SQL.
    Routers never touch the DB. Repositories never contain business rules.
    The one documented exception: `modules/health/` calls `core.db.check_database()` and

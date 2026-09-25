@@ -33,6 +33,7 @@ api/app/
     redis.py              client, pub/sub helpers
     security.py           JWT, argon2, OTP generation, CSRF
     errors.py             AppError + handlers → error envelope
+    enums.py              the 20 Postgres enum types as Python enums (shared across modules)
     deps.py               current_user, require_role, rate_limit
     pagination.py         cursor encode/decode
     providers/            sms.py payments.py moderation.py facematch.py push.py storage.py
