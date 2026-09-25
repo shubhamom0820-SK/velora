@@ -40,6 +40,11 @@ extend-select = [
     "TID251", # banned APIs below — CLAUDE.md rule 7
 ]
 
+[tool.ruff.lint.per-file-ignores]
+# Blank revisions come with `op` and `sa` imported; the post-write ruff hook
+# must not strip them before anyone has written the migration.
+"alembic/versions/*" = ["F401"]
+
 [tool.ruff.lint.flake8-tidy-imports.banned-api]
 "requests".msg = "Rule 7: async only — use httpx."
 "psycopg2".msg = "Rule 7: async only — use asyncpg through SQLAlchemy."
@@ -52,7 +57,7 @@ extend-select = [
 [tool.mypy]
 python_version = "3.12"
 strict = true
-files = ["app", "tests"]
+files = ["app", "tests", "alembic"]
 # Ships inside pydantic: types model and Settings constructors properly.
 plugins = ["pydantic.mypy"]
 

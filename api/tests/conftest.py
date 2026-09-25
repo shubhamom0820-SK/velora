@@ -5,8 +5,7 @@ on `velora_test`, never anything else. The app under test is built from explicit
 test settings and shares that transaction.
 
 Fixtures still to come, each with the task that builds what it needs:
-migrating `velora_test` once per session (T-1.7), `fake_providers` (T-1.21) and
-`make_user` (T-3.1).
+`fake_providers` (T-1.21) and `make_user` (T-3.1).
 """
 
 from __future__ import annotations
@@ -20,6 +19,7 @@ from fastapi import FastAPI
 from httpx import ASGITransport, AsyncClient
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession
 
+from alembic import command as alembic_command
 from tests.infra import (
     INFRA_DOWN_REASON,
     INFRA_UP,
@@ -29,6 +29,7 @@ from tests.infra import (
     ensure_test_database,
     in_ci,
     infra_policy,
+    run_alembic,
     session_for_the_app,
     transactional_session,
 )
@@ -84,11 +85,12 @@ def make_test_settings() -> Settings:
 async def test_engine() -> AsyncIterator[AsyncEngine]:
     """One engine on `velora_test` for the whole run.
 
-    T-1.7 adds migrating `velora_test` to head here, once per session.
+    Migrated to head once, here; each test's writes are then rolled back.
     """
     if not INFRA_UP:
         pytest.skip(INFRA_DOWN_REASON)
     engine = build_engine(TEST_DATABASE_URL)
+    await run_alembic(engine, alembic_command.upgrade, "head")
     yield engine
     await engine.dispose()
 

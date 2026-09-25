@@ -9,13 +9,15 @@ from __future__ import annotations
 
 import os
 import socket
-from collections.abc import AsyncIterator
+from collections.abc import AsyncIterator, Callable
 from contextlib import asynccontextmanager
+from pathlib import Path
 from typing import Literal
 from urllib.parse import urlsplit
 
 import pytest
-from sqlalchemy.engine import make_url
+from alembic.config import Config
+from sqlalchemy.engine import Connection, make_url
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession
 
 DEFAULT_TEST_DATABASE_URL = (
@@ -119,3 +121,25 @@ async def session_for_the_app() -> AsyncIterator[AsyncSession]:
             "`db` so its writes are rolled back."
         )
     yield ActiveSession.session
+
+
+API_DIR = Path(__file__).resolve().parent.parent
+
+
+async def run_alembic(
+    engine: AsyncEngine, command: Callable[..., object], *args: str
+) -> None:
+    """Run an Alembic command (`alembic.command.upgrade`, `.downgrade`, …) on
+    `engine`'s database from inside the running event loop.
+
+    The connection is handed to env.py, which uses it instead of calling
+    `asyncio.run()` — not allowed here, since pytest's loop is already running.
+    """
+
+    def _run(connection: Connection) -> None:
+        config = Config(str(API_DIR / "alembic.ini"))
+        config.attributes["connection"] = connection
+        command(config, *args)
+
+    async with engine.begin() as connection:
+        await connection.run_sync(_run)

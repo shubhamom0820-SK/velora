@@ -87,13 +87,13 @@ never done silently.
 - [x] **Commit:** `chore: ruff, mypy, pre-commit, gitleaks [T-1.6]`
 
 ### T-1.7 · Alembic
-- [ ] **Needs:** T-1.4
-- [ ] `alembic init -t async`; `env.py` reads `DATABASE_URL`; `target_metadata` from a shared `Base` with naming convention (`pk_`, `fk_`, `uq_`, `ix_`, `ck_`).
-- [ ] `make migrate`, `make migration m="…"`, `make migrate-down`.
-- [ ] Test harness: `test_engine` in `tests/conftest.py` migrates `velora_test` to head once per session (moved from T-1.5).
-- [ ] mypy: allow untyped code in `api/alembic/` (strict stays on `app/` and `tests/`, T-1.6); add it to `[tool.mypy] files` once its layout exists.
-- [ ] **Done when:** an empty revision upgrades and downgrades cleanly.
-- [ ] **Commit:** `chore(db): alembic async setup [T-1.7]`
+- [x] **Needs:** T-1.4
+- [x] `alembic init -t async`; `env.py` reads `DATABASE_URL`; `target_metadata` from a shared `Base` with naming convention (`pk_`, `fk_`, `uq_`, `ix_`, `ck_`).
+- [x] `make migrate`, `make migration m="…"`, `make migrate-down`.
+- [x] Test harness: `test_engine` in `tests/conftest.py` migrates `velora_test` to head once per session (moved from T-1.5).
+- [x] mypy: `api/alembic/` added to `[tool.mypy] files` and kept **strict** — the async `env.py` and generated revisions are already typed. A hand-written migration that genuinely needs loosening uses a per-file `# mypy: disallow-untyped-defs=False`.
+- [x] **Done when:** an empty revision upgrades and downgrades cleanly.
+- [x] **Commit:** `chore(db): alembic async setup [T-1.7]`
 
 ### T-1.8 → T-1.13 · Schema migrations
 One migration per task, each with a working `downgrade()`. Build exactly `03-SCHEMA.md`.
@@ -836,3 +836,10 @@ Claude Code adds items here instead of doing unplanned work. Format:
   without the shell profile, so `uv` may not be on `PATH` and every commit fails. Resolve `uv`
   robustly (absolute path or a wrapper that locates it) and test a commit from VS Code. Found in
   review of T-1.6.
+- [ ] P-11 · Test DB stamped at a revision the checkout doesn't have — every task works on its own
+  branch, and from T-1.8 each adds migrations. Run the tests on a branch with a new migration, switch
+  to one without it, and `velora_test` still records that revision: every database test then errors
+  with `ResolutionError: No such revision`. Happened for real during T-1.7. `velora_test` is
+  disposable, so the harness should detect an unknown stamp and rebuild the schema (drop and
+  recreate `public`, migrate to head) rather than fail. Until then, recover with
+  `make infra-reset`. Found during T-1.7.
