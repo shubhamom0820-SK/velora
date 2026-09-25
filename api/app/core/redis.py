@@ -11,7 +11,8 @@ from redis.asyncio import Redis
 
 
 def build_redis(url: str) -> Redis:
-    return Redis.from_url(url)
+    client: Redis = Redis.from_url(url)  # from_url is typed as Any upstream
+    return client
 
 
 async def check_redis(client: Redis) -> None:

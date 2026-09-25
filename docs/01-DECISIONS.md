@@ -249,6 +249,30 @@ reporting call with nothing else to change.
 **Why defer:** a dependency that is installed but not configured is a liability — it ships code,
 CVEs and import cost for no behaviour. It arrives when it is actually wired up.
 
+**Amended in T-1.6 (P-03): orjson removed.** FastAPI 0.141 deprecates `ORJSONResponse` because it
+now serialises responses itself, through Pydantic, whenever a route declares its return type —
+and rule 9 requires one on every route. Error handlers use plain `JSONResponse`. With nothing
+left using orjson it was removed, by the same rule as sentry-sdk above: no unused dependencies.
+
+### D-039 · pre-commit and gitleaks; golden rules enforced by lint — Locked
+**pre-commit** runs hooks on every commit; install once per clone with `make hooks`. **gitleaks**
+blocks secrets before they reach a commit. Both were named in T-1.6's plan text but missing from
+the tooling row in `CLAUDE.md`, which has now been corrected.
+
+- ruff and mypy run as **local hooks through `uv`**, so their versions come from `api/uv.lock` and
+  match `make lint` exactly. The usual isolated mypy hook cannot see FastAPI or Pydantic, so
+  strict mypy would fail there.
+- gitleaks is a pinned hook that **pre-commit builds itself**, bootstrapping Go if needed — no
+  system install on any machine, CI included. Verified: a fake GitHub token in a real
+  `git commit` is blocked and `HEAD` does not move.
+- **Golden rules are lint errors, not review items.** ruff bans `print` (`T20`), and `requests`,
+  `psycopg2`, `time.sleep`, `datetime.now`/`utcnow`/`today` and `date.today` (`TID251`, rule 7).
+  The one sanctioned wall-clock read, in `core/clock.py`, is exempt by a single-line `noqa` — not
+  a per-file ignore, which would also have exempted `requests` in that file.
+- mypy is `strict` for `app/` and `tests/`, with pydantic's plugin (ships inside pydantic).
+
+**Why:** a rule that only a reviewer catches is a rule that eventually gets missed.
+
 ### D-036 · Local infrastructure binds to loopback only — Locked
 Every port published by `infra/docker-compose.yml` is bound to `127.0.0.1`, never the Docker
 default of `0.0.0.0`: Postgres 5432, Redis 6379, MinIO 9000 and 9001.

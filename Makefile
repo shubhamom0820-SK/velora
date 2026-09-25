@@ -2,7 +2,7 @@
 # Targets tagged [T-x.y] are stubs until that task lands. See docs/05-PLAN.md.
 
 .DEFAULT_GOAL := help
-.PHONY: help infra-up infra-down infra-reset dev worker seed test lint migrate migrate-down migration types e2e
+.PHONY: help infra-up infra-down infra-reset dev worker seed test lint hooks migrate migrate-down migration types e2e
 
 COMPOSE := docker compose -f infra/docker-compose.yml
 
@@ -32,8 +32,11 @@ seed: ## Dev data: 20 profiles, test users (refuses in production) [T-1.15]
 test: ## api pytest (web vitest joins with T-1.19)
 	cd api && uv run pytest
 
-lint: ## ruff + mypy + eslint + tsc --noEmit [T-1.6]
-	@echo "not yet — T-1.6"
+lint: ## ruff + format check + strict mypy (eslint + tsc join with T-1.17)
+	cd api && uv run ruff check . && uv run ruff format --check . && uv run mypy
+
+hooks: ## Install the git pre-commit hooks (once per clone)
+	cd api && uv run pre-commit install
 
 migrate: ## alembic upgrade head [T-1.7]
 	@echo "not yet — T-1.7"

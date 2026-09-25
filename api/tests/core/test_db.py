@@ -38,7 +38,7 @@ async def test_get_session_uses_the_apps_database_not_the_global_one(
 
     app = create_app(
         Settings(
-            _env_file=None,  # type: ignore[call-arg]
+            _env_file=None,
             ENV="local",
             DATABASE_URL=_TEST_DB_URL,
             REDIS_URL="redis://127.0.0.1:6379/1",

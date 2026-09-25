@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from collections.abc import AsyncIterator
+
 import pytest
 from fastapi import FastAPI
 from httpx import ASGITransport, AsyncClient
@@ -23,7 +25,7 @@ class Body(BaseModel):
 
 
 @pytest.fixture
-async def failing_client() -> AsyncClient:
+async def failing_client() -> AsyncIterator[AsyncClient]:
     """An app with routes that fail in each way we need to exercise."""
     app: FastAPI = create_app()
 

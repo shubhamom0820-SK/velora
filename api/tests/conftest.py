@@ -66,7 +66,7 @@ def pytest_configure(config: pytest.Config) -> None:
 def make_test_settings() -> Settings:
     """Explicit settings for the app under test — never read from `.env`."""
     return Settings(
-        _env_file=None,  # type: ignore[call-arg]
+        _env_file=None,
         ENV="local",
         DATABASE_URL=TEST_DATABASE_URL,
         REDIS_URL=TEST_REDIS_URL,

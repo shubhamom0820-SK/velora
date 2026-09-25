@@ -14,7 +14,7 @@ from app.main import close_resources, create_app
 
 def _settings(database: str, redis_db: int) -> Settings:
     return Settings(
-        _env_file=None,  # type: ignore[call-arg]
+        _env_file=None,
         ENV="local",
         DATABASE_URL=f"postgresql+asyncpg://velora:velora@127.0.0.1:5432/{database}",
         REDIS_URL=f"redis://127.0.0.1:6379/{redis_db}",

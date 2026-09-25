@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from collections.abc import Iterator
 from datetime import UTC, datetime, timedelta
 
 import pytest
@@ -10,7 +11,7 @@ from app.core import clock
 
 
 @pytest.fixture(autouse=True)
-def _always_unfreeze():
+def _always_unfreeze() -> Iterator[None]:
     yield
     clock.unfreeze()
 

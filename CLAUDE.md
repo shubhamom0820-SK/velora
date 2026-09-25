@@ -26,13 +26,13 @@ Permanence is granted by the other person, never bought.
 | Web data | TanStack Query (server state), Zustand (client state), Zod, React Hook Form |
 | Swipe | @use-gesture/react + @react-spring/web |
 | API | Python 3.12, FastAPI, Pydantic v2, SQLAlchemy 2.0 async, asyncpg, Alembic |
-| API logging/serialisation | structlog (JSON logs), orjson (responses) — D-038 |
+| API logging | structlog (JSON logs); responses serialised by FastAPI/Pydantic — D-038 |
 | DB | PostgreSQL 16 + PostGIS + pg_trgm + pgcrypto + citext |
 | Cache/queue | Redis + ARQ |
 | HTTP out | httpx (async) — never `requests` |
 | Storage | Cloudflare R2 via aioboto3, presigned URLs only |
 | Hosting | Vercel (web) · Fly.io `bom` (api + worker) · Supabase `ap-south-1` · Upstash |
-| Tooling | uv, ruff, mypy, pytest, pnpm, eslint, prettier, vitest, Playwright |
+| Tooling | uv, ruff, mypy, pytest, pnpm, eslint, prettier, vitest, Playwright, pre-commit, gitleaks — D-039 |
 
 ## Repo layout
 
@@ -69,6 +69,7 @@ make worker      # ARQ worker only
 make seed        # dev data: 20 profiles, test users (refuses in production)
 make test        # api pytest + web vitest
 make lint        # ruff + mypy + eslint + tsc --noEmit
+make hooks       # install the git pre-commit hooks (once per clone)
 make migrate     # alembic upgrade head   (make migrate-down to step back)
 make migration m="message"   # new alembic revision
 make types       # regenerate web/src/types/api.ts from OpenAPI

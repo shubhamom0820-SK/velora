@@ -23,7 +23,7 @@ def now() -> datetime:
     """The current instant as a timezone-aware UTC datetime."""
     if _override is not None:
         return _override
-    return datetime.now(UTC)
+    return datetime.now(UTC)  # noqa: TID251 — the one sanctioned wall-clock read
 
 
 def today_ist() -> date:

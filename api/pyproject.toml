@@ -9,7 +9,6 @@ dependencies = [
     "asyncpg>=0.31.0",
     "fastapi>=0.141.1",
     "httpx>=0.28.1",
-    "orjson>=3.12.0",
     "pydantic-settings>=2.15.0",
     "redis>=5.3.1",
     "sqlalchemy[asyncio]>=2.0",
@@ -22,10 +21,40 @@ dev = [
     "faker>=40.39.0",
     "mypy>=2.3.1",
     "polyfactory>=3.3.0",
+    "pre-commit>=4.6.2",
     "pytest>=9.1.1",
     "pytest-asyncio>=1.4.0",
     "ruff>=0.16.8",
 ]
+
+[tool.ruff]
+target-version = "py312"
+line-length = 88
+
+[tool.ruff.lint]
+# Ruff's curated default rule set — pinned by the ruff version in uv.lock, so it
+# only changes on a deliberate upgrade — plus golden rules that a machine should
+# enforce rather than a reviewer (D-039).
+extend-select = [
+    "T20",    # no print() — 07-CHECKLISTS.md §A
+    "TID251", # banned APIs below — CLAUDE.md rule 7
+]
+
+[tool.ruff.lint.flake8-tidy-imports.banned-api]
+"requests".msg = "Rule 7: async only — use httpx."
+"psycopg2".msg = "Rule 7: async only — use asyncpg through SQLAlchemy."
+"time.sleep".msg = "Rule 7: never block the event loop — use asyncio.sleep."
+"datetime.datetime.now".msg = "Rule 7: read the time only via app.core.clock.now()."
+"datetime.datetime.utcnow".msg = "Rule 7: read the time only via app.core.clock.now()."
+"datetime.datetime.today".msg = "Rule 7: read the time only via app.core.clock.now()."
+"datetime.date.today".msg = "Rule 7: use app.core.clock.today_ist()."
+
+[tool.mypy]
+python_version = "3.12"
+strict = true
+files = ["app", "tests"]
+# Ships inside pydantic: types model and Settings constructors properly.
+plugins = ["pydantic.mypy"]
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"

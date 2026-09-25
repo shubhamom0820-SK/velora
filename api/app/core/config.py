@@ -111,4 +111,4 @@ class Settings(BaseSettings):
 @lru_cache
 def get_settings() -> Settings:
     """Cached so the environment is read and validated exactly once."""
-    return Settings()  # type: ignore[call-arg]
+    return Settings()

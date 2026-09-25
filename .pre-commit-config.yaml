@@ -1,0 +1,60 @@
+# Git hooks, run on every commit. Install once per clone: `make hooks`.
+#
+# ruff and mypy run as local hooks through uv, so their versions come from
+# api/uv.lock — the same tools, same versions and same config as `make lint`.
+# (The usual isolated mypy hook cannot see FastAPI or Pydantic, so strict mypy
+# would fail there.) gitleaks is built by pre-commit itself: no system install.
+# See D-039.
+
+default_install_hook_types: [pre-commit]
+
+repos:
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v6.0.0
+    hooks:
+      - id: end-of-file-fixer
+
+  - repo: https://github.com/gitleaks/gitleaks
+    rev: v8.30.0
+    hooks:
+      - id: gitleaks
+
+  - repo: local
+    hooks:
+      - id: ruff
+        name: ruff (lint)
+        entry: uv run --project api ruff check --fix --force-exclude
+        language: system
+        types_or: [python, pyi]
+        files: ^api/
+
+      - id: ruff-format
+        name: ruff (format)
+        entry: uv run --project api ruff format --force-exclude
+        language: system
+        types_or: [python, pyi]
+        files: ^api/
+
+      - id: mypy
+        name: mypy (strict)
+        entry: uv run --directory api mypy
+        language: system
+        types_or: [python, pyi]
+        files: ^api/
+        pass_filenames: false
+
+      # web/ arrives in T-1.17; until then these never match a file. The paths
+      # pre-commit passes start with `web/`, so strip it before running there.
+      - id: prettier
+        name: prettier (web)
+        entry: bash -c 'cd web && pnpm exec prettier --write --ignore-unknown "${@/#web\//}"' --
+        language: system
+        files: ^web/
+        # Only files prettier formats — web/.gitkeep must not trigger it.
+        types_or: [javascript, jsx, ts, tsx, css, scss, json, yaml, markdown]
+
+      - id: eslint
+        name: eslint (web)
+        entry: bash -c 'cd web && pnpm exec eslint --fix "${@/#web\//}"' --
+        language: system
+        files: ^web/.*\.(js|jsx|ts|tsx|mjs|cjs)$

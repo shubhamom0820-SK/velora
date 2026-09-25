@@ -16,7 +16,7 @@ from typing import Any
 import structlog
 from fastapi import FastAPI, Request
 from fastapi.exceptions import RequestValidationError
-from fastapi.responses import ORJSONResponse
+from fastapi.responses import JSONResponse
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
 log = structlog.get_logger(__name__)
@@ -62,15 +62,15 @@ def envelope(
     return {"error": error}
 
 
-async def _handle_app_error(request: Request, exc: Exception) -> ORJSONResponse:
+async def _handle_app_error(request: Request, exc: Exception) -> JSONResponse:
     assert isinstance(exc, AppError)
-    return ORJSONResponse(
+    return JSONResponse(
         status_code=exc.status,
         content=envelope(exc.code, exc.message, exc.details),
     )
 
 
-async def _handle_validation_error(request: Request, exc: Exception) -> ORJSONResponse:
+async def _handle_validation_error(request: Request, exc: Exception) -> JSONResponse:
     assert isinstance(exc, RequestValidationError)
     fields = [
         {
@@ -79,7 +79,7 @@ async def _handle_validation_error(request: Request, exc: Exception) -> ORJSONRe
         }
         for err in exc.errors()
     ]
-    return ORJSONResponse(
+    return JSONResponse(
         status_code=400,
         content=envelope(
             "VALIDATION_ERROR",
@@ -89,23 +89,23 @@ async def _handle_validation_error(request: Request, exc: Exception) -> ORJSONRe
     )
 
 
-async def _handle_http_exception(request: Request, exc: Exception) -> ORJSONResponse:
+async def _handle_http_exception(request: Request, exc: Exception) -> JSONResponse:
     assert isinstance(exc, StarletteHTTPException)
     code = _STATUS_TO_CODE.get(exc.status_code, "INTERNAL")
     message = exc.detail if isinstance(exc.detail, str) else "Request failed."
     if code == "NOT_FOUND":
         message = "Not found."
-    return ORJSONResponse(status_code=exc.status_code, content=envelope(code, message))
+    return JSONResponse(status_code=exc.status_code, content=envelope(code, message))
 
 
-async def _handle_unexpected(request: Request, exc: Exception) -> ORJSONResponse:
+async def _handle_unexpected(request: Request, exc: Exception) -> JSONResponse:
     """Last resort: log with the request id, tell the client nothing.
 
     T-9.12 adds Sentry here; the exception is already bound to the request id by
     the logging middleware, so reporting is a one-line addition.
     """
     log.exception("unhandled_exception", exc_type=type(exc).__name__)
-    return ORJSONResponse(
+    return JSONResponse(
         status_code=500,
         content=envelope("INTERNAL", "Something went wrong on our end."),
     )

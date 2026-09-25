@@ -80,17 +80,18 @@ never done silently.
 - [x] **Commit:** `test(api): pytest harness and fixtures [T-1.5]`
 
 ### T-1.6 · Lint, types, hooks
-- [ ] **Needs:** T-1.3
-- [ ] ruff (lint + format) config; mypy with `strict = true` for `app/` (allow untyped for alembic).
-- [ ] `.pre-commit-config.yaml`: ruff, ruff-format, mypy, gitleaks, end-of-file-fixer, prettier + eslint for `web/`.
-- [ ] **Done when:** `make lint` passes; a fake secret in a file is blocked by gitleaks.
-- [ ] **Commit:** `chore: ruff, mypy, pre-commit, gitleaks [T-1.6]`
+- [x] **Needs:** T-1.3
+- [x] ruff (lint + format) config; mypy with `strict = true` for `app/` (allow untyped for alembic).
+- [x] `.pre-commit-config.yaml`: ruff, ruff-format, mypy, gitleaks, end-of-file-fixer, prettier + eslint for `web/`.
+- [x] **Done when:** `make lint` passes; a fake secret in a file is blocked by gitleaks.
+- [x] **Commit:** `chore: ruff, mypy, pre-commit, gitleaks [T-1.6]`
 
 ### T-1.7 · Alembic
 - [ ] **Needs:** T-1.4
 - [ ] `alembic init -t async`; `env.py` reads `DATABASE_URL`; `target_metadata` from a shared `Base` with naming convention (`pk_`, `fk_`, `uq_`, `ix_`, `ck_`).
 - [ ] `make migrate`, `make migration m="…"`, `make migrate-down`.
 - [ ] Test harness: `test_engine` in `tests/conftest.py` migrates `velora_test` to head once per session (moved from T-1.5).
+- [ ] mypy: allow untyped code in `api/alembic/` (strict stays on `app/` and `tests/`, T-1.6); add it to `[tool.mypy] files` once its layout exists.
 - [ ] **Done when:** an empty revision upgrades and downgrades cleanly.
 - [ ] **Commit:** `chore(db): alembic async setup [T-1.7]`
 
@@ -128,6 +129,7 @@ One migration per task, each with a working `downgrade()`. Build exactly `03-SCH
 - [ ] Route groups: `(marketing)`, `(auth)`, `(app)`, `admin` with placeholder pages.
 - [ ] `src/styles/tokens.css` from `08-DESIGN.md`; Tailwind theme reads the CSS variables.
 - [ ] `src/i18n/en.ts` string dictionary + `t()` helper.
+- [ ] Verify the prettier and eslint pre-commit hooks from T-1.6 run on `web/` files; prettier must be a `web/` devDependency (create-next-app adds ESLint, not Prettier).
 - [ ] **Done when:** `pnpm dev` shows placeholders; `pnpm lint && pnpm tsc --noEmit` clean.
 - [ ] **Commit:** `feat(web): next.js skeleton with tokens [T-1.17]`
 
@@ -794,11 +796,13 @@ Claude Code adds items here instead of doing unplanned work. Format:
   Hub is no longer publicly pullable, so the stack pulls from `quay.io/minio/*` at pinned RELEASE
   tags. The tag also matters because newer MinIO community builds drop the web console that T-1.2's
   acceptance depends on — found during T-1.2
-- [ ] P-03 · Decide the response-class strategy — FastAPI 0.141 deprecates `ORJSONResponse`
+- [x] P-03 · Decide the response-class strategy — FastAPI 0.141 deprecates `ORJSONResponse`
   ("FastAPI now serializes data directly to JSON bytes via Pydantic"), but T-1.3 specifies orjson
   responses, so every error response currently emits a `FastAPIDeprecationWarning`. Either keep it
   and silence the warning, or drop `default_response_class` and keep orjson only where we serialise
   by hand. Worth settling before T-1.20 turns warnings into CI noise — found during T-1.3
+  **Resolved in T-1.6:** moved off `ORJSONResponse` (handlers use `JSONResponse`; routes serialise
+  natively via Pydantic), orjson removed, D-038 amended. 21 warnings → 0.
 - [ ] P-04 · Exception logging may leak values — tracebacks currently log exception messages
   verbatim, which can carry row values or tokens once real data exists. Violates CLAUDE.md rule 15.
   Found during T-1.3.
@@ -823,3 +827,12 @@ Claude Code adds items here instead of doing unplanned work. Format:
   is fixed at `127.0.0.1:6379/1`. If T-1.20's CI runs Redis anywhere else, the harness reports the
   stack unreachable and CI hard-fails by design. Add the override alongside T-1.20. Found in review
   of T-1.5.
+- [ ] P-09 · Run gitleaks in CI — the pre-commit hook only protects clones that ran `make hooks`,
+  and `git commit --no-verify` skips it. T-1.20's CI steps list ruff, mypy and pytest but not
+  gitleaks, so nothing server-side enforces checklist E's "no secrets in repo". Add a
+  `gitleaks git` step to T-1.20's `api` job. Found in review of T-1.6.
+- [ ] P-10 · Hooks must work from GUI git clients — the ruff and mypy hooks call `uv` by name. VS
+  Code's Source Control panel (which the user commits from) and other GUI clients run hooks
+  without the shell profile, so `uv` may not be on `PATH` and every commit fails. Resolve `uv`
+  robustly (absolute path or a wrapper that locates it) and test a commit from VS Code. Found in
+  review of T-1.6.

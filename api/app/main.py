@@ -12,7 +12,6 @@ from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import ORJSONResponse
 
 from app.core.config import Settings, get_settings
 from app.core.db import build_engine, build_sessionmaker
@@ -50,7 +49,6 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app = FastAPI(
         title=f"{APP_NAME} API",
         version="0.1.0",
-        default_response_class=ORJSONResponse,
         docs_url="/docs" if not settings.is_production else None,
         redoc_url=None,
         openapi_url="/openapi.json" if not settings.is_production else None,
