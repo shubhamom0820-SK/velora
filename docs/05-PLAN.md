@@ -844,7 +844,9 @@ Claude Code adds items here instead of doing unplanned work. Format:
   disposable, so the harness should detect an unknown stamp and rebuild the schema (drop and
   recreate `public`, migrate to head) rather than fail. Until then, recover with
   `make infra-reset`. Found during T-1.7.
-- [ ] P-12 · Drop `typing.Union` from the revision template — `api/alembic/script.py.mako` imports
+- [x] P-12 · Drop `typing.Union` from the revision template — `api/alembic/script.py.mako` imports
   `Union`, the post-write ruff hook rewrites the annotations to `X | Y`, and T-1.7's F401 exemption
   for `alembic/versions/*` then keeps the now-unused import in every new revision. Write the
   template with `|` and no `Union` import. Found during T-1.8 (removed by hand there).
+  **Done:** template now imports `Sequence` from `collections.abc` and writes `str | Sequence[str] | None`;
+  a generated revision has no `Union` and passes strict mypy and ruff.
