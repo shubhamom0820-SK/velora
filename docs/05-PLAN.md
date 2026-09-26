@@ -102,10 +102,10 @@ One migration per task, each with a working `downgrade()`. Build exactly `03-SCH
 - [x] **T-1.10** Discovery + conversations: `swipes`, `profile_views`, `liked_you_reveals`, `matches`, `threads`, `messages`, `message_unlocks`, `thread_clears`. — `[T-1.10]`
 - [x] **T-1.11** Album, kudos, safety: `album_requests`, `kudos`, `gifts`, `gift_sends`, `blocks`, `reports`, `fraud_scores`, `fraud_events`. — `[T-1.11]`
 - [x] **T-1.12** Money: `wallets`, `ledger_entries` (+ no-update/delete trigger), `action_prices`, `credit_packs`, `payments`, `refund_requests`, `referrals`. — `[T-1.12]`
-- [ ] **T-1.13** Notifications + ops: `push_subscriptions`, `notification_prefs`, `notifications`, `audit_log`, `app_config`, `waitlist`. — `[T-1.13]`
+- [x] **T-1.13** Notifications + ops: `push_subscriptions`, `notification_prefs`, `notifications`, `audit_log`, `app_config`, `waitlist`. — `[T-1.13]`
 - **For T-1.10 → T-1.13 (from T-1.9):** autogenerate drops `create_type=False` on every enum column,
   and the line wrapping varies, so **parse the migration file to verify it — never eyeball it.**
-- [ ] **Done when (each):** `make migrate && make migrate-down && make migrate` succeeds; SQLAlchemy models match.
+- [x] **Done when (each):** `make migrate && make migrate-down && make migrate` succeeds; SQLAlchemy models match.
 
 ### T-1.14 · Reference data migration
 - [ ] **Needs:** T-1.13
@@ -888,15 +888,27 @@ Claude Code adds items here instead of doing unplanned work. Format:
   were merged earlier without it. Reuse `refuse_change()` in a new migration (rule 11). Clearing a
   chat stays one-sided (`thread_clears`), so no legitimate path deletes messages. Found during T-1.12.
 - [ ] P-18 · App connects as a least-privilege database role — T-1.12's guards (append-only ledger,
-  never-deleted payments) are triggers: they stop application bugs, not a privileged role. Proven:
+  never-deleted payments) and T-1.13's (append-only `audit_log`) are triggers: they stop application
+  bugs, not a privileged role. Proven on the ledger, and again on `audit_log` in review of T-1.13:
   as table owner or superuser, `SET session_replication_role = replica` or `ALTER TABLE … DISABLE
   TRIGGER` lets a `DELETE` straight through. If the API connects to Supabase as the owning role, an
   injection or stray script has those bypasses. The API must use a role that doesn't own the tables
-  and can't `ALTER` them or set `session_replication_role`; migrations run as the owner.
-  **Before T-1.22.** Found in review of T-1.12.
+  and can't `ALTER` them or set `session_replication_role`; migrations run as the owner. Its tests
+  cover every guarded table. **Before T-1.22.** Found in review of T-1.12.
 - [ ] P-19 · Namespace ledger idempotency keys per user — `ledger_entries.idempotency_key` is unique
   across all users, and money routes accept a client `Idempotency-Key` header (02-ARCHITECTURE §3).
   Stored raw, two users sending the same key collide: the second user's genuine debit is refused —
   or, if the service reads a unique violation as "already applied", reported as paid when it wasn't.
   `wallet.service` must store a namespaced key, e.g. `{user_id}:{operation}:{client key}`.
   **Design into T-5.x.** Found in review of T-1.12.
+- [ ] P-20 · Audit automated actions as a system user — ruled in T-1.13: `audit_log.actor_id` is
+  NOT NULL, because null could not tell "the system did it" from "a bug forgot to set it", and the
+  system user is created when auto-freeze first needs it, by T-9.2. T-9.2's text says neither that
+  auto-freeze writes `audit_log` nor that the user must exist; the ruling lives only in 03-SCHEMA §8
+  and the `AuditLogEntry` docstring. T-9.2 adds a data migration creating the user — it must never
+  log in or appear anywhere users are listed — and writes each automated freeze to `audit_log` as
+  it. **Fold into T-9.2.** Found in review of T-1.13.
+- [ ] P-21 · Correct two comments — the `PushSubscription` docstring calls `p256dh` and `auth`
+  "secrets": `auth` is a shared secret, but `p256dh` is the browser's public key. The comment above
+  `test_updated_at_triggers_are_on_exactly_the_mutable_tables` says "five mutable tables"; it has
+  been wrong since T-1.10 and the set is now 17. Comments only. Found in review of T-1.13.

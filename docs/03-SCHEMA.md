@@ -380,30 +380,43 @@ Reward (both get credits) only after the referee's first paid purchase or selfie
 ## 7. Notifications
 
 ### push_subscriptions
-`id uuid pk, user_id uuid, endpoint text unique, p256dh text, auth text, last_ok_at, created_at`.
+`id uuid pk, user_id uuid fk users, endpoint text not null unique, p256dh text not null,
+auth text not null, last_ok_at timestamptz null, created_at`.
+One subscription per endpoint, across accounts. `p256dh` and `auth` are the subscription's keys:
+never logged, never returned (rule 15).
 
 ### notification_prefs  (pk user_id)
-`match, message, like, knot, expiry, balance, generic_text` — booleans, defaults true except
-`generic_text` false.
+`user_id uuid pk fk users`; `match, message, likes, knot, expiry, balance, generic_text` —
+booleans, not null, defaults true except `generic_text` false; `updated_at`.
+The column is `likes` because `like` is a reserved word in Postgres. The model attribute and the
+API field of `Prefs` (04-API) stay `like` (T-1.13).
 
 ### notifications  (in-app list)
-`id uuid pk, user_id uuid, kind text, payload jsonb, read_at timestamptz null, created_at`.
-Index `(user_id, created_at desc)`.
+`id uuid pk, user_id uuid fk users, kind text not null, payload jsonb null, read_at timestamptz null,
+created_at`. Index `(user_id, created_at desc)`.
 
 ---
 
 ## 8. Ops
 
-### audit_log
-`id uuid pk, actor_id uuid, action text, target_type text, target_id uuid, meta jsonb, created_at`.
+### audit_log  (append-only)
+`id uuid pk, actor_id uuid not null fk users, action text not null, target_type text null,
+target_id uuid null, meta jsonb null, created_at`.
+`target_id` is polymorphic, so no fk. Check `(target_type IS NULL) = (target_id IS NULL)`, as on
+`ledger_entries.ref_*`. `actor_id` is never null — null could not tell "the system did it" from
+"a bug forgot to set it"; automated actions use a dedicated system user, created by T-9.2.
+Triggers `audit_log_no_update_delete` and `audit_log_no_truncate` (statement-level) reuse T-1.12's
+`refuse_change()` and raise `restrict_violation` (23001): the person with a reason to erase the
+trace is exactly the person with admin access (T-1.13).
 
 ### app_config  (key/value, cached 60 s)
-`key text pk, value jsonb, updated_at`. Seeds: `swipe_daily_limit_men=50`,
+`key text pk, value jsonb not null, updated_at`. Seeds: `swipe_daily_limit_men=50`,
 `discovery_radius_km=25`, `thread_hours=24`, `mask_first_n_messages=20`, `kudos_min_messages=6`,
 `gift_free_daily_limit=3`, `gift_same_recipient_cooldown_h=24`.
 
 ### waitlist
-`id uuid pk, email citext unique, city text null, created_at`.
+`id uuid pk, email citext not null unique, city text null, created_at`.
+Unique ignores case (citext). No format check in the database: T-2.3 validates in the API.
 
 ---
 

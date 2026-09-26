@@ -13,6 +13,9 @@ T-1.12: money — a balance never below zero, an append-only ledger (UPDATE,
 DELETE and TRUNCATE refused), payments never hard-deleted, and a paid payment
 always carrying its idempotency anchor. With this, every constraint T-1.16 lists
 is tested where it was built.
+T-1.13: notifications and ops — an append-only audit log with a real actor, the
+`like` preference stored as column `likes`, one subscription per push endpoint,
+and a case-insensitive waitlist.
 """
 
 from __future__ import annotations
@@ -26,6 +29,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.enums import Gender
+from app.modules.notifications.models import NotificationPrefs
 from app.modules.users.models import User
 
 EXTENSIONS = {"postgis", "pg_trgm", "pgcrypto", "citext"}
@@ -279,6 +283,10 @@ async def test_updated_at_triggers_are_on_exactly_the_mutable_tables(
         "action_prices",
         "payments",
         "refund_requests",
+        # T-1.13 (audit_log is append-only; waitlist is written once;
+        # notifications and push_subscriptions carry their own timestamps)
+        "notification_prefs",
+        "app_config",
     }
 
 
@@ -1233,3 +1241,193 @@ async def test_refund_request_starts_open(db: AsyncSession) -> None:
     )
 
     assert status == "open"
+
+
+# --- T-1.13 -------------------------------------------------------------------
+
+NOT_NULL_VIOLATION = "23502"
+
+
+# Notifications.
+
+
+async def test_a_push_endpoint_belongs_to_one_subscription(db: AsyncSession) -> None:
+    """Unique across accounts: one browser endpoint is one subscription."""
+    first, second = await _user(db), await _user(db)
+    insert = (
+        "insert into push_subscriptions (user_id, endpoint, p256dh, auth) "
+        "values (:u, 'https://push.example/abc', 'key', 'secret')"
+    )
+    await db.execute(text(insert), {"u": first.id})
+
+    state = await _rejected(db, insert, {"u": second.id})
+
+    assert state == UNIQUE_VIOLATION
+
+
+async def test_notification_prefs_default_on_except_generic_text(
+    db: AsyncSession,
+) -> None:
+    user = await _user(db)
+
+    row = (
+        await db.execute(
+            text(
+                "insert into notification_prefs (user_id) values (:u) returning "
+                "match, message, likes, knot, expiry, balance, generic_text"
+            ),
+            {"u": user.id},
+        )
+    ).one()
+
+    assert tuple(row) == (True, True, True, True, True, True, False)
+
+
+async def test_the_like_preference_round_trips(db: AsyncSession) -> None:
+    """The attribute is `like`, the column `likes` (a reserved word): a value
+    written through either name reads back through the other."""
+    user = await _user(db)
+    prefs = NotificationPrefs(user_id=user.id, like=False)
+    db.add(prefs)
+    await db.flush()
+
+    stored = await db.scalar(
+        text("select likes from notification_prefs where user_id = :u"),
+        {"u": user.id},
+    )
+    await db.execute(
+        text("update notification_prefs set likes = true where user_id = :u"),
+        {"u": user.id},
+    )
+    await db.refresh(prefs)
+    selected = await db.scalar(
+        select(NotificationPrefs.like).where(NotificationPrefs.user_id == user.id)
+    )
+
+    assert stored is False
+    assert prefs.like is True
+    assert selected is True
+
+
+@pytest.mark.parametrize(
+    ("table", "columns"),
+    [
+        (
+            "push_subscriptions",
+            "(user_id, endpoint, p256dh, auth) values (:x, 'https://push.example/x', 'k', 's')",
+        ),
+        ("notification_prefs", "(user_id) values (:x)"),
+        ("notifications", "(user_id, kind) values (:x, 'match')"),
+    ],
+)
+async def test_notification_references_are_real(
+    db: AsyncSession, table: str, columns: str
+) -> None:
+    state = await _rejected(db, f"insert into {table} {columns}", {"x": uuid.uuid4()})
+
+    assert state == FOREIGN_KEY_VIOLATION
+
+
+# Audit log: append-only, enforced — the trace outlives whoever wants it gone.
+
+
+async def _audit_entry(db: AsyncSession, actor_id: uuid.UUID) -> uuid.UUID:
+    entry_id = await db.scalar(
+        text(
+            "insert into audit_log (actor_id, action, target_type, target_id) "
+            "values (:a, 'user.freeze', 'user', :t) returning id"
+        ),
+        {"a": actor_id, "t": uuid.uuid4()},
+    )
+    assert isinstance(entry_id, uuid.UUID)
+    return entry_id
+
+
+async def test_audit_log_accepts_inserts(db: AsyncSession) -> None:
+    """Append-only is not read-only; an action with no target is allowed."""
+    user = await _user(db)
+
+    await _audit_entry(db, user.id)
+    await db.execute(
+        text("insert into audit_log (actor_id, action) values (:a, 'config.update')"),
+        {"a": user.id},
+    )
+
+
+@pytest.mark.parametrize(
+    "statement",
+    [
+        "update audit_log set action = 'nothing.happened' where id = :id",
+        "update audit_log set meta = '{}' where id = :id",
+        "delete from audit_log where id = :id",
+    ],
+)
+async def test_audit_entries_cannot_change_or_disappear(
+    db: AsyncSession, statement: str
+) -> None:
+    user = await _user(db)
+    entry_id = await _audit_entry(db, user.id)
+
+    state = await _rejected(db, statement, {"id": entry_id})
+
+    assert state == RESTRICT_VIOLATION
+
+
+async def test_audit_log_cannot_be_truncated(db: AsyncSession) -> None:
+    """TRUNCATE skips row triggers; the statement-level guard catches it."""
+    user = await _user(db)
+    await _audit_entry(db, user.id)
+
+    state = await _rejected(db, "truncate audit_log")
+
+    assert state == RESTRICT_VIOLATION
+
+
+@pytest.mark.parametrize("target", ["'user', null", "null, gen_random_uuid()"])
+async def test_audit_target_is_complete_or_absent(
+    db: AsyncSession, target: str
+) -> None:
+    user = await _user(db)
+
+    state = await _rejected(
+        db,
+        "insert into audit_log (actor_id, action, target_type, target_id) "
+        f"values (:a, 'user.freeze', {target})",
+        {"a": user.id},
+    )
+
+    assert state == CHECK_VIOLATION
+
+
+async def test_every_audit_entry_has_a_real_actor(db: AsyncSession) -> None:
+    """NULL could not tell "the system did it" from "a bug forgot to set it"."""
+    missing = await _rejected(
+        db, "insert into audit_log (action) values ('user.freeze')"
+    )
+    unknown = await _rejected(
+        db,
+        "insert into audit_log (actor_id, action) values (:a, 'user.freeze')",
+        {"a": uuid.uuid4()},
+    )
+
+    assert missing == NOT_NULL_VIOLATION
+    assert unknown == FOREIGN_KEY_VIOLATION
+
+
+# app_config and waitlist.
+
+
+async def test_app_config_needs_a_value(db: AsyncSession) -> None:
+    state = await _rejected(db, "insert into app_config (key) values ('test-key')")
+
+    assert state == NOT_NULL_VIOLATION
+
+
+async def test_waitlist_email_is_unique_ignoring_case(db: AsyncSession) -> None:
+    await db.execute(text("insert into waitlist (email) values ('Priya@Example.com')"))
+
+    state = await _rejected(
+        db, "insert into waitlist (email) values ('priya@example.COM')"
+    )
+
+    assert state == UNIQUE_VIOLATION
