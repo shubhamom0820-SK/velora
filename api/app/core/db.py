@@ -20,9 +20,10 @@ import uuid
 from collections.abc import AsyncIterator
 from datetime import datetime
 from enum import StrEnum
+from typing import Any
 
 from fastapi import Request
-from sqlalchemy import DateTime, MetaData, func, text
+from sqlalchemy import DateTime, ForeignKey, MetaData, func, text
 from sqlalchemy.dialects.postgresql import ENUM, UUID
 from sqlalchemy.ext.asyncio import (
     AsyncEngine,
@@ -30,7 +31,7 @@ from sqlalchemy.ext.asyncio import (
     async_sessionmaker,
     create_async_engine,
 )
-from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
+from sqlalchemy.orm import DeclarativeBase, Mapped, MappedColumn, mapped_column
 
 from app.core.enums import PG_ENUMS
 
@@ -76,6 +77,23 @@ def uuid_pk() -> Mapped[uuid.UUID]:
     """`uuid primary key default gen_random_uuid()`."""
     return mapped_column(
         UUID(as_uuid=True), primary_key=True, server_default=func.gen_random_uuid()
+    )
+
+
+def uuid_fk(
+    target: str,
+    *,
+    nullable: bool = False,
+    primary_key: bool = False,
+    ondelete: str = "RESTRICT",
+) -> MappedColumn[Any]:
+    """A uuid foreign key. `on delete restrict` is the schema-wide default
+    (03-SCHEMA.md): we don't hard-delete, so a dangling reference is a bug."""
+    return mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey(target, ondelete=ondelete),
+        nullable=nullable,
+        primary_key=primary_key,
     )
 
 

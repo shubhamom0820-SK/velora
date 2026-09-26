@@ -166,11 +166,11 @@ Index `(user_id, created_at desc)`.
 PK `(swiper_id, target_id)`. Index `(target_id, dir) where dir in ('like','super')` — powers "liked you".
 
 ### profile_views
-`viewer_id uuid, viewed_id uuid, last_viewed_at timestamptz, view_count int default 1, pk(viewer_id, viewed_id)`.
+`viewer_id uuid fk users, viewed_id uuid fk users, last_viewed_at timestamptz, view_count int default 1, pk(viewer_id, viewed_id)`.
 Index `(viewed_id, last_viewed_at desc)`. Not written when the viewer is incognito (backlog B-7).
 
 ### liked_you_reveals
-`viewer_id uuid, liker_id uuid, created_at, pk(viewer_id, liker_id)`.
+`viewer_id uuid fk users, liker_id uuid fk users, created_at, pk(viewer_id, liker_id)`.
 
 ### matches
 | column | type | notes |
@@ -202,6 +202,10 @@ Check `user_low < user_high`. Unique `(user_low, user_high)`.
 | last_message_at | timestamptz null | |
 | message_count | int default 0 | for masking + call gates |
 Check `user_low < user_high`. Unique `(user_low, user_high)`.
+Check `status <> 'knotted' OR (knotted_at IS NOT NULL AND expires_at IS NULL)` — a Velora never
+carries an expiry, so the expiry cron can never kill a conversation both people were told is
+permanent. Check `status <> 'active' OR expires_at IS NOT NULL` — an active thread always expires;
+every way into `active` (open, reopen, untie) sets a fresh 24h (T-1.10).
 Indexes: `(expires_at) where status='active'`, `(user_low, last_message_at desc)`,
 `(user_high, last_message_at desc)`.
 
@@ -222,10 +226,10 @@ Indexes: `(expires_at) where status='active'`, `(user_low, last_message_at desc)
 Unique `(sender_id, client_msg_id)`. Index `(thread_id, created_at desc)`.
 
 ### message_unlocks  (men paying to hear a voice note)
-`user_id uuid, message_id uuid, created_at, pk(user_id, message_id)`.
+`user_id uuid fk users, message_id uuid fk messages, created_at, pk(user_id, message_id)`.
 
 ### thread_clears  (one-sided hide)
-`user_id uuid, thread_id uuid, cleared_at timestamptz, pk(user_id, thread_id)`.
+`user_id uuid fk users, thread_id uuid fk threads, cleared_at timestamptz, pk(user_id, thread_id)`.
 A cleared thread is hidden from that user's list; if a new message arrives after `cleared_at`,
 it reappears showing only messages newer than `cleared_at`.
 

@@ -99,7 +99,7 @@ never done silently.
 One migration per task, each with a working `downgrade()`. Build exactly `03-SCHEMA.md`.
 - [x] **T-1.8** Extensions, all enums, `set_updated_at()` trigger function. — `feat(db): extensions and enums [T-1.8]`
 - [x] **T-1.9** Identity + profile: `users`, `sessions`, `banned_identities`, `profiles`, `areas`, `interests`, `profile_interests`, `photos`, `verifications`, plus trigger making `users.gender`/`users.dob` immutable once non-null. — `[T-1.9]`
-- [ ] **T-1.10** Discovery + conversations: `swipes`, `profile_views`, `liked_you_reveals`, `matches`, `threads`, `messages`, `message_unlocks`, `thread_clears`. — `[T-1.10]`
+- [x] **T-1.10** Discovery + conversations: `swipes`, `profile_views`, `liked_you_reveals`, `matches`, `threads`, `messages`, `message_unlocks`, `thread_clears`. — `[T-1.10]`
 - [ ] **T-1.11** Album, kudos, safety: `album_requests`, `kudos`, `gifts`, `gift_sends`, `blocks`, `reports`, `fraud_scores`, `fraud_events`. — `[T-1.11]`
 - [ ] **T-1.12** Money: `wallets`, `ledger_entries` (+ no-update/delete trigger), `action_prices`, `credit_packs`, `payments`, `refund_requests`, `referrals`. — `[T-1.12]`
 - [ ] **T-1.13** Notifications + ops: `push_subscriptions`, `notification_prefs`, `notifications`, `audit_log`, `app_config`, `waitlist`. — `[T-1.13]`
@@ -121,7 +121,7 @@ One migration per task, each with a working `downgrade()`. Build exactly `03-SCH
 
 ### T-1.16 · Schema tests
 - [ ] **Needs:** T-1.13, T-1.5
-- [ ] Tests that prove: `wallets.balance` can't go negative; ledger UPDATE/DELETE raises; `threads` rejects `user_low >= user_high`; `users.gender` can't change once set *(covered in T-1.9, `tests/test_schema.py`)*; username regex enforced *(covered in T-1.9)*; unique `(sender_id, client_msg_id)`.
+- [ ] Tests that prove: `wallets.balance` can't go negative; ledger UPDATE/DELETE raises; `threads` rejects `user_low >= user_high` *(covered in T-1.10)*; `users.gender` can't change once set *(covered in T-1.9, `tests/test_schema.py`)*; username regex enforced *(covered in T-1.9)*; unique `(sender_id, client_msg_id)` *(covered in T-1.10)*.
 - [ ] **Commit:** `test(db): constraint tests [T-1.16]`
 
 ### T-1.17 · Web skeleton
@@ -862,3 +862,12 @@ Claude Code adds items here instead of doing unplanned work. Format:
   **Before T-4.x (photo upload).** Found in review of T-1.9.
   **Done:** migration `36af56c36916` recreates the check with `position IS NOT NULL AND …`;
   a public photo with no position is now refused (`23514`), other kinds still need none.
+- [ ] P-14 · Say `thread_hours`, not "24h" — T-1.10's note in 03-SCHEMA.md (threads) and the
+  `threads` model docstring say every way into `active` sets "a fresh 24h", but the lifetime is
+  `app_config.thread_hours` (seeded 24). Reword both so T-7.x reads the config instead of copying
+  a literal (checklist A). The CHECKs don't depend on the value. **Before T-7.x.** Found in review
+  of T-1.10.
+- [ ] P-15 · Bound `messages.body_raw` and `duration_s` (optional) — `body` is capped at 2000
+  characters but `body_raw` is unbounded, and `duration_s` accepts 0 or negative seconds. API input
+  validation (T-7.x) is the primary bound; matching CHECKs would be defence in depth. Needs a new
+  migration now that T-1.10 is merged (rule 11). Found in review of T-1.10.

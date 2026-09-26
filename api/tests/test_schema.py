@@ -3,7 +3,10 @@
 T-1.8: extensions and the set_updated_at() trigger function.
 T-1.9: the identity and profile tables — the immutable gender/dob trigger, the
 username format, the updated_at triggers, partial unique photo slots, and the
-one cascading foreign key. T-1.16 adds the remaining constraint tests.
+one cascading foreign key.
+T-1.10: discovery and conversations — ordered pairs, one thread per pair, the
+two CHECKs that keep a knotted thread permanent and an active one expiring,
+message dedupe. T-1.16 adds the remaining constraint tests.
 """
 
 from __future__ import annotations
@@ -249,11 +252,16 @@ async def test_updated_at_triggers_are_on_exactly_the_mutable_tables(
     )
 
     assert set(rows.scalars()) == {
+        # T-1.9
         "users",
         "sessions",
         "profiles",
         "photos",
         "verifications",
+        # T-1.10 (profile_views and thread_clears carry their own timestamp)
+        "matches",
+        "threads",
+        "messages",
     }
 
 
@@ -357,5 +365,278 @@ async def test_a_user_with_a_profile_cannot_be_deleted(db: AsyncSession) -> None
     await db.execute(text("insert into profiles (user_id) values (:u)"), {"u": user.id})
 
     state = await _rejected(db, "delete from users where id = :u", {"u": user.id})
+
+    assert state == FOREIGN_KEY_VIOLATION
+
+
+# --- T-1.10 -------------------------------------------------------------------
+
+
+async def _pair(db: AsyncSession) -> tuple[uuid.UUID, uuid.UUID]:
+    """Two users, returned as (low, high) — pairs are stored ordered."""
+    a, b = await _user(db), await _user(db)
+    low, high = sorted((a.id, b.id))
+    return low, high
+
+
+async def _thread(
+    db: AsyncSession, low: uuid.UUID, high: uuid.UUID, **overrides: object
+) -> uuid.UUID:
+    values: dict[str, object] = {
+        "low": low,
+        "high": high,
+        "status": "active",
+        "expires": "now() + interval '24 hours'",
+    }
+    values.update(overrides)
+    expires = values.pop("expires")
+    thread_id = await db.scalar(
+        text(
+            "insert into threads (user_low, user_high, origin, opened_by, status, "
+            f"expires_at) values (:low, :high, 'match', :low, :status, {expires}) "
+            "returning id"
+        ),
+        values,
+    )
+    assert isinstance(thread_id, uuid.UUID)
+    return thread_id
+
+
+# Ordered pairs: user_low < user_high (T-1.16's item, covered here).
+
+
+@pytest.mark.parametrize("table", ["threads", "matches"])
+async def test_pair_must_be_ordered(db: AsyncSession, table: str) -> None:
+    low, high = await _pair(db)
+    extra = (
+        ", origin, opened_by, expires_at) values (:a, :b, 'match', :a, now() + interval '1 day')"
+        if table == "threads"
+        else ") values (:a, :b)"
+    )
+
+    reversed_state = await _rejected(
+        db, f"insert into {table} (user_low, user_high{extra}", {"a": high, "b": low}
+    )
+    equal_state = await _rejected(
+        db, f"insert into {table} (user_low, user_high{extra}", {"a": low, "b": low}
+    )
+
+    assert reversed_state == CHECK_VIOLATION
+    assert equal_state == CHECK_VIOLATION
+
+
+async def test_one_thread_per_pair(db: AsyncSession) -> None:
+    low, high = await _pair(db)
+    await _thread(db, low, high)
+
+    state = await _rejected(
+        db,
+        "insert into threads (user_low, user_high, origin, opened_by, expires_at) "
+        "values (:low, :high, 'dm', :high, now() + interval '1 day')",
+        {"low": low, "high": high},
+    )
+
+    assert state == UNIQUE_VIOLATION
+
+
+async def test_one_match_per_pair(db: AsyncSession) -> None:
+    low, high = await _pair(db)
+    await db.execute(
+        text("insert into matches (user_low, user_high) values (:l, :h)"),
+        {"l": low, "h": high},
+    )
+
+    state = await _rejected(
+        db,
+        "insert into matches (user_low, user_high) values (:l, :h)",
+        {"l": low, "h": high},
+    )
+
+    assert state == UNIQUE_VIOLATION
+
+
+# The Velora promise, guarded from both sides (D-003).
+
+
+async def test_a_knotted_thread_cannot_carry_an_expiry(db: AsyncSession) -> None:
+    """Otherwise the expiry cron would kill a conversation both people were
+    told is permanent."""
+    low, high = await _pair(db)
+    thread_id = await _thread(db, low, high)
+
+    state = await _rejected(
+        db,
+        "update threads set status = 'knotted', knotted_at = now() where id = :t",
+        {"t": thread_id},
+    )
+
+    assert state == CHECK_VIOLATION
+
+
+async def test_a_knotted_thread_needs_knotted_at(db: AsyncSession) -> None:
+    low, high = await _pair(db)
+    thread_id = await _thread(db, low, high)
+
+    state = await _rejected(
+        db,
+        "update threads set status = 'knotted', expires_at = null where id = :t",
+        {"t": thread_id},
+    )
+
+    assert state == CHECK_VIOLATION
+
+
+async def test_knotting_properly_is_allowed(db: AsyncSession) -> None:
+    low, high = await _pair(db)
+    thread_id = await _thread(db, low, high)
+
+    await db.execute(
+        text(
+            "update threads set status = 'knotted', knotted_at = now(), "
+            "expires_at = null where id = :t"
+        ),
+        {"t": thread_id},
+    )
+
+
+async def test_an_active_thread_must_expire(db: AsyncSession) -> None:
+    """Otherwise it would sit active forever and break the 24-hour promise."""
+    low, high = await _pair(db)
+
+    state = await _rejected(
+        db,
+        "insert into threads (user_low, user_high, origin, opened_by) "
+        "values (:low, :high, 'match', :low)",
+        {"low": low, "high": high},
+    )
+
+    assert state == CHECK_VIOLATION
+
+
+async def test_untying_back_to_active_needs_a_fresh_expiry(db: AsyncSession) -> None:
+    """Untie (04-API: DELETE /threads/{id}/knot) returns a Velora to active."""
+    low, high = await _pair(db)
+    thread_id = await _thread(db, low, high)
+    await db.execute(
+        text(
+            "update threads set status = 'knotted', knotted_at = now(), "
+            "expires_at = null where id = :t"
+        ),
+        {"t": thread_id},
+    )
+
+    no_expiry = await _rejected(
+        db, "update threads set status = 'active' where id = :t", {"t": thread_id}
+    )
+    await db.execute(
+        text(
+            "update threads set status = 'active', "
+            "expires_at = now() + interval '24 hours' where id = :t"
+        ),
+        {"t": thread_id},
+    )
+
+    assert no_expiry == CHECK_VIOLATION
+
+
+# Messages.
+
+
+async def _message(
+    db: AsyncSession,
+    thread_id: uuid.UUID,
+    sender_id: uuid.UUID,
+    client_msg_id: uuid.UUID,
+    body: str = "hi",
+) -> None:
+    await db.execute(
+        text(
+            "insert into messages (thread_id, sender_id, kind, body, client_msg_id) "
+            "values (:t, :s, 'text', :b, :c)"
+        ),
+        {"t": thread_id, "s": sender_id, "b": body, "c": client_msg_id},
+    )
+
+
+async def test_a_retried_send_is_stored_once(db: AsyncSession) -> None:
+    """(sender_id, client_msg_id) is unique — T-1.16's item, covered here."""
+    low, high = await _pair(db)
+    thread_id = await _thread(db, low, high)
+    client_msg_id = uuid.uuid4()
+    await _message(db, thread_id, low, client_msg_id)
+
+    state = await _rejected(
+        db,
+        "insert into messages (thread_id, sender_id, kind, body, client_msg_id) "
+        "values (:t, :s, 'text', 'hi again', :c)",
+        {"t": thread_id, "s": low, "c": client_msg_id},
+    )
+
+    assert state == UNIQUE_VIOLATION
+
+
+async def test_two_senders_may_reuse_a_client_msg_id(db: AsyncSession) -> None:
+    low, high = await _pair(db)
+    thread_id = await _thread(db, low, high)
+    shared = uuid.uuid4()
+
+    await _message(db, thread_id, low, shared)
+    await _message(db, thread_id, high, shared)
+
+
+async def test_message_body_is_at_most_2000_characters(db: AsyncSession) -> None:
+    low, high = await _pair(db)
+    thread_id = await _thread(db, low, high)
+    await _message(db, thread_id, low, uuid.uuid4(), body="x" * 2000)
+
+    state = await _rejected(
+        db,
+        "insert into messages (thread_id, sender_id, kind, body, client_msg_id) "
+        "values (:t, :s, 'text', :b, :c)",
+        {"t": thread_id, "s": low, "b": "x" * 2001, "c": uuid.uuid4()},
+    )
+
+    assert state == CHECK_VIOLATION
+
+
+# Swipes, and the FKs added to the doc's shorthand tables (T-1.10 Q2).
+
+
+async def test_one_swipe_per_pair(db: AsyncSession) -> None:
+    low, high = await _pair(db)
+    await db.execute(
+        text("insert into swipes (swiper_id, target_id, dir) values (:a, :b, 'like')"),
+        {"a": low, "b": high},
+    )
+
+    state = await _rejected(
+        db,
+        "insert into swipes (swiper_id, target_id, dir) values (:a, :b, 'pass')",
+        {"a": low, "b": high},
+    )
+
+    assert state == UNIQUE_VIOLATION
+
+
+@pytest.mark.parametrize(
+    ("table", "columns"),
+    [
+        (
+            "profile_views",
+            "(viewer_id, viewed_id, last_viewed_at) values (:u, :x, now())",
+        ),
+        ("liked_you_reveals", "(viewer_id, liker_id) values (:u, :x)"),
+        ("thread_clears", "(user_id, thread_id, cleared_at) values (:u, :x, now())"),
+        ("message_unlocks", "(user_id, message_id) values (:u, :x)"),
+    ],
+)
+async def test_shorthand_tables_reject_dangling_references(
+    db: AsyncSession, table: str, columns: str
+) -> None:
+    user = await _user(db)
+
+    state = await _rejected(
+        db, f"insert into {table} {columns}", {"u": user.id, "x": uuid.uuid4()}
+    )
 
     assert state == FOREIGN_KEY_VIOLATION
