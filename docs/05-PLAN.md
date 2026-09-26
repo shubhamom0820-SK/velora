@@ -862,11 +862,12 @@ Claude Code adds items here instead of doing unplanned work. Format:
   **Before T-4.x (photo upload).** Found in review of T-1.9.
   **Done:** migration `36af56c36916` recreates the check with `position IS NOT NULL AND …`;
   a public photo with no position is now refused (`23514`), other kinds still need none.
-- [ ] P-14 · Say `thread_hours`, not "24h" — T-1.10's note in 03-SCHEMA.md (threads) and the
+- [x] P-14 · Say `thread_hours`, not "24h" — T-1.10's note in 03-SCHEMA.md (threads) and the
   `threads` model docstring say every way into `active` sets "a fresh 24h", but the lifetime is
   `app_config.thread_hours` (seeded 24). Reword both so T-7.x reads the config instead of copying
   a literal (checklist A). The CHECKs don't depend on the value. **Before T-7.x.** Found in review
   of T-1.10.
+  **Done:** both now name `app_config.thread_hours` (seeded 24).
 - [ ] P-15 · Bound `messages.body_raw` and `duration_s` (optional) — `body` is capped at 2000
   characters but `body_raw` is unbounded, and `duration_s` accepts 0 or negative seconds. API input
   validation (T-7.x) is the primary bound; matching CHECKs would be defence in depth. Needs a new

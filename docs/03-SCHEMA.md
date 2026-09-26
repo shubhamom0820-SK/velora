@@ -205,7 +205,8 @@ Check `user_low < user_high`. Unique `(user_low, user_high)`.
 Check `status <> 'knotted' OR (knotted_at IS NOT NULL AND expires_at IS NULL)` — a Velora never
 carries an expiry, so the expiry cron can never kill a conversation both people were told is
 permanent. Check `status <> 'active' OR expires_at IS NOT NULL` — an active thread always expires;
-every way into `active` (open, reopen, untie) sets a fresh 24h (T-1.10).
+every way into `active` (open, reopen, untie) sets a fresh expiry of `app_config.thread_hours`
+(seeded 24) — read the setting, never hardcode the number (T-1.10).
 Indexes: `(expires_at) where status='active'`, `(user_low, last_message_at desc)`,
 `(user_high, last_message_at desc)`.
 

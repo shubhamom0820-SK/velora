@@ -1,13 +1,14 @@
 """`threads` and `thread_clears` — 03-SCHEMA.md §4.
 
-A thread expires 24h after opening unless both people tie the knot, which makes
-it a permanent Velora (D-003). Two CHECKs guard that promise from both sides,
-whatever code path writes the row:
+A thread expires `app_config.thread_hours` (seeded 24) after opening unless both
+people tie the knot, which makes it a permanent Velora (D-003). Two CHECKs guard
+that promise from both sides, whatever code path writes the row:
 
 - a knotted thread has `knotted_at` and **no** `expires_at` — otherwise the
   expiry cron would kill a conversation both people were told is permanent;
 - an active thread **has** `expires_at` — otherwise it would never expire. Every
-  way into `active` (open, reopen, untie) sets a fresh 24h.
+  way into `active` (open, reopen, untie) sets a fresh `thread_hours` expiry —
+  read from app_config, never a literal (checklist A).
 """
 
 from __future__ import annotations
