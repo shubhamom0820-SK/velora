@@ -108,10 +108,10 @@ One migration per task, each with a working `downgrade()`. Build exactly `03-SCH
 - [x] **Done when (each):** `make migrate && make migrate-down && make migrate` succeeds; SQLAlchemy models match.
 
 ### T-1.14 · Reference data migration
-- [ ] **Needs:** T-1.13
-- [ ] Data migration inserting `interests` (21), `gifts` (6, D-016), `action_prices` (D-004), `credit_packs` (D-005: 25/₹1,500 · 50/₹2,500 · 75/₹3,375 · 100/₹4,000, variant A; variant B entry pack ₹999/25 for the beta test), `app_config` seeds, `areas` for the launch city.
-- [ ] **Done when:** counts match; re-running is a no-op (`ON CONFLICT DO NOTHING`).
-- [ ] **Commit:** `feat(db): reference data [T-1.14]`
+- [x] **Needs:** T-1.13
+- [x] Data migration inserting `interests` (24), `gifts` (6, D-016), `action_prices` (D-004), `credit_packs` (D-005: 25/₹1,500 · 50/₹2,500 · 75/₹3,375 · 100/₹4,000, variant A; variant B entry pack ₹999/25 for the beta test), `app_config` seeds, `areas` for the launch city.
+- [x] **Done when:** counts match; re-running is a no-op (`ON CONFLICT DO NOTHING`).
+- [x] **Commit:** `feat(db): reference data [T-1.14]`
 
 ### T-1.15 · Dev seed
 - [ ] **Needs:** T-1.14
@@ -120,9 +120,11 @@ One migration per task, each with a working `downgrade()`. Build exactly `03-SCH
 - [ ] **Commit:** `chore(dev): seed script [T-1.15]`
 
 ### T-1.16 · Schema tests
-- [ ] **Needs:** T-1.13, T-1.5
-- [ ] Tests that prove: `wallets.balance` can't go negative *(covered in T-1.12)*; ledger UPDATE/DELETE raises *(covered in T-1.12, TRUNCATE too)*; `threads` rejects `user_low >= user_high` *(covered in T-1.10)*; `users.gender` can't change once set *(covered in T-1.9, `tests/test_schema.py`)*; username regex enforced *(covered in T-1.9)*; unique `(sender_id, client_msg_id)` *(covered in T-1.10)*.
-- [ ] **Commit:** `test(db): constraint tests [T-1.16]`
+- [-] **Needs:** T-1.13, T-1.5
+- [-] Tests that prove: `wallets.balance` can't go negative *(covered in T-1.12)*; ledger UPDATE/DELETE raises *(covered in T-1.12, TRUNCATE too)*; `threads` rejects `user_low >= user_high` *(covered in T-1.10)*; `users.gender` can't change once set *(covered in T-1.9, `tests/test_schema.py`)*; username regex enforced *(covered in T-1.9)*; unique `(sender_id, client_msg_id)` *(covered in T-1.10)*.
+- [-] **Commit:** `test(db): constraint tests [T-1.16]`
+- **Dropped:** every constraint above is tested in `tests/test_schema.py` by the task that built it
+  (T-1.9 through T-1.12); nothing is left to add. Closed during T-1.14.
 
 ### T-1.17 · Web skeleton
 - [ ] **Needs:** T-1.1
@@ -912,3 +914,41 @@ Claude Code adds items here instead of doing unplanned work. Format:
   "secrets": `auth` is a shared secret, but `p256dh` is the browser's public key. The comment above
   `test_updated_at_triggers_are_on_exactly_the_mutable_tables` says "five mutable tables"; it has
   been wrong since T-1.10 and the set is now 17. Comments only. Found in review of T-1.13.
+- [ ] P-22 · Commit the prototype to the repo — it is "the visual reference for every screen"
+  (08-DESIGN) and the source for T-1.15's 20 dev profiles, T-1.19's UI primitives, T-2.1's landing
+  page, T-3.11's onboarding screens and T-8.7's store sheet, but it has never been in the repo or its
+  history. T-1.14 had to ask for the interests list for the same reason. Suggested home:
+  `docs/prototype/`. **Before T-1.15.** Found during T-1.14.
+- [ ] P-23 · Define what a variant-B man sees in `GET /packs` (T-8.1) — T-1.14 seeds variant B as
+  one row, `entry-25` (25 credits, ₹999). Read literally, "active packs for the user's price-test
+  variant" gives a B user a one-pack store. What D-005 describes is A's ladder with the entry pack
+  in place of `pack-25`. Decide in T-8.1, with a test that B sees four packs. Found during T-1.14.
+- [ ] P-24 · Make the catalogue columns NOT NULL — `areas.city`, `areas.name`, `areas.centroid`,
+  `interests.slug` and `interests.label` are nullable (T-1.9). A catalogue row with no name means
+  nothing, and nullable unique keys (`(city, name)`, `slug`) don't stop duplicate NULLs, so a
+  re-run could duplicate such a row. The T-1.14 seed sets them all. New migration (rule 11).
+  Found during T-1.14.
+- [ ] P-25 · Intent becomes a multi-select catalogue, the same shape as interests — interests are
+  who you are; intents are what you're looking for. **Do right after T-1.14.** Its own migration,
+  because T-1.8 and T-1.9 are merged (rule 11).
+  - Drop `profiles.intent` (and its index `ix_profiles_intent`) and the `intent_t` enum.
+  - Add `intents` (`id smallint pk, slug text unique, label text`) and `profile_intents`
+    (`user_id, intent_id, pk(user_id, intent_id)`).
+  - Seed 10, in sentence case like interests (both show as chips on the same profile): Something
+    serious, Long term, Situationship, Casual dating, Just one night, No strings attached, Open
+    relationship, Discreet, Friendship, Go with the flow.
+  - Users pick 1 to 3, enforced in the service.
+  - Update 03-SCHEMA, 04-API (`POST /me/seeking` takes a list), and the T-3.6 and T-6.2 steps,
+    since discovery filters on intent.
+  - Also touches (found while filing): 04-API `GET /discover`'s `intent=` param and T-6.2's `Card`
+    (one `intent` today); T-6.6 search ("city/intent/interest matches"); T-6.9's filter sheet;
+    T-3.11's "seeking + intent" screen; 08-DESIGN's intent badge; 02-ARCHITECTURE §8's query
+    sketch; and in code `Intent` / `PG_ENUMS` in `app/core/enums.py`, whose test expects 20 enums.
+- [ ] P-26 · Catalogue labels on screen come from `en.ts`, keyed by id — D-033 puts every
+  user-facing string in `web/src/i18n/en.ts`, but 03-SCHEMA calls `gifts.label` "shown in UI", and
+  `GET /gifts` returns `label` (04-API), and `GET /interests` will. **Resolved:** the database
+  label is the admin-facing name and the fallback; the UI reads `en.ts` keyed by id. That is what
+  lets Hindi work later without a data migration. Applies to `gifts.label`, `interests.label` and,
+  after P-25, `intents.label`. Reword 03-SCHEMA's notes on those columns to match; the tasks that
+  show them — T-3.12's interests picker, T-6.8's profile chips, T-8.10's gift sheet, and P-25's
+  intent screens — add the `en.ts` entries and read them. Found during T-1.14.

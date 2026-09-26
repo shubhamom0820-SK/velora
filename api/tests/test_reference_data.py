@@ -1,0 +1,287 @@
+"""Reference data (T-1.14): the catalogues match D-004, D-005, D-016 and
+03-SCHEMA.md §8, and seeding twice changes nothing.
+
+Expected values are written out here, not read from the migration, so a wrong
+value in the migration fails a test instead of agreeing with itself.
+"""
+
+from __future__ import annotations
+
+import importlib.util
+from itertools import pairwise
+from types import ModuleType
+
+import pytest
+from sqlalchemy import Text, text
+from sqlalchemy.dialects.postgresql import JSONB
+from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession
+
+from alembic import command
+from app.core.enums import LedgerReason
+from tests.infra import API_DIR, run_alembic
+
+COUNTS = {
+    "action_prices": 7,
+    "credit_packs": 5,
+    "gifts": 6,
+    "app_config": 7,
+    "interests": 24,
+    "areas": 40,
+}
+
+
+def _revision() -> ModuleType:
+    """The migration itself, so the re-run tests execute its exact inserts."""
+    [path] = (API_DIR / "alembic" / "versions").glob("*_fa16c0908c2c_*.py")
+    spec = importlib.util.spec_from_file_location("reference_data_revision", path)
+    assert spec is not None and spec.loader is not None
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+REVISION = _revision()
+
+
+async def _counts(db: AsyncSession) -> dict[str, int]:
+    return {
+        table: await db.scalar(text(f"select count(*) from {table}"))
+        for table in COUNTS
+    }
+
+
+@pytest.mark.parametrize(("table", "expected"), COUNTS.items())
+async def test_counts_match(db: AsyncSession, table: str, expected: int) -> None:
+    assert await db.scalar(text(f"select count(*) from {table}")) == expected
+
+
+# Prices (D-004).
+
+
+async def test_action_prices_are_d004(db: AsyncSession) -> None:
+    rows = await db.execute(text("select action, credits from action_prices"))
+
+    assert dict(rows.tuples().all()) == {
+        "thread_open": 5,
+        "dm_open": 5,
+        "thread_reopen": 3,
+        "voice_unlock": 5,
+        "album_request": 5,
+        "super_like": 5,
+        "liked_you_reveal": 20,
+    }
+
+
+async def test_every_priced_action_is_a_ledger_reason(db: AsyncSession) -> None:
+    """A price's key is the reason its debit is written with."""
+    actions = set(
+        (await db.execute(text("select action from action_prices"))).scalars()
+    )
+
+    assert actions <= {reason.value for reason in LedgerReason}
+
+
+async def test_the_knot_has_no_price(db: AsyncSession) -> None:
+    """Permanence is granted by the other person, never bought (D-003)."""
+    priced = await db.scalar(
+        text("select count(*) from action_prices where action like '%knot%'")
+    )
+
+    assert priced == 0
+
+
+# Packs (D-005).
+
+
+async def test_variant_a_is_the_d005_ladder(db: AsyncSession) -> None:
+    rows = (
+        await db.execute(
+            text(
+                "select id, credits, price_paise from credit_packs "
+                "where variant = 'A' order by sort"
+            )
+        )
+    ).all()
+
+    assert [tuple(row) for row in rows] == [
+        ("pack-25", 25, 150_000),
+        ("pack-50", 50, 250_000),
+        ("pack-75", 75, 337_500),
+        ("pack-100", 100, 400_000),
+    ]
+    # Each larger pack is cheaper per credit — compared in integers (D-029).
+    assert all(
+        price * next_credits > next_price * credits
+        for (_, credits, price), (_, next_credits, next_price) in pairwise(rows)
+    )
+
+
+async def test_variant_b_is_the_entry_pack(db: AsyncSession) -> None:
+    rows = (
+        await db.execute(
+            text(
+                "select id, credits, price_paise from credit_packs where variant = 'B'"
+            )
+        )
+    ).all()
+
+    assert [tuple(row) for row in rows] == [("entry-25", 25, 99_900)]
+
+
+async def test_every_pack_is_active_with_the_first_purchase_bonus(
+    db: AsyncSession,
+) -> None:
+    rows = await db.execute(
+        text("select distinct bonus_first_pct, active from credit_packs")
+    )
+
+    assert [tuple(row) for row in rows] == [(20, True)]
+
+
+# Gifts (D-016).
+
+
+async def test_gifts_are_d016(db: AsyncSession) -> None:
+    rows = await db.execute(text("select id, credits from gifts order by sort"))
+
+    assert [tuple(row) for row in rows] == [
+        ("smile", 0),
+        ("wave", 0),
+        ("rose", 2),
+        ("coffee", 2),
+        ("chocolate", 4),
+        ("teddy", 4),
+    ]
+
+
+# app_config (03-SCHEMA.md §8).
+
+
+async def test_app_config_seeds(db: AsyncSession) -> None:
+    rows = await db.execute(
+        text("select key, value from app_config").columns(key=Text, value=JSONB)
+    )
+
+    assert dict(rows.tuples().all()) == {
+        "swipe_daily_limit_men": 50,
+        "discovery_radius_km": 25,
+        "thread_hours": 24,
+        "mask_first_n_messages": 20,
+        "kudos_min_messages": 6,
+        "gift_free_daily_limit": 3,
+        "gift_same_recipient_cooldown_h": 24,
+    }
+
+
+# Interests: fixed ids, because the API takes them.
+
+
+async def test_interests_have_fixed_ids_in_order(db: AsyncSession) -> None:
+    rows = (
+        await db.execute(text("select id, slug, label from interests order by id"))
+    ).all()
+
+    assert [row.id for row in rows] == list(range(1, 25))
+    assert [row.label for row in rows] == [
+        "Filter coffee",
+        "Trekking",
+        "Indie music",
+        "Pottery",
+        "Dogs",
+        "Cats",
+        "Old Hindi cinema",
+        "Badminton",
+        "Street food",
+        "Sketching",
+        "Reading",
+        "Yoga",
+        "Baking",
+        "Gaming",
+        "Anime",
+        "Running",
+        "Photography",
+        "Cricket",
+        "Travel",
+        "Startups",
+        "Cooking",
+        "Hopeless romantic",
+        "Yapper",
+        "Yearner",
+    ]
+    assert (rows[0].slug, rows[6].slug) == ("filter-coffee", "old-hindi-cinema")
+
+
+# Areas: the launch city's location fallback (D-034).
+
+MG_ROAD = "SRID=4326;POINT(77.5946 12.9716)"
+
+
+async def test_areas_are_in_the_launch_city(db: AsyncSession) -> None:
+    """Swapped latitude and longitude would land thousands of km away."""
+    cities, farthest_km, distinct_points = (
+        await db.execute(
+            text(
+                "select array_agg(distinct city), "
+                "max(ST_Distance(centroid, ST_GeogFromText(:centre))) / 1000, "
+                "count(distinct ST_AsText(centroid)) from areas"
+            ),
+            {"centre": MG_ROAD},
+        )
+    ).one()
+
+    assert cities == ["Bengaluru"]
+    assert farthest_km < 30
+    assert distinct_points == COUNTS["areas"]
+
+
+# Running it again.
+
+
+async def test_seeding_again_changes_nothing(db: AsyncSession) -> None:
+    before = await _counts(db)
+
+    for statement in REVISION.reference_data():
+        await db.execute(statement)
+
+    assert await _counts(db) == before
+
+
+async def test_seeding_again_keeps_tuned_values(db: AsyncSession) -> None:
+    """Prices and settings are tuned as data; a re-run must never reset them."""
+    await db.execute(text("update gifts set credits = 3 where id = 'rose'"))
+    await db.execute(
+        text("update action_prices set credits = 6 where action = 'thread_open'")
+    )
+    await db.execute(
+        text("update app_config set value = '40' where key = 'swipe_daily_limit_men'")
+    )
+
+    for statement in REVISION.reference_data():
+        await db.execute(statement)
+
+    tuned = (
+        await db.execute(
+            text(
+                "select (select credits from gifts where id = 'rose'), "
+                "(select credits from action_prices where action = 'thread_open'), "
+                "(select value::int from app_config where key = 'swipe_daily_limit_men')"
+            )
+        )
+    ).one()
+    assert tuple(tuned) == (3, 6, 40)
+
+
+async def test_downgrade_removes_the_seeds(test_engine: AsyncEngine) -> None:
+    """The round trip can't see an incomplete downgrade: its upgrade inserts with
+    DO NOTHING, so leftover rows pass silently. Check the tables are empty."""
+    try:
+        await run_alembic(test_engine, command.downgrade, REVISION.down_revision)
+        async with test_engine.connect() as connection:
+            left = {
+                table: await connection.scalar(text(f"select count(*) from {table}"))
+                for table in COUNTS
+            }
+    finally:
+        await run_alembic(test_engine, command.upgrade, "head")
+
+    assert left == dict.fromkeys(COUNTS, 0)

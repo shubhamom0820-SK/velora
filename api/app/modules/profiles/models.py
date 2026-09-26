@@ -122,7 +122,7 @@ class Area(CreatedAt, Base):
 
 
 class Interest(CreatedAt, Base):
-    """Seed data: the 21 interests. A fixed smallint id, not a uuid."""
+    """Seed data: the 24 interests (T-1.14). A fixed smallint id, not a uuid."""
 
     __tablename__ = "interests"
 

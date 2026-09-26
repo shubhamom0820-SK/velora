@@ -115,9 +115,12 @@ Indexes: `GIST(location)`, `GIN(username gin_trgm_ops)`, `GIN(first_name gin_trg
 
 ### areas  (seed data for location fallback)
 `id uuid pk, city text, name text, centroid geography(Point,4326)`. Unique `(city, name)`.
+Seed: 40 Bengaluru neighbourhoods (D-013's default), centroids approximate to about 1 km (T-1.14).
 
-### interests  (seed: the 21 from the prototype)
+### interests  (seed: 24, T-1.14)
 `id smallint pk, slug text unique, label text`.
+Who you are — hobbies and vibe. Ids 1–24 are fixed in seed order, because the API takes
+`interest_ids`; slugs are the labels in kebab-case (`filter-coffee`).
 
 ### profile_interests
 `user_id uuid fk, interest_id smallint fk, pk(user_id, interest_id)`. Exactly 5 per user — enforced
@@ -264,6 +267,7 @@ Unique `(from_id, to_id)`. Check `from_id <> to_id` — self-kudos would manufac
 | active | boolean not null default true | |
 
 Seed (D-016): `smile` 0 · `wave` 0 · `rose` 2 · `coffee` 2 · `chocolate` 4 · `teddy` 4.
+Labels are the ids capitalised; assets are emoji (😊 👋 🌹 ☕ 🍫 🧸).
 
 ### gift_sends
 | column | type | notes |
@@ -337,13 +341,17 @@ wipe the money record. Both raise `restrict_violation` (23001) (T-1.12).
 
 ### action_prices
 `action text pk, credits int not null check (credits >= 0), active boolean not null default true, updated_at`.
-Seed from D-004.
+Seed (D-004): the keys are the seven debit reasons of `ledger_reason_t` — `thread_open` 5 ·
+`dm_open` 5 · `thread_reopen` 3 · `voice_unlock` 5 · `album_request` 5 · `super_like` 5 ·
+`liked_you_reveal` 20. The free knot actions have no row: permanence is never bought (D-003).
 
 ### credit_packs
 `id text pk, credits int not null, price_paise int not null, bonus_first_pct smallint not null default 20,
 active boolean not null default true, sort smallint not null default 0, variant text not null default 'A'`
 (for the beta price test). Checks — invariants, not policy: `credits > 0`, `price_paise > 0`,
 `bonus_first_pct between 0 and 100`. The values themselves stay free to tune (D-005).
+Seed (D-005): `pack-25` 25/₹1,500 · `pack-50` 50/₹2,500 · `pack-75` 75/₹3,375 · `pack-100`
+100/₹4,000 (variant A, sort 1–4); `entry-25` 25/₹999 (variant B, the beta price test, T-10.4).
 
 ### payments
 | column | type | notes |
@@ -422,9 +430,12 @@ Unique ignores case (citext). No format check in the database: T-2.3 validates i
 
 ## 9. Seed data (Sprint 1, `alembic` data migration + `make seed` for dev)
 
-- `interests` — 21 rows
+- `interests` — 24 rows
 - `gifts` — 6 rows (D-016)
-- `action_prices`, `credit_packs`, `app_config` — from D-004 / D-005
-- `areas` — ~40 neighbourhoods for the launch city
+- `action_prices`, `credit_packs`, `app_config` — from D-004 / D-005 / §8
+- `areas` — 40 neighbourhoods for the launch city
+
+One data migration (T-1.14), every insert `ON CONFLICT DO NOTHING`: re-running it changes nothing
+and never resets a value tuned since.
 - **dev only** (`make seed`): the 20 prototype profiles (10 women, 10 men) with photos,
   a moderator account, and a man with 60 credits for testing.
