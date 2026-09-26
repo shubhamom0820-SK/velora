@@ -914,11 +914,13 @@ Claude Code adds items here instead of doing unplanned work. Format:
   "secrets": `auth` is a shared secret, but `p256dh` is the browser's public key. The comment above
   `test_updated_at_triggers_are_on_exactly_the_mutable_tables` says "five mutable tables"; it has
   been wrong since T-1.10 and the set is now 17. Comments only. Found in review of T-1.13.
-- [ ] P-22 · Commit the prototype to the repo — it is "the visual reference for every screen"
+- [x] P-22 · Commit the prototype to the repo — it is "the visual reference for every screen"
   (08-DESIGN) and the source for T-1.15's 20 dev profiles, T-1.19's UI primitives, T-2.1's landing
   page, T-3.11's onboarding screens and T-8.7's store sheet, but it has never been in the repo or its
   history. T-1.14 had to ask for the interests list for the same reason. Suggested home:
   `docs/prototype/`. **Before T-1.15.** Found during T-1.14.
+  **Done:** committed as `docs/prototype/velora-prototype-reference.html`. It predates the Velora
+  rename, so it says "Knot": the screens and flows are the reference, not the name.
 - [ ] P-23 · Define what a variant-B man sees in `GET /packs` (T-8.1) — T-1.14 seeds variant B as
   one row, `entry-25` (25 credits, ₹999). Read literally, "active packs for the user's price-test
   variant" gives a B user a one-pack store. What D-005 describes is A's ladder with the entry pack

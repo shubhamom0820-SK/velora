@@ -1,7 +1,8 @@
 # 08 · Design system
 
-The prototype is the visual reference for every screen. This file turns it into rules so the
-real app stays consistent.
+The prototype (`docs/prototype/velora-prototype-reference.html`) is the visual reference for every
+screen. It predates the rename to Velora, so it says "Knot" — the screens and flows are the
+reference, not the name. This file turns it into rules so the real app stays consistent.
 
 ## 1. Tokens — the only place colours live
 
