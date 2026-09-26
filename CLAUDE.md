@@ -132,6 +132,6 @@ make e2e         # Playwright
 
 ## Do not build (unless a task says so)
 
-Deferred to after beta: video/voice calls, Vibe Room, virtual gifts, native apps, iOS.
+Deferred to after beta: video/voice calls, Vibe Room, native apps, iOS.
 Rejected permanently: public ratings or reviews of people, paying to remove a review,
 fake or operated profiles, gender self-change after signup.

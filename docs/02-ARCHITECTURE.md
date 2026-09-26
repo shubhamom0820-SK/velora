@@ -40,7 +40,7 @@ api/app/
                           each: Protocol + RealImpl + FakeImpl
   modules/
     auth users profiles photos verification discovery swipes matches
-    threads messages album kudos safety wallet payments referrals
+    threads messages album kudos gifts safety wallet payments referrals
     notifications admin waitlist realtime
   workers/
     main.py               ARQ WorkerSettings, cron schedule

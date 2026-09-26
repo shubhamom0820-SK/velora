@@ -6,7 +6,10 @@ username format, the updated_at triggers, partial unique photo slots, and the
 one cascading foreign key.
 T-1.10: discovery and conversations — ordered pairs, one thread per pair, the
 two CHECKs that keep a knotted thread permanent and an active one expiring,
-message dedupe. T-1.16 adds the remaining constraint tests.
+message dedupe.
+T-1.11: album, kudos, gifts and safety — one live album request per pair, no
+acting on yourself, never-negative charges, report and fraud-score bounds.
+T-1.16 adds the remaining constraint tests.
 """
 
 from __future__ import annotations
@@ -262,6 +265,10 @@ async def test_updated_at_triggers_are_on_exactly_the_mutable_tables(
         "matches",
         "threads",
         "messages",
+        # T-1.11 (gifts is catalogue seed data, like areas and interests)
+        "album_requests",
+        "reports",
+        "fraud_scores",
     }
 
 
@@ -637,6 +644,262 @@ async def test_shorthand_tables_reject_dangling_references(
 
     state = await _rejected(
         db, f"insert into {table} {columns}", {"u": user.id, "x": uuid.uuid4()}
+    )
+
+    assert state == FOREIGN_KEY_VIOLATION
+
+
+# --- T-1.11 -------------------------------------------------------------------
+
+
+async def _gift(db: AsyncSession, gift_id: str = "test-rose", credits: int = 2) -> str:
+    """The catalogue is empty until T-1.14 seeds it; add one inside the test."""
+    await db.execute(
+        text(
+            "insert into gifts (id, label, asset, credits) "
+            "values (:id, 'Rose', 'rose', :c)"
+        ),
+        {"id": gift_id, "c": credits},
+    )
+    return gift_id
+
+
+async def _album_request(
+    db: AsyncSession, requester: uuid.UUID, owner: uuid.UUID, status: str = "pending"
+) -> None:
+    await db.execute(
+        text(
+            "insert into album_requests (requester_id, owner_id, status) "
+            "values (:r, :o, :s)"
+        ),
+        {"r": requester, "o": owner, "s": status},
+    )
+
+
+# Album requests.
+
+
+@pytest.mark.parametrize("live", ["pending", "granted"])
+async def test_one_live_album_request_per_pair(db: AsyncSession, live: str) -> None:
+    low, high = await _pair(db)
+    await _album_request(db, low, high, status=live)
+
+    state = await _rejected(
+        db,
+        "insert into album_requests (requester_id, owner_id) values (:r, :o)",
+        {"r": low, "o": high},
+    )
+
+    assert state == UNIQUE_VIOLATION
+
+
+@pytest.mark.parametrize("finished", ["declined", "revoked"])
+async def test_a_finished_album_request_frees_the_pair(
+    db: AsyncSession, finished: str
+) -> None:
+    low, high = await _pair(db)
+    await _album_request(db, low, high, status=finished)
+
+    await _album_request(db, low, high)
+
+
+# No acting on yourself (T-1.11 Q4).
+
+
+@pytest.mark.parametrize(
+    ("table", "sql"),
+    [
+        ("album_requests", "(requester_id, owner_id) values (:u, :u)"),
+        (
+            "kudos",
+            "(from_id, to_id, kind, thread_id) values (:u, :u, 'genuinely_funny', :t)",
+        ),
+        ("gift_sends", "(sender_id, recipient_id, gift_id) values (:u, :u, :g)"),
+        ("blocks", "(blocker_id, blocked_id) values (:u, :u)"),
+        ("reports", "(reporter_id, reported_id, reason) values (:u, :u, 'fake')"),
+    ],
+)
+async def test_nobody_can_act_on_themselves(
+    db: AsyncSession, table: str, sql: str
+) -> None:
+    low, high = await _pair(db)
+    thread_id = await _thread(db, low, high)
+    gift_id = await _gift(db)
+
+    state = await _rejected(
+        db, f"insert into {table} {sql}", {"u": low, "t": thread_id, "g": gift_id}
+    )
+
+    assert state == CHECK_VIOLATION
+
+
+# Charges are never negative (T-1.11 Q4).
+
+
+async def test_album_request_charge_is_never_negative(db: AsyncSession) -> None:
+    low, high = await _pair(db)
+
+    state = await _rejected(
+        db,
+        "insert into album_requests (requester_id, owner_id, credits_charged) "
+        "values (:r, :o, -1)",
+        {"r": low, "o": high},
+    )
+
+    assert state == CHECK_VIOLATION
+
+
+async def test_gift_send_charge_is_never_negative(db: AsyncSession) -> None:
+    low, high = await _pair(db)
+    gift_id = await _gift(db)
+
+    state = await _rejected(
+        db,
+        "insert into gift_sends (sender_id, recipient_id, gift_id, credits_charged) "
+        "values (:s, :r, :g, -2)",
+        {"s": low, "r": high, "g": gift_id},
+    )
+
+    assert state == CHECK_VIOLATION
+
+
+# Kudos.
+
+
+async def test_one_kudos_per_pair(db: AsyncSession) -> None:
+    low, high = await _pair(db)
+    thread_id = await _thread(db, low, high)
+    sql = "insert into kudos (from_id, to_id, kind, thread_id) values (:f, :t, :k, :th)"
+    await db.execute(
+        text(sql), {"f": low, "t": high, "k": "genuinely_funny", "th": thread_id}
+    )
+
+    state = await _rejected(
+        db, sql, {"f": low, "t": high, "k": "really_thoughtful", "th": thread_id}
+    )
+
+    assert state == UNIQUE_VIOLATION
+
+
+# Gifts: prices are data (D-016), so only "never negative" is enforced.
+
+
+async def test_gift_price_is_never_negative(db: AsyncSession) -> None:
+    state = await _rejected(
+        db,
+        "insert into gifts (id, label, asset, credits) values ('bad', 'Bad', 'x', -1)",
+    )
+
+    assert state == CHECK_VIOLATION
+
+
+async def test_a_gift_needs_a_label_and_an_asset(db: AsyncSession) -> None:
+    """A gift with no label can't be rendered (T-1.11 Q6)."""
+    no_label = await _rejected(
+        db, "insert into gifts (id, asset, credits) values ('no-label', 'x', 0)"
+    )
+    no_asset = await _rejected(
+        db, "insert into gifts (id, label, credits) values ('no-asset', 'X', 0)"
+    )
+
+    assert no_label == "23502"  # not_null_violation
+    assert no_asset == "23502"
+
+
+async def test_catalogue_defaults(db: AsyncSession) -> None:
+    await db.execute(
+        text("insert into gifts (id, label, asset, credits) values ('d', 'D', 'd', 0)")
+    )
+
+    sort, active = (
+        await db.execute(text("select sort, active from gifts where id = 'd'"))
+    ).one()
+
+    assert (sort, active) == (0, True)
+
+
+async def test_a_gift_send_needs_a_real_gift(db: AsyncSession) -> None:
+    low, high = await _pair(db)
+
+    state = await _rejected(
+        db,
+        "insert into gift_sends (sender_id, recipient_id, gift_id) "
+        "values (:s, :r, 'no-such-gift')",
+        {"s": low, "r": high},
+    )
+
+    assert state == FOREIGN_KEY_VIOLATION
+
+
+# Reports.
+
+
+async def test_report_details_at_most_500(db: AsyncSession) -> None:
+    low, high = await _pair(db)
+
+    state = await _rejected(
+        db,
+        "insert into reports (reporter_id, reported_id, reason, details) "
+        "values (:a, :b, 'scam', :d)",
+        {"a": low, "b": high, "d": "x" * 501},
+    )
+
+    assert state == CHECK_VIOLATION
+
+
+async def test_report_action_is_one_of_four(db: AsyncSession) -> None:
+    low, high = await _pair(db)
+    sql = (
+        "insert into reports (reporter_id, reported_id, reason, action) "
+        "values (:a, :b, 'scam', :act)"
+    )
+
+    for action in ("freeze", "ban", "warn", "none"):
+        async with db.begin_nested():
+            await db.execute(text(sql), {"a": low, "b": high, "act": action})
+    state = await _rejected(db, sql, {"a": low, "b": high, "act": "delete"})
+
+    assert state == CHECK_VIOLATION
+
+
+# Fraud (D-031): the score is 0-100; bands are policy, not a CHECK.
+
+
+@pytest.mark.parametrize("score", [-1, 101])
+async def test_fraud_score_is_0_to_100(db: AsyncSession, score: int) -> None:
+    user = await _user(db)
+
+    state = await _rejected(
+        db,
+        "insert into fraud_scores (user_id, score) values (:u, :s)",
+        {"u": user.id, "s": score},
+    )
+
+    assert state == CHECK_VIOLATION
+
+
+# FKs spelled out on the shorthand tables (T-1.10's ruling, applied again).
+
+
+@pytest.mark.parametrize(
+    ("table", "columns"),
+    [
+        ("blocks", "(blocker_id, blocked_id) values (:u, :x)"),
+        ("fraud_scores", "(user_id) values (:x)"),
+        ("fraud_events", "(user_id, signal, weight) values (:x, 'burst', 10)"),
+        (
+            "reports",
+            "(reporter_id, reported_id, reason, thread_id) values (:u, :u2, 'other', :x)",
+        ),
+    ],
+)
+async def test_shorthand_references_are_real(
+    db: AsyncSession, table: str, columns: str
+) -> None:
+    low, high = await _pair(db)
+
+    state = await _rejected(
+        db, f"insert into {table} {columns}", {"u": low, "u2": high, "x": uuid.uuid4()}
     )
 
     assert state == FOREIGN_KEY_VIOLATION

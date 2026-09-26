@@ -242,26 +242,26 @@ it reappears showing only messages newer than `cleared_at`.
 | column | type | notes |
 |---|---|---|
 | id | uuid pk | |
-| requester_id | uuid fk | |
-| owner_id | uuid fk | |
+| requester_id | uuid fk users | |
+| owner_id | uuid fk users | |
 | status | album_req_t default 'pending' | |
-| credits_charged | int default 0 | refunded on decline |
+| credits_charged | int not null default 0 | refunded on decline; check `>= 0` |
 | decided_at | timestamptz null | |
-Unique `(requester_id, owner_id) where status in ('pending','granted')`.
+Unique `(requester_id, owner_id) where status in ('pending','granted')`. Check `requester_id <> owner_id`.
 
 ### kudos
-`id uuid pk, from_id uuid, to_id uuid, kind kudos_t, thread_id uuid, created_at`.
-Unique `(from_id, to_id)`. Only allowed after the thread has ≥ 6 messages.
+`id uuid pk, from_id uuid fk users, to_id uuid fk users, kind kudos_t, thread_id uuid fk threads, created_at`.
+Unique `(from_id, to_id)`. Check `from_id <> to_id` — self-kudos would manufacture social proof. Only allowed after the thread has ≥ 6 messages.
 
 ### gifts  (catalogue, seeded)
 | column | type | notes |
 |---|---|---|
 | id | text pk | slug, e.g. `rose` |
-| label | text | shown in UI |
-| asset | text | emoji or icon key |
+| label | text not null | shown in UI |
+| asset | text not null | emoji or icon key |
 | credits | int not null check (credits >= 0) | 0, 2 or 4 |
-| sort | smallint | display order |
-| active | boolean default true | |
+| sort | smallint not null default 0 | display order |
+| active | boolean not null default true | |
 
 Seed (D-016): `smile` 0 · `wave` 0 · `rose` 2 · `coffee` 2 · `chocolate` 4 · `teddy` 4.
 
@@ -272,35 +272,39 @@ Seed (D-016): `smile` 0 · `wave` 0 · `rose` 2 · `coffee` 2 · `chocolate` 4 �
 | sender_id | uuid fk users | |
 | recipient_id | uuid fk users | |
 | gift_id | text fk gifts | |
-| credits_charged | int not null default 0 | copied at send time |
+| credits_charged | int not null default 0 | copied at send time; check `>= 0` |
 | thread_id | uuid null fk threads | set if a thread already existed |
 | created_at | timestamptz | |
 Indexes: `(recipient_id, created_at desc)`, `(sender_id, created_at desc)`,
 `(sender_id, recipient_id, gift_id, created_at desc)` for the cooldown check.
+Check `sender_id <> recipient_id`. No check pins prices to particular values — prices are data (D-016).
 
 ### blocks
-`blocker_id uuid, blocked_id uuid, created_at, pk(blocker_id, blocked_id)`. Index `(blocked_id)`.
+`blocker_id uuid fk users, blocked_id uuid fk users, created_at, pk(blocker_id, blocked_id)`. Index `(blocked_id)`.
+Check `blocker_id <> blocked_id`.
 
 ### reports
 | column | type | notes |
 |---|---|---|
 | id | uuid pk | |
-| reporter_id | uuid fk | |
-| reported_id | uuid fk | |
+| reporter_id | uuid fk users | |
+| reported_id | uuid fk users | |
 | reason | report_reason_t | |
-| details | text null | ≤ 500 |
-| thread_id | uuid null | context |
+| details | text null | ≤ 500 (check) |
+| thread_id | uuid null fk threads | context |
 | status | report_status_t default 'open' | |
-| action | text null | freeze / ban / warn / none |
+| action | text null | check: one of `freeze` / `ban` / `warn` / `none` |
 | resolved_by | uuid null fk users | |
 | resolved_at | timestamptz null | |
 Indexes: `(status, created_at)`, `(reported_id, created_at desc)`.
+Check `reporter_id <> reported_id` — a self-report could probe the auto-freeze rule (D-031).
 
 ### fraud_scores
-`user_id uuid pk, score smallint, band fraud_band_t, signals jsonb, updated_at`.
+`user_id uuid pk fk users, score smallint not null default 0, band fraud_band_t not null default 'normal', signals jsonb, updated_at`.
+Check `score between 0 and 100` (D-031). Bands are policy, so no check ties them to the score.
 
 ### fraud_events
-`id uuid pk, user_id uuid, signal text, weight smallint, meta jsonb, created_at`.
+`id uuid pk, user_id uuid fk users, signal text not null, weight smallint not null, meta jsonb, created_at`.
 Index `(user_id, created_at desc)`.
 
 ---

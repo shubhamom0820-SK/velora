@@ -100,7 +100,7 @@ One migration per task, each with a working `downgrade()`. Build exactly `03-SCH
 - [x] **T-1.8** Extensions, all enums, `set_updated_at()` trigger function. — `feat(db): extensions and enums [T-1.8]`
 - [x] **T-1.9** Identity + profile: `users`, `sessions`, `banned_identities`, `profiles`, `areas`, `interests`, `profile_interests`, `photos`, `verifications`, plus trigger making `users.gender`/`users.dob` immutable once non-null. — `[T-1.9]`
 - [x] **T-1.10** Discovery + conversations: `swipes`, `profile_views`, `liked_you_reveals`, `matches`, `threads`, `messages`, `message_unlocks`, `thread_clears`. — `[T-1.10]`
-- [ ] **T-1.11** Album, kudos, safety: `album_requests`, `kudos`, `gifts`, `gift_sends`, `blocks`, `reports`, `fraud_scores`, `fraud_events`. — `[T-1.11]`
+- [x] **T-1.11** Album, kudos, safety: `album_requests`, `kudos`, `gifts`, `gift_sends`, `blocks`, `reports`, `fraud_scores`, `fraud_events`. — `[T-1.11]`
 - [ ] **T-1.12** Money: `wallets`, `ledger_entries` (+ no-update/delete trigger), `action_prices`, `credit_packs`, `payments`, `refund_requests`, `referrals`. — `[T-1.12]`
 - [ ] **T-1.13** Notifications + ops: `push_subscriptions`, `notification_prefs`, `notifications`, `audit_log`, `app_config`, `waitlist`. — `[T-1.13]`
 - **For T-1.10 → T-1.13 (from T-1.9):** autogenerate drops `create_type=False` on every enum column,
@@ -872,3 +872,9 @@ Claude Code adds items here instead of doing unplanned work. Format:
   characters but `body_raw` is unbounded, and `duration_s` accepts 0 or negative seconds. API input
   validation (T-7.x) is the primary bound; matching CHECKs would be defence in depth. Needs a new
   migration now that T-1.10 is merged (rule 11). Found in review of T-1.10.
+- [ ] P-16 · Decide whether unblocking keeps history — `blocks` is one row per pair with no
+  history, so unless T-9.1 designs otherwise, unblock is a `DELETE` and the fact that A blocked B is
+  gone. Rule 12's explicit list doesn't name blocks, but its principle does ("nothing is hard-deleted
+  that moderation may need"), and "blocked by many people" is a fraud and moderation signal. Options:
+  soft-unblock (`unblocked_at`, primary key replaced by a partial unique index) or accept the loss.
+  Needs a new migration (T-1.11 is merged). **Before T-9.1.** Found in review of T-1.11.
