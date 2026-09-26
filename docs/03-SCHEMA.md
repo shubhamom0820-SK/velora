@@ -322,46 +322,57 @@ Index `(user_id, created_at desc)`.
 | column | type | notes |
 |---|---|---|
 | id | uuid pk | |
-| user_id | uuid fk | |
+| user_id | uuid fk users | |
 | delta | int not null | CHECK (delta <> 0) |
 | balance_after | int not null | CHECK (balance_after >= 0) |
-| reason | ledger_reason_t | |
+| reason | ledger_reason_t not null | |
 | ref_type | text null | e.g. `thread`, `payment` |
-| ref_id | uuid null | |
+| ref_id | uuid null | polymorphic, so no fk |
 | idempotency_key | text not null unique | |
 | created_at | timestamptz | |
-Index `(user_id, created_at desc)`.
-Trigger `ledger_no_update_delete`: raises on UPDATE or DELETE.
+Index `(user_id, created_at desc)`. Check `(ref_type IS NULL) = (ref_id IS NULL)`.
+Trigger `ledger_no_update_delete`: raises on UPDATE or DELETE. Trigger `ledger_no_truncate`
+(statement-level): raises on TRUNCATE, which skips row triggers — without it one command could
+wipe the money record. Both raise `restrict_violation` (23001) (T-1.12).
 
 ### action_prices
-`action text pk, credits int not null check (credits >= 0), active boolean default true, updated_at`.
+`action text pk, credits int not null check (credits >= 0), active boolean not null default true, updated_at`.
 Seed from D-004.
 
 ### credit_packs
-`id text pk, credits int, price_paise int, bonus_first_pct smallint default 20, active boolean,
-sort smallint, variant text default 'A'` (for the beta price test).
+`id text pk, credits int not null, price_paise int not null, bonus_first_pct smallint not null default 20,
+active boolean not null default true, sort smallint not null default 0, variant text not null default 'A'`
+(for the beta price test). Checks — invariants, not policy: `credits > 0`, `price_paise > 0`,
+`bonus_first_pct between 0 and 100`. The values themselves stay free to tune (D-005).
 
 ### payments
 | column | type | notes |
 |---|---|---|
 | id | uuid pk | |
-| user_id | uuid fk | |
+| user_id | uuid fk users | |
 | pack_id | text fk credit_packs | |
-| amount_paise | int | copied from pack at order time |
-| credits | int | copied |
-| bonus_credits | int default 0 | |
-| provider | text default 'razorpay' | |
+| amount_paise | int not null | copied from pack at order time; check `> 0` |
+| credits | int not null | copied; check `> 0` |
+| bonus_credits | int not null default 0 | check `>= 0` |
+| provider | text not null default 'razorpay' | |
 | provider_order_id | text unique not null | |
 | provider_payment_id | text unique null | **idempotency anchor** |
-| status | payment_status_t default 'created' | |
+| status | payment_status_t not null default 'created' | |
 | paid_at | timestamptz null | |
 | raw_webhook | jsonb null | last verified payload |
 
+Check `status NOT IN ('paid','refunded') OR (provider_payment_id IS NOT NULL AND paid_at IS NOT NULL)` —
+once money has moved the idempotency anchor exists, or a payment could be credited twice.
+Triggers `payments_no_delete` and `payments_no_truncate`: payments are never hard-deleted
+(rule 12); status updates are allowed. Both raise `restrict_violation` (23001) (T-1.12).
+
 ### refund_requests
-`id uuid pk, user_id uuid, payment_id uuid, reason text, status text default 'open', created_at`.
+`id uuid pk, user_id uuid fk users, payment_id uuid fk payments, reason text, status text not null default 'open', created_at`.
+`status` is free text on purpose: T-8.3 owns the refund workflow and defines its values.
 
 ### referrals
-`referee_id uuid pk, referrer_id uuid, rewarded_at timestamptz null, created_at`.
+`referee_id uuid pk fk users, referrer_id uuid fk users, rewarded_at timestamptz null, created_at`.
+Check `referee_id <> referrer_id` — a self-referral would farm credits on both sides of one account.
 Reward (both get credits) only after the referee's first paid purchase or selfie verification.
 
 ---

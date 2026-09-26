@@ -101,7 +101,7 @@ One migration per task, each with a working `downgrade()`. Build exactly `03-SCH
 - [x] **T-1.9** Identity + profile: `users`, `sessions`, `banned_identities`, `profiles`, `areas`, `interests`, `profile_interests`, `photos`, `verifications`, plus trigger making `users.gender`/`users.dob` immutable once non-null. — `[T-1.9]`
 - [x] **T-1.10** Discovery + conversations: `swipes`, `profile_views`, `liked_you_reveals`, `matches`, `threads`, `messages`, `message_unlocks`, `thread_clears`. — `[T-1.10]`
 - [x] **T-1.11** Album, kudos, safety: `album_requests`, `kudos`, `gifts`, `gift_sends`, `blocks`, `reports`, `fraud_scores`, `fraud_events`. — `[T-1.11]`
-- [ ] **T-1.12** Money: `wallets`, `ledger_entries` (+ no-update/delete trigger), `action_prices`, `credit_packs`, `payments`, `refund_requests`, `referrals`. — `[T-1.12]`
+- [x] **T-1.12** Money: `wallets`, `ledger_entries` (+ no-update/delete trigger), `action_prices`, `credit_packs`, `payments`, `refund_requests`, `referrals`. — `[T-1.12]`
 - [ ] **T-1.13** Notifications + ops: `push_subscriptions`, `notification_prefs`, `notifications`, `audit_log`, `app_config`, `waitlist`. — `[T-1.13]`
 - **For T-1.10 → T-1.13 (from T-1.9):** autogenerate drops `create_type=False` on every enum column,
   and the line wrapping varies, so **parse the migration file to verify it — never eyeball it.**
@@ -121,7 +121,7 @@ One migration per task, each with a working `downgrade()`. Build exactly `03-SCH
 
 ### T-1.16 · Schema tests
 - [ ] **Needs:** T-1.13, T-1.5
-- [ ] Tests that prove: `wallets.balance` can't go negative; ledger UPDATE/DELETE raises; `threads` rejects `user_low >= user_high` *(covered in T-1.10)*; `users.gender` can't change once set *(covered in T-1.9, `tests/test_schema.py`)*; username regex enforced *(covered in T-1.9)*; unique `(sender_id, client_msg_id)` *(covered in T-1.10)*.
+- [ ] Tests that prove: `wallets.balance` can't go negative *(covered in T-1.12)*; ledger UPDATE/DELETE raises *(covered in T-1.12, TRUNCATE too)*; `threads` rejects `user_low >= user_high` *(covered in T-1.10)*; `users.gender` can't change once set *(covered in T-1.9, `tests/test_schema.py`)*; username regex enforced *(covered in T-1.9)*; unique `(sender_id, client_msg_id)` *(covered in T-1.10)*.
 - [ ] **Commit:** `test(db): constraint tests [T-1.16]`
 
 ### T-1.17 · Web skeleton
@@ -827,6 +827,10 @@ Claude Code adds items here instead of doing unplanned work. Format:
   contend anyway. The 🔒 tests #1–#3 in `06-TESTING.md` (wallet concurrency and idempotency, T-5.4;
   webhook idempotency, T-8.2) need genuinely committed transactions on separate connections, with
   the tables truncated afterwards. **Needed before T-5.4.** Found in review of T-1.5.
+  **Note from T-1.12:** truncation won't work — `ledger_entries` refuses UPDATE, DELETE *and*
+  TRUNCATE, and `payments` refuses DELETE and TRUNCATE. Decide the cleanup in T-5.4, where the
+  constraint is felt: a throwaway database per run, or fresh user ids per run (production never
+  deletes from the ledger either).
 - [ ] P-08 · `TEST_REDIS_URL` override — `TEST_DATABASE_URL` can be overridden but the test Redis
   is fixed at `127.0.0.1:6379/1`. If T-1.20's CI runs Redis anywhere else, the harness reports the
   stack unreachable and CI hard-fails by design. Add the override alongside T-1.20. Found in review
@@ -878,3 +882,21 @@ Claude Code adds items here instead of doing unplanned work. Format:
   that moderation may need"), and "blocked by many people" is a fraud and moderation signal. Options:
   soft-unblock (`unblocked_at`, primary key replaced by a partial unique index) or accept the loss.
   Needs a new migration (T-1.11 is merged). **Before T-9.1.** Found in review of T-1.11.
+- [ ] P-17 · Refuse DELETE and TRUNCATE on `messages` and `reports` — rule 12 names messages,
+  reports, ledger and payments as never hard-deleted. T-1.12 enforces it in the database for the
+  ledger and payments (`refuse_change()`, `restrict_violation` 23001); `messages` and `reports`
+  were merged earlier without it. Reuse `refuse_change()` in a new migration (rule 11). Clearing a
+  chat stays one-sided (`thread_clears`), so no legitimate path deletes messages. Found during T-1.12.
+- [ ] P-18 · App connects as a least-privilege database role — T-1.12's guards (append-only ledger,
+  never-deleted payments) are triggers: they stop application bugs, not a privileged role. Proven:
+  as table owner or superuser, `SET session_replication_role = replica` or `ALTER TABLE … DISABLE
+  TRIGGER` lets a `DELETE` straight through. If the API connects to Supabase as the owning role, an
+  injection or stray script has those bypasses. The API must use a role that doesn't own the tables
+  and can't `ALTER` them or set `session_replication_role`; migrations run as the owner.
+  **Before T-1.22.** Found in review of T-1.12.
+- [ ] P-19 · Namespace ledger idempotency keys per user — `ledger_entries.idempotency_key` is unique
+  across all users, and money routes accept a client `Idempotency-Key` header (02-ARCHITECTURE §3).
+  Stored raw, two users sending the same key collide: the second user's genuine debit is refused —
+  or, if the service reads a unique violation as "already applied", reported as paid when it wasn't.
+  `wallet.service` must store a namespaced key, e.g. `{user_id}:{operation}:{client key}`.
+  **Design into T-5.x.** Found in review of T-1.12.

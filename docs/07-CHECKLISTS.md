@@ -8,6 +8,8 @@
 - [ ] Every acceptance item in `05-PLAN.md` for this task is met
 - [ ] Tests added in the same change; `make lint test` clean
 - [ ] No `print`, no commented-out code, no stray TODO without a Proposed task
+- [ ] Any test that implements an item on `06-TESTING.md`'s never-skip list carries
+      `@pytest.mark.critical`, so CI runs it first
 - [ ] No literal prices, limits or durations in code — read from `action_prices` / `app_config`
 - [ ] No hex colours outside `tokens.css`; no user-facing string outside `en.ts`
 - [ ] Types regenerated (`make types`) if any API schema changed

@@ -9,7 +9,10 @@ two CHECKs that keep a knotted thread permanent and an active one expiring,
 message dedupe.
 T-1.11: album, kudos, gifts and safety — one live album request per pair, no
 acting on yourself, never-negative charges, report and fraud-score bounds.
-T-1.16 adds the remaining constraint tests.
+T-1.12: money — a balance never below zero, an append-only ledger (UPDATE,
+DELETE and TRUNCATE refused), payments never hard-deleted, and a paid payment
+always carrying its idempotency anchor. With this, every constraint T-1.16 lists
+is tested where it was built.
 """
 
 from __future__ import annotations
@@ -145,6 +148,7 @@ async def test_gender_and_dob_can_be_set_once(db: AsyncSession) -> None:
     assert row == ("male", date(2000, 1, 1))
 
 
+@pytest.mark.critical  # 06-TESTING.md #8: gender immutable — DB trigger also blocks
 @pytest.mark.parametrize(
     ("column", "first", "second"),
     [
@@ -172,6 +176,7 @@ async def test_identity_cannot_change_once_set(
     assert state == CHECK_VIOLATION
 
 
+@pytest.mark.critical  # 06-TESTING.md #8
 @pytest.mark.parametrize("column", ["gender", "dob"])
 async def test_identity_cannot_be_cleared_once_set(
     db: AsyncSession, column: str
@@ -269,6 +274,11 @@ async def test_updated_at_triggers_are_on_exactly_the_mutable_tables(
         "album_requests",
         "reports",
         "fraud_scores",
+        # T-1.12 (ledger is append-only; credit_packs is catalogue seed data)
+        "wallets",
+        "action_prices",
+        "payments",
+        "refund_requests",
     }
 
 
@@ -717,6 +727,8 @@ async def test_a_finished_album_request_frees_the_pair(
         ("gift_sends", "(sender_id, recipient_id, gift_id) values (:u, :u, :g)"),
         ("blocks", "(blocker_id, blocked_id) values (:u, :u)"),
         ("reports", "(reporter_id, reported_id, reason) values (:u, :u, 'fake')"),
+        # A self-referral would farm credits on both sides of one account.
+        ("referrals", "(referee_id, referrer_id) values (:u, :u)"),
     ],
 )
 async def test_nobody_can_act_on_themselves(
@@ -903,3 +915,321 @@ async def test_shorthand_references_are_real(
     )
 
     assert state == FOREIGN_KEY_VIOLATION
+
+
+# --- T-1.12 -------------------------------------------------------------------
+
+RESTRICT_VIOLATION = "23001"
+
+
+async def _ledger_entry(
+    db: AsyncSession, user_id: uuid.UUID, **fields: object
+) -> uuid.UUID:
+    values: dict[str, object] = {
+        "u": user_id,
+        "delta": 5,
+        "after": 5,
+        "key": f"test-{uuid.uuid4()}",
+    }
+    values.update(fields)
+    entry_id = await db.scalar(
+        text(
+            "insert into ledger_entries "
+            "(user_id, delta, balance_after, reason, idempotency_key) "
+            "values (:u, :delta, :after, 'purchase', :key) returning id"
+        ),
+        values,
+    )
+    assert isinstance(entry_id, uuid.UUID)
+    return entry_id
+
+
+async def _pack(db: AsyncSession, pack_id: str = "test-pack") -> str:
+    await db.execute(
+        text(
+            "insert into credit_packs (id, credits, price_paise) "
+            "values (:id, 25, 150000)"
+        ),
+        {"id": pack_id},
+    )
+    return pack_id
+
+
+async def _payment(db: AsyncSession, user_id: uuid.UUID) -> uuid.UUID:
+    pack_id = await _pack(db, f"pack-{uuid.uuid4().hex[:8]}")
+    payment_id = await db.scalar(
+        text(
+            "insert into payments (user_id, pack_id, amount_paise, credits, "
+            "provider_order_id) values (:u, :p, 150000, 25, :o) returning id"
+        ),
+        {"u": user_id, "p": pack_id, "o": f"order_{uuid.uuid4().hex}"},
+    )
+    assert isinstance(payment_id, uuid.UUID)
+    return payment_id
+
+
+# Wallets: the balance never goes below zero (T-1.16's item, covered here).
+
+
+async def test_wallet_balance_cannot_go_negative(db: AsyncSession) -> None:
+    user = await _user(db)
+    await db.execute(text("insert into wallets (user_id) values (:u)"), {"u": user.id})
+
+    state = await _rejected(
+        db, "update wallets set balance = -1 where user_id = :u", {"u": user.id}
+    )
+
+    assert state == CHECK_VIOLATION
+
+
+# Ledger: append-only, enforced (T-1.16's item, covered here).
+
+
+async def test_ledger_accepts_inserts(db: AsyncSession) -> None:
+    """Append-only is not read-only."""
+    user = await _user(db)
+
+    await _ledger_entry(db, user.id)
+
+
+@pytest.mark.parametrize(
+    "statement",
+    [
+        "update ledger_entries set delta = 500 where id = :id",
+        "update ledger_entries set reason = 'refund' where id = :id",
+        "delete from ledger_entries where id = :id",
+    ],
+)
+async def test_ledger_rows_cannot_change_or_disappear(
+    db: AsyncSession, statement: str
+) -> None:
+    user = await _user(db)
+    entry_id = await _ledger_entry(db, user.id)
+
+    state = await _rejected(db, statement, {"id": entry_id})
+
+    assert state == RESTRICT_VIOLATION
+
+
+async def test_ledger_cannot_be_truncated(db: AsyncSession) -> None:
+    """TRUNCATE skips row triggers; the statement-level guard catches it."""
+    user = await _user(db)
+    await _ledger_entry(db, user.id)
+
+    state = await _rejected(db, "truncate ledger_entries")
+
+    assert state == RESTRICT_VIOLATION
+
+
+@pytest.mark.parametrize(
+    ("fields", "why"),
+    [
+        ({"delta": 0, "after": 0}, "a zero delta records nothing"),
+        ({"delta": -5, "after": -5}, "balance_after never negative"),
+    ],
+)
+async def test_ledger_entry_values(
+    db: AsyncSession, fields: dict[str, object], why: str
+) -> None:
+    user = await _user(db)
+
+    with pytest.raises(IntegrityError) as excinfo:
+        async with db.begin_nested():
+            await _ledger_entry(db, user.id, **fields)
+
+    assert _sqlstate(excinfo.value) == CHECK_VIOLATION, why
+
+
+async def test_ledger_reference_is_complete_or_absent(db: AsyncSession) -> None:
+    user = await _user(db)
+
+    state = await _rejected(
+        db,
+        "insert into ledger_entries (user_id, delta, balance_after, reason, "
+        "idempotency_key, ref_type) values (:u, 5, 5, 'purchase', 'k1', 'thread')",
+        {"u": user.id},
+    )
+
+    assert state == CHECK_VIOLATION
+
+
+async def test_idempotency_key_applies_once(db: AsyncSession) -> None:
+    user = await _user(db)
+    await _ledger_entry(db, user.id, key="same-key")
+
+    with pytest.raises(IntegrityError) as excinfo:
+        async with db.begin_nested():
+            await _ledger_entry(db, user.id, key="same-key")
+
+    assert _sqlstate(excinfo.value) == UNIQUE_VIOLATION
+
+
+# Payments: never hard-deleted (rule 12), anchored once paid (D-026).
+
+
+async def test_a_payment_cannot_be_deleted(db: AsyncSession) -> None:
+    user = await _user(db)
+    payment_id = await _payment(db, user.id)
+
+    state = await _rejected(db, "delete from payments where id = :p", {"p": payment_id})
+
+    assert state == RESTRICT_VIOLATION
+
+
+async def test_payments_cannot_be_truncated(db: AsyncSession) -> None:
+    """Plain TRUNCATE is already refused by the refund_requests foreign key, before
+    the trigger runs. CASCADE passes that check — the guard must catch it."""
+    user = await _user(db)
+    await _payment(db, user.id)
+
+    state = await _rejected(db, "truncate payments cascade")
+
+    assert state == RESTRICT_VIOLATION
+
+
+async def test_a_payment_status_can_be_updated(db: AsyncSession) -> None:
+    user = await _user(db)
+    payment_id = await _payment(db, user.id)
+
+    await db.execute(
+        text(
+            "update payments set status = 'paid', provider_payment_id = 'pay_1', "
+            "paid_at = now() where id = :p"
+        ),
+        {"p": payment_id},
+    )
+
+
+@pytest.mark.parametrize("status", ["paid", "refunded"])
+async def test_money_moved_means_an_anchor_exists(
+    db: AsyncSession, status: str
+) -> None:
+    """A paid row without provider_payment_id would break webhook idempotency."""
+    user = await _user(db)
+    payment_id = await _payment(db, user.id)
+
+    no_anchor = await _rejected(
+        db,
+        f"update payments set status = '{status}', paid_at = now() where id = :p",
+        {"p": payment_id},
+    )
+    no_paid_at = await _rejected(
+        db,
+        f"update payments set status = '{status}', provider_payment_id = 'pay_x' "
+        "where id = :p",
+        {"p": payment_id},
+    )
+
+    assert no_anchor == CHECK_VIOLATION
+    assert no_paid_at == CHECK_VIOLATION
+
+
+@pytest.mark.parametrize("column", ["provider_order_id", "provider_payment_id"])
+async def test_provider_ids_are_unique(db: AsyncSession, column: str) -> None:
+    user = await _user(db)
+    first, second = await _payment(db, user.id), await _payment(db, user.id)
+    await db.execute(
+        text(f"update payments set {column} = 'dup' where id = :p"), {"p": first}
+    )
+
+    state = await _rejected(
+        db, f"update payments set {column} = 'dup' where id = :p", {"p": second}
+    )
+
+    assert state == UNIQUE_VIOLATION
+
+
+@pytest.mark.parametrize(
+    "assignment", ["amount_paise = 0", "credits = 0", "bonus_credits = -1"]
+)
+async def test_payment_amounts_are_sane(db: AsyncSession, assignment: str) -> None:
+    user = await _user(db)
+    payment_id = await _payment(db, user.id)
+
+    state = await _rejected(
+        db, f"update payments set {assignment} where id = :p", {"p": payment_id}
+    )
+
+    assert state == CHECK_VIOLATION
+
+
+# Catalogues: invariants, not policy.
+
+
+@pytest.mark.parametrize(
+    "values",
+    [
+        "('p0', 0, 150000, 20)",
+        "('p1', 25, 0, 20)",
+        "('p2', 25, 150000, 101)",
+        "('p3', 25, 150000, -1)",
+    ],
+)
+async def test_credit_pack_invariants(db: AsyncSession, values: str) -> None:
+    state = await _rejected(
+        db,
+        f"insert into credit_packs (id, credits, price_paise, bonus_first_pct) values {values}",
+    )
+
+    assert state == CHECK_VIOLATION
+
+
+async def test_credit_pack_defaults(db: AsyncSession) -> None:
+    await _pack(db, "defaults")
+
+    row = (
+        await db.execute(
+            text(
+                "select bonus_first_pct, active, sort, variant "
+                "from credit_packs where id = 'defaults'"
+            )
+        )
+    ).one()
+
+    assert tuple(row) == (20, True, 0, "A")
+
+
+async def test_action_price_never_negative(db: AsyncSession) -> None:
+    state = await _rejected(
+        db, "insert into action_prices (action, credits) values ('thread_open', -5)"
+    )
+
+    assert state == CHECK_VIOLATION
+
+
+# Foreign keys on the shorthand tables (the T-1.10 ruling, applied again).
+
+
+@pytest.mark.parametrize(
+    ("table", "columns"),
+    [
+        ("wallets", "(user_id) values (:x)"),
+        ("refund_requests", "(user_id, payment_id) values (:u, :x)"),
+        ("referrals", "(referee_id, referrer_id) values (:u, :x)"),
+    ],
+)
+async def test_money_references_are_real(
+    db: AsyncSession, table: str, columns: str
+) -> None:
+    user = await _user(db)
+
+    state = await _rejected(
+        db, f"insert into {table} {columns}", {"u": user.id, "x": uuid.uuid4()}
+    )
+
+    assert state == FOREIGN_KEY_VIOLATION
+
+
+async def test_refund_request_starts_open(db: AsyncSession) -> None:
+    user = await _user(db)
+    payment_id = await _payment(db, user.id)
+
+    status = await db.scalar(
+        text(
+            "insert into refund_requests (user_id, payment_id) values (:u, :p) "
+            "returning status"
+        ),
+        {"u": user.id, "p": payment_id},
+    )
+
+    assert status == "open"
