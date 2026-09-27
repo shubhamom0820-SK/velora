@@ -115,7 +115,8 @@ Indexes: `GIST(location)`, `GIN(username gin_trgm_ops)`, `GIN(first_name gin_trg
 
 ### areas  (seed data for location fallback)
 `id uuid pk, city text, name text, centroid geography(Point,4326)`. Unique `(city, name)`.
-Seed: 40 Bengaluru neighbourhoods (D-013's default), centroids approximate to about 1 km (T-1.14).
+Seed: 40 Bengaluru neighbourhoods (D-013's default), drafted by Claude and reviewed by the founder
+(T-1.14); centroids are approximate to about 1 km.
 
 ### interests  (seed: 24, T-1.14)
 `id smallint pk, slug text unique, label text`.

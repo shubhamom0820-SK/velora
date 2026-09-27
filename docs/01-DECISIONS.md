@@ -121,9 +121,16 @@ Optional 4-digit PIN locks the app on this device. Stored as an argon2 hash serv
 ### D-013 · Launch city — Open (default: Bengaluru)
 One city only for beta and launch. Discovery radius default 25 km.
 
-### D-014 · Theme — Open (default: black · white · red blend)
-Three prototypes exist (dark, soft light, blend). Colours live only in `web/src/styles/tokens.css`,
-so switching is a one-file change. See `08-DESIGN.md`.
+### D-014 · Theme — Locked (black · white · red blend)
+The app has one theme, the blend: black chrome (header, bottom nav, hero, sheets), soft-white
+content, red accent. Its tokens are in `08-DESIGN.md` §1 and match the prototype
+(`docs/prototype/`) value for value. Colours live only in `web/src/styles/tokens.css`.
+
+**Why now:** locked by the founder before T-1.17 creates `tokens.css` — T-1.19's primitives,
+Sprint 2's landing page and everything after inherit whatever goes in there.
+
+**Rejected:** the other two prototypes, dark and soft light. Their tokens remain in git history
+(08-DESIGN before this lock); a dark mode, if ever wanted, would be a new decision.
 
 ### D-015 · Name "Velora" — Open
 Trademark search pending ("The Velora" is an established wedding brand). Keep the name in one

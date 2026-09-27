@@ -7,10 +7,10 @@ reference, not the name. This file turns it into rules so the real app stays con
 ## 1. Tokens — the only place colours live
 
 `web/src/styles/tokens.css`. Components use **semantic** names only (`--surface`, never `#FFFFFF`).
-Theme is chosen by `data-theme` on `<html>`; default is `blend` (D-014).
+One theme: the black · white · red blend (D-014, Locked). These values match the prototype's.
 
 ```css
-:root, [data-theme="blend"] {
+:root {
   /* content (soft white) */
   --page:#E7E4E3; --bg:#F6F4F3; --surface:#FFFFFF; --surface-2:#ECE8E7; --line:#E2DDDC;
   --ink:#1A1517; --mute:#6E6668;
@@ -23,28 +23,12 @@ Theme is chosen by `data-theme` on `<html>`; default is `blend` (D-014).
   --shadow-1:0 4px 14px rgba(207,42,64,.24); --shadow-2:0 10px 26px rgba(20,12,15,.14);
   --scrim:rgba(10,8,9,.45);
 }
-[data-theme="dark"] {
-  --page:#080508; --bg:#120C0F; --surface:#1C1418; --surface-2:#261C21; --line:#33262C;
-  --ink:#F5EDEE; --mute:#9B8B90; --accent:#E62945; --accent-soft:rgba(230,41,69,.13);
-  --chrome:#120C0F; --chrome-ink:#F5EDEE; --chrome-mute:#9B8B90; --chrome-line:#33262C;
-  --chrome-accent:#E62945; --chrome-accent-soft:rgba(230,41,69,.13);
-  --shadow-1:0 6px 22px rgba(230,41,69,.32); --shadow-2:0 18px 44px rgba(0,0,0,.55);
-  --scrim:rgba(4,2,4,.72);
-}
-[data-theme="soft"] {
-  --page:#E6DEDA; --bg:#F2ECE8; --surface:#F9F5F2; --surface-2:#E7DDD8; --line:#DDD1CC;
-  --ink:#2E2428; --mute:#7C6F73; --accent:#BF3A4D; --accent-soft:rgba(191,58,77,.10);
-  --chrome:#F2ECE8; --chrome-ink:#2E2428; --chrome-mute:#7C6F73; --chrome-line:#DDD1CC;
-  --chrome-accent:#BF3A4D; --chrome-accent-soft:rgba(191,58,77,.10);
-  --shadow-1:0 4px 12px rgba(191,58,77,.20); --shadow-2:0 10px 26px rgba(70,40,45,.12);
-  --scrim:rgba(40,16,24,.36);
-}
 ```
 
 Rules:
 - Text on `--accent` is `--on-accent`. Text on photos is `--on-photo` over `--photo-scrim`.
 - Anything inside a chrome area uses the `--chrome-*` set.
-- Contrast: body text ≥ 4.5:1, large text ≥ 3:1 in all three themes (checked in T-9.11).
+- Contrast: body text ≥ 4.5:1, large text ≥ 3:1 (checked in T-9.11).
 - `<meta name="theme-color">` = `--chrome`.
 
 ## 2. Type
@@ -95,7 +79,7 @@ Feature components live in `src/components/<feature>/` (discover, chat, wallet, 
 
 ## 5. Screen inventory
 
-Every screen must exist in the prototype first. ✦ = uses chrome in the blend theme.
+Every screen must exist in the prototype first. ✦ = uses the black chrome.
 
 **Marketing:** Landing ✦(header, hero, footer) · Terms · Privacy · Refunds · Contact · Public profile `/@username`.
 
