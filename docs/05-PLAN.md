@@ -156,6 +156,13 @@ One migration per task, each with a working `downgrade()`. Build exactly `03-SCH
 ### T-1.20 · CI
 - [ ] **Needs:** T-1.5, T-1.6, T-1.19
 - [ ] GitHub Actions `ci.yml`: job `api` (postgis + redis services, `uv sync`, migrate, ruff, mypy, pytest); job `web` (pnpm install, lint, tsc, vitest, `next build`). Required on PRs to `main`.
+- [ ] Secrets scan in CI (from P-09): a `gitleaks git` step in the `api` job. The pre-commit hook
+  only protects clones that ran `make hooks`, and `git commit --no-verify` skips it — without this,
+  nothing server-side enforces checklist E's "no secrets in repo".
+- [ ] Hooks work from GUI git clients (from P-10): the ruff and mypy hooks resolve `uv` without
+  relying on the shell's `PATH` (an absolute path, or a wrapper that locates it). VS Code's Source
+  Control panel runs hooks without the shell profile, so `uv` may be missing and every commit
+  fails. Test a commit from VS Code.
 - [ ] **Commit:** `ci: api and web pipelines [T-1.20]`
 
 ### T-1.21 · Provider adapters
@@ -170,6 +177,13 @@ One migration per task, each with a working `downgrade()`. Build exactly `03-SCH
 - [ ] `api/Dockerfile` (multi-stage, uv, non-root, gunicorn + uvicorn workers). `infra/fly.api.toml` and `infra/fly.worker.toml`, region `bom`, health check `/readyz`, release command `alembic upgrade head`.
 - [ ] Supabase staging project (enable PostGIS, pg_trgm, citext); Upstash staging DB; R2 staging buckets.
 - [ ] Note: Supabase manages extensions from its dashboard. T-1.8's migration uses `create extension if not exists`, so upgrade is a no-op there — but its `downgrade()` drops them, so never downgrade a Supabase database to base.
+- [ ] Least-privilege database role (from P-18): the API and worker connect as a role that doesn't
+  own the tables and can't `ALTER` them or set `session_replication_role`; the release command
+  (migrations) runs as the owner. The guards on `ledger_entries`, `payments` and `audit_log` are
+  triggers — they stop application bugs, but an owner or superuser connection bypasses them with
+  `SET session_replication_role = replica` or `ALTER TABLE … DISABLE TRIGGER`.
+- [ ] Tests, connected as that role: UPDATE, DELETE and TRUNCATE are still refused on every guarded
+  table, and both bypasses are denied.
 - [ ] Vercel project for `web/` with staging env vars.
 - [ ] GitHub Actions `deploy.yml`: on push to `main` → deploy staging API + worker; Vercel deploys web itself.
 - [ ] **Done when:** staging web loads and staging `/readyz` is 200.
@@ -841,11 +855,13 @@ Claude Code adds items here instead of doing unplanned work. Format:
   and `git commit --no-verify` skips it. T-1.20's CI steps list ruff, mypy and pytest but not
   gitleaks, so nothing server-side enforces checklist E's "no secrets in repo". Add a
   `gitleaks git` step to T-1.20's `api` job. Found in review of T-1.6.
+  **Moved:** now a step in T-1.20 — tick this with T-1.20.
 - [ ] P-10 · Hooks must work from GUI git clients — the ruff and mypy hooks call `uv` by name. VS
   Code's Source Control panel (which the user commits from) and other GUI clients run hooks
   without the shell profile, so `uv` may not be on `PATH` and every commit fails. Resolve `uv`
   robustly (absolute path or a wrapper that locates it) and test a commit from VS Code. Found in
   review of T-1.6.
+  **Moved:** now a step in T-1.20 — tick this with T-1.20.
 - [ ] P-11 · Test DB stamped at a revision the checkout doesn't have — every task works on its own
   branch, and from T-1.8 each adds migrations. Run the tests on a branch with a new migration, switch
   to one without it, and `velora_test` still records that revision: every database test then errors
@@ -897,6 +913,7 @@ Claude Code adds items here instead of doing unplanned work. Format:
   injection or stray script has those bypasses. The API must use a role that doesn't own the tables
   and can't `ALTER` them or set `session_replication_role`; migrations run as the owner. Its tests
   cover every guarded table. **Before T-1.22.** Found in review of T-1.12.
+  **Moved:** now two steps in T-1.22 — tick this with T-1.22.
 - [ ] P-19 · Namespace ledger idempotency keys per user — `ledger_entries.idempotency_key` is unique
   across all users, and money routes accept a client `Idempotency-Key` header (02-ARCHITECTURE §3).
   Stored raw, two users sending the same key collide: the second user's genuine debit is refused —
