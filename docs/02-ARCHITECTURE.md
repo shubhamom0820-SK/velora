@@ -191,7 +191,7 @@ WHERE ST_DWithin(p.location, :me, :radius_m)
   AND NOT EXISTS (SELECT 1 FROM swipes s WHERE s.swiper_id = :me_id AND s.target_id = p.user_id)
   AND NOT EXISTS (SELECT 1 FROM blocks b WHERE (b.blocker_id = :me_id AND b.blocked_id = p.user_id)
                                               OR (b.blocker_id = p.user_id AND b.blocked_id = :me_id))
-  -- optional: intent, verified, online filters
+  -- optional: intents (any overlap: EXISTS on profile_intents, D-041), verified, online filters
 ORDER BY rank_score(dist_m, u.last_active_at, u.is_verified, p.completeness) DESC, p.user_id
 LIMIT :limit;
 ```

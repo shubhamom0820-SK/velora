@@ -1,4 +1,5 @@
-"""`profiles`, `areas`, `interests`, `profile_interests` — 03-SCHEMA.md §2.
+"""`profiles`, `areas`, `interests`, `profile_interests`, `intents`,
+`profile_intents` — 03-SCHEMA.md §2.
 
 Everything on a profile except its key is nullable: T-3.3 creates the row at
 signup, before onboarding has filled anything in. Length and format rules are
@@ -29,7 +30,7 @@ from sqlalchemy.dialects.postgresql import CITEXT, UUID
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.core.db import Base, CreatedAt, Timestamps, pg_enum, uuid_pk
-from app.core.enums import Intent, Seeking
+from app.core.enums import Seeking
 
 
 def _point() -> Geography:
@@ -59,7 +60,7 @@ class Profile(Timestamps, Base):
         DateTime(timezone=True)
     )
     seeking: Mapped[Seeking | None] = mapped_column(pg_enum(Seeking))
-    intent: Mapped[Intent | None] = mapped_column(pg_enum(Intent))
+    # Intent is a 1-3 pick from the `intents` catalogue (profile_intents, D-041).
     is_hidden: Mapped[bool] = mapped_column(
         Boolean, nullable=False, server_default=false()
     )
@@ -103,7 +104,6 @@ class Profile(Timestamps, Base):
             postgresql_using="gin",
             postgresql_ops={"first_name": "gin_trgm_ops"},
         ),
-        Index("ix_profiles_intent", "intent"),
         Index("ix_profiles_is_hidden", "is_hidden"),
     )
 
@@ -146,3 +146,35 @@ class ProfileInterest(CreatedAt, Base):
         ForeignKey("interests.id", ondelete="RESTRICT"),
         primary_key=True,
     )
+
+
+class Intent(CreatedAt, Base):
+    """Seed data: what you're looking for — 10 intents (P-25, D-041). A fixed
+    smallint id, like interests; unlike them, slug and label are NOT NULL."""
+
+    __tablename__ = "intents"
+
+    id: Mapped[int] = mapped_column(SmallInteger, primary_key=True, autoincrement=False)
+    slug: Mapped[str] = mapped_column(Text, nullable=False, unique=True)
+    label: Mapped[str] = mapped_column(Text, nullable=False)
+
+
+class ProfileIntent(CreatedAt, Base):
+    """1 to 3 per user — enforced in the service, not here (D-041)."""
+
+    __tablename__ = "profile_intents"
+
+    user_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("users.id", ondelete="RESTRICT"),
+        primary_key=True,
+    )
+    intent_id: Mapped[int] = mapped_column(
+        SmallInteger,
+        ForeignKey("intents.id", ondelete="RESTRICT"),
+        primary_key=True,
+    )
+
+    # Discovery filters by intent (any overlap, D-041); the primary key only
+    # serves lookups by user.
+    __table_args__ = (Index("ix_profile_intents_intent_id", "intent_id"),)

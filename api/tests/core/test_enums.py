@@ -44,5 +44,6 @@ async def test_no_database_enum_without_a_python_twin(db: AsyncSession) -> None:
     assert set(database) == set(PG_ENUMS)
 
 
-def test_twenty_enums_as_in_03_schema() -> None:
-    assert len(PG_ENUMS) == 20
+def test_nineteen_enums_as_in_03_schema() -> None:
+    """Twenty until P-25 made intent a catalogue (D-041)."""
+    assert len(PG_ENUMS) == 19

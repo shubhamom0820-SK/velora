@@ -84,7 +84,7 @@ Devanagari falls back to Noto Sans Devanagari on Android.
 | Sheet | bottom (mobile) / centred (desktop); title; scroll body; sticky footer |
 | Toast | info (ink) · error (accent) · with action (Undo) |
 | Avatar | photo · initial fallback · online dot · verified badge |
-| Badge | count · status pill (Online, New, Knotted, intent) |
+| Badge | count · status pill (Online, New, Knotted, intents) |
 | Skeleton | line · card · avatar |
 | EmptyState / ErrorState | icon, title, body, action |
 | Countdown | shared ticker; `4h 59m left` → `12m 30s left` → `Expired` |
@@ -99,7 +99,7 @@ Every screen must exist in the prototype first. ✦ = uses chrome in the blend t
 
 **Marketing:** Landing ✦(header, hero, footer) · Terms · Privacy · Refunds · Contact · Public profile `/@username`.
 
-**Onboarding (12):** Phone · OTP · DOB · Gender · Seeking + intent · Name + places · Username ·
+**Onboarding (12):** Phone · OTP · DOB · Gender · Seeking + intents · Name + places · Username ·
 About · Photos · Interests · PIN · Selfie.
 
 **App:** Header ✦ · Bottom nav ✦ · Discover (deck, feeds, search, filters sheet) · Match sheet ✦ ·

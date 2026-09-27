@@ -25,15 +25,6 @@ class Seeking(StrEnum):
     EVERYONE = "everyone"
 
 
-class Intent(StrEnum):
-    SERIOUS = "serious"
-    LONGTERM = "longterm"
-    SHORT = "short"
-    ONENIGHT = "onenight"
-    CHAT = "chat"
-    DISCREET = "discreet"
-
-
 class OnboardingStep(StrEnum):
     DOB = "dob"
     GENDER = "gender"
@@ -169,7 +160,6 @@ class BanKind(StrEnum):
 PG_ENUMS: dict[str, type[StrEnum]] = {
     "gender_t": Gender,
     "seeking_t": Seeking,
-    "intent_t": Intent,
     "onboarding_t": OnboardingStep,
     "user_status_t": UserStatus,
     "role_t": Role,

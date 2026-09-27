@@ -129,6 +129,25 @@ so switching is a one-file change. See `08-DESIGN.md`.
 Trademark search pending ("The Velora" is an established wedding brand). Keep the name in one
 constant (`APP_NAME`) in both apps so a rename is trivial.
 
+### D-041 · Intent is a multi-select catalogue — Locked
+Intent — what someone is looking for — is a catalogue, the same shape as interests: the `intents`
+table (10 rows) and `profile_intents`, **1 to 3 per user**, enforced in the service (P-25). This is
+why intent is not an enum like the app's other classifications. Discovery's intent filter matches
+on **any overlap**. Labels are sentence case, since intents and interests show as chips on the same
+profile; the UI reads them from `en.ts` keyed by id (P-26).
+
+**Why any overlap:** ticking two intents means "either of these is fine", not "I demand both".
+Requiring every selected intent would mean someone who ticks "Something serious" and "Long term"
+only sees people who picked both — and where the gender ratio is already the hard problem, that
+shrinks a thin feed to nothing.
+
+**Why 10:** the 20 first proposed included near-duplicates that users wouldn't distinguish, which
+turns a filter into noise. "Just sexuality" and "Exploring fantasies" were deliberately left out for
+the launch market; they can be added (a data migration) if that is decided otherwise.
+
+**Rejected: a single enum value** (`profiles.intent`, type `intent_t`) — what intent was until
+P-25. **Rejected: matching every selected intent** — see "Why any overlap".
+
 ---
 
 ## Architecture

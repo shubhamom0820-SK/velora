@@ -1,5 +1,6 @@
 """Reference data (T-1.14): the catalogues match D-004, D-005, D-016 and
-03-SCHEMA.md §8, and seeding twice changes nothing.
+03-SCHEMA.md §8, and seeding twice changes nothing. P-25 adds the intents
+catalogue (D-041), tested the same way.
 
 Expected values are written out here, not read from the migration, so a wrong
 value in the migration fails a test instead of agreeing with itself.
@@ -30,17 +31,17 @@ COUNTS = {
 }
 
 
-def _revision() -> ModuleType:
-    """The migration itself, so the re-run tests execute its exact inserts."""
-    [path] = (API_DIR / "alembic" / "versions").glob("*_fa16c0908c2c_*.py")
-    spec = importlib.util.spec_from_file_location("reference_data_revision", path)
+def _revision(revision_id: str) -> ModuleType:
+    """A migration itself, so the re-run tests execute its exact inserts."""
+    [path] = (API_DIR / "alembic" / "versions").glob(f"*_{revision_id}_*.py")
+    spec = importlib.util.spec_from_file_location(f"revision_{revision_id}", path)
     assert spec is not None and spec.loader is not None
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
     return module
 
 
-REVISION = _revision()
+REVISION = _revision("fa16c0908c2c")
 
 
 async def _counts(db: AsyncSession) -> dict[str, int]:
@@ -285,3 +286,60 @@ async def test_downgrade_removes_the_seeds(test_engine: AsyncEngine) -> None:
         await run_alembic(test_engine, command.upgrade, "head")
 
     assert left == dict.fromkeys(COUNTS, 0)
+
+
+# --- P-25: intents (D-041) ----------------------------------------------------
+
+INTENTS_REVISION = _revision("c4193b88d395")
+
+
+async def test_intents_have_fixed_ids_in_order(db: AsyncSession) -> None:
+    rows = (
+        await db.execute(text("select id, slug, label from intents order by id"))
+    ).all()
+
+    assert [row.id for row in rows] == list(range(1, 11))
+    assert [row.label for row in rows] == [
+        "Something serious",
+        "Long term",
+        "Situationship",
+        "Casual dating",
+        "Just one night",
+        "No strings attached",
+        "Open relationship",
+        "Discreet",
+        "Friendship",
+        "Go with the flow",
+    ]
+    assert (rows[0].slug, rows[9].slug) == ("something-serious", "go-with-the-flow")
+
+
+async def test_intent_labels_are_sentence_case(db: AsyncSession) -> None:
+    """They sit next to interests as chips on the same profile."""
+    labels = (await db.execute(text("select label from intents"))).scalars().all()
+
+    assert [label for label in labels if label[1:] != label[1:].lower()] == []
+
+
+async def test_seeding_intents_again_changes_nothing(db: AsyncSession) -> None:
+    await db.execute(text("update intents set label = 'Serious' where id = 1"))
+
+    for statement in INTENTS_REVISION.reference_data():
+        await db.execute(statement)
+
+    count = await db.scalar(text("select count(*) from intents"))
+    label = await db.scalar(text("select label from intents where id = 1"))
+    assert (count, label) == (10, "Serious")
+
+
+async def test_intents_downgrade_removes_the_seeds(test_engine: AsyncEngine) -> None:
+    try:
+        await run_alembic(
+            test_engine, command.downgrade, INTENTS_REVISION.down_revision
+        )
+        async with test_engine.connect() as connection:
+            left = await connection.scalar(text("select count(*) from intents"))
+    finally:
+        await run_alembic(test_engine, command.upgrade, "head")
+
+    assert left == 0

@@ -16,6 +16,8 @@ is tested where it was built.
 T-1.13: notifications and ops — an append-only audit log with a real actor, the
 `like` preference stored as column `likes`, one subscription per push endpoint,
 and a case-insensitive waitlist.
+P-25: intent as a catalogue (D-041) — each intent picked once, picks reference a
+real user and intent, catalogue rows need a unique slug and a label.
 """
 
 from __future__ import annotations
@@ -1428,6 +1430,61 @@ async def test_waitlist_email_is_unique_ignoring_case(db: AsyncSession) -> None:
 
     state = await _rejected(
         db, "insert into waitlist (email) values ('priya@example.COM')"
+    )
+
+    assert state == UNIQUE_VIOLATION
+
+
+# --- P-25 ---------------------------------------------------------------------
+
+# Intent is a 1-3 pick from a catalogue (D-041); the count is the service's job.
+
+
+async def _intent(db: AsyncSession, intent_id: int = 900, slug: str = "test") -> int:
+    await db.execute(
+        text("insert into intents (id, slug, label) values (:i, :s, 'Test')"),
+        {"i": intent_id, "s": slug},
+    )
+    return intent_id
+
+
+async def test_an_intent_is_picked_once(db: AsyncSession) -> None:
+    user = await _user(db)
+    intent_id = await _intent(db)
+    insert = "insert into profile_intents (user_id, intent_id) values (:u, :i)"
+    await db.execute(text(insert), {"u": user.id, "i": intent_id})
+
+    state = await _rejected(db, insert, {"u": user.id, "i": intent_id})
+
+    assert state == UNIQUE_VIOLATION
+
+
+async def test_picks_reference_a_real_user_and_intent(db: AsyncSession) -> None:
+    user = await _user(db)
+    intent_id = await _intent(db)
+    insert = "insert into profile_intents (user_id, intent_id) values (:u, :i)"
+
+    no_intent = await _rejected(db, insert, {"u": user.id, "i": 901})
+    no_user = await _rejected(db, insert, {"u": uuid.uuid4(), "i": intent_id})
+
+    assert no_intent == FOREIGN_KEY_VIOLATION
+    assert no_user == FOREIGN_KEY_VIOLATION
+
+
+async def test_an_intent_needs_a_slug_and_a_label(db: AsyncSession) -> None:
+    """NOT NULL from the start — the gap P-24 fixes on interests and areas."""
+    no_slug = await _rejected(db, "insert into intents (id, label) values (901, 'X')")
+    no_label = await _rejected(db, "insert into intents (id, slug) values (902, 'x')")
+
+    assert no_slug == NOT_NULL_VIOLATION
+    assert no_label == NOT_NULL_VIOLATION
+
+
+async def test_intent_slugs_are_unique(db: AsyncSession) -> None:
+    await _intent(db, 900, "dup")
+
+    state = await _rejected(
+        db, "insert into intents (id, slug, label) values (901, 'dup', 'Dup')"
     )
 
     assert state == UNIQUE_VIOLATION

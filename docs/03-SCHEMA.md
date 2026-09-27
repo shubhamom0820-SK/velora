@@ -14,7 +14,6 @@ The Alembic migrations in Sprint 1 create **everything below in this order**.
 ```sql
 gender_t          ('male','female')
 seeking_t         ('women','men','everyone')
-intent_t          ('serious','longterm','short','onenight','chat','discreet')
 onboarding_t      ('dob','gender','seeking','profile','username','about','photos','interests','pin','selfie','done')
 user_status_t     ('active','paused','frozen','banned','deleted')
 role_t            ('user','moderator','admin')
@@ -36,6 +35,8 @@ payment_status_t  ('created','paid','failed','refunded')
 fraud_band_t      ('normal','monitor','shadow','freeze')
 ban_kind_t        ('phone_hash','device_id')
 ```
+
+Intent is not an enum: it is the `intents` catalogue, picked 1 to 3 per user (D-041, P-25).
 
 ---
 
@@ -102,7 +103,6 @@ Unique `(kind, value)`.
 | location | geography(Point,4326) null | |
 | location_updated_at | timestamptz | |
 | seeking | seeking_t | |
-| intent | intent_t | |
 | is_hidden | boolean default false | privacy: hide profile |
 | hide_age | boolean default false | |
 | hide_distance | boolean default false | |
@@ -111,7 +111,7 @@ Unique `(kind, value)`.
 | completeness | smallint default 0 | 0–100, computed by service |
 
 Indexes: `GIST(location)`, `GIN(username gin_trgm_ops)`, `GIN(first_name gin_trgm_ops)`,
-`(intent)`, `(is_hidden)`.
+`(is_hidden)`. Intent lives in `profile_intents` (D-041).
 
 ### areas  (seed data for location fallback)
 `id uuid pk, city text, name text, centroid geography(Point,4326)`. Unique `(city, name)`.
@@ -125,6 +125,16 @@ Who you are — hobbies and vibe. Ids 1–24 are fixed in seed order, because th
 ### profile_interests
 `user_id uuid fk, interest_id smallint fk, pk(user_id, interest_id)`. Exactly 5 per user — enforced
 in the service.
+
+### intents  (seed: 10, P-25)
+`id smallint pk, slug text not null unique, label text not null`.
+What you're looking for (D-041). Ids 1–10 are fixed in seed order, because the API takes
+`intent_ids`; slugs are the labels in kebab-case (`something-serious`). Labels are sentence case,
+like interests — both show as chips on the same profile.
+
+### profile_intents
+`user_id uuid fk users, intent_id smallint fk intents, pk(user_id, intent_id)`. 1 to 3 per user —
+enforced in the service. Index `(intent_id)`: discovery filters on intent, matching any overlap.
 
 ### photos
 | column | type | notes |
@@ -431,11 +441,12 @@ Unique ignores case (citext). No format check in the database: T-2.3 validates i
 ## 9. Seed data (Sprint 1, `alembic` data migration + `make seed` for dev)
 
 - `interests` — 24 rows
+- `intents` — 10 rows (P-25, D-041)
 - `gifts` — 6 rows (D-016)
 - `action_prices`, `credit_packs`, `app_config` — from D-004 / D-005 / §8
 - `areas` — 40 neighbourhoods for the launch city
-
-One data migration (T-1.14), every insert `ON CONFLICT DO NOTHING`: re-running it changes nothing
-and never resets a value tuned since.
 - **dev only** (`make seed`): the 20 prototype profiles (10 women, 10 men) with photos,
   a moderator account, and a man with 60 credits for testing.
+
+The reference data is two data migrations — T-1.14's, and P-25's for intents — with every insert
+`ON CONFLICT DO NOTHING`: re-running them changes nothing and never resets a value tuned since.

@@ -23,7 +23,7 @@ the source for `web/src/types/api.ts`.
 | GET | /me | 🔐 | → `Me` (user + profile + wallet balance + onboarding_step) | T-3.5 |
 | POST | /me/dob | 🔐 | `{dob}` → `Me` or `UNDERAGE` | T-3.6 |
 | POST | /me/gender | 🔐 | `{gender}` → `Me` (once) | T-3.6 |
-| POST | /me/seeking | 🔐 | `{seeking, intent}` → `Me` | T-3.6 |
+| POST | /me/seeking | 🔐 | `{seeking, intent_ids[1–3]}` → `Me` | T-3.6 |
 | PATCH | /me/profile | 🔐 | `{first_name?, hometown?, city?, about?}` → `Me` | T-3.7 |
 | GET | /usernames/{u}/available | 🔐 | → `{available, suggestion?}` | T-3.7 |
 | PUT | /me/username | 🔐 | `{username}` → `Me` or `USERNAME_TAKEN` | T-3.7 |
@@ -34,6 +34,7 @@ the source for `web/src/types/api.ts`.
 | POST | /me/export | ✅ | → 202 (emailed/downloadable later) | T-9.6 |
 | DELETE | /me | ✅ | → 202, 30-day window | T-9.6 |
 | GET | /interests | 🔓 | → `Interest[]` | T-3.8 |
+| GET | /intents | 🔐 | → `Intent[]` | T-3.6 |
 | GET | /areas?city= | 🔓 | → `Area[]` | T-4.10 |
 
 ## Photos & verification
@@ -51,7 +52,7 @@ the source for `web/src/types/api.ts`.
 ## Discovery
 | Method | Path | Auth | Body → Response | Task |
 |---|---|---|---|---|
-| GET | /discover | ✅ | `?feed=foryou|new|online&intent=&verified=&cursor=` → `Page<Card>` | T-6.2 |
+| GET | /discover | ✅ | `?feed=foryou|new|online&intent_ids=&verified=&cursor=` → `Page<Card>` (`intent_ids`: any overlap, D-041) | T-6.2 |
 | POST | /swipes | ✅ | `{target_id, dir}` → `{matched, match_id?, swipes_left}` | T-6.4 |
 | GET | /users/{id} | ✅ | → `PublicProfile` | T-6.3 |
 | GET | /users/by-username/{u} | ✅ | → `PublicProfile` | T-6.6 |

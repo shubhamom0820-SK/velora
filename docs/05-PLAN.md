@@ -260,7 +260,7 @@ One migration per task, each with a working `downgrade()`. Build exactly `03-SCH
 - [ ] `POST /me/dob`: compute age in IST; < 18 → add phone hash to `banned_identities`, set status `banned`, revoke sessions, return `UNDERAGE`. Advance step.
 - [ ] `POST /me/gender`: only if null → set, advance; else `IMMUTABLE_FIELD`.
 - [ ] The database also refuses the change (T-1.9's `users_identity_immutable` trigger) with SQLSTATE `23514` `check_violation`, which SQLAlchemy raises as `IntegrityError`. Map it to `IMMUTABLE_FIELD` by that SQLSTATE — never by the message text, which Postgres can reword.
-- [ ] `POST /me/seeking {seeking, intent}` → advance.
+- [ ] `GET /intents`; `POST /me/seeking {seeking, intent_ids}` — 1 to 3 valid distinct ids (D-041), replace the set in one tx → advance.
 - [ ] Steps must happen in order; out-of-order → `ONBOARDING_INCOMPLETE` with the expected step.
 - [ ] Tests for each branch, including "17 years 364 days" and "exactly 18 today".
 - [ ] **Commit:** `feat(onboarding): dob, gender, seeking [T-3.6]`
@@ -291,7 +291,7 @@ One migration per task, each with a working `downgrade()`. Build exactly `03-SCH
 
 ### T-3.11 · Web onboarding 1–7
 - [ ] **Needs:** T-3.10, T-3.7
-- [ ] Screens from the prototype: phone, OTP (4 boxes, paste support, resend timer from `resend_after_s`), DOB (native date input; under-18 message), gender (with lock warning), seeking + intent, name/hometown/city, username (debounced availability 400 ms, shows `velora.app/@name`).
+- [ ] Screens from the prototype: phone, OTP (4 boxes, paste support, resend timer from `resend_after_s`), DOB (native date input; under-18 message), gender (with lock warning), seeking + intents (pick 1–3), name/hometown/city, username (debounced availability 400 ms, shows `velora.app/@name`).
 - [ ] Each screen: submit disabled until valid; server errors shown inline from `ApiError.code` via `en.ts`.
 - [ ] **Commit:** `feat(web): onboarding steps 1-7 [T-3.11]`
 
@@ -442,9 +442,9 @@ Built before discovery and chat because swipes, threads and unlocks all spend cr
 
 ### T-6.2 · Discovery query
 - [ ] **Needs:** T-4.10, T-4.8
-- [ ] Repository implements the query in `02-ARCHITECTURE.md §8` with feeds: `foryou` (ranked), `new` (joined ≤ 7 days first), `online` (active ≤ 5 min). Filters: intent[], verified.
+- [ ] Repository implements the query in `02-ARCHITECTURE.md §8` with feeds: `foryou` (ranked), `new` (joined ≤ 7 days first), `online` (active ≤ 5 min). Filters: `intent_ids` (any overlap, D-041), verified.
 - [ ] Excludes: self, swiped, blocked either way, hidden, not `done`, status ≠ active, fraud band `freeze`; `shadow` band users only shown to others in `shadow`.
-- [ ] Response `Card`: id, first_name, age (null if hide_age), username, city, hometown, distance_km (null if hide_distance, else ≥ 1), intent, bio line (first 90 chars of about), main photo URL, is_verified, is_online, is_new.
+- [ ] Response `Card`: id, first_name, age (null if hide_age), username, city, hometown, distance_km (null if hide_distance, else ≥ 1), intent_ids, bio line (first 90 chars of about), main photo URL, is_verified, is_online, is_new.
 - [ ] Cursor = (score, user_id).
 - [ ] Performance test: seed 50k profiles, assert p95 < 80 ms with `EXPLAIN ANALYZE` showing the GIST index.
 - [ ] **Commit:** `feat(discovery): ranked nearby feed [T-6.2]`
@@ -474,7 +474,7 @@ Built before discovery and chat because swipes, threads and unlocks all spend cr
 
 ### T-6.6 · Search and @username
 - [ ] **Needs:** T-6.3
-- [ ] `GET /search?q=`: `@` prefix → exact-then-prefix username match (ignores distance/filters, still respects blocks/hidden); otherwise trigram on first_name/username + city/intent/interest matches within radius. `GET /users/by-username/{u}`.
+- [ ] `GET /search?q=`: `@` prefix → exact-then-prefix username match (ignores distance/filters, still respects blocks/hidden); otherwise trigram on first_name/username + city, intent and interest matches within radius. `GET /users/by-username/{u}`.
 - [ ] Web search bar with debounce; @-mode list results.
 - [ ] **Commit:** `feat(search): search and username lookup [T-6.6]`
 
@@ -930,7 +930,7 @@ Claude Code adds items here instead of doing unplanned work. Format:
   nothing, and nullable unique keys (`(city, name)`, `slug`) don't stop duplicate NULLs, so a
   re-run could duplicate such a row. The T-1.14 seed sets them all. New migration (rule 11).
   Found during T-1.14.
-- [ ] P-25 · Intent becomes a multi-select catalogue, the same shape as interests — interests are
+- [x] P-25 · Intent becomes a multi-select catalogue, the same shape as interests — interests are
   who you are; intents are what you're looking for. **Do right after T-1.14.** Its own migration,
   because T-1.8 and T-1.9 are merged (rule 11).
   - Drop `profiles.intent` (and its index `ix_profiles_intent`) and the `intent_t` enum.
@@ -946,6 +946,8 @@ Claude Code adds items here instead of doing unplanned work. Format:
     (one `intent` today); T-6.6 search ("city/intent/interest matches"); T-6.9's filter sheet;
     T-3.11's "seeking + intent" screen; 08-DESIGN's intent badge; 02-ARCHITECTURE §8's query
     sketch; and in code `Intent` / `PG_ENUMS` in `app/core/enums.py`, whose test expects 20 enums.
+  **Done:** migrations `edf91547331e` (schema) and `c4193b88d395` (the 10 intents); decision
+  recorded as D-041, with `GET /intents` (🔐, T-3.6) added to 04-API.
 - [ ] P-26 · Catalogue labels on screen come from `en.ts`, keyed by id — D-033 puts every
   user-facing string in `web/src/i18n/en.ts`, but 03-SCHEMA calls `gifts.label` "shown in UI", and
   `GET /gifts` returns `label` (04-API), and `GET /interests` will. **Resolved:** the database
