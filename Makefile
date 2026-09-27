@@ -20,20 +20,26 @@ infra-down: ## Stop the docker stack, keeping data
 infra-reset: ## Stop the docker stack and DROP all data volumes
 	$(COMPOSE) down -v
 
-dev: ## Run infra + api + worker + web [T-1.17]
-	@echo "not yet — T-1.17"
+dev: ## Run infra + api + web, all on 127.0.0.1 (worker joins with T-4.4)
+	$(MAKE) infra-up
+	@echo "api http://127.0.0.1:8000  web http://127.0.0.1:3000  (Ctrl-C stops both)"
+	@trap 'kill 0' INT TERM; \
+	( cd api && uv run uvicorn app.main:app --host 127.0.0.1 --port 8000 --reload ) & \
+	( cd web && pnpm dev --port 3000 ) & \
+	wait
 
 worker: ## Run the ARQ worker only [T-4.4]
 	@echo "not yet — T-4.4"
 
-seed: ## Dev data: 20 profiles, test users (refuses in production) [T-1.15]
+seed: ## Dev data: 20 profiles, test users (local only) [T-1.15]
 	@echo "not yet — T-1.15"
 
 test: ## api pytest (web vitest joins with T-1.19)
 	cd api && uv run pytest
 
-lint: ## ruff + format check + strict mypy (eslint + tsc join with T-1.17)
+lint: ## api: ruff + format check + strict mypy · web: eslint + tsc + prettier check
 	cd api && uv run ruff check . && uv run ruff format --check . && uv run mypy
+	cd web && pnpm lint && pnpm typecheck && pnpm format:check
 
 hooks: ## Install the git pre-commit hooks (once per clone)
 	cd api && uv run pre-commit install

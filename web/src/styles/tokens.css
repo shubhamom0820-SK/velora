@@ -1,0 +1,74 @@
+/*
+ * Design tokens — the only place colours live (CLAUDE.md rule 14). Values are
+ * docs/08-DESIGN.md §1–§3: the black · white · red blend (D-014, Locked), which
+ * matches the prototype. A pre-commit hook rejects colours anywhere else in
+ * web/src; the one exception is src/styles/theme-color.ts (08-DESIGN §1).
+ *
+ * Tailwind reads these through `@theme inline` in src/app/globals.css.
+ */
+
+:root {
+  /* content (soft white) */
+  --page: #e7e4e3;
+  --bg: #f6f4f3;
+  --surface: #ffffff;
+  --surface-2: #ece8e7;
+  --line: #e2dddc;
+  --ink: #1a1517;
+  --mute: #6e6668;
+  --accent: #cf2a40;
+  --accent-soft: rgba(207, 42, 64, 0.09);
+  --on-accent: #ffffff;
+  /* chrome (black): header, bottom nav, hero, match sheet, wallet card, lock screen */
+  --chrome: #141113;
+  --chrome-ink: #f3efee;
+  --chrome-mute: #a29a9c;
+  --chrome-line: #2b2528;
+  --chrome-accent: #e8475a;
+  --chrome-accent-soft: rgba(232, 71, 90, 0.16);
+  /* on-photo text (cards, call screen) */
+  --on-photo: #ffffff;
+  --photo-scrim: linear-gradient(
+    to top,
+    rgba(6, 3, 6, 0.94),
+    rgba(6, 3, 6, 0.55) 52%,
+    transparent
+  );
+  --shadow-1: 0 4px 14px rgba(207, 42, 64, 0.24);
+  --shadow-2: 0 10px 26px rgba(20, 12, 15, 0.14);
+  --scrim: rgba(10, 8, 9, 0.45);
+
+  /* type (§2): system fonts only, no web-font download */
+  --font-system: -apple-system, "Segoe UI", Roboto, "Noto Sans", sans-serif;
+  --type-display-size: 42px;
+  --type-display-line: 1.05;
+  --type-display-weight: 700;
+  --type-display-tracking: -2px;
+  --type-title-1-size: 24px;
+  --type-title-1-line: 1.2;
+  --type-title-1-weight: 700;
+  --type-title-2-size: 18px;
+  --type-title-2-line: 1.3;
+  --type-title-2-weight: 700;
+  --type-body-size: 14.5px;
+  --type-body-line: 1.6;
+  --type-body-weight: 400;
+  --type-ui-size: 14px;
+  --type-ui-line: 1.4;
+  --type-ui-weight: 500;
+  --type-small-size: 12.5px;
+  --type-small-line: 1.5;
+  --type-small-weight: 400;
+  --type-micro-size: 11px;
+  --type-micro-line: 1.3;
+  --type-micro-weight: 600;
+
+  /* shape (§3) */
+  --corner-input: 10px;
+  --corner-button: 12px;
+  --corner-card: 14px;
+  --corner-bubble: 16px;
+  --corner-sheet: 24px;
+  --corner-swipe: 26px;
+  --corner-pill: 999px;
+}

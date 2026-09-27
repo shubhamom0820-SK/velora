@@ -29,7 +29,10 @@ Rules:
 - Text on `--accent` is `--on-accent`. Text on photos is `--on-photo` over `--photo-scrim`.
 - Anything inside a chrome area uses the `--chrome-*` set.
 - Contrast: body text ≥ 4.5:1, large text ≥ 3:1 (checked in T-9.11).
-- `<meta name="theme-color">` = `--chrome`.
+- `<meta name="theme-color">` = `--chrome`. A meta tag can't read a CSS variable, so this is the
+  one colour literal outside `tokens.css`: `web/src/styles/theme-color.ts`, which must equal
+  `--chrome` (a test asserts it once vitest exists — P-28). The pre-commit hook exempts only these
+  two files.
 
 ## 2. Type
 

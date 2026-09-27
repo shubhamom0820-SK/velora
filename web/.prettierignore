@@ -1,0 +1,4 @@
+# Generated or owned by tools — never reformat.
+pnpm-lock.yaml
+next-env.d.ts
+.next/

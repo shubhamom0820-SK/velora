@@ -130,15 +130,15 @@ One migration per task, each with a working `downgrade()`. Build exactly `03-SCH
   (T-1.9 through T-1.12); nothing is left to add. Closed during T-1.14.
 
 ### T-1.17 · Web skeleton
-- [ ] **Needs:** T-1.1
-- [ ] `pnpm create next-app web` — TypeScript, App Router, Tailwind, ESLint, `src/` dir.
-- [ ] `tsconfig` strict + `noUncheckedIndexedAccess`; path alias `@/`.
-- [ ] Route groups: `(marketing)`, `(auth)`, `(app)`, `admin` with placeholder pages.
-- [ ] `src/styles/tokens.css` from `08-DESIGN.md`; Tailwind theme reads the CSS variables.
-- [ ] `src/i18n/en.ts` string dictionary + `t()` helper.
-- [ ] Verify the prettier and eslint pre-commit hooks from T-1.6 run on `web/` files; prettier must be a `web/` devDependency (create-next-app adds ESLint, not Prettier).
-- [ ] **Done when:** `pnpm dev` shows placeholders; `pnpm lint && pnpm tsc --noEmit` clean.
-- [ ] **Commit:** `feat(web): next.js skeleton with tokens [T-1.17]`
+- [x] **Needs:** T-1.1
+- [x] `pnpm create next-app web` — TypeScript, App Router, Tailwind, ESLint, `src/` dir.
+- [x] `tsconfig` strict + `noUncheckedIndexedAccess`; path alias `@/`.
+- [x] Route groups: `(marketing)`, `(auth)`, `(app)`, `admin` with placeholder pages.
+- [x] `src/styles/tokens.css` from `08-DESIGN.md`; Tailwind theme reads the CSS variables.
+- [x] `src/i18n/en.ts` string dictionary + `t()` helper.
+- [x] Verify the prettier and eslint pre-commit hooks from T-1.6 run on `web/` files; prettier must be a `web/` devDependency (create-next-app adds ESLint, not Prettier).
+- [x] **Done when:** `pnpm dev` shows placeholders; `pnpm lint && pnpm tsc --noEmit` clean.
+- [x] **Commit:** `feat(web): next.js skeleton with tokens [T-1.17]`
 
 ### T-1.18 · Web data layer
 - [ ] **Needs:** T-1.17, T-1.3
@@ -146,6 +146,10 @@ One migration per task, each with a working `downgrade()`. Build exactly `03-SCH
 - [ ] `src/lib/api.ts` — typed fetch wrapper: base URL, JSON, attaches access token, parses the error envelope into `ApiError {code, message, details, status}`.
 - [ ] `QueryClientProvider` in root layout; `src/lib/queries/keys.ts` (query key factory).
 - [ ] Zustand `src/store/session.ts` (access token in memory, user id).
+- [ ] ESLint enforces rule 14's "no `fetch` inside components": `fetch` is banned in `web/src`
+  except `src/lib/`, so server data only reaches components through the api client and query
+  hooks. Deferred from T-1.17 to here, where `src/lib/` is created — a rule goes in when the thing
+  it protects exists.
 - [ ] **Done when:** a dev page calls `/healthz` via a query hook and renders the result.
 - [ ] **Commit:** `feat(web): api client, query setup, type generation [T-1.18]`
 
@@ -162,10 +166,10 @@ One migration per task, each with a working `downgrade()`. Build exactly `03-SCH
 - [ ] Secrets scan in CI (from P-09): a `gitleaks git` step in the `api` job. The pre-commit hook
   only protects clones that ran `make hooks`, and `git commit --no-verify` skips it — without this,
   nothing server-side enforces checklist E's "no secrets in repo".
-- [ ] Hooks work from GUI git clients (from P-10): the ruff and mypy hooks resolve `uv` without
-  relying on the shell's `PATH` (an absolute path, or a wrapper that locates it). VS Code's Source
-  Control panel runs hooks without the shell profile, so `uv` may be missing and every commit
-  fails. Test a commit from VS Code.
+- [ ] Hooks work from GUI git clients (from P-10): the ruff and mypy hooks resolve `uv`, and the
+  prettier and eslint hooks `pnpm` (live since T-1.17), without relying on the shell's `PATH` (an
+  absolute path, or a wrapper that locates it). VS Code's Source Control panel runs hooks without
+  the shell profile, so either may be missing and every commit fails. Test a commit from VS Code.
 - [ ] **Commit:** `ci: api and web pipelines [T-1.20]`
 
 ### T-1.21 · Provider adapters
@@ -984,3 +988,8 @@ Claude Code adds items here instead of doing unplanned work. Format:
   opens "Trained in Carnatic vocal since I was six", and T-1.15 has to replace her "Carnatic" tag.
   Adding it is a data migration; existing ids stay fixed, so it would take id 25. Found while
   planning T-1.15.
+- [ ] P-28 · Test that `theme-color` equals `--chrome` — `<meta name="theme-color">` can't read a
+  CSS variable, so `web/src/styles/theme-color.ts` holds the literal `#141113`: the one documented
+  exception to rule 14 (08-DESIGN §1). The day `--chrome` changes in `tokens.css`, that copy drifts
+  and nobody notices. **After T-1.19** (vitest): a test that reads `tokens.css` and asserts
+  `THEME_COLOR` equals `--chrome`. Found in T-1.17.

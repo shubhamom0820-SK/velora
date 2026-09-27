@@ -1,0 +1,74 @@
+@import "tailwindcss";
+@import "../styles/tokens.css";
+
+/* Only the design tokens exist as colours: Tailwind's built-in palette is
+   removed, so `bg-red-500` doesn't compile and components use semantic names
+   (08-DESIGN §1). */
+@theme {
+  --color-*: initial;
+}
+
+@theme inline {
+  --color-page: var(--page);
+  --color-bg: var(--bg);
+  --color-surface: var(--surface);
+  --color-surface-2: var(--surface-2);
+  --color-line: var(--line);
+  --color-ink: var(--ink);
+  --color-mute: var(--mute);
+  --color-accent: var(--accent);
+  --color-accent-soft: var(--accent-soft);
+  --color-on-accent: var(--on-accent);
+  --color-chrome: var(--chrome);
+  --color-chrome-ink: var(--chrome-ink);
+  --color-chrome-mute: var(--chrome-mute);
+  --color-chrome-line: var(--chrome-line);
+  --color-chrome-accent: var(--chrome-accent);
+  --color-chrome-accent-soft: var(--chrome-accent-soft);
+  --color-on-photo: var(--on-photo);
+  --color-scrim: var(--scrim);
+
+  --font-sans: var(--font-system);
+
+  --text-display: var(--type-display-size);
+  --text-display--line-height: var(--type-display-line);
+  --text-display--font-weight: var(--type-display-weight);
+  --text-display--letter-spacing: var(--type-display-tracking);
+  --text-title-1: var(--type-title-1-size);
+  --text-title-1--line-height: var(--type-title-1-line);
+  --text-title-1--font-weight: var(--type-title-1-weight);
+  --text-title-2: var(--type-title-2-size);
+  --text-title-2--line-height: var(--type-title-2-line);
+  --text-title-2--font-weight: var(--type-title-2-weight);
+  --text-body: var(--type-body-size);
+  --text-body--line-height: var(--type-body-line);
+  --text-body--font-weight: var(--type-body-weight);
+  --text-ui: var(--type-ui-size);
+  --text-ui--line-height: var(--type-ui-line);
+  --text-ui--font-weight: var(--type-ui-weight);
+  --text-small: var(--type-small-size);
+  --text-small--line-height: var(--type-small-line);
+  --text-small--font-weight: var(--type-small-weight);
+  --text-micro: var(--type-micro-size);
+  --text-micro--line-height: var(--type-micro-line);
+  --text-micro--font-weight: var(--type-micro-weight);
+
+  --radius-input: var(--corner-input);
+  --radius-button: var(--corner-button);
+  --radius-card: var(--corner-card);
+  --radius-bubble: var(--corner-bubble);
+  --radius-sheet: var(--corner-sheet);
+  --radius-swipe: var(--corner-swipe);
+  --radius-pill: var(--corner-pill);
+
+  --shadow-1: var(--shadow-1);
+  --shadow-2: var(--shadow-2);
+}
+
+@layer base {
+  body {
+    background: var(--page);
+    color: var(--ink);
+    font-family: var(--font-system);
+  }
+}

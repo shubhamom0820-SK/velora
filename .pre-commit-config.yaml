@@ -43,14 +43,14 @@ repos:
         files: ^api/
         pass_filenames: false
 
-      # web/ arrives in T-1.17; until then these never match a file. The paths
-      # pre-commit passes start with `web/`, so strip it before running there.
+      # The paths pre-commit passes start with `web/`, so strip it before
+      # running there.
       - id: prettier
         name: prettier (web)
         entry: bash -c 'cd web && pnpm exec prettier --write --ignore-unknown "${@/#web\//}"' --
         language: system
         files: ^web/
-        # Only files prettier formats — web/.gitkeep must not trigger it.
+        # Only files prettier formats.
         types_or: [javascript, jsx, ts, tsx, css, scss, json, yaml, markdown]
 
       - id: eslint
@@ -58,3 +58,14 @@ repos:
         entry: bash -c 'cd web && pnpm exec eslint --fix "${@/#web\//}"' --
         language: system
         files: ^web/.*\.(js|jsx|ts|tsx|mjs|cjs)$
+
+      # Rule 14: colours live only in tokens.css (T-1.17). Rejects hex colours
+      # and CSS colour functions anywhere else in web/src. The one exception is
+      # theme-color.ts: a <meta> tag can't read a CSS variable (08-DESIGN §1).
+      - id: colours-only-in-tokens
+        name: colours only in tokens.css (web)
+        language: pygrep
+        entry: '(?i)#(?:[0-9a-f]{8}|[0-9a-f]{6}|[0-9a-f]{3,4})\b|\b(?:rgba?|hsla?|hwb|lab|lch|oklab|oklch)\('
+        files: ^web/src/
+        exclude: ^web/src/styles/(tokens\.css|theme-color\.ts)$
+        types_or: [javascript, jsx, ts, tsx, css, scss]
