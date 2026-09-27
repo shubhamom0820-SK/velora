@@ -114,8 +114,11 @@ One migration per task, each with a working `downgrade()`. Build exactly `03-SCH
 - [x] **Commit:** `feat(db): reference data [T-1.14]`
 
 ### T-1.15 · Dev seed
-- [ ] **Needs:** T-1.14
-- [ ] `make seed` (dev only, refuses if `ENV=production`): the 20 prototype profiles with approved placeholder photos in MinIO, locations spread in the launch city, 3 of the women pre-liking the test man; a test man (`+91 90000 00001`, 60 credits), a test woman (`+91 90000 00002`, verified), a moderator.
+- [ ] **Needs:** T-1.14, T-3.1
+- **Why T-3.1:** phone numbers are hashed and encrypted with its `core/security.py`, so the seeded test accounts are the ones login finds. Parts that need later code live in those tasks: placeholder photos in T-4.4, verification rows in T-4.5, the test man's 60 credits in T-5.1 (rule 5).
+- [ ] `make seed` (local only — refuses unless `ENV` is `local`; an allowlist, so an environment added later can't pass by default): the 20 prototype profiles (`docs/prototype/`, the `P` array), each with the rows signup creates (T-3.3), onboarding done, `is_verified` where the prototype has `v`, and a location at its neighbourhood's centroid (`area_id`; `city` Bengaluru, `hometown` from `from`); prototype women seek men and men seek women. 3 of the women — the prototype's `likedYou`: Ananya, Meera, Riya — like the test man. A test man (`+91 90000 00001`, `test_man`, seeking women), a test woman (`+91 90000 00002`, `test_woman`, seeking men, verified), and a moderator (`+91 90000 00003`, onboarding not started, so not in discovery).
+- [ ] Interests: each profile keeps its 3 prototype tags plus 2 drafted by Claude from its `about` text; Kavya's "Carnatic" (not in the catalogue) is replaced. Intents: the prototype's value mapped — `serious` → Something serious, `longterm` → Long term, `short` → Casual dating, `chat` → Go with the flow — then roughly a third get a 2nd intent and a few a 3rd, fitting their `about`, so D-041's 1–3 and any-overlap filter run on real data. Show the founder all 20 (interests and the intent spread) before `/done`. The data file's note says the additions were drafted by Claude from the prototype's about text and reviewed by the founder.
+- [ ] The seed's output never contains a phone number (rule 15).
 - [ ] **Done when:** `make seed` twice doesn't duplicate.
 - [ ] **Commit:** `chore(dev): seed script [T-1.15]`
 
@@ -365,11 +368,12 @@ One migration per task, each with a working `downgrade()`. Build exactly `03-SCH
 - [ ] **Commit:** `feat(photos): list, reorder, delete [T-4.3]`
 
 ### T-4.4 · Moderation worker
-- [ ] **Needs:** T-4.2
+- [ ] **Needs:** T-4.2, T-1.15
 - [ ] ARQ worker bootstrap (`workers/main.py`) + `make worker`.
 - [ ] `moderate_photo(photo_id)`: fetch raw → Pillow open (reject if not an image) → `ImageOps.exif_transpose` → resize longest side 1600 → save JPEG q85 **without EXIF** → `ModerationProvider.check()` → approve (write public copy for `public` kind) or reject with reason (`nudity`, `minor_suspected`, `no_face`, `text_overlay`, `other`). `minor_suspected` also opens an internal report.
 - [ ] Idempotent: re-running on an approved photo does nothing.
 - [ ] Tests with the fake provider for approve and each reject path; test that output has no EXIF.
+- [ ] Extend `make seed` (T-1.15): an approved public photo at position 0 for every onboarded seeded user — a placeholder from the prototype's `c1`/`c2` gradient, re-encoded like any upload and stored through `StorageProvider`. Re-running creates no duplicates.
 - [ ] **Commit:** `feat(worker): photo moderation pipeline [T-4.4]`
 
 ### T-4.5 · Selfie verification
@@ -377,6 +381,7 @@ One migration per task, each with a working `downgrade()`. Build exactly `03-SCH
 - [ ] `POST /verification/challenge` → random pose from a list (turn left, turn right, look up, smile) stored on the row. `POST /verification/{id}/submit {photo_id}` → enqueue `verify_selfie`.
 - [ ] `verify_selfie`: re-encode; `FaceMatchProvider.compare(selfie, approved_public_photos)`; similarity ≥ 85 and exactly one face → `approved`, `users.is_verified = true`; else `rejected` with reason. Max 5 attempts / day.
 - [ ] Selfies are never public and never shown to other users.
+- [ ] Extend `make seed` (T-1.15): an approved verification row, with a placeholder selfie in the private bucket, for every seeded user marked verified — the test woman and the prototype's 14 `v` profiles.
 - [ ] **Commit:** `feat(verification): selfie challenge and face match [T-4.5]`
 
 ### T-4.6 · Web photos step
@@ -416,12 +421,13 @@ One migration per task, each with a working `downgrade()`. Build exactly `03-SCH
 Built before discovery and chat because swipes, threads and unlocks all spend credits.
 
 ### T-5.1 · Wallet service
-- [ ] **Needs:** T-1.12, T-1.5
+- [ ] **Needs:** T-1.12, T-1.5, T-1.15
 - [ ] `wallet.service.debit(session, user_id, amount, reason, ref_type, ref_id, idempotency_key)` and `credit(...)`.
 - [ ] Inside the caller's transaction: `SELECT … FROM wallets WHERE user_id = :u FOR UPDATE` → check `balance >= amount` else raise `INSUFFICIENT_CREDITS {required, balance}` → update balance → insert `ledger_entries` with `balance_after`.
 - [ ] Idempotency: if `idempotency_key` already exists, return the existing entry and change nothing.
 - [ ] `amount <= 0` → programming error (raise, don't silently accept).
 - [ ] Publishes `wallet.updated` after commit (not before).
+- [ ] Extend `make seed` (T-1.15): credit the test man 60 through `credit(reason='admin_grant', idempotency_key='seed:test-man-credits')`, so a re-run changes nothing.
 - [ ] **Commit:** `feat(wallet): row-locked debit and credit [T-5.1]`
 
 ### T-5.2 · Prices
@@ -973,3 +979,8 @@ Claude Code adds items here instead of doing unplanned work. Format:
   after P-25, `intents.label`. Reword 03-SCHEMA's notes on those columns to match; the tasks that
   show them — T-3.12's interests picker, T-6.8's profile chips, T-8.10's gift sheet, and P-25's
   intent screens — add the `en.ts` entries and read them. Found during T-1.14.
+- [ ] P-27 · Consider Indian classical music in the interests catalogue — the 24 have Indie music
+  and Old Hindi cinema but nothing classical, and a prototype profile needed it: Kavya's about
+  opens "Trained in Carnatic vocal since I was six", and T-1.15 has to replace her "Carnatic" tag.
+  Adding it is a data migration; existing ids stay fixed, so it would take id 25. Found while
+  planning T-1.15.
