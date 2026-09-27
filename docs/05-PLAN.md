@@ -1004,3 +1004,23 @@ Claude Code adds items here instead of doing unplanned work. Format:
   form, whose value is off the scale. That covers both arbitrary values (`p-[18px]`) and off-scale
   steps (`mt-7` is 28 px, `gap-4.5` is 18 px, `p-9` is 36 px). Prove it both ways: it flags
   those, and passes `p-3.5`, `gap-2.5` and `px-0.5`. Found in T-1.19.
+- [ ] P-30 · Keep `/admin` off the public internet until it is gated. **Due before T-1.22.**
+
+  **The web gate on `/admin` is UX, not protection.** Anyone can download the page's JavaScript,
+  and the Next.js server never sees a session there: D-024 keeps the access token in browser
+  memory, and checklist E scopes the refresh cookie to `/v1/auth`. The only thing guarding admin
+  data is the API's role check. Every `/admin/*` endpoint must carry its own
+  `require_role(...)`; never ship one on the strength of the page gate.
+
+  Why now: `web/src/app/admin/page.tsx` is a placeholder that returns 200 from the production
+  build, and T-1.22 puts that build on a public staging URL. The plan gates the admin API (T-9.5),
+  but nothing gates the web route. T-3.10's gate covers `(app)` only, and T-2.4's `robots.txt`
+  disallow only asks crawlers to stay away — it also advertises the path. Two parts:
+  - **Before T-1.22:** `/admin` returns 404 outside `next dev`, using the allowlist `/dev/ui` uses
+    (`notFound()` unless `NODE_ENV === "development"`), with a test. Check the staging 404's
+    *body*, not just its status: in T-1.19 a 404 still carried the page's `metadata` title.
+  - **In T-9.5, replacing the gate above:** the web `/admin` renders only for
+    `role in (moderator, admin)`, read through `useMe()`, and anyone else gets the 404 page. It can
+    only be a client-side check (see above), so it is there for the user, not for security.
+
+  Found while closing T-1.19.
