@@ -322,6 +322,26 @@ inside the compose network.
 **If a service ever must be reachable from another device** (a phone on the same wifi testing the
 web app), publish that one port deliberately and say why — do not revert the whole file.
 
+### D-042 · Web unit tests and icons — Locked
+T-1.19 added the web app's unit-test tooling and its icon set. Versions are pinned exactly.
+- **lucide-react** (icons). The only runtime addition, so the only one in `dependencies`. The
+  plan names it, and the prototype's icons are Lucide's own paths. Components import each icon by
+  name, so only the icons used are bundled.
+- **vitest** with **vite** (a required peer of vitest 5) and **jsdom**, the DOM that Next 16's
+  Vitest guide uses.
+- **Testing Library**: `@testing-library/react` with its peer `@testing-library/dom`;
+  `@testing-library/user-event`, because the Sheet's focus trap needs real Tab and Shift+Tab, which
+  `fireEvent` can't produce; and `@testing-library/jest-dom` for matchers such as `toHaveFocus` and
+  `toHaveAccessibleName`.
+- All the test tooling is in `devDependencies`, so none of it ships in the production bundle.
+  `@types/node` moved from `^20` to `^24`, matching `engines` and vitest's peer range.
+
+**Rejected: `@vitejs/plugin-react` and `vite-tsconfig-paths`**, which Next's guide adds. Vite 8
+compiles JSX from `tsconfig`'s `jsx` setting and resolves `@/` itself (`resolve.tsconfigPaths`),
+so neither is needed. **Also rejected: a headless UI or focus-trap library.** The plan asks for
+the primitives to be built, and the Sheet's trap is about 30 lines with tests on both Tab
+directions, Esc and focus return.
+
 ---
 
 ## Adding a decision

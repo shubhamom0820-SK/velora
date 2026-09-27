@@ -1,5 +1,6 @@
 import type { Metadata, Viewport } from "next";
 
+import { ToastProvider } from "@/components/ui/ToastProvider";
 import { t } from "@/i18n/t";
 import { APP_NAME } from "@/lib/app";
 import { THEME_COLOR } from "@/styles/theme-color";
@@ -18,7 +19,9 @@ export const viewport: Viewport = {
 export default function RootLayout({ children }: LayoutProps<"/">) {
   return (
     <html lang="en">
-      <body>{children}</body>
+      <body>
+        <ToastProvider>{children}</ToastProvider>
+      </body>
     </html>
   );
 }

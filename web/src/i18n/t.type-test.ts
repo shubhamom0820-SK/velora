@@ -1,6 +1,6 @@
 /*
  * Compile-time checks for t(), run by `pnpm typecheck` (tsc). Never imported,
- * so never bundled. Unit tests join with vitest in T-1.19.
+ * so never bundled. The runtime behaviour is tested in t.test.ts.
  */
 import { t } from "./t";
 

@@ -13,6 +13,7 @@ One theme: the black · white · red blend (D-014, Locked). These values match t
 :root {
   /* content (soft white) */
   --page:#E7E4E3; --bg:#F6F4F3; --surface:#FFFFFF; --surface-2:#ECE8E7; --line:#E2DDDC;
+  --line-strong:#D3CDCC; /* toggle track when off */
   --ink:#1A1517; --mute:#6E6668;
   --accent:#CF2A40; --accent-soft:rgba(207,42,64,.09); --on-accent:#FFFFFF;
   /* chrome (black): header, bottom nav, hero, match sheet, wallet card, lock screen */
@@ -21,6 +22,7 @@ One theme: the black · white · red blend (D-014, Locked). These values match t
   /* on-photo text (cards, call screen) */
   --on-photo:#FFFFFF; --photo-scrim:linear-gradient(to top, rgba(6,3,6,.94), rgba(6,3,6,.55) 52%, transparent);
   --shadow-1:0 4px 14px rgba(207,42,64,.24); --shadow-2:0 10px 26px rgba(20,12,15,.14);
+  --shadow-knob:0 1px 3px rgba(40,10,20,.3); /* toggle knob */
   --scrim:rgba(10,8,9,.45);
 }
 ```
@@ -31,8 +33,8 @@ Rules:
 - Contrast: body text ≥ 4.5:1, large text ≥ 3:1 (checked in T-9.11).
 - `<meta name="theme-color">` = `--chrome`. A meta tag can't read a CSS variable, so this is the
   one colour literal outside `tokens.css`: `web/src/styles/theme-color.ts`, which must equal
-  `--chrome` (a test asserts it once vitest exists — P-28). The pre-commit hook exempts only these
-  two files.
+  `--chrome` (`theme-color.test.ts` fails if it doesn't — P-28). The pre-commit hook exempts only
+  these two files.
 
 ## 2. Type
 
@@ -45,18 +47,36 @@ Devanagari falls back to Noto Sans Devanagari on Android.
 | `title-1` | 24 / 1.2 / 700 | screen titles, onboarding questions |
 | `title-2` | 18 / 1.3 / 700 | sheet titles |
 | `body` | 14.5 / 1.6 / 400 | paragraphs, about |
-| `ui` | 14 / 1.4 / 500–600 | buttons, list rows |
+| `ui` | 14 / 1.4 / 500–600 | buttons, list rows, chips, toggles |
+| `input` | 16 / 1.4 / 400 | text typed into fields — below 16 px, iOS Safari zooms the page on focus |
 | `small` | 12.5 / 1.5 / 400 | helper text |
 | `micro` | 11 / 1.3 / 600 | badges, timestamps |
 
+The prototype uses 31 font sizes, including 12, 12.5, 13 and 13.5, which differ by half a pixel.
+The scale collapses them. Each element takes the token that the Use column gives its role, even
+where that moves the prototype's size by a pixel or two: its 15 px buttons and 13 px chips are
+`ui` (14), its 12 px field labels are `small` (12.5), and its 16 px empty-state titles are
+`title-2` (18).
+
 ## 3. Space, shape, motion
 
-- Spacing scale (px): 4 · 8 · 12 · 16 · 20 · 24 · 32 · 40 · 56. Screen padding 16–20 mobile, 24 desktop.
-- Radius: 10 inputs/small buttons · 12 buttons · 14 cards · 16 chat bubbles · 24 sheets · 26 swipe card · 999 pills.
-- Content max-width: 520 px for app screens (centred on desktop), 900–1100 px for marketing/admin.
+Checked value by value against the prototype in T-1.19, and corrected where the two disagreed.
+
+- Spacing scale (px): 2 · 4 · 6 · 8 · 10 · 12 · 14 · 16 · 20 · 24 · 32 · 40 · 56. The half-steps
+  2 · 6 · 10 · 14 are padding inside controls (buttons 14 and 10, fields 14 × 16, chips 8 × 14),
+  as in the prototype. The prototype's rarer values (18, 22, 26, 28, 36, 48, 64) are rounded to the
+  nearest step when their screens are built; P-29 adds a hook that rejects anything off the scale.
+  Screen padding 20–24 mobile, 24 desktop.
+- Radius: 12 inputs and buttons (both sizes) · 14 cards · 16 chat bubbles · 24 sheets · 26 swipe
+  card · 999 pills. The prototype's few 10 px buttons (admin actions, the waitlist form) become 12
+  when their screens use `Button`.
+- Content max-width: 520 px for app screens (centred on desktop) · 720 legal pages · 760 admin ·
+  900 landing.
 - Motion: 150 ms for press/hover, 250–300 ms for sheets, spring for the deck. Respect
   `prefers-reduced-motion` (no rotation, fade instead).
-- Tap targets ≥ 44 × 44 px.
+- Tap targets ≥ 44 × 44 px. That is the tap area, which may reach past the visible control: chips
+  and small buttons are drawn 38–42 px tall, as in the prototype, and stretch their tap area with
+  an invisible `::before`.
 
 ## 4. Components (`src/components/ui/`)
 
@@ -73,10 +93,17 @@ Devanagari falls back to Noto Sans Devanagari on Android.
 | Avatar | photo · initial fallback · online dot · verified badge |
 | Badge | count · status pill (Online, New, Knotted, intents) |
 | Skeleton | line · card · avatar |
+| Spinner | sizes; announced as a status, pulses instead of spinning under reduced motion |
+| Icon | a Lucide icon at stroke 2; decorative (hidden) unless given a label |
 | EmptyState / ErrorState | icon, title, body, action |
 | Countdown | shared ticker; `4h 59m left` → `12m 30s left` → `Expired` |
 | GiftGrid | 6 tiles, 3×2; free tiles show remaining count, paid show credits |
 | PriceTag | shows credits for men, "free" for women (reads from `/prices`) |
+
+T-1.19 built Button, Chip, Field, TextArea, Toggle, Sheet, Toast, Avatar, Skeleton, Spinner, Icon,
+EmptyState and ErrorState; `/dev/ui` (under `next dev` only) shows each in every state. The rest
+arrive with the first task that needs them: OtpInput with T-3.11, IconButton and PriceTag with
+T-6.5's action row, Badge with T-6.7 and T-6.9, Countdown with T-7.10, GiftGrid with T-8.10.
 
 Feature components live in `src/components/<feature>/` (discover, chat, wallet, profile, admin).
 

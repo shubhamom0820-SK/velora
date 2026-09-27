@@ -154,11 +154,11 @@ One migration per task, each with a working `downgrade()`. Build exactly `03-SCH
 - [ ] **Commit:** `feat(web): api client, query setup, type generation [T-1.18]`
 
 ### T-1.19 · UI primitives
-- [ ] **Needs:** T-1.17
-- [ ] From the prototype, in `src/components/ui/`: `Button` (primary/ghost/danger, sm/md, loading), `Chip`, `Sheet` (bottom on mobile, centred on desktop, focus trap, Esc closes), `Field`, `TextArea` (counter), `Toast` + `useToast`, `Icon` (lucide-react), `Avatar`, `Spinner`, `EmptyState`, `ErrorState`, `Toggle`, `Skeleton`.
-- [ ] `/dev/ui` page (dev only) showing every primitive in every state.
-- [ ] Vitest + Testing Library; one test per primitive (renders, interaction, a11y role).
-- [ ] **Commit:** `feat(web): ui primitives [T-1.19]`
+- [x] **Needs:** T-1.17
+- [x] From the prototype, in `src/components/ui/`: `Button` (primary/ghost/danger, sm/md, loading), `Chip`, `Sheet` (bottom on mobile, centred on desktop, focus trap, Esc closes), `Field`, `TextArea` (counter), `Toast` + `useToast`, `Icon` (lucide-react), `Avatar`, `Spinner`, `EmptyState`, `ErrorState`, `Toggle`, `Skeleton`.
+- [x] `/dev/ui` page (dev only) showing every primitive in every state.
+- [x] Vitest + Testing Library; one test per primitive (renders, interaction, a11y role).
+- [x] **Commit:** `feat(web): ui primitives [T-1.19]`
 
 ### T-1.20 · CI
 - [ ] **Needs:** T-1.5, T-1.6, T-1.19
@@ -988,8 +988,19 @@ Claude Code adds items here instead of doing unplanned work. Format:
   opens "Trained in Carnatic vocal since I was six", and T-1.15 has to replace her "Carnatic" tag.
   Adding it is a data migration; existing ids stay fixed, so it would take id 25. Found while
   planning T-1.15.
-- [ ] P-28 · Test that `theme-color` equals `--chrome` — `<meta name="theme-color">` can't read a
+- [x] P-28 · Test that `theme-color` equals `--chrome` — `<meta name="theme-color">` can't read a
   CSS variable, so `web/src/styles/theme-color.ts` holds the literal `#141113`: the one documented
   exception to rule 14 (08-DESIGN §1). The day `--chrome` changes in `tokens.css`, that copy drifts
   and nobody notices. **After T-1.19** (vitest): a test that reads `tokens.css` and asserts
   `THEME_COLOR` equals `--chrome`. Found in T-1.17.
+  **Done in T-1.19:** `web/src/styles/theme-color.test.ts`. Proven both ways: it fails when the
+  copy is one digit off, and passes once it's restored.
+- [ ] P-29 · Reject spacing values that aren't on the scale. 08-DESIGN §3's spacing scale was
+  settled in T-1.19: 2 · 4 · 6 · 8 · 10 · 12 · 14 · 16 · 20 · 24 · 32 · 40 · 56 px. The prototype's
+  32 one-off values (18, 22, 26, 28, 36, 48, 64) are to be rounded when their screens are built,
+  but nothing enforces that — the same gap P-28 closed for theme-color. Extend the
+  `colours-only-in-tokens` pre-commit hook (same hook, same `pygrep` pattern, same `^web/src/`
+  scope) to also reject Tailwind padding, margin, gap and space utilities, in every axis and side
+  form, whose value is off the scale. That covers both arbitrary values (`p-[18px]`) and off-scale
+  steps (`mt-7` is 28 px, `gap-4.5` is 18 px, `p-9` is 36 px). Prove it both ways: it flags
+  those, and passes `p-3.5`, `gap-2.5` and `px-0.5`. Found in T-1.19.

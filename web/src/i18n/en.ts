@@ -15,4 +15,14 @@ export const en = {
     discover: "Discover",
     admin: "Admin",
   },
+  ui: {
+    close: "Close",
+    loading: "Loading",
+    remove: "Remove {label}",
+    counter: "{count}/{max}",
+    online: "Online",
+    verified: "Verified",
+    errorTitle: "Something went wrong",
+    retry: "Try again",
+  },
 } as const;

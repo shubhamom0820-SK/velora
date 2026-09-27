@@ -6,6 +6,22 @@
    (08-DESIGN §1). */
 @theme {
   --color-*: initial;
+
+  /* Motion (08-DESIGN §3): sheets and toasts enter in 280 ms. Components pair
+     these with `motion-reduce:animate-fade-in`, so reduced motion only fades. */
+  --animate-sheet-up: sheet-up 280ms cubic-bezier(0.2, 0.8, 0.3, 1);
+  --animate-fade-in: fade-in 280ms ease-out;
+
+  @keyframes sheet-up {
+    from {
+      transform: translateY(100%);
+    }
+  }
+  @keyframes fade-in {
+    from {
+      opacity: 0;
+    }
+  }
 }
 
 @theme inline {
@@ -14,6 +30,7 @@
   --color-surface: var(--surface);
   --color-surface-2: var(--surface-2);
   --color-line: var(--line);
+  --color-line-strong: var(--line-strong);
   --color-ink: var(--ink);
   --color-mute: var(--mute);
   --color-accent: var(--accent);
@@ -46,6 +63,9 @@
   --text-ui: var(--type-ui-size);
   --text-ui--line-height: var(--type-ui-line);
   --text-ui--font-weight: var(--type-ui-weight);
+  --text-input: var(--type-input-size);
+  --text-input--line-height: var(--type-input-line);
+  --text-input--font-weight: var(--type-input-weight);
   --text-small: var(--type-small-size);
   --text-small--line-height: var(--type-small-line);
   --text-small--font-weight: var(--type-small-weight);
@@ -63,6 +83,7 @@
 
   --shadow-1: var(--shadow-1);
   --shadow-2: var(--shadow-2);
+  --shadow-knob: var(--shadow-knob);
 }
 
 @layer base {

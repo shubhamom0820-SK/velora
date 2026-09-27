@@ -14,6 +14,7 @@
   --surface: #ffffff;
   --surface-2: #ece8e7;
   --line: #e2dddc;
+  --line-strong: #d3cdcc;
   --ink: #1a1517;
   --mute: #6e6668;
   --accent: #cf2a40;
@@ -36,6 +37,7 @@
   );
   --shadow-1: 0 4px 14px rgba(207, 42, 64, 0.24);
   --shadow-2: 0 10px 26px rgba(20, 12, 15, 0.14);
+  --shadow-knob: 0 1px 3px rgba(40, 10, 20, 0.3);
   --scrim: rgba(10, 8, 9, 0.45);
 
   /* type (§2): system fonts only, no web-font download */
@@ -56,6 +58,9 @@
   --type-ui-size: 14px;
   --type-ui-line: 1.4;
   --type-ui-weight: 500;
+  --type-input-size: 16px;
+  --type-input-line: 1.4;
+  --type-input-weight: 400;
   --type-small-size: 12.5px;
   --type-small-line: 1.5;
   --type-small-weight: 400;
@@ -64,7 +69,7 @@
   --type-micro-weight: 600;
 
   /* shape (§3) */
-  --corner-input: 10px;
+  --corner-input: 12px;
   --corner-button: 12px;
   --corner-card: 14px;
   --corner-bubble: 16px;
