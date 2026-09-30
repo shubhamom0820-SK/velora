@@ -1,0 +1,137 @@
+#!/usr/bin/env bash
+# Tests scripts/ci-gate against a fake `gh` (T-1.20): the gate passes only a
+# successful run for the exact commit, and fails closed on everything else.
+# The fake applies the gate's real --jq expressions with jq, as gh does, so the
+# exact-SHA filtering is what's under test. Runs locally and in CI.
+set -euo pipefail
+
+here="$(cd "$(dirname "$0")" && pwd)"
+gate="$here/ci-gate"
+work="$(mktemp -d)"
+trap 'rm -rf "$work"' EXIT
+
+sha="$(git -C "$here" rev-parse HEAD)"
+old="0000000000000000000000000000000000000000"
+
+mkdir "$work/bin"
+cat >"$work/bin/gh" <<'FAKE'
+#!/usr/bin/env bash
+set -euo pipefail
+expr="" prev=""
+for arg in "$@"; do
+  if [[ "$prev" == --jq ]]; then expr="$arg"; fi
+  prev="$arg"
+done
+# GitHub resolves --workflow against the default branch, so it 404s until the
+# workflow file is on main (T-1.20's first run). The fake always does, so the
+# flag can't quietly come back.
+for arg in "$@"; do
+  if [[ "$arg" == --workflow ]]; then
+    echo "HTTP 404: workflow ci.yml not found on the default branch" >&2
+    exit 1
+  fi
+done
+if [[ -f "$FAKE_DIR/unreachable" ]]; then
+  echo "error connecting to api.github.com" >&2
+  exit 1
+fi
+case "$1 $2" in
+  "api rate_limit") echo '{}'; exit 0 ;;
+  "run list")
+    if [[ -f "$FAKE_DIR/list-error" ]]; then cat "$FAKE_DIR/list-error" >&2; exit 1; fi
+    calls=$(($(cat "$FAKE_DIR/list-calls" 2>/dev/null || echo 0) + 1))
+    echo "$calls" >"$FAKE_DIR/list-calls"
+    if ((calls <= $(cat "$FAKE_DIR/delay" 2>/dev/null || echo 0))); then
+      json='[]'
+    else
+      json="$(cat "$FAKE_DIR/list.json")"
+    fi
+    ;;
+  "run view") json="$(cat "$FAKE_DIR/view-$3.json")" ;;
+  *) echo "fake gh: unexpected call: $*" >&2; exit 64 ;;
+esac
+jq -r "$expr" <<<"$json"
+FAKE
+chmod +x "$work/bin/gh"
+
+# scenario NAME LIST_JSON [RUN_ID VIEW_STATUS VIEW_CONCLUSION VIEW_SHA]...
+scenario() {
+  local dir="$work/$1"
+  mkdir -p "$dir"
+  printf '%s' "$2" >"$dir/list.json"
+  shift 2
+  while (($# >= 4)); do
+    printf '{"status":"%s","conclusion":"%s","headSha":"%s"}' "$2" "$3" "$4" >"$dir/view-$1.json"
+    shift 4
+  done
+}
+# run ID SHA CREATED_AT [WORKFLOW_NAME]
+run() { printf '{"databaseId":%s,"headSha":"%s","createdAt":"%s","workflowName":"%s"}' "$1" "$2" "$3" "${4:-CI}"; }
+
+# expect NAME EXIT MESSAGE [ENV=VALUE]... — the exit code alone can't tell a
+# deliberate "not green" from the script crashing, so the message is checked too.
+passed=0 failed=0
+expect() {
+  local name="$1" want="$2" message="$3" got=0
+  shift 3
+  env PATH="$work/bin:$PATH" FAKE_DIR="$work/$name" CI_GATE_INTERVAL=1 \
+    CI_GATE_APPEAR_TIMEOUT=2 CI_GATE_FINISH_TIMEOUT=2 "$@" \
+    "$gate" "$sha" >"$work/$name.out" 2>&1 || got=$?
+  if [[ "$got" == "$want" ]] && grep -qF -- "$message" "$work/$name.out"; then
+    passed=$((passed + 1))
+    printf 'ok    %-48s exit %s\n' "$name" "$got"
+  else
+    failed=$((failed + 1))
+    printf 'FAIL  %-48s exit %s, want %s saying "%s"\n' "$name" "$got" "$want" "$message"
+    sed 's/^/        /' "$work/$name.out"
+  fi
+}
+
+scenario green "[$(run 11 "$sha" 2026-01-01T00:00:00Z)]" 11 completed success "$sha"
+expect green 0 "CI is green for ${sha:0:7} (run 11)"
+
+scenario appears-late "[$(run 11 "$sha" 2026-01-01T00:00:00Z)]" 11 completed success "$sha"
+echo 2 >"$work/appears-late/delay"
+expect appears-late 0 "CI is green for ${sha:0:7} (run 11)" CI_GATE_APPEAR_TIMEOUT=6
+
+# A newer run for an older commit sits beside ours: the gate must take ours.
+scenario picks-this-commit "[$(run 9 "$old" 2026-01-02T00:00:00Z),$(run 11 "$sha" 2026-01-01T00:00:00Z)]" \
+  9 completed failure "$old" 11 completed success "$sha"
+expect picks-this-commit 0 "CI is green for ${sha:0:7} (run 11)"
+
+scenario only-an-older-commit "[$(run 9 "$old" 2026-01-02T00:00:00Z)]" 9 completed success "$old"
+expect only-an-older-commit 2 "CI never reported a run for ${sha:0:7}"
+
+scenario no-run-at-all "[]"
+expect no-run-at-all 2 "CI never reported a run for ${sha:0:7}"
+
+scenario failed "[$(run 11 "$sha" 2026-01-01T00:00:00Z)]" 11 completed failure "$sha"
+expect failed 1 "CI concluded 'failure'"
+
+scenario cancelled "[$(run 11 "$sha" 2026-01-01T00:00:00Z)]" 11 completed cancelled "$sha"
+expect cancelled 1 "CI concluded 'cancelled'"
+
+scenario view-is-another-commit "[$(run 11 "$sha" 2026-01-01T00:00:00Z)]" 11 completed success "$old"
+expect view-is-another-commit 1 "run 11 is for 0000000, not ${sha:0:7}"
+
+scenario never-finishes "[$(run 11 "$sha" 2026-01-01T00:00:00Z)]" 11 in_progress "" "$sha"
+expect never-finishes 3 "didn't finish within 2s"
+
+# GitHub's own "Dependency Graph" workflow also runs on pushed commits.
+scenario picks-this-workflow "[$(run 5 "$sha" 2026-01-02T00:00:00Z "Dependency Graph"),$(run 11 "$sha" 2026-01-01T00:00:00Z)]" \
+  5 completed failure "$sha" 11 completed success "$sha"
+expect picks-this-workflow 0 "CI is green for ${sha:0:7} (run 11)"
+
+scenario github-unreachable "[]"
+touch "$work/github-unreachable/unreachable"
+expect github-unreachable 4 "couldn't reach or authenticate with GitHub"
+
+# GitHub is reachable and says no: never the manual path.
+scenario github-answers-with-an-error "[]"
+echo "HTTP 404: Not Found (https://api.github.com/repos/o/r/actions/runs)" >"$work/github-answers-with-an-error/list-error"
+expect github-answers-with-an-error 5 "GitHub answered with an error while listing runs"
+grep -qF "HTTP 404: Not Found" "$work/github-answers-with-an-error.out" ||
+  { failed=$((failed + 1)); echo "FAIL  github-answers-with-an-error doesn't show GitHub's error"; }
+
+echo "ci-gate-test: $passed passed, $failed failed"
+((failed == 0))

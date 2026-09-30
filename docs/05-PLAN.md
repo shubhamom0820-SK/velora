@@ -161,19 +161,26 @@ One migration per task, each with a working `downgrade()`. Build exactly `03-SCH
 - [x] **Commit:** `feat(web): ui primitives [T-1.19]`
 
 ### T-1.20 · CI
-- [ ] **Needs:** T-1.5, T-1.6, T-1.19
-- [ ] GitHub Actions `ci.yml`: job `api` (postgis + redis services, `uv sync`, migrate, ruff, mypy, pytest); job `web` (pnpm install, lint, tsc, vitest, `next build`). Required on PRs to `main`.
-- [ ] Secrets scan in CI (from P-09): a `gitleaks git` step in the `api` job. The pre-commit hook
+- [x] **Needs:** T-1.5, T-1.6, T-1.19
+- [x] GitHub Actions `ci.yml`: job `api` (postgis + redis services, `uv sync`, migrate, ruff, mypy, pytest); job `web` (pnpm install, lint, tsc, vitest, `next build`). Runs on every push, to any branch. Nothing is marked "required": there are no pull requests to attach required checks to. CI is binding anyway, through `/done` (next step, D-044).
+- [x] Secrets scan in CI (from P-09): a `gitleaks git` step in the `api` job. The pre-commit hook
   only protects clones that ran `make hooks`, and `git commit --no-verify` skips it — without this,
   nothing server-side enforces checklist E's "no secrets in repo".
-- [ ] Hooks work from GUI git clients (from P-10): the ruff and mypy hooks resolve `uv`, and the
+- [x] Hooks work from GUI git clients (from P-10): the ruff and mypy hooks resolve `uv`, and the
   prettier and eslint hooks `pnpm` (live since T-1.17), without relying on the shell's `PATH` (an
   absolute path, or a wrapper that locates it). VS Code's Source Control panel runs hooks without
   the shell profile, so either may be missing and every commit fails. Test a commit from VS Code.
-- [ ] Types are fresh (from T-1.18, rule 10): CI runs `make types` and fails if
+- [x] Types are fresh (from T-1.18, rule 10): CI runs `make types` and fails if
   `web/src/types/api.ts` changes. `make types` works offline (D-043), so this needs no running
   API. Without it, a response schema can change with stale web types and only a reviewer notices.
-- [ ] **Commit:** `ci: api and web pipelines [T-1.20]`
+- [x] `/done` gate (D-044): `/done` pushes the branch, runs `scripts/ci-gate`, and fast-forwards
+  `main` only when CI passed for that exact commit. The gate finds the run by the commit's SHA,
+  never "the latest run on the branch", and fails closed: no run within 3 minutes, no finish
+  within 20, a cancelled or failed run, or GitHub not answering all stop `/done` with a message.
+  `done.md` documents a manual path for GitHub being unreachable (exit 4) — never for a red run
+  or an error GitHub answered (exit 5). `scripts/ci-gate-test` proves each case against a fake
+  `gh`, and runs in CI.
+- [x] **Commit:** `ci: api and web pipelines [T-1.20]`
 
 ### T-1.21 · Provider adapters
 - [ ] **Needs:** T-1.3
@@ -195,7 +202,7 @@ One migration per task, each with a working `downgrade()`. Build exactly `03-SCH
 - [ ] Tests, connected as that role: UPDATE, DELETE and TRUNCATE are still refused on every guarded
   table, and both bypasses are denied.
 - [ ] Vercel project for `web/` with staging env vars.
-- [ ] GitHub Actions `deploy.yml`: on push to `main` → deploy staging API + worker; Vercel deploys web itself.
+- [ ] GitHub Actions `deploy.yml`: on push to `main` → deploy staging API + worker, but only a commit whose CI passed — a second check after `/done`'s gate (D-044). Vercel deploys web itself from Git, which ignores CI by default: make its web deploys wait for CI too (e.g. deploy from `deploy.yml` with the Vercel CLI), or record why not.
 - [ ] **Done when:** staging web loads and staging `/readyz` is 200.
 - [ ] **Commit:** `ci: staging deploy [T-1.22]`
 

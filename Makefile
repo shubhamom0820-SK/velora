@@ -2,7 +2,7 @@
 # Targets tagged [T-x.y] are stubs until that task lands. See docs/05-PLAN.md.
 
 .DEFAULT_GOAL := help
-.PHONY: help infra-up infra-down infra-reset dev worker seed test lint hooks migrate migrate-down migration migration-auto types e2e
+.PHONY: help infra-up infra-down infra-reset dev worker seed test test-api test-web lint lint-api lint-web hooks migrate migrate-down migration migration-auto types e2e
 
 COMPOSE := docker compose -f infra/docker-compose.yml
 
@@ -34,12 +34,20 @@ worker: ## Run the ARQ worker only [T-4.4]
 seed: ## Dev data: 20 profiles, test users (local only) [T-1.15]
 	@echo "not yet — T-1.15"
 
-test: ## api pytest + web vitest
-	cd api && uv run pytest
+test: test-api test-web ## api pytest + web vitest (CI runs each half as its own job)
+
+test-api: ## api pytest: the critical tests first, then the rest (06-TESTING)
+	cd api && uv run pytest -m critical && uv run pytest -m "not critical"
+
+test-web: ## web vitest
 	cd web && pnpm test
 
-lint: ## api: ruff + format check + strict mypy · web: eslint + tsc + prettier check
+lint: lint-api lint-web ## api + web lint (CI runs each half as its own job)
+
+lint-api: ## api: ruff + format check + strict mypy
 	cd api && uv run ruff check . && uv run ruff format --check . && uv run mypy
+
+lint-web: ## web: eslint + tsc + prettier check
 	cd web && pnpm lint && pnpm typecheck && pnpm format:check
 
 hooks: ## Install the git pre-commit hooks (once per clone)

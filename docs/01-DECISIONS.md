@@ -362,6 +362,34 @@ no runtime dependency, and it throws instead of returning `{data, error}`, which
 TanStack Query wants. **Deferred: zod.** Nothing parses user input yet; it arrives with React
 Hook Form when Sprint 3's forms need it.
 
+
+### D-044 · CI is binding through /done, not through pull requests — Locked
+CI (`.github/workflows/ci.yml`, T-1.20) runs on every push, to any branch, and is binding from
+T-1.20: `/done` pushes the task branch, waits for CI on that exact commit (`scripts/ci-gate`), and
+fast-forwards `main` only when that run passed. T-1.22's staging deploy checks again — a second
+gate, not the first.
+- The gate finds the run by the commit's SHA and checks the run's `headSha`, never "the latest run
+  on the branch": between a push and its run appearing, that is an older commit's run.
+- It fails closed. No run within 3 minutes, a run not finished within 20, a failed or cancelled
+  run, or GitHub not answering all stop `/done` with a message, and `main` stays where it is.
+  `scripts/ci-gate-test` proves each case against a fake `gh`, asserting on the message as well
+  as the exit code.
+- It matches the workflow by name, not with `gh run list --workflow ci.yml`: GitHub resolves that
+  against the default branch, so it 404s until the file is on `main` — found by T-1.20's own run.
+- "Couldn't reach or authenticate with GitHub" (exit 4) and "GitHub answered with an error"
+  (exit 5) are separate. Only exit 4 opens `/done`'s written manual path, whose first step is
+  checking the token, since a bad token is the usual cause. An ordinary API error can never
+  reach the bypass.
+- CI runs every pre-commit hook and a full-history gitleaks scan, because `git commit --no-verify`
+  skips the local hooks, and the colour-token hook runs nowhere else.
+- Third-party actions are pinned to commit SHAs. gitleaks is its release binary, with the checksum
+  committed in the workflow, so a tampered release fails instead of running.
+
+**Rejected: required status checks.** GitHub attaches them to pull requests, and this project
+merges by fast-forward without pull requests, so there is nothing to require them on. The `/done`
+gate does the same job without one. **Rejected: `gitleaks/gitleaks-action`** — third-party code in
+CI, for what a checksum-verified binary does.
+
 ---
 
 ## Adding a decision

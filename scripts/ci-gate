@@ -1,0 +1,97 @@
+#!/usr/bin/env bash
+# The /done gate (T-1.20, D-044): exits 0 only when the CI workflow has passed
+# for this exact commit, so main is only ever fast-forwarded to a checked one.
+# Everything else fails closed: a failed or cancelled run, a run for some other
+# commit, no run at all, a run that never finishes, or GitHub not answering.
+#
+#   scripts/ci-gate [COMMIT]          (default: HEAD)
+#
+# Exit codes:
+#   0  CI passed for this commit
+#   1  CI did not pass (failed, cancelled, or ran for another commit)
+#   2  CI never reported a run for this commit
+#   3  CI didn't finish in time
+#   4  couldn't reach or authenticate with GitHub: the only case for /done's
+#      manual path, and a bad token is the usual cause
+#   5  GitHub answered, with an error: never a case for the manual path
+set -euo pipefail
+
+sha="$(git rev-parse --verify "${1:-HEAD}^{commit}")"
+short="${sha:0:7}"
+# The workflow's `name:` in .github/workflows/ci.yml. Matched by name, not with
+# `gh run list --workflow ci.yml`: GitHub resolves that against the default
+# branch, so it 404s until the workflow file is on main.
+workflow="${CI_GATE_WORKFLOW_NAME:-CI}"
+appear_timeout="${CI_GATE_APPEAR_TIMEOUT:-180}"  # seconds for the run to show up
+finish_timeout="${CI_GATE_FINISH_TIMEOUT:-1200}" # seconds for it to finish
+interval="${CI_GATE_INTERVAL:-10}"
+errors="$(mktemp)"
+trap 'rm -f "$errors"' EXIT
+
+say() { printf 'ci-gate: %s\n' "$*" >&2; }
+not_merging() { say "Not fast-forwarding main. $*"; }
+
+# gh failed. Tell "couldn't reach or authenticate" (exit 4) apart from "GitHub
+# answered with an error" (exit 5), so an ordinary 404 can never open the
+# manual path.
+gh_failed() {
+  local what="$1"
+  if ! gh api rate_limit >/dev/null 2>&1; then
+    not_merging "couldn't reach or authenticate with GitHub while $what ('gh api rate_limit' fails too)."
+    say "Check the token first: 'gh auth status'. If it's expired or missing, 'gh auth login' and run scripts/ci-gate again."
+    exit 4
+  fi
+  not_merging "GitHub answered with an error while $what:"
+  sed 's/^/ci-gate:   /' "$errors" >&2
+  exit 5
+}
+
+# The run for exactly this commit and this workflow: gh filters by SHA, and jq
+# checks headSha and the workflow's name again. Never "the latest run on the
+# branch" — between a push and its run appearing, that is an older commit's.
+find_run() {
+  gh run list --commit "$sha" --event push --limit 50 \
+    --json databaseId,headSha,workflowName,createdAt \
+    --jq "[.[] | select(.headSha == \"$sha\" and .workflowName == \"$workflow\")] | sort_by(.createdAt) | last | .databaseId // empty"
+}
+
+say "waiting for the '${workflow}' workflow on ${short}…"
+start=$SECONDS
+while :; do
+  if ! run="$(find_run 2>"$errors")"; then gh_failed "listing runs for $short"; fi
+  if [[ -n "$run" ]]; then break; fi
+  if ((SECONDS - start >= appear_timeout)); then
+    not_merging "CI never reported a run for $short within ${appear_timeout}s."
+    say "Decide: look at the Actions tab, re-run, or wait and run scripts/ci-gate again."
+    exit 2
+  fi
+  sleep "$interval"
+done
+
+say "run $run is for $short; waiting for it to finish…"
+start=$SECONDS
+while :; do
+  if ! line="$(gh run view "$run" --json status,conclusion,headSha \
+    --jq '"\(.status)|\(.conclusion)|\(.headSha)"' 2>"$errors")"; then
+    gh_failed "reading run $run"
+  fi
+  IFS='|' read -r status conclusion head <<<"$line"
+  if [[ "$head" != "$sha" ]]; then
+    not_merging "run $run is for ${head:0:7}, not $short."
+    exit 1
+  fi
+  if [[ "$status" == completed ]]; then
+    if [[ "$conclusion" == success ]]; then
+      say "CI is green for $short (run $run)."
+      exit 0
+    fi
+    not_merging "CI concluded '${conclusion:-none}' for $short (run $run)."
+    say "See why: gh run view $run --log-failed"
+    exit 1
+  fi
+  if ((SECONDS - start >= finish_timeout)); then
+    not_merging "run $run for $short didn't finish within ${finish_timeout}s. Decide."
+    exit 3
+  fi
+  sleep "$interval"
+done

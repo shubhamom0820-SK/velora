@@ -10,3 +10,46 @@ Finish task $ARGUMENTS.
    Say its ID and title only. Suggest I start a fresh session for it.
 7. Push the branch: run `git push -u origin HEAD`. If the push fails because
    no remote is configured, tell me instead of guessing a URL.
+8. Wait for CI on that exact commit: run `scripts/ci-gate` (D-044). It finds the CI run for HEAD's
+   SHA, never "the latest run on the branch", waits up to 3 minutes for it to appear and 20 for it
+   to finish, and exits 0 only if that run passed.
+   - Exit 0: continue.
+   - Any other exit: stop here. Show what it printed, leave `main` untouched and the branch
+     pushed, and let me decide. Never fast-forward on a failure, a cancelled run, a timeout or
+     an error from GitHub.
+9. Fast-forward `main`: `git checkout main`, `git merge --ff-only origin/main`, then
+   `git merge --ff-only <branch>`, then `git push origin main`. If a fast-forward isn't possible,
+   stop and tell me.
+10. Delete the branch, locally and on origin.
+
+## Manual path: only when GitHub can't be reached (gate exit 4)
+
+This path exists so GitHub being unreachable doesn't turn into an improvised `git merge` that skips
+everything above. It is **only** for `scripts/ci-gate` exiting **4**: it couldn't reach or
+authenticate with GitHub. That is usually a bad or expired token, not an outage — so step 1 is
+always the token.
+
+**It is never for a red run, or for anything GitHub answered.** Exit 1 (CI failed, was cancelled,
+or ran for another commit) means the commit is not good: fix it on the branch and run `/done`
+again. Exit 5 means GitHub answered with an error: read it and fix the cause. Exit 2 or 3 (no run
+appeared, or it didn't finish) means wait and run `scripts/ci-gate` again; if it keeps happening,
+stop and ask me. Take this path only when I say so, after you've shown me the gate's exit-4 output.
+
+1. Check the token first: `gh auth status`. If it's expired, missing or lacks a scope, fix it
+   (`gh auth login`, or `gh auth refresh -s <scope>`) and run `scripts/ci-gate` again — that is
+   the end of it. Go on only if the token is fine and GitHub still can't be reached: the network
+   is down, or githubstatus.com reports an incident.
+2. On the branch, with a clean working tree (`git status` shows nothing), run CI's checks locally.
+   Every one must pass; if any fails, stop.
+   - `make lint test`
+   - `cd web && pnpm build`
+   - `make types && git diff --exit-code -- web/src/types/api.ts`
+   - `SKIP=gitleaks uv run --project api pre-commit run --all-files --show-diff-on-failure`
+   - `scripts/ci-gate-test`
+
+   The full-history secrets scan needs GitHub; CI runs it on `main` once GitHub is back (step 4).
+3. Do steps 9 and 10 above. If the push fails because git can't reach GitHub either, stop and tell
+   me: `main` has then moved locally only, and must be pushed before the next task starts.
+4. When GitHub answers again, check CI on what went to `main`: `scripts/ci-gate main`. If it isn't
+   green, tell me at once — `main` is red, and fixing it comes before anything else.
+5. In your report, say the gate was bypassed, quote its exit-4 output, and list the local results.

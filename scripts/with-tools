@@ -1,0 +1,48 @@
+#!/usr/bin/env bash
+# Runs a git hook's command with uv, pnpm and node findable, even when git was
+# started by a GUI client (VS Code's Source Control panel, GitHub Desktop) whose
+# PATH can be as bare as /usr/bin:/bin:/usr/sbin:/sbin (T-1.20, from P-10).
+#
+# Your own PATH always wins: the usual install locations are only appended, and
+# only if they exist on this machine.
+#
+#   scripts/with-tools [--need TOOL]... COMMAND [ARGS...]
+#
+# --need names a tool the command needs, so a missing one fails with a clear
+# message instead of bash's bare "command not found".
+set -euo pipefail
+
+add() {
+  if [[ -d "$1" && ":$PATH:" != *":$1:"* ]]; then PATH="$PATH:$1"; fi
+}
+
+add "$HOME/.local/bin"        # uv's installer
+add "$HOME/.cargo/bin"        # uv via cargo
+add /opt/homebrew/bin         # Homebrew on Apple silicon
+add /usr/local/bin            # Homebrew on Intel, and system installs
+add "$HOME/.volta/bin"        # Volta
+add "$HOME/Library/pnpm"      # pnpm's own installer, macOS
+add "$HOME/.local/share/pnpm" # pnpm's own installer, Linux
+
+# nvm: the Node its default alias names, else the newest one installed.
+nvm_versions="${NVM_DIR:-$HOME/.nvm}/versions/node"
+if [[ -d "$nvm_versions" ]]; then
+  want=""
+  alias_file="${NVM_DIR:-$HOME/.nvm}/alias/default"
+  if [[ -f "$alias_file" ]]; then want="$(tr -d '[:space:]' <"$alias_file")"; fi
+  case "$want" in "" | node | stable | lts/*) want="" ;; *) want="${want#v}" ;; esac
+  newest="$(ls -1 "$nvm_versions" | grep "^v${want}" | sort -V | tail -n 1 || true)"
+  if [[ -n "$newest" ]]; then add "$nvm_versions/$newest/bin"; fi
+fi
+export PATH
+
+while [[ "${1:-}" == --need ]]; do
+  if ! command -v "$2" >/dev/null 2>&1; then
+    echo "with-tools: this hook needs '$2', which isn't on PATH or in the usual install" >&2
+    echo "locations. Install it, or add its directory to the PATH your git client sees." >&2
+    exit 127
+  fi
+  shift 2
+done
+
+exec "$@"

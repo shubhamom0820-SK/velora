@@ -74,8 +74,8 @@ make infra-reset # stop the stack and DROP all data volumes (clean database)
 make dev         # infra + api + web on 127.0.0.1 (worker joins with T-4.4)
 make worker      # ARQ worker only
 make seed        # dev data: 20 profiles, test users (local only)
-make test        # api pytest + web vitest
-make lint        # ruff + mypy + eslint + tsc --noEmit + prettier check
+make test        # api pytest + web vitest   (test-api / test-web for one side)
+make lint        # ruff + mypy + eslint + tsc --noEmit + prettier check   (lint-api / lint-web)
 make hooks       # install the git pre-commit hooks (once per clone)
 make migrate     # alembic upgrade head   (make migrate-down to step back)
 make migration m="message"   # new blank alembic revision (written by hand)
@@ -139,6 +139,7 @@ make e2e         # Playwright
 - [ ] No TODOs left without a matching "Proposed task"
 - [ ] Checkbox ticked in `docs/05-PLAN.md`
 - [ ] One commit (or a small, clean series) referencing the task ID
+- [ ] CI green for that exact commit — `/done` fast-forwards `main` only then (D-044)
 
 ## Do not build (unless a task says so)
 

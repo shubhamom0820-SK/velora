@@ -95,8 +95,12 @@ and anything already enforced by the type checker.
 
 ## CI order
 
-1. ruff + mypy + eslint + tsc (fail fast, ~1 min)
-2. `pytest -m critical`
-3. rest of pytest + vitest (parallel jobs)
-4. `next build`
-5. Playwright (only if 1–4 pass)
+`.github/workflows/ci.yml` (T-1.20) runs on every push as three parallel jobs: `api` (full-history
+secrets scan, lint, migrate, pytest), `web` (lint, vitest, `next build`) and `repo` (types are
+fresh, every pre-commit hook, the `/done` gate's own tests). `/done` fast-forwards `main` only when
+the run for that exact commit passed (D-044). Within each job:
+
+1. Lint first, failing fast: ruff + mypy · eslint + tsc + prettier
+2. `pytest -m critical`, then the rest of pytest (`make test-api`) · vitest
+3. `next build`
+4. Playwright (from T-3.13, only if 1–3 pass)

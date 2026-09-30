@@ -1,0 +1,182 @@
+# CI (T-1.20, D-044). Runs on every push, to any branch. There are no pull
+# requests, so nothing is marked "required": the gate is /done, which
+# fast-forwards main only when this workflow passed for that exact commit
+# (scripts/ci-gate). T-1.22's deploy checks again.
+#
+# Third-party actions are pinned to a commit SHA; the comment names the version.
+name: CI
+
+on:
+  push:
+    branches: ["**"]
+  workflow_dispatch:
+
+# A newer push to the same branch supersedes a run still in progress. The /done
+# gate treats a cancelled run as not green.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+env:
+  UV_VERSION: "0.12.13"
+  NODE_VERSION: "24"
+  # The same gitleaks version as the pre-commit hook. The checksum is copied from
+  # the release's checksums file into this repo, so a tampered release fails.
+  GITLEAKS_VERSION: "8.30.0"
+  GITLEAKS_SHA256: "79a3ab579b53f71efd634f3aaf7e04a0fa0cf206b7ed434638d1547a2470a66e"
+  # Settings the API refuses to start without. Placeholders, not secrets: the
+  # same values the test harness sets (api/tests/conftest.py).
+  ENV: local
+  DATABASE_URL: postgresql+asyncpg://velora:velora@127.0.0.1:5432/velora_test
+  REDIS_URL: redis://127.0.0.1:6379/1
+  JWT_SECRET: test-secret-not-a-real-key
+  PHONE_PEPPER: test-pepper
+  PHONE_ENC_KEY: test-enc-key
+
+jobs:
+  api:
+    name: api — secrets, lint, migrate, pytest
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    services:
+      db:
+        image: postgis/postgis:16-3.4
+        env:
+          POSTGRES_USER: velora
+          POSTGRES_PASSWORD: velora
+          # The test harness only runs against a database whose name ends in _test.
+          POSTGRES_DB: velora_test
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U velora -d velora_test"
+          --health-interval 5s --health-timeout 5s --health-retries 12
+      redis:
+        image: redis:7-alpine
+        ports: ["6379:6379"]
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 5s --health-timeout 3s --health-retries 12
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0 # the secrets scan reads every commit
+          persist-credentials: false
+
+      # The pre-commit hook only protects clones that ran `make hooks`, and
+      # `git commit --no-verify` skips it. This scans the whole history (P-09).
+      - name: Secrets scan (gitleaks, full history)
+        run: |
+          cd "$RUNNER_TEMP"
+          curl -sSfL -o gitleaks.tar.gz \
+            "https://github.com/gitleaks/gitleaks/releases/download/v${GITLEAKS_VERSION}/gitleaks_${GITLEAKS_VERSION}_linux_x64.tar.gz"
+          echo "${GITLEAKS_SHA256}  gitleaks.tar.gz" | sha256sum --check --strict
+          tar -xzf gitleaks.tar.gz gitleaks
+          ./gitleaks git --redact --verbose "$GITHUB_WORKSPACE"
+
+      - uses: astral-sh/setup-uv@c18668ad3cf93ea998bef934396af7bb5c839dc7 # v10.2.0
+        with:
+          version: ${{ env.UV_VERSION }}
+          enable-cache: true
+          cache-dependency-glob: api/uv.lock
+
+      - name: Install
+        working-directory: api
+        run: uv sync --locked
+
+      - name: Lint (ruff, format, mypy)
+        run: make lint-api
+
+      - name: Migrate the test database
+        working-directory: api
+        run: uv run alembic upgrade head
+
+      # CI=true (set by GitHub) turns an unreachable database into a failure,
+      # never a skip (06-TESTING). The critical tests run first.
+      - name: Test (pytest)
+        run: make test-api
+
+  web:
+    name: web — lint, vitest, build
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
+        with:
+          package_json_file: web/package.json
+
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: pnpm
+          cache-dependency-path: web/pnpm-lock.yaml
+
+      - name: Install
+        working-directory: web
+        run: pnpm install --frozen-lockfile
+
+      - name: Lint (eslint, tsc, prettier)
+        run: make lint-web
+
+      - name: Test (vitest)
+        run: make test-web
+
+      - name: Build (next build)
+        working-directory: web
+        run: pnpm build
+
+  repo:
+    name: repo — types, hooks, gate
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - uses: astral-sh/setup-uv@c18668ad3cf93ea998bef934396af7bb5c839dc7 # v10.2.0
+        with:
+          version: ${{ env.UV_VERSION }}
+          enable-cache: true
+          cache-dependency-glob: api/uv.lock
+
+      - uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
+        with:
+          package_json_file: web/package.json
+
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: pnpm
+          cache-dependency-path: web/pnpm-lock.yaml
+
+      - name: Install
+        run: |
+          (cd api && uv sync --locked)
+          (cd web && pnpm install --frozen-lockfile)
+
+      # Rule 10: a response schema can't change with stale web types.
+      - name: Types are fresh
+        run: |
+          make types
+          if ! git diff --exit-code -- web/src/types/api.ts; then
+            echo "::error file=web/src/types/api.ts::Stale types: run 'make types' and commit the result (CLAUDE.md rule 10)."
+            exit 1
+          fi
+
+      # `git commit --no-verify` skips every hook, and `make lint` doesn't run the
+      # colour-token hook at all, so CI runs them all. gitleaks' hook only scans
+      # staged changes; the api job scans the whole history instead.
+      - name: pre-commit hooks, every file
+        env:
+          SKIP: gitleaks
+        run: uv run --project api pre-commit run --all-files --show-diff-on-failure
+
+      - name: The /done gate's own tests
+        run: scripts/ci-gate-test
