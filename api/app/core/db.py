@@ -143,8 +143,14 @@ def import_models() -> None:
                 importlib.import_module(name)
 
 
-def build_engine(url: str) -> AsyncEngine:
-    return create_async_engine(url, pool_pre_ping=True)
+def build_engine(url: str, *, pool_size: int = 5, max_overflow: int = 5) -> AsyncEngine:
+    """An engine whose pool holds `pool_size` connections, plus `max_overflow`
+    more under load. The pool is per process: every uvicorn worker opens its own,
+    so a deployment's connection budget is workers x (pool_size + max_overflow)
+    (infra/STAGING.md)."""
+    return create_async_engine(
+        url, pool_pre_ping=True, pool_size=pool_size, max_overflow=max_overflow
+    )
 
 
 def build_sessionmaker(engine: AsyncEngine) -> async_sessionmaker[AsyncSession]:

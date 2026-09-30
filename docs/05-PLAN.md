@@ -193,33 +193,48 @@ One migration per task, each with a working `downgrade()`. Build exactly `03-SCH
 - [x] **Commit:** `feat(api): provider interfaces with fakes [T-1.21]`
 
 ### T-1.22 · Staging deploy
-- [ ] **Needs:** T-1.4, T-1.17, P-0.6
-- [ ] `api/.dockerignore` excluding `.env*`, before the first image is built (from P-32). A `.env`
+- [x] **Needs:** T-1.4, T-1.17, P-0.6
+- [x] `api/.dockerignore` excluding `.env*`, before the first image is built (from P-32). A `.env`
   in the image is a secrets leak: it bakes the JWT secret, the database password and every
   provider key into an image pushed to Fly's registry, and Docker keeps deleted files in earlier
   layers, so once pushed every one of them must be rotated. It would also set `ENV=local` and
   switch off D-045. CI checks that the built image has no `.env` in any layer.
-- [ ] `api/Dockerfile` (multi-stage, uv, non-root, gunicorn + uvicorn workers). `infra/fly.api.toml` and `infra/fly.worker.toml`, region `bom`, health check `/readyz`, release command `alembic upgrade head`.
+- [x] `api/Dockerfile` (multi-stage, uv, non-root, base images pinned by digest). uvicorn with 2
+  workers, not gunicorn: uvicorn restarts dead workers itself, and the image checks settings once
+  before any worker starts, so a configuration error stops the container instead of crash-looping.
+  `infra/fly.api.toml`, region `bom`, health check `/readyz`. No release command: migrations run
+  from CI as the owner (D-046). The worker's Fly app moved to T-4.4, which builds the worker.
 - [ ] Supabase staging project (enable PostGIS, pg_trgm, citext); Upstash staging DB; R2 staging buckets.
-- [ ] Note: Supabase manages extensions from its dashboard. T-1.8's migration uses `create extension if not exists`, so upgrade is a no-op there — but its `downgrade()` drops them, so never downgrade a Supabase database to base.
-- [ ] Least-privilege database role (from P-18): the API and worker connect as a role that doesn't
-  own the tables and can't `ALTER` them or set `session_replication_role`; the release command
-  (migrations) runs as the owner. The guards on `ledger_entries`, `payments` and `audit_log` are
+  All by hand, from `infra/STAGING.md`.
+- [ ] Supabase's Data API off, and the app-role migration strips `anon` and `authenticated` of every
+  privilege on our tables. Left on, it serves every table in `public` over REST to anyone with the
+  project's anon key. The runbook ends with a SQL check that those roles hold nothing.
+- [x] Database pool sized for 2 workers (`DB_POOL_SIZE`, `DB_MAX_OVERFLOW`): each worker opens its
+  own pool, so staging's budget is 2 × (5 + 2) = 14 connections, recorded in `infra/STAGING.md`.
+- [x] Note: Supabase manages extensions from its dashboard. T-1.8's migration uses `create extension if not exists`, so upgrade is a no-op there — but its `downgrade()` drops them, so never downgrade a Supabase database to base.
+- [x] Least-privilege database role (from P-18): the API and worker connect as a role that doesn't
+  own the tables and can't `ALTER` them or set `session_replication_role`; migrations run as the
+  owner, from CI (D-046), so the owner's credentials are never on Fly beside the app. The guards on `ledger_entries`, `payments` and `audit_log` are
   triggers — they stop application bugs, but an owner or superuser connection bypasses them with
   `SET session_replication_role = replica` or `ALTER TABLE … DISABLE TRIGGER`.
-- [ ] Tests, connected as that role: UPDATE, DELETE and TRUNCATE are still refused on every guarded
-  table, and both bypasses are denied.
-- [ ] Vercel project for `web/` with staging env vars.
-- [ ] Serve `/openapi.json` and `/docs` only when `ENV == "local"` (from P-31). `create_app()`
+- [x] Tests, connected as that role: the writes each guard refuses are refused — UPDATE, DELETE and
+  TRUNCATE on `ledger_entries` and `audit_log`; DELETE and TRUNCATE on `payments`, whose UPDATE
+  stays allowed because a payment's status moves — and both bypasses are denied.
+- [ ] A separate Vercel project `velora-staging`, with no Git connection, deployed with `--prod` from
+  `deploy.yml`: one stable URL, which the API's `CORS_ORIGINS` names.
+- [x] Serve `/openapi.json` and `/docs` only when `ENV == "local"` (from P-31). `create_app()`
   serves them everywhere but production — a blacklist — so public staging would publish the full
   schema of the wallet, payment and admin routes. Nothing needs them outside local: `make types`
   reads the schema offline (D-043). Test staging and production: 404, and no schema in the body.
-- [ ] `/admin` returns 404 outside `next dev` (from P-30), with the same allowlist as `/dev/ui`
+- [x] `/admin` returns 404 outside `next dev` (from P-30), with the same allowlist as `/dev/ui`
   and a test; check the staging 404's body, not just its status. Until T-9.5 there is no admin
   page to protect, only a placeholder that shouldn't be public.
-- [ ] GitHub Actions `deploy.yml`: on push to `main` → deploy staging API + worker, but only a commit whose CI passed — a second check after `/done`'s gate (D-044). Vercel deploys web itself from Git, which ignores CI by default: make its web deploys wait for CI too (e.g. deploy from `deploy.yml` with the Vercel CLI), or record why not.
+- [x] GitHub Actions `deploy.yml`: on push to `main` → deploy staging API + worker, but only a commit whose CI passed — a second check after `/done`'s gate (D-044). Vercel deploys web itself from Git, which ignores CI by default: make its web deploys wait for CI too (e.g. deploy from `deploy.yml` with the Vercel CLI), or record why not.
+  Also runnable by hand for any commit whose CI passed. GitHub runs `workflow_run` and
+  `workflow_dispatch` workflows only from the default branch, so the first deploy follows the merge.
+- [x] After every deploy, `scripts/staging-smoke` checks staging from the outside, bodies included.
 - [ ] **Done when:** staging web loads and staging `/readyz` is 200.
-- [ ] **Commit:** `ci: staging deploy [T-1.22]`
+- [x] **Commit:** `ci: staging deploy [T-1.22]`
 
 ---
 
@@ -289,7 +304,7 @@ One migration per task, each with a working `downgrade()`. Build exactly `03-SCH
 - [ ] **Commit:** `feat(auth): verify otp and create account [T-3.3]`
 
 ### T-3.4 · Refresh and logout
-- [ ] **Needs:** T-3.3
+- [ ] **Needs:** T-3.3, and **P-33** (staging's web and API on one site, or the refresh cookie can't flow there)
 - [ ] `POST /v1/auth/refresh`: require `X-CSRF` equal to `csrf` cookie; look up `token_hash`; if revoked → revoke whole family (reuse attack) → `SESSION_REVOKED`; else rotate (new session, old `revoked_at` + `replaced_by`).
 - [ ] `POST /v1/auth/logout`: revoke current session, clear cookies.
 - [ ] Tests: rotation works; reusing an old token kills the family; missing CSRF → 401.
@@ -399,6 +414,9 @@ One migration per task, each with a working `downgrade()`. Build exactly `03-SCH
 ### T-4.4 · Moderation worker
 - [ ] **Needs:** T-4.2, T-1.15, and a **Sightengine account with API keys** — not created yet (P-0.6)
 - [ ] ARQ worker bootstrap (`workers/main.py`) + `make worker`.
+- [ ] Deploy the worker to Fly staging (moved from T-1.22): `infra/fly.worker.toml` beside
+  `fly.api.toml`, the same image and least-privilege role, deployed by `deploy.yml` after the API.
+  Add its pool to the connection budget in `infra/STAGING.md`.
 - [ ] `moderate_photo(photo_id)`: fetch raw → Pillow open (reject if not an image) → `ImageOps.exif_transpose` → resize longest side 1600 → save JPEG q85 **without EXIF** → `ModerationProvider.check()` → approve (write public copy for `public` kind) or reject with reason (`nudity`, `minor_suspected`, `no_face`, `text_overlay`, `other`). `minor_suspected` also opens an internal report.
 - [ ] Idempotent: re-running on an approved photo does nothing.
 - [ ] Tests with the fake provider for approve and each reject path; test that output has no EXIF.
@@ -945,7 +963,7 @@ Claude Code adds items here instead of doing unplanned work. Format:
   ledger and payments (`refuse_change()`, `restrict_violation` 23001); `messages` and `reports`
   were merged earlier without it. Reuse `refuse_change()` in a new migration (rule 11). Clearing a
   chat stays one-sided (`thread_clears`), so no legitimate path deletes messages. Found during T-1.12.
-- [ ] P-18 · App connects as a least-privilege database role — T-1.12's guards (append-only ledger,
+- [x] P-18 · App connects as a least-privilege database role — T-1.12's guards (append-only ledger,
   never-deleted payments) and T-1.13's (append-only `audit_log`) are triggers: they stop application
   bugs, not a privileged role. Proven on the ledger, and again on `audit_log` in review of T-1.13:
   as table owner or superuser, `SET session_replication_role = replica` or `ALTER TABLE … DISABLE
@@ -1056,7 +1074,7 @@ Claude Code adds items here instead of doing unplanned work. Format:
   Found while closing T-1.19.
   **Moved:** the 404 is now a step in T-1.22, and the role gate a step in T-9.5 — tick this with
   T-9.5.
-- [ ] P-31 · Stop serving the API schema and docs outside local. **Due before T-1.22.**
+- [x] P-31 · Stop serving the API schema and docs outside local. **Due before T-1.22.**
   `create_app()` serves `/openapi.json` and `/docs` unless `ENV` is `production` — a blacklist,
   so staging serves both, with the full schema. Checked in T-1.18: `local` and `staging` return
   200 with every path; `production` returns 404 with no schema in the body. T-1.22 makes staging
@@ -1065,7 +1083,7 @@ Claude Code adds items here instead of doing unplanned work. Format:
   an allowlist, served only when `ENV == "local"`, and test both `staging` and `production`:
   `/openapi.json` and `/docs` return 404, and the bodies contain no schema. Found in T-1.18.
   **Moved:** now a step in T-1.22 — tick this with T-1.22.
-- [ ] P-32 · Keep `api/.env` out of every image — a secrets leak, not a config problem.
+- [x] P-32 · Keep `api/.env` out of every image — a secrets leak, not a config problem.
   **Due with T-1.22's Dockerfile.** Docker's build context ignores `.gitignore`, so building from
   `api/` copies a developer's `api/.env` into the image unless it's excluded. That bakes the JWT
   secret, the database password and every provider key into an image pushed to Fly's registry.
@@ -1075,3 +1093,11 @@ Claude Code adds items here instead of doing unplanned work. Format:
   `api/.dockerignore` excluding `.env*` before the first image is built, and a CI check that the
   built image contains no `.env` in any layer. Found in T-1.21.
   **Moved:** now a step in T-1.22 — tick this with T-1.22.
+- [ ] P-33 · Put staging's web and API on one site, or sign-in can't keep a session there. **Due
+  before T-3.4** (on its Needs line). Staging's web is `*.vercel.app` and its API `*.fly.dev`:
+  different sites, so D-024's `SameSite=Lax` refresh cookie, scoped to `.velora.app`, never flows
+  between them. Refresh and logout (T-3.4) could then only be tested locally. The fix is staging
+  subdomains of the real domain (e.g. `staging.velora.app` and `api.staging.velora.app`).
+  **The chain that gates it:** the trademark search (P-0.1) settles the name (D-015, still Open) →
+  only then is the domain bought (P-0.3) → P-33 → T-3.4. A name change after P-0.3 would mean buying
+  again. Found planning T-1.22.

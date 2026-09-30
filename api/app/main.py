@@ -22,6 +22,7 @@ from app.core.redis import build_redis
 from app.modules.health.router import router as health_router
 
 APP_NAME = "Velora"  # One constant, so a rename stays cheap (D-015).
+SCHEMA_SERVED_IN: frozenset[str] = frozenset({"local"})
 
 
 async def close_resources(app: FastAPI) -> None:
@@ -47,12 +48,17 @@ def create_app(settings: Settings | None = None) -> FastAPI:
 
     configure_logging(json_logs=not settings.debug)
 
+    # The schema and Swagger UI are served only where ENV is local: an allowlist
+    # (rule 16), since a public schema of the wallet, payment and admin routes is
+    # free reconnaissance (P-31). Nothing needs them elsewhere — `make types`
+    # generates from `app.openapi()` offline (D-043).
+    serve_schema = settings.ENV in SCHEMA_SERVED_IN
     app = FastAPI(
         title=f"{APP_NAME} API",
         version="0.1.0",
-        docs_url="/docs" if not settings.is_production else None,
+        docs_url="/docs" if serve_schema else None,
         redoc_url=None,
-        openapi_url="/openapi.json" if not settings.is_production else None,
+        openapi_url="/openapi.json" if serve_schema else None,
         lifespan=lifespan,
     )
 
@@ -76,7 +82,11 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     # built for tests cannot reach the dev database (P-05). Nothing connects
     # yet: startup succeeds with a dependency down, and /readyz reports it.
     app.state.settings = settings
-    app.state.engine = build_engine(settings.DATABASE_URL)
+    app.state.engine = build_engine(
+        settings.DATABASE_URL,
+        pool_size=settings.DB_POOL_SIZE,
+        max_overflow=settings.DB_MAX_OVERFLOW,
+    )
     app.state.sessionmaker = build_sessionmaker(app.state.engine)
     app.state.redis = build_redis(settings.REDIS_URL)
     # External services (D-028): fakes locally and in tests, real ones elsewhere.

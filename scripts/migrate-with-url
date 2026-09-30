@@ -1,0 +1,24 @@
+#!/usr/bin/env bash
+# Runs `alembic upgrade head` against MIGRATION_DATABASE_URL, as the database
+# owner, with none of the app's settings (T-1.22, D-046). deploy.yml runs this
+# from CI, so the owner's credentials are never on Fly beside the app.
+#
+#   MIGRATION_DATABASE_URL=postgresql+asyncpg://owner:…@host:5432/db scripts/migrate-with-url
+set -euo pipefail
+
+: "${MIGRATION_DATABASE_URL:?set MIGRATION_DATABASE_URL to the owner connection}"
+
+cd "$(dirname "$0")/../api"
+uv run --locked python - <<'PY'
+import os
+
+from alembic import command
+from alembic.config import Config
+
+config = Config("alembic.ini")
+# ConfigParser reads % as interpolation, and URL-encoded passwords contain it.
+config.set_main_option(
+    "sqlalchemy.url", os.environ["MIGRATION_DATABASE_URL"].replace("%", "%%")
+)
+command.upgrade(config, "head")
+PY

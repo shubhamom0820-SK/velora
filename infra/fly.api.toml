@@ -1,0 +1,54 @@
+# Staging API on Fly (T-1.22). Deployed by .github/workflows/deploy.yml as
+#   flyctl deploy api --config "$GITHUB_WORKSPACE/infra/fly.api.toml"
+# so api/ is the build context. Secrets are set in Fly, never here
+# (infra/STAGING.md). There is no release command: migrations run from CI as the
+# database owner, so the owner's credentials are never on Fly (D-046).
+
+app = "velora-api-staging"
+primary_region = "bom"
+
+[build]
+  # Both relative to this file.
+  dockerfile = "../api/Dockerfile"
+  ignorefile = "../api/.dockerignore" # P-32: no .env in any layer
+
+[env]
+  ENV = "staging"
+  # D-045: outside local, every provider is a real one. None is built yet, so
+  # each raises if called; nothing calls them before its task.
+  AUTH_PHONE_PROVIDER = "firebase"
+  SMS_PROVIDER = "msg91"
+  PAYMENTS_PROVIDER = "razorpay"
+  MODERATION_PROVIDER = "sightengine"
+  FACEMATCH_PROVIDER = "rekognition"
+  STORAGE_PROVIDER = "s3"
+  PUSH_PROVIDER = "webpush"
+  # The staging web's one stable URL (a separate Vercel project, deployed --prod).
+  CORS_ORIGINS = "https://velora-staging.vercel.app"
+  # Per process, and the image runs 2 uvicorn workers: at most
+  # 2 x (5 + 2) = 14 connections to Postgres. The budget is in infra/STAGING.md.
+  DB_POOL_SIZE = "5"
+  DB_MAX_OVERFLOW = "2"
+  R2_BUCKET_PUBLIC = "velora-staging-public"
+  R2_BUCKET_PRIVATE = "velora-staging-private"
+
+[http_service]
+  internal_port = 8000
+  force_https = true
+  auto_stop_machines = "off"
+  auto_start_machines = true
+  min_machines_running = 1
+
+  # Readiness, not liveness: a deploy only goes live once the new machine
+  # reaches Postgres and Redis. A failing check takes the machine out of the
+  # load balancer; it doesn't restart it.
+  [[http_service.checks]]
+    method = "GET"
+    path = "/readyz"
+    interval = "15s"
+    timeout = "5s"
+    grace_period = "20s"
+
+[[vm]]
+  size = "shared-cpu-1x"
+  memory = "512mb"

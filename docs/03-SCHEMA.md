@@ -7,6 +7,13 @@ noted. FKs are `on delete restrict` unless noted — we don't hard-delete users 
 
 The Alembic migrations in Sprint 1 create **everything below in this order**.
 
+**Roles (T-1.22):** migrations run as the owner; the app connects as a login role in `velora_app`,
+which reads and writes rows and nothing more — no TRUNCATE, no DDL, no UPDATE or DELETE on
+`ledger_entries` and `audit_log`, no DELETE on `payments`, `messages` or `reports` (rule 12). New
+tables get SELECT, INSERT, UPDATE and DELETE by default, so **a new append-only or never-deleted
+table's migration revokes what the app shouldn't have**; `tests/test_app_role.py` fails for any
+table whose `refuse_change()` trigger the app role could reach.
+
 ---
 
 ## Enums

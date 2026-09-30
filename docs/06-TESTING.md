@@ -113,3 +113,8 @@ T-1.20's first run failed only because the postgis image built CI's test databas
 from `infra/docker-compose.yml`, so CI now starts the same compose services. A step is verified
 only where it actually runs — for T-1.22's migrations, that means on Supabase, which manages
 extensions itself, not on local Postgres.
+
+**GitHub only triggers a workflow that exists on the default branch.** `workflow_run`,
+`workflow_dispatch`, and `gh run list --workflow <file>` all resolve against `main`, so a new or
+renamed workflow can't be triggered or looked up by file from its own branch until it merges.
+This cost T-1.20 (the gate's run lookup) and T-1.22 (the first deploy).

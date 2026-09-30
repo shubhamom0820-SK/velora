@@ -1,0 +1,172 @@
+# Staging deploy (T-1.22, D-046). Deploys only a commit whose CI passed — a
+# second check after /done's gate (D-044) — and then checks staging itself.
+#
+#   gate → migrate (as the owner, from here) → api (Fly) → web (Vercel) → smoke
+#
+# Runs after CI completes on main, for the exact commit CI tested; or by hand
+# for any commit whose CI passed (Actions → Deploy staging → Run workflow).
+# Secrets and variables live in the `staging` GitHub environment
+# (infra/STAGING.md). Third-party actions are pinned to a commit SHA.
+# GitHub only triggers workflows that exist on the default branch, so this one
+# can't run until it's on main (06-TESTING).
+name: Deploy staging
+
+on:
+  workflow_run:
+    workflows: [CI]
+    types: [completed]
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      ref:
+        description: Commit or branch to deploy — its CI run must have passed
+        required: true
+        default: main
+
+# One deploy at a time, and never cancel one halfway through.
+concurrency:
+  group: deploy-staging
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+  actions: read # scripts/ci-gate reads CI runs
+
+env:
+  UV_VERSION: "0.12.13"
+  NODE_VERSION: "24"
+  FLYCTL_VERSION: "0.4.110"
+  VERCEL_CLI_VERSION: "61.1.0"
+
+jobs:
+  gate:
+    name: gate — CI passed for this exact commit
+    # A completed CI run on main only deploys if it passed, for a push.
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push')
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    outputs:
+      sha: ${{ steps.commit.outputs.sha }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.event.workflow_run.head_sha || inputs.ref }}
+          persist-credentials: false
+
+      - name: The commit to deploy
+        id: commit
+        run: echo "sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+
+      # The same gate as /done: that exact SHA's CI run, failing closed.
+      - name: CI passed for it
+        env:
+          GH_TOKEN: ${{ github.token }}
+          SHA: ${{ steps.commit.outputs.sha }}
+        run: scripts/ci-gate "$SHA"
+
+  migrate:
+    name: migrate — as the owner, from CI
+    needs: gate
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    environment: staging
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ needs.gate.outputs.sha }}
+          persist-credentials: false
+
+      - uses: astral-sh/setup-uv@c18668ad3cf93ea998bef934396af7bb5c839dc7 # v10.2.0
+        with:
+          version: ${{ env.UV_VERSION }}
+          enable-cache: true
+          cache-dependency-glob: api/uv.lock
+
+      # Supabase's session pooler: IPv4, which GitHub's runners need. The owner's
+      # credentials exist only here, never on Fly beside the app (D-046).
+      - name: alembic upgrade head
+        env:
+          MIGRATION_DATABASE_URL: ${{ secrets.STAGING_MIGRATION_DATABASE_URL }}
+        run: scripts/migrate-with-url
+
+  api:
+    name: api — Fly
+    needs: [gate, migrate]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    environment: staging
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ needs.gate.outputs.sha }}
+          persist-credentials: false
+
+      - uses: superfly/flyctl-actions/setup-flyctl@fc53c09e1bc3be6f54706524e3b82c4f462f77be # v1.5
+        with:
+          version: ${{ env.FLYCTL_VERSION }}
+
+      # api/ is the build context; the config's path is absolute because the
+      # working directory moves to api/.
+      - name: flyctl deploy
+        env:
+          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
+        run: flyctl deploy api --config "$GITHUB_WORKSPACE/infra/fly.api.toml" --remote-only
+
+  web:
+    name: web — Vercel
+    needs: [gate, api]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    environment: staging
+    defaults:
+      run:
+        working-directory: web
+    env:
+      VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+      VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
+      VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ needs.gate.outputs.sha }}
+          persist-credentials: false
+
+      - uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
+        with:
+          package_json_file: web/package.json
+
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: pnpm
+          cache-dependency-path: web/pnpm-lock.yaml
+
+      # The staging project deploys only from here (web/vercel.json turns off its
+      # Git deploys), so the web can't go live around the CI gate. --prod gives it
+      # the project's one stable URL, which the API's CORS_ORIGINS names.
+      - name: vercel pull
+        run: pnpm dlx "vercel@$VERCEL_CLI_VERSION" pull --yes --environment=production --token="$VERCEL_TOKEN"
+      - name: vercel build
+        run: pnpm dlx "vercel@$VERCEL_CLI_VERSION" build --prod --token="$VERCEL_TOKEN"
+      - name: vercel deploy
+        run: pnpm dlx "vercel@$VERCEL_CLI_VERSION" deploy --prebuilt --prod --token="$VERCEL_TOKEN"
+
+  smoke:
+    name: smoke — staging, from the outside
+    needs: [gate, web]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    environment: staging
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ needs.gate.outputs.sha }}
+          persist-credentials: false
+
+      - name: Staging answers, bodies included
+        env:
+          API_URL: ${{ vars.STAGING_API_URL }}
+          WEB_URL: ${{ vars.STAGING_WEB_URL }}
+        run: scripts/staging-smoke "$API_URL" "$WEB_URL"

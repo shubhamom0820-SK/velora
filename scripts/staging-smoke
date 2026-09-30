@@ -1,0 +1,75 @@
+#!/usr/bin/env bash
+# Checks a deployed environment from the outside (T-1.22): run by deploy.yml
+# after every staging deploy, and reusable for production (T-2.6).
+#
+#   scripts/staging-smoke API_URL WEB_URL
+#
+# Bodies are checked as well as status codes: a 404 that still carries the page
+# or the schema is a leak (T-1.19's lesson). Exits 1 if any check fails, after
+# running them all.
+set -euo pipefail
+
+api="${1%/}"
+web="${2%/}"
+failures=0
+
+say() { printf 'staging-smoke: %s\n' "$*"; }
+fail() {
+  say "FAIL $*"
+  failures=$((failures + 1))
+}
+
+# fetch URL [curl args...] → sets $status and $body
+fetch() {
+  local url="$1" out
+  shift
+  out="$(curl -s --max-time 20 -w '\n%{http_code}' "$@" "$url" || printf '\n000')"
+  status="${out##*$'\n'}"
+  body="${out%$'\n'*}"
+}
+
+# expect NAME URL STATUS [MUST_CONTAIN] [MUST_NOT_CONTAIN]
+expect() {
+  local name="$1" url="$2" want="$3" contains="${4:-}" absent="${5:-}"
+  fetch "$url"
+  if [[ "$status" != "$want" ]]; then
+    fail "$name: $url returned $status, want $want"
+  elif [[ -n "$contains" && "$body" != *"$contains"* ]]; then
+    fail "$name: $url's body lacks '$contains'"
+  elif [[ -n "$absent" && "$body" == *"$absent"* ]]; then
+    fail "$name: $url's body contains '$absent'"
+  else
+    say "ok   $name ($status)"
+  fi
+}
+
+# A new machine can take a moment to reach Postgres and Redis.
+for _ in $(seq 1 12); do
+  fetch "$api/readyz"
+  [[ "$status" == 200 ]] && break
+  sleep 5
+done
+expect "API ready (Postgres and Redis)" "$api/readyz" 200 '"database":"ok"'
+expect "API alive" "$api/healthz" 200 '"status":"ok"'
+expect "API schema hidden (P-31)" "$api/openapi.json" 404 '"code":"NOT_FOUND"' '"paths"'
+expect "API docs hidden (P-31)" "$api/docs" 404 '"code":"NOT_FOUND"' 'swagger'
+
+expect "web loads" "$web/" 200 'Velora'
+expect "web /admin hidden (P-30)" "$web/admin" 404 '' 'Coming soon.'
+expect "web /dev/ui hidden" "$web/dev/ui" 404 '' 'UI primitives'
+expect "web /dev/health hidden" "$web/dev/health" 404 '' 'API health'
+
+# The API must accept the web's origin, or every browser call fails.
+headers="$(curl -s --max-time 20 -o /dev/null -D - -H "Origin: $web" "$api/healthz" || true)"
+allowed="$(grep -i '^access-control-allow-origin:' <<<"$headers" | tr -d '\r' | cut -d' ' -f2- || true)"
+if [[ "$allowed" == "$web" ]]; then
+  say "ok   API allows the web's origin (CORS)"
+else
+  fail "API's CORS_ORIGINS doesn't allow $web (got '${allowed:-nothing}')"
+fi
+
+if ((failures > 0)); then
+  say "$failures check(s) failed."
+  exit 1
+fi
+say "every check passed."

@@ -56,6 +56,10 @@ class Settings(BaseSettings):
     PHONE_PEPPER: str
     PHONE_ENC_KEY: str
 
+    # --- Database pool, per process (each uvicorn worker opens its own) ---
+    DB_POOL_SIZE: int = Field(default=5, ge=1)
+    DB_MAX_OVERFLOW: int = Field(default=5, ge=0)
+
     # --- Web origins and cookies ---
     # NoDecode: pydantic-settings would otherwise try to JSON-parse this
     # before the validator below sees the comma-separated string.

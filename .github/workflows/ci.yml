@@ -4,6 +4,8 @@
 # (scripts/ci-gate). T-1.22's deploy checks again.
 #
 # Third-party actions are pinned to a commit SHA; the comment names the version.
+# GitHub only triggers workflows that exist on the default branch: a new or renamed
+# workflow can't run by workflow_run or by hand from its own branch (06-TESTING).
 name: CI
 
 on:
@@ -121,6 +123,62 @@ jobs:
       - name: Build (next build)
         working-directory: web
         run: pnpm build
+
+  image:
+    name: image — no .env inside, serves, fails fast
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    env:
+      IMAGE: velora-api:ci
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      # P-32: CI's checkout never has an api/.env, so the check would pass
+      # without testing anything. Plant one; .dockerignore must keep it out.
+      - name: Plant an api/.env the image must not contain
+        run: printf 'JWT_SECRET=planted-by-ci\n' > api/.env
+
+      - name: Build the API image (the Dockerfile Fly builds)
+        run: docker build -t "$IMAGE" api
+
+      - name: No .env in any layer
+        run: |
+          scripts/check-image-no-env "$IMAGE"
+          if docker save "$IMAGE" | grep -a -q planted-by-ci; then
+            echo "::error::The planted .env's contents are inside the image."
+            exit 1
+          fi
+
+      - name: Serves /healthz, hides its schema outside local
+        run: |
+          docker run -d --name api -p 127.0.0.1:8000:8000 \
+            -e ENV=staging -e DATABASE_URL -e REDIS_URL -e JWT_SECRET -e PHONE_PEPPER -e PHONE_ENC_KEY \
+            -e AUTH_PHONE_PROVIDER=firebase -e SMS_PROVIDER=msg91 -e PAYMENTS_PROVIDER=razorpay \
+            -e MODERATION_PROVIDER=sightengine -e FACEMATCH_PROVIDER=rekognition \
+            -e STORAGE_PROVIDER=s3 -e PUSH_PROVIDER=webpush "$IMAGE"
+          for _ in $(seq 1 30); do curl -sf -o /dev/null http://127.0.0.1:8000/healthz && break; sleep 1; done
+          test "$(curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:8000/healthz)" = 200
+          body="$(curl -s -w '\n%{http_code}' http://127.0.0.1:8000/openapi.json)"
+          echo "$body"
+          test "$(tail -n 1 <<<"$body")" = 404
+          grep -q '"code":"NOT_FOUND"' <<<"$body"
+          if grep -q '"paths"' <<<"$body"; then echo "::error::The 404 carries the schema."; exit 1; fi
+          test "$(docker exec api id -u)" != 0
+
+      # uvicorn restarts dying workers, so a config error must stop the container
+      # before any start, not crash-loop inside it (D-045's refusal is one).
+      - name: A configuration error stops the container
+        run: |
+          set +e
+          output="$(timeout 60 docker run --rm -e ENV=staging -e DATABASE_URL -e REDIS_URL \
+            -e JWT_SECRET -e PHONE_PEPPER -e PHONE_ENC_KEY "$IMAGE" 2>&1)"
+          status=$?
+          set -e
+          echo "$output" | tail -n 5
+          test "$status" = 1
+          grep -q 'ENV=staging cannot use fake providers' <<<"$output"
 
   repo:
     name: repo — types, hooks, gate

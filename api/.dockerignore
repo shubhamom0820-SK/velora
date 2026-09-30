@@ -1,0 +1,20 @@
+# What never goes into the API image (T-1.22).
+#
+# P-32: a .env in an image is a secrets leak. It would bake the JWT secret, the
+# database password and every provider key into an image pushed to Fly's
+# registry, and Docker keeps deleted files in earlier layers, so once pushed
+# every one of them must be rotated. CI builds with a planted .env and fails if
+# any layer contains it (scripts/check-image-no-env).
+.env
+.env.*
+
+# Local tooling and caches.
+.venv
+__pycache__
+*.py[cod]
+.pytest_cache
+.mypy_cache
+.ruff_cache
+
+# Not needed to run the API.
+tests

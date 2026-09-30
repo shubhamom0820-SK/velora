@@ -236,6 +236,7 @@ that person in the last 7 days → `wallet.credit(reason=refund_banned_partner)`
 | `ENV` | api, worker | `local` / `staging` / `production` — required, no default: a deploy that forgets it refuses to start rather than becoming `local` |
 | `DATABASE_URL` | api, worker | `postgresql+asyncpg://…` |
 | `REDIS_URL` | api, worker | |
+| `DB_POOL_SIZE`, `DB_MAX_OVERFLOW` | api, worker | per process (default 5 and 5); budget = processes × (both), recorded in `infra/STAGING.md` |
 | `JWT_SECRET` | api | 64+ random bytes |
 | `PHONE_PEPPER`, `PHONE_ENC_KEY` | api | never rotate without a migration plan |
 | `CORS_ORIGINS` | api | comma list, exact origins |
@@ -293,9 +294,10 @@ secret is left empty. Real secret values are never committed.
 
 | | local | staging | production |
 |---|---|---|---|
-| Web | `pnpm dev` :3000 | Vercel preview | Vercel prod `velora.app` |
+| Web | `pnpm dev` :3000 | Vercel project `velora-staging` (its own; stable URL) | Vercel prod `velora.app` |
 | API | uvicorn :8000 | Fly `velora-api-staging` | Fly `velora-api` |
 | DB | docker postgis | Supabase project `velora-staging` | Supabase `velora-prod` |
 | Providers | fake | real (test keys) | real (live keys) |
 
-Deploy: merge to `main` → staging automatically. Git tag `v*` → production.
+Deploy: merge to `main` → CI → staging automatically, for that commit only once its CI passed
+(`deploy.yml`, D-046; set up by `infra/STAGING.md`). Git tag `v*` → production.

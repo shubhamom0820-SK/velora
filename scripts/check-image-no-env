@@ -1,0 +1,39 @@
+#!/usr/bin/env bash
+# Fails if any layer of a Docker image contains a .env file (T-1.22, P-32).
+#
+#   scripts/check-image-no-env IMAGE
+#
+# Every layer is checked, not just the final filesystem: a file deleted in a
+# later layer is still in the earlier one, and still ships with the image.
+# Exit codes: 0 no .env in any layer · 1 a .env was found · 2 no layers to check
+set -euo pipefail
+
+image="$1"
+work="$(mktemp -d)"
+trap 'rm -rf "$work"' EXIT
+
+docker save "$image" -o "$work/image.tar"
+mkdir "$work/image"
+tar -xf "$work/image.tar" -C "$work/image"
+
+layers=0 found=0
+while IFS= read -r -d '' file; do
+  # A layer is any file in the archive that is itself a tar (possibly gzipped).
+  if ! listing="$(tar -tf "$file" 2>/dev/null)"; then continue; fi
+  layers=$((layers + 1))
+  if hits="$(grep -E '(^|/)\.env(\.[^/]*)?$' <<<"$listing")"; then
+    echo "check-image-no-env: layer ${file#"$work/image/"} of $image contains:" >&2
+    sed 's/^/  /' <<<"$hits" >&2
+    found=1
+  fi
+done < <(find "$work/image" -type f -print0)
+
+if ((layers == 0)); then
+  echo "check-image-no-env: found no layers in $image, so checked nothing." >&2
+  exit 2
+fi
+if ((found)); then
+  echo "check-image-no-env: $image ships a .env. Rotate every secret it held if it was ever pushed." >&2
+  exit 1
+fi
+echo "check-image-no-env: no .env in any of the $layers layers of $image."

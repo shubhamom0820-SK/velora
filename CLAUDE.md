@@ -49,7 +49,8 @@ velora/
     alembic/            migrations
     tests/              mirrors app/
   web/                  Next.js app (App Router, TypeScript strict, Tailwind v4)
-  infra/                docker-compose.yml, fly.toml
+  infra/                docker-compose.yml, fly.api.toml, STAGING.md (the deploy runbook)
+  scripts/              ci-gate, with-tools, staging-smoke, check-image-no-env, migrate-with-url
   Makefile
 ```
 

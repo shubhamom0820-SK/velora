@@ -407,6 +407,26 @@ default, forgetting one variable in a deploy would ship either.
 real provider's keys, which D-028 exists to avoid. **Rejected: refusing fakes only in
 production** — a blacklist, which staging and any environment named later would pass.
 
+
+### D-046 · Staging deploys from CI, migrations run as the owner from CI — Locked
+Staging (T-1.22, `infra/STAGING.md`) deploys only a commit whose CI passed: `deploy.yml` runs after
+CI on `main` and first re-checks that exact commit with `scripts/ci-gate` — a second gate after
+`/done`'s (D-044). Migrations then run **from CI, as the database owner**, over Supabase's IPv4
+session pooler. The API on Fly connects as `velora_api`, a login role in `velora_app`, which reads
+and writes rows and nothing more (P-18). The web deploys from the same workflow with the Vercel
+CLI, into its own project with no Git connection, so it can't go live around the gate. After every
+deploy, `scripts/staging-smoke` checks staging from the outside, bodies included.
+
+**Why:** the owner can switch off the ledger's triggers (`ALTER TABLE … DISABLE TRIGGER`), and those
+triggers are the last line protecting money. Owner credentials on Fly, beside the app, would put
+that one code-execution bug away.
+
+**Rejected: Fly's release command** for migrations — it runs with the app's own secrets, so the
+owner's credentials would live on Fly. **Rejected: Vercel's Git integration** — it deploys every
+push, ignoring CI. **Rejected: gunicorn** — a new dependency for what uvicorn's `--workers` already
+does; the image checks settings before the workers start, so a bad configuration exits instead of
+crash-looping. **Deferred:** the worker's Fly app, to T-4.4, which builds the worker.
+
 ---
 
 ## Adding a decision
