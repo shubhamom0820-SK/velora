@@ -7,7 +7,10 @@ and prove the triggers' bypasses and the guarded writes are all refused.
 
 from __future__ import annotations
 
+import importlib.util
 from collections.abc import AsyncIterator
+from pathlib import Path
+from types import ModuleType
 
 import pytest
 from sqlalchemy import text
@@ -188,3 +191,40 @@ async def test_no_refuse_change_trigger_is_reachable_by_the_app_role(
         "payments",
     }
     assert reachable == []
+
+
+def _migration(filename: str) -> ModuleType:
+    """Load a migration module by file name (the versions directory isn't a package)."""
+    path = Path(__file__).parent.parent / "alembic" / "versions" / filename
+    spec = importlib.util.spec_from_file_location(path.stem, path)
+    assert spec is not None and spec.loader is not None
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+async def test_extensions_schema_usage_is_granted_where_the_schema_exists(
+    test_engine: AsyncEngine,
+) -> None:
+    """Supabase keeps extensions in an `extensions` schema; locally they're in
+    public, so this builds Supabase's layout inside a transaction that is rolled
+    back, and runs 67e81c6c203d's SQL against it (T-1.22)."""
+    migration = _migration("20261001_67e81c6c203d_app_role_extensions_usage.py")
+    usage = text("select has_schema_privilege(:role, 'extensions', 'USAGE')")
+
+    async with test_engine.connect() as owner:
+        transaction = await owner.begin()
+        try:
+            # No `extensions` schema (the local layout): the grant does nothing.
+            await owner.execute(text(migration.GRANT_EXTENSIONS_USAGE))
+
+            await owner.execute(text("create schema extensions"))
+            assert await owner.scalar(usage, {"role": APP_ROLE}) is False
+
+            await owner.execute(text(migration.GRANT_EXTENSIONS_USAGE))
+            assert await owner.scalar(usage, {"role": APP_ROLE}) is True
+
+            await owner.execute(text(migration.REVOKE_EXTENSIONS_USAGE))
+            assert await owner.scalar(usage, {"role": APP_ROLE}) is False
+        finally:
+            await transaction.rollback()

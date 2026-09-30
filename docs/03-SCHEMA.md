@@ -12,7 +12,9 @@ which reads and writes rows and nothing more — no TRUNCATE, no DDL, no UPDATE 
 `ledger_entries` and `audit_log`, no DELETE on `payments`, `messages` or `reports` (rule 12). New
 tables get SELECT, INSERT, UPDATE and DELETE by default, so **a new append-only or never-deleted
 table's migration revokes what the app shouldn't have**; `tests/test_app_role.py` fails for any
-table whose `refuse_change()` trigger the app role could reach.
+table whose `refuse_change()` trigger the app role could reach. Where the extensions live in an
+`extensions` schema (Supabase), `velora_app` also has USAGE on it, or it couldn't use `citext`,
+`geography` or PostGIS; locally they're in `public`.
 
 ---
 

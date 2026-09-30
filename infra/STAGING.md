@@ -49,6 +49,12 @@ Supabase's smallest compute allows 60 direct connections, and its own services u
 whenever workers, machines or pools change — two machines doubles it. Production starts from this
 table, not from a guess.
 
+**`velora_api` has a connection limit of 20**, set on the role itself, so the database enforces the
+budget even if a pool setting drifts. 20 sits above the 14 the pools allow, so normal load never
+reaches it, and well under the instance's 60, so a runaway pool can't starve the migrations or
+Supabase's own services. When the worker (T-4.4) or a second machine raises the sum, raise the limit
+with it (`alter role velora_api connection limit N`) and record the new number and reason here.
+
 ## First-time setup (the founder, in each dashboard)
 
 Nothing here goes in git. Generate every secret fresh for staging; never reuse a local one.
@@ -77,24 +83,32 @@ Nothing here goes in git. Generate every secret fresh for staging; never reuse a
    -- The group the migrations grant privileges to. The first migration would create it; making it
    -- now lets the login role join it before that migration runs.
    create role velora_app nologin;
-   create role velora_api login password '<generated>' in role velora_app;
+   create role velora_api login connection limit 20 password '<generated>' in role velora_app;
    -- PostGIS and citext live in `extensions` on Supabase; without this the app can't see them.
    alter role velora_api set search_path = public, extensions;
    ```
 
    Without `velora_api`, the API can't connect, its `/readyz` never passes, and Fly refuses the
    deploy.
-6. After the first deploy, check the app role can't reach past its privileges — every row
-   should say `false`:
+6. After the first deploy, check the app role — **every row must say `true`**:
 
    ```sql
-   select 'velora_api is superuser', rolsuper from pg_roles where rolname = 'velora_api'
-   union all
-   select 'velora_api can create roles', rolcreaterole from pg_roles where rolname = 'velora_api'
-   union all
-   select 'app can update the ledger', has_table_privilege('velora_app', 'ledger_entries', 'UPDATE')
-   union all
-   select 'app can delete payments', has_table_privilege('velora_app', 'payments', 'DELETE');
+   select check_name, ok from (values
+     ('velora_api is not a superuser',
+        not (select rolsuper from pg_roles where rolname = 'velora_api')),
+     ('velora_api cannot create roles',
+        not (select rolcreaterole from pg_roles where rolname = 'velora_api')),
+     ('velora_api is capped at 20 connections',
+        (select rolconnlimit from pg_roles where rolname = 'velora_api') = 20),
+     ('the app cannot update the ledger',
+        not has_table_privilege('velora_app', 'ledger_entries', 'UPDATE')),
+     ('the app cannot delete payments',
+        not has_table_privilege('velora_app', 'payments', 'DELETE')),
+     -- Supabase keeps the extensions here, and a new role gets no USAGE; without it the app
+     -- can't use citext, geography or PostGIS (67e81c6c203d grants it).
+     ('the app can use the extensions schema',
+        has_schema_privilege('velora_app', 'extensions', 'USAGE'))
+   ) as checks(check_name, ok);
    ```
 7. Check Supabase's API roles hold nothing of ours — this must return **no rows**:
 
