@@ -30,7 +30,7 @@ never done silently.
 - [x] **P-0.6** Create accounts: GitHub, Supabase (Mumbai), Upstash, Cloudflare (R2 on), Fly.io (paid plan for `bom`), Vercel, Sentry, Sightengine, AWS (Rekognition, `ap-south-1`).
   **Ticked with three still to set up**, none needed before Sprint 4: Sightengine (T-4.4), AWS for
   Rekognition (T-4.5 — signed up, but its payment method failed verification) and Sentry (T-9.12).
-  Each must exist before its task starts.
+  Each is on its task's **Needs** line, which `/task` checks before planning.
 - [ ] **P-0.7** Lawyer session: gender-based pricing, IT Rules 2021 obligations, DPDP consent. Get Terms, Privacy, Refund policy drafted.
 - [ ] **P-0.8** After T-2.2 is live: apply to Razorpay and Cashfree.
 - [ ] **P-0.9** Buy a ₹10–12k Android phone for testing.
@@ -397,7 +397,7 @@ One migration per task, each with a working `downgrade()`. Build exactly `03-SCH
 - [ ] **Commit:** `feat(photos): list, reorder, delete [T-4.3]`
 
 ### T-4.4 · Moderation worker
-- [ ] **Needs:** T-4.2, T-1.15
+- [ ] **Needs:** T-4.2, T-1.15, and a **Sightengine account with API keys** — not created yet (P-0.6)
 - [ ] ARQ worker bootstrap (`workers/main.py`) + `make worker`.
 - [ ] `moderate_photo(photo_id)`: fetch raw → Pillow open (reject if not an image) → `ImageOps.exif_transpose` → resize longest side 1600 → save JPEG q85 **without EXIF** → `ModerationProvider.check()` → approve (write public copy for `public` kind) or reject with reason (`nudity`, `minor_suspected`, `no_face`, `text_overlay`, `other`). `minor_suspected` also opens an internal report.
 - [ ] Idempotent: re-running on an approved photo does nothing.
@@ -406,7 +406,7 @@ One migration per task, each with a working `downgrade()`. Build exactly `03-SCH
 - [ ] **Commit:** `feat(worker): photo moderation pipeline [T-4.4]`
 
 ### T-4.5 · Selfie verification
-- [ ] **Needs:** T-4.4
+- [ ] **Needs:** T-4.4, and a **working AWS account for Rekognition in `ap-south-1`** — signed up, but its payment method failed verification (P-0.6)
 - [ ] `POST /verification/challenge` → random pose from a list (turn left, turn right, look up, smile) stored on the row. `POST /verification/{id}/submit {photo_id}` → enqueue `verify_selfie`.
 - [ ] `verify_selfie`: re-encode; `FaceMatchProvider.compare(selfie, approved_public_photos)`; similarity ≥ 85 and exactly one face → `approved`, `users.is_verified = true`; else `rejected` with reason. Max 5 attempts / day.
 - [ ] Selfies are never public and never shown to other users.
@@ -776,7 +776,7 @@ Built before discovery and chat because swipes, threads and unlocks all spend cr
 - [ ] **Commit:** `a11y(web): accessibility pass [T-9.11]`
 
 ### T-9.12 · Observability
-- [ ] **Needs:** T-1.22
+- [ ] **Needs:** T-1.22, and a **Sentry account** — not created yet (P-0.6)
 - [ ] Sentry in api, worker, web (release = git sha). Alerts: 5xx > 1% for 5 min, webhook signature failures, any job failing 3×, ledger reconciliation mismatch, queue depth > 1,000. Uptime check on `/readyz`.
 - [ ] **Commit:** `chore(ops): error tracking and alerts [T-9.12]`
 
