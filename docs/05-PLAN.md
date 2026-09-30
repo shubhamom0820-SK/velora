@@ -141,17 +141,17 @@ One migration per task, each with a working `downgrade()`. Build exactly `03-SCH
 - [x] **Commit:** `feat(web): next.js skeleton with tokens [T-1.17]`
 
 ### T-1.18 · Web data layer
-- [ ] **Needs:** T-1.17, T-1.3
-- [ ] `make types` → `openapi-typescript $API/openapi.json -o web/src/types/api.ts`.
-- [ ] `src/lib/api.ts` — typed fetch wrapper: base URL, JSON, attaches access token, parses the error envelope into `ApiError {code, message, details, status}`.
-- [ ] `QueryClientProvider` in root layout; `src/lib/queries/keys.ts` (query key factory).
-- [ ] Zustand `src/store/session.ts` (access token in memory, user id).
-- [ ] ESLint enforces rule 14's "no `fetch` inside components": `fetch` is banned in `web/src`
+- [x] **Needs:** T-1.17, T-1.3
+- [x] `make types` → `openapi-typescript $API/openapi.json -o web/src/types/api.ts`.
+- [x] `src/lib/api.ts` — typed fetch wrapper: base URL, JSON, attaches access token, parses the error envelope into `ApiError {code, message, details, status}`.
+- [x] `QueryClientProvider` in root layout; `src/lib/queries/keys.ts` (query key factory).
+- [x] Zustand `src/store/session.ts` (access token in memory, user id).
+- [x] ESLint enforces rule 14's "no `fetch` inside components": `fetch` is banned in `web/src`
   except `src/lib/`, so server data only reaches components through the api client and query
   hooks. Deferred from T-1.17 to here, where `src/lib/` is created — a rule goes in when the thing
   it protects exists.
-- [ ] **Done when:** a dev page calls `/healthz` via a query hook and renders the result.
-- [ ] **Commit:** `feat(web): api client, query setup, type generation [T-1.18]`
+- [x] **Done when:** a dev page calls `/healthz` via a query hook and renders the result.
+- [x] **Commit:** `feat(web): api client, query setup, type generation [T-1.18]`
 
 ### T-1.19 · UI primitives
 - [x] **Needs:** T-1.17
@@ -170,6 +170,9 @@ One migration per task, each with a working `downgrade()`. Build exactly `03-SCH
   prettier and eslint hooks `pnpm` (live since T-1.17), without relying on the shell's `PATH` (an
   absolute path, or a wrapper that locates it). VS Code's Source Control panel runs hooks without
   the shell profile, so either may be missing and every commit fails. Test a commit from VS Code.
+- [ ] Types are fresh (from T-1.18, rule 10): CI runs `make types` and fails if
+  `web/src/types/api.ts` changes. `make types` works offline (D-043), so this needs no running
+  API. Without it, a response schema can change with stale web types and only a reviewer notices.
 - [ ] **Commit:** `ci: api and web pipelines [T-1.20]`
 
 ### T-1.21 · Provider adapters
@@ -1024,3 +1027,11 @@ Claude Code adds items here instead of doing unplanned work. Format:
     only be a client-side check (see above), so it is there for the user, not for security.
 
   Found while closing T-1.19.
+- [ ] P-31 · Stop serving the API schema and docs outside local. **Due before T-1.22.**
+  `create_app()` serves `/openapi.json` and `/docs` unless `ENV` is `production` — a blacklist,
+  so staging serves both, with the full schema. Checked in T-1.18: `local` and `staging` return
+  200 with every path; `production` returns 404 with no schema in the body. T-1.22 makes staging
+  public, and a public schema of the wallet, payment and admin routes is free reconnaissance.
+  Since T-1.18 nothing needs the endpoint: `make types` reads the schema offline (D-043). Make it
+  an allowlist, served only when `ENV == "local"`, and test both `staging` and `production`:
+  `/openapi.json` and `/docs` return 404, and the bodies contain no schema. Found in T-1.18.

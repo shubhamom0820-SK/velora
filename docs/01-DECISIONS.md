@@ -342,6 +342,26 @@ so neither is needed. **Also rejected: a headless UI or focus-trap library.** Th
 the primitives to be built, and the Sheet's trap is about 30 lines with tests on both Tab
 directions, Esc and focus return.
 
+
+### D-043 · Web data layer — Locked
+T-1.18 added the web app's data layer. Versions are pinned exactly.
+- **@tanstack/react-query** and **zustand**, both in the pinned stack and both runtime
+  `dependencies`. TanStack Query holds server state; zustand holds the session, in memory only
+  (D-024).
+- **openapi-typescript**, a `devDependency`. `make types` generates `web/src/types/api.ts` from
+  the API's OpenAPI schema **offline**: it imports the FastAPI app and dumps `app.openapi()`, so
+  it needs no running server, no infrastructure and no exposed `/openapi.json`. That makes it
+  deterministic, which is what lets CI fail when the committed types are stale (T-1.20, rule 10).
+- `src/lib/api.ts` is typed straight from the generated `paths`: a path or method the API doesn't
+  have won't compile. It throws `ApiError {code, message, details, status}` on any non-2xx.
+- Queries retry a 5xx or network failure twice and never a 4xx. Mutations never retry: a retried
+  payment is a double charge.
+
+**Rejected: `openapi-fetch`.** It does the same typing, but the wrapper is one small file with
+no runtime dependency, and it throws instead of returning `{data, error}`, which is what
+TanStack Query wants. **Deferred: zod.** Nothing parses user input yet; it arrives with React
+Hook Form when Sprint 3's forms need it.
+
 ---
 
 ## Adding a decision

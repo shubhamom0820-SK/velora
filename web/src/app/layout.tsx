@@ -3,6 +3,7 @@ import type { Metadata, Viewport } from "next";
 import { ToastProvider } from "@/components/ui/ToastProvider";
 import { t } from "@/i18n/t";
 import { APP_NAME } from "@/lib/app";
+import { QueryProvider } from "@/lib/queries/QueryProvider";
 import { THEME_COLOR } from "@/styles/theme-color";
 
 import "./globals.css";
@@ -20,7 +21,9 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
   return (
     <html lang="en">
       <body>
-        <ToastProvider>{children}</ToastProvider>
+        <QueryProvider>
+          <ToastProvider>{children}</ToastProvider>
+        </QueryProvider>
       </body>
     </html>
   );
