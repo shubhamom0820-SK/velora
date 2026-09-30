@@ -427,6 +427,22 @@ push, ignoring CI. **Rejected: gunicorn** — a new dependency for what uvicorn'
 does; the image checks settings before the workers start, so a bad configuration exits instead of
 crash-looping. **Deferred:** the worker's Fly app, to T-4.4, which builds the worker.
 
+
+### D-047 · Local and CI run Postgres 16; Supabase runs 17 — Open
+Supabase created the staging project on **Postgres 17.11 with PostGIS 3.3.7**, the version it gives
+every new project. Local and CI run **Postgres 16 with PostGIS 3.4** (`postgis/postgis:16-3.4`).
+The layout differs too: Supabase installs the extensions in an `extensions` schema, locally they
+sit in `public`.
+
+**Why it matters:** local passing proves nothing about staging (06-TESTING). The layout difference
+has already hidden one bug: the app role had no USAGE on `extensions`, which no local test could
+see, found only by connecting to staging (fixed by migration `67e81c6c203d`). A version difference
+can hide the next one.
+
+**Decided now:** the gap is known and accepted for the moment; P-34 moves local and CI to 17. That
+closes the gap without eliminating it: `postgis:17` images ship PostGIS 3.5, and Supabase's is 3.3,
+so staging stays the only place PostGIS behaviour is verified.
+
 ---
 
 ## Adding a decision

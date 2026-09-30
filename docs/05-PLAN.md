@@ -1101,3 +1101,12 @@ Claude Code adds items here instead of doing unplanned work. Format:
   **The chain that gates it:** the trademark search (P-0.1) settles the name (D-015, still Open) →
   only then is the domain bought (P-0.3) → P-33 → T-3.4. A name change after P-0.3 would mean buying
   again. Found planning T-1.22.
+- [ ] P-34 · Move local and CI to Postgres 17, closing the gap with Supabase (D-047). Staging runs
+  Postgres 17.11 with PostGIS 3.3.7; local and CI run 16 with PostGIS 3.4. Switch
+  `infra/docker-compose.yml`, and with it CI (which starts the same compose services), to a pinned
+  `postgis/postgis:17-*` image, run the full suite, and update CLAUDE.md's stack row. **This closes
+  the gap, not eliminates it:** the `postgis:17` images ship PostGIS 3.5, not Supabase's 3.3, so
+  PostGIS behaviour is only ever verified on staging. Consider matching Supabase's layout too — the
+  extensions in an `extensions` schema rather than `public` — since that difference hid the bug
+  `67e81c6c203d` fixed. Best done before discovery leans on PostGIS (T-6.2). Found setting up
+  staging in T-1.22.
