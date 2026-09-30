@@ -104,3 +104,9 @@ the run for that exact commit passed (D-044). Within each job:
 2. `pytest -m critical`, then the rest of pytest (`make test-api`) · vitest
 3. `next build`
 4. Playwright (from T-3.13, only if 1–3 pass)
+
+Running CI's commands locally does not prove CI will pass, because the infrastructure differs:
+T-1.20's first run failed only because the postgis image built CI's test database differently
+from `infra/docker-compose.yml`, so CI now starts the same compose services. A step is verified
+only where it actually runs — for T-1.22's migrations, that means on Supabase, which manages
+extensions itself, not on local Postgres.

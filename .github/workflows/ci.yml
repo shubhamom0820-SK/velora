@@ -41,24 +41,6 @@ jobs:
     name: api — secrets, lint, migrate, pytest
     runs-on: ubuntu-24.04
     timeout-minutes: 15
-    services:
-      db:
-        image: postgis/postgis:16-3.4
-        env:
-          POSTGRES_USER: velora
-          POSTGRES_PASSWORD: velora
-          # The test harness only runs against a database whose name ends in _test.
-          POSTGRES_DB: velora_test
-        ports: ["5432:5432"]
-        options: >-
-          --health-cmd "pg_isready -U velora -d velora_test"
-          --health-interval 5s --health-timeout 5s --health-retries 12
-      redis:
-        image: redis:7-alpine
-        ports: ["6379:6379"]
-        options: >-
-          --health-cmd "redis-cli ping"
-          --health-interval 5s --health-timeout 3s --health-retries 12
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -75,6 +57,15 @@ jobs:
           echo "${GITLEAKS_SHA256}  gitleaks.tar.gz" | sha256sum --check --strict
           tar -xzf gitleaks.tar.gz gitleaks
           ./gitleaks git --redact --verbose "$GITHUB_WORKSPACE"
+
+      # The same Postgres and Redis as `make infra-up`, from the same compose
+      # file, so CI's test database is built exactly like yours: our init script
+      # creates velora_test, and the postgis image's own script (which adds
+      # topology and tiger-geocoder tables) never runs. As service containers,
+      # CI built it differently and T-1.20's first run failed on that alone.
+      # MinIO isn't started: no test uses storage yet.
+      - name: Start Postgres and Redis (infra/docker-compose.yml)
+        run: docker compose -f infra/docker-compose.yml up -d --wait db redis
 
       - uses: astral-sh/setup-uv@c18668ad3cf93ea998bef934396af7bb5c839dc7 # v10.2.0
         with:
