@@ -27,7 +27,10 @@ never done silently.
 - [ ] **P-0.4** DLT (needed only to move off Firebase later — start it anyway, it is slow): entity → header → OTP template `{#var#} is your Velora verification code. Valid for 5 minutes. Do not share it.`
 - [ ] **P-0.5** MSG91 account; link DLT IDs; send one test SMS to yourself.
 - [ ] **P-0.12** Firebase: project, Phone provider on, App Check + reCAPTCHA Enterprise enforced, authorised domains, daily SMS quota cap, billing alert. Confirm the **real per-SMS price for IN** in the billing console and write it into D-035.
-- [ ] **P-0.6** Create accounts: GitHub, Supabase (Mumbai), Upstash, Cloudflare (R2 on), Fly.io (paid plan for `bom`), Vercel, Sentry, Sightengine, AWS (Rekognition, `ap-south-1`).
+- [x] **P-0.6** Create accounts: GitHub, Supabase (Mumbai), Upstash, Cloudflare (R2 on), Fly.io (paid plan for `bom`), Vercel, Sentry, Sightengine, AWS (Rekognition, `ap-south-1`).
+  **Ticked with three still to set up**, none needed before Sprint 4: Sightengine (T-4.4), AWS for
+  Rekognition (T-4.5 — signed up, but its payment method failed verification) and Sentry (T-9.12).
+  Each must exist before its task starts.
 - [ ] **P-0.7** Lawyer session: gender-based pricing, IT Rules 2021 obligations, DPDP consent. Get Terms, Privacy, Refund policy drafted.
 - [ ] **P-0.8** After T-2.2 is live: apply to Razorpay and Cashfree.
 - [ ] **P-0.9** Buy a ₹10–12k Android phone for testing.
@@ -191,6 +194,11 @@ One migration per task, each with a working `downgrade()`. Build exactly `03-SCH
 
 ### T-1.22 · Staging deploy
 - [ ] **Needs:** T-1.4, T-1.17, P-0.6
+- [ ] `api/.dockerignore` excluding `.env*`, before the first image is built (from P-32). A `.env`
+  in the image is a secrets leak: it bakes the JWT secret, the database password and every
+  provider key into an image pushed to Fly's registry, and Docker keeps deleted files in earlier
+  layers, so once pushed every one of them must be rotated. It would also set `ENV=local` and
+  switch off D-045. CI checks that the built image has no `.env` in any layer.
 - [ ] `api/Dockerfile` (multi-stage, uv, non-root, gunicorn + uvicorn workers). `infra/fly.api.toml` and `infra/fly.worker.toml`, region `bom`, health check `/readyz`, release command `alembic upgrade head`.
 - [ ] Supabase staging project (enable PostGIS, pg_trgm, citext); Upstash staging DB; R2 staging buckets.
 - [ ] Note: Supabase manages extensions from its dashboard. T-1.8's migration uses `create extension if not exists`, so upgrade is a no-op there — but its `downgrade()` drops them, so never downgrade a Supabase database to base.
@@ -202,6 +210,13 @@ One migration per task, each with a working `downgrade()`. Build exactly `03-SCH
 - [ ] Tests, connected as that role: UPDATE, DELETE and TRUNCATE are still refused on every guarded
   table, and both bypasses are denied.
 - [ ] Vercel project for `web/` with staging env vars.
+- [ ] Serve `/openapi.json` and `/docs` only when `ENV == "local"` (from P-31). `create_app()`
+  serves them everywhere but production — a blacklist — so public staging would publish the full
+  schema of the wallet, payment and admin routes. Nothing needs them outside local: `make types`
+  reads the schema offline (D-043). Test staging and production: 404, and no schema in the body.
+- [ ] `/admin` returns 404 outside `next dev` (from P-30), with the same allowlist as `/dev/ui`
+  and a test; check the staging 404's body, not just its status. Until T-9.5 there is no admin
+  page to protect, only a placeholder that shouldn't be public.
 - [ ] GitHub Actions `deploy.yml`: on push to `main` → deploy staging API + worker, but only a commit whose CI passed — a second check after `/done`'s gate (D-044). Vercel deploys web itself from Git, which ignores CI by default: make its web deploys wait for CI too (e.g. deploy from `deploy.yml` with the Vercel CLI), or record why not.
 - [ ] **Done when:** staging web loads and staging `/readyz` is 200.
 - [ ] **Commit:** `ci: staging deploy [T-1.22]`
@@ -722,6 +737,11 @@ Built before discovery and chat because swipes, threads and unlocks all spend cr
 - [ ] **Needs:** T-9.2
 - [ ] API: all `/admin/*` routes in `04-API.md`, `require_role(moderator)`; credit grants and bans `admin` only; every call writes `audit_log`; viewing messages of a thread logs who looked and why (reason required).
 - [ ] Web `/admin`: metrics tiles, report queue with SLA timer (24 h), user search + detail (photos, reports, fraud signals, ledger, threads), moderation queue (approve/reject), actions with confirmation dialogs, audit log.
+- [ ] Web `/admin` renders only for `role in (moderator, admin)`, read through `useMe()`; anyone else
+  gets the 404 page — replacing T-1.22's `next dev`-only gate (from P-30). **This gate is UX, not
+  protection:** anyone can download the page's JavaScript, and the Next.js server never sees a
+  session there (D-024). Every `/admin/*` endpoint must carry its own `require_role(...)`; the
+  API's role check is the only thing guarding admin data.
 - [ ] **Commit:** `feat(admin): moderation panel [T-9.5]`
 
 ### T-9.6 · Settings and data rights
@@ -1034,6 +1054,8 @@ Claude Code adds items here instead of doing unplanned work. Format:
     only be a client-side check (see above), so it is there for the user, not for security.
 
   Found while closing T-1.19.
+  **Moved:** the 404 is now a step in T-1.22, and the role gate a step in T-9.5 — tick this with
+  T-9.5.
 - [ ] P-31 · Stop serving the API schema and docs outside local. **Due before T-1.22.**
   `create_app()` serves `/openapi.json` and `/docs` unless `ENV` is `production` — a blacklist,
   so staging serves both, with the full schema. Checked in T-1.18: `local` and `staging` return
@@ -1042,6 +1064,7 @@ Claude Code adds items here instead of doing unplanned work. Format:
   Since T-1.18 nothing needs the endpoint: `make types` reads the schema offline (D-043). Make it
   an allowlist, served only when `ENV == "local"`, and test both `staging` and `production`:
   `/openapi.json` and `/docs` return 404, and the bodies contain no schema. Found in T-1.18.
+  **Moved:** now a step in T-1.22 — tick this with T-1.22.
 - [ ] P-32 · Keep `api/.env` out of every image — a secrets leak, not a config problem.
   **Due with T-1.22's Dockerfile.** Docker's build context ignores `.gitignore`, so building from
   `api/` copies a developer's `api/.env` into the image unless it's excluded. That bakes the JWT
@@ -1051,3 +1074,4 @@ Claude Code adds items here instead of doing unplanned work. Format:
   image, which switches D-045's check off and allows fake payments and fake sign-in. Add
   `api/.dockerignore` excluding `.env*` before the first image is built, and a CI check that the
   built image contains no `.env` in any layer. Found in T-1.21.
+  **Moved:** now a step in T-1.22 — tick this with T-1.22.
