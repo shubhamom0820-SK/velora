@@ -183,11 +183,11 @@ One migration per task, each with a working `downgrade()`. Build exactly `03-SCH
 - [x] **Commit:** `ci: api and web pipelines [T-1.20]`
 
 ### T-1.21 · Provider adapters
-- [ ] **Needs:** T-1.3
-- [ ] `app/core/providers/`: `SmsProvider`, `PaymentsProvider`, `ModerationProvider`, `FaceMatchProvider`, `PushProvider`, `StorageProvider` as `Protocol`s. Each has `Fake…` (in-memory, records calls; fake SMS logs the OTP to console in local only) and a real implementation stub raising `NotImplementedError`. Selection by env var.
-- [ ] `fake_providers` fixture in `tests/conftest.py` overriding every provider with its fake (moved from T-1.5).
-- [ ] **Done when:** tests can assert "an SMS was sent to X" via the fake.
-- [ ] **Commit:** `feat(api): provider interfaces with fakes [T-1.21]`
+- [x] **Needs:** T-1.3
+- [x] `app/core/providers/`: `SmsProvider`, `PaymentsProvider`, `ModerationProvider`, `FaceMatchProvider`, `PushProvider`, `StorageProvider` as `Protocol`s. Each has `Fake…` (in-memory, records calls; fake SMS logs the OTP to console in local only) and a real implementation stub raising `NotImplementedError`. Selection by env var.
+- [x] `fake_providers` fixture in `tests/conftest.py` overriding every provider with its fake (moved from T-1.5).
+- [x] **Done when:** tests can assert "an SMS was sent to X" via the fake.
+- [x] **Commit:** `feat(api): provider interfaces with fakes [T-1.21]`
 
 ### T-1.22 · Staging deploy
 - [ ] **Needs:** T-1.4, T-1.17, P-0.6
@@ -1042,3 +1042,12 @@ Claude Code adds items here instead of doing unplanned work. Format:
   Since T-1.18 nothing needs the endpoint: `make types` reads the schema offline (D-043). Make it
   an allowlist, served only when `ENV == "local"`, and test both `staging` and `production`:
   `/openapi.json` and `/docs` return 404, and the bodies contain no schema. Found in T-1.18.
+- [ ] P-32 · Keep `api/.env` out of every image — a secrets leak, not a config problem.
+  **Due with T-1.22's Dockerfile.** Docker's build context ignores `.gitignore`, so building from
+  `api/` copies a developer's `api/.env` into the image unless it's excluded. That bakes the JWT
+  secret, the database password and every provider key into an image pushed to Fly's registry.
+  Docker keeps deleted files in earlier layers, so removing the file later doesn't remove the
+  secrets: once pushed, every one of them must be rotated. It also sets `ENV=local` inside the
+  image, which switches D-045's check off and allows fake payments and fake sign-in. Add
+  `api/.dockerignore` excluding `.env*` before the first image is built, and a CI check that the
+  built image contains no `.env` in any layer. Found in T-1.21.

@@ -4,8 +4,10 @@ Every test that touches Postgres runs inside a transaction that is rolled back,
 on `velora_test`, never anything else. The app under test is built from explicit
 test settings and shares that transaction.
 
-Fixtures still to come, each with the task that builds what it needs:
-`fake_providers` (T-1.21) and `make_user` (T-3.1).
+Every external service is its in-memory fake (`fake_providers`, D-028): the
+`app` fixture installs them, so no test can reach a real provider.
+
+Still to come, with the task that builds what it needs: `make_user` (T-3.1).
 """
 
 from __future__ import annotations
@@ -52,6 +54,7 @@ for _key, _value in {
 
 from app.core.config import Settings
 from app.core.db import build_engine, get_session
+from app.core.providers import FakeProviders
 from app.main import close_resources, create_app
 
 
@@ -110,10 +113,20 @@ async def db(test_engine: AsyncEngine) -> AsyncIterator[AsyncSession]:
 
 
 @pytest.fixture
-async def app() -> AsyncIterator[FastAPI]:
-    """The app, built from test settings; requests share the test's `db`."""
+def fake_providers() -> FakeProviders:
+    """Every external service as its fake, for a test to steer and inspect:
+    `fake_providers.sms.last_code(phone)`, `fake_providers.moderation.next = "reject:nudity"`.
+    Quiet: the fake SMS doesn't echo codes to the terminal in tests."""
+    return FakeProviders()
+
+
+@pytest.fixture
+async def app(fake_providers: FakeProviders) -> AsyncIterator[FastAPI]:
+    """The app, built from test settings; requests share the test's `db`, and
+    every provider is the test's fake."""
     application = create_app(make_test_settings())
     application.dependency_overrides[get_session] = session_for_the_app
+    application.state.providers = fake_providers.as_providers()
     try:
         yield application
     finally:

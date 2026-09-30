@@ -13,7 +13,7 @@ from __future__ import annotations
 from functools import lru_cache
 from typing import Annotated, Literal
 
-from pydantic import Field, field_validator
+from pydantic import Field, field_validator, model_validator
 from pydantic_settings import BaseSettings, NoDecode, SettingsConfigDict
 
 Env = Literal["local", "staging", "production"]
@@ -22,6 +22,22 @@ SmsProvider = Literal["msg91", "fake"]
 PaymentsProvider = Literal["razorpay", "fake"]
 ModerationProvider = Literal["sightengine", "fake"]
 FaceMatchProvider = Literal["rekognition", "fake"]
+StorageProvider = Literal["s3", "fake"]
+PushProvider = Literal["webpush", "fake"]
+
+# Where fake providers may run: an allowlist (CLAUDE.md rule 16, D-045). A fake
+# payments gateway grants free credits and a fake sign-in lets anyone in as
+# anyone, so every other environment must name a real provider for each of these.
+FAKES_ALLOWED_IN: frozenset[str] = frozenset({"local"})
+PROVIDER_SETTINGS = (
+    "AUTH_PHONE_PROVIDER",
+    "SMS_PROVIDER",
+    "PAYMENTS_PROVIDER",
+    "MODERATION_PROVIDER",
+    "FACEMATCH_PROVIDER",
+    "STORAGE_PROVIDER",
+    "PUSH_PROVIDER",
+)
 
 
 class Settings(BaseSettings):
@@ -75,6 +91,7 @@ class Settings(BaseSettings):
     AWS_REGION: str = "ap-south-1"
 
     # --- Object storage: R2 in deployed envs, MinIO locally (D-027) ---
+    STORAGE_PROVIDER: StorageProvider = "fake"
     R2_ACCOUNT_ID: str = ""
     R2_ACCESS_KEY_ID: str = ""
     R2_SECRET_ACCESS_KEY: str = ""
@@ -84,6 +101,7 @@ class Settings(BaseSettings):
     PUBLIC_CDN_URL: str = ""
 
     # --- Web push ---
+    PUSH_PROVIDER: PushProvider = "fake"
     VAPID_PUBLIC_KEY: str = ""
     VAPID_PRIVATE_KEY: str = ""
     VAPID_SUBJECT: str = ""
@@ -98,6 +116,24 @@ class Settings(BaseSettings):
         if isinstance(v, str):
             return [origin.strip() for origin in v.split(",") if origin.strip()]
         return v
+
+    @model_validator(mode="after")
+    def _fakes_only_where_allowed(self) -> Settings:
+        """Refuse to start with a fake provider outside `FAKES_ALLOWED_IN`.
+
+        `ENV` itself has no default, so a deploy that forgets it fails above
+        instead of quietly becoming "local" and passing this check.
+        """
+        if self.ENV in FAKES_ALLOWED_IN:
+            return self
+        fakes = [name for name in PROVIDER_SETTINGS if getattr(self, name) == "fake"]
+        if fakes:
+            raise ValueError(
+                f"ENV={self.ENV} cannot use fake providers ({', '.join(fakes)}): fakes run "
+                f"only where ENV is {', '.join(sorted(FAKES_ALLOWED_IN))} (D-045). "
+                "Set a real provider for each."
+            )
+        return self
 
     @property
     def is_production(self) -> bool:

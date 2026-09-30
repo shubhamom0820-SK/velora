@@ -390,6 +390,23 @@ merges by fast-forward without pull requests, so there is nothing to require the
 gate does the same job without one. **Rejected: `gitleaks/gitleaks-action`** — third-party code in
 CI, for what a checksum-verified binary does.
 
+
+### D-045 · Fake providers run only where ENV is local — Locked
+Every external service sits behind a provider (D-028; storage joined in T-1.21), selected by a
+`*_PROVIDER` setting whose default is `fake`. `Settings` refuses to start when any of them is
+`fake` and `ENV` is not `local`, naming each one: staging and production must set a real provider
+for all seven, `AUTH_PHONE_PROVIDER` included. It is an allowlist (`FAKES_ALLOWED_IN`, CLAUDE.md
+rule 16), and it is only as good as `ENV` itself, which therefore has no default — a deploy that
+forgets it fails to start instead of quietly becoming `local`.
+
+**Why:** the fakes are the two worst failures this app could have. A fake payments gateway grants
+credits nobody paid for; a fake phone sign-in lets anyone in as anyone. With `fake` as a silent
+default, forgetting one variable in a deploy would ship either.
+
+**Rejected: defaults of real providers.** Local development and tests would then need every
+real provider's keys, which D-028 exists to avoid. **Rejected: refusing fakes only in
+production** — a blacklist, which staging and any environment named later would pass.
+
 ---
 
 ## Adding a decision

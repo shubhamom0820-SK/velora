@@ -21,6 +21,8 @@ _ALL_VARS = [
     "PAYMENTS_PROVIDER",
     "MODERATION_PROVIDER",
     "FACEMATCH_PROVIDER",
+    "STORAGE_PROVIDER",
+    "PUSH_PROVIDER",
 ]
 
 
@@ -39,6 +41,18 @@ _REQUIRED = {
     "JWT_SECRET": "x",
     "PHONE_PEPPER": "x",
     "PHONE_ENC_KEY": "x",
+}
+
+
+# A real provider for every setting: what staging and production must name (D-045).
+_REAL_PROVIDERS = {
+    "AUTH_PHONE_PROVIDER": "firebase",
+    "SMS_PROVIDER": "msg91",
+    "PAYMENTS_PROVIDER": "razorpay",
+    "MODERATION_PROVIDER": "sightengine",
+    "FACEMATCH_PROVIDER": "rekognition",
+    "STORAGE_PROVIDER": "s3",
+    "PUSH_PROVIDER": "webpush",
 }
 
 
@@ -74,6 +88,8 @@ def test_providers_default_to_fake() -> None:
     assert settings.PAYMENTS_PROVIDER == "fake"
     assert settings.MODERATION_PROVIDER == "fake"
     assert settings.FACEMATCH_PROVIDER == "fake"
+    assert settings.STORAGE_PROVIDER == "fake"
+    assert settings.PUSH_PROVIDER == "fake"
 
 
 def test_invalid_env_is_rejected() -> None:
@@ -83,5 +99,40 @@ def test_invalid_env_is_rejected() -> None:
 
 def test_env_flags() -> None:
     assert _settings(ENV="local").debug is True
-    assert _settings(ENV="production").is_production is True
-    assert _settings(ENV="production").debug is False
+    assert _settings(ENV="production", **_REAL_PROVIDERS).is_production is True
+    assert _settings(ENV="production", **_REAL_PROVIDERS).debug is False
+
+
+# --- Fakes run only where ENV is local (D-045) ---------------------------------
+
+
+@pytest.mark.parametrize("env", ["staging", "production"])
+@pytest.mark.parametrize("provider", sorted(_REAL_PROVIDERS))
+def test_a_fake_provider_outside_local_refuses_to_start(
+    env: str, provider: str
+) -> None:
+    with pytest.raises(ValidationError) as excinfo:
+        _settings(ENV=env, **{**_REAL_PROVIDERS, provider: "fake"})
+
+    message = str(excinfo.value)
+    assert f"ENV={env} cannot use fake providers ({provider})" in message
+    assert "D-045" in message
+
+
+def test_every_fake_is_named_at_once() -> None:
+    with pytest.raises(ValidationError) as excinfo:
+        _settings(ENV="production")  # all seven default to fake
+
+    assert "(" + ", ".join(_REAL_PROVIDERS) + ")" in str(excinfo.value)
+
+
+@pytest.mark.parametrize("env", ["staging", "production"])
+def test_real_providers_start_outside_local(env: str) -> None:
+    settings = _settings(ENV=env, **_REAL_PROVIDERS)
+
+    assert all(getattr(settings, name) != "fake" for name in _REAL_PROVIDERS)
+
+
+def test_local_may_use_fakes_and_real_providers() -> None:
+    assert _settings(ENV="local").PAYMENTS_PROVIDER == "fake"
+    assert _settings(ENV="local", **_REAL_PROVIDERS).PAYMENTS_PROVIDER == "razorpay"

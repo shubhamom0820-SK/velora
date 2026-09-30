@@ -17,6 +17,7 @@ from app.core.config import Settings, get_settings
 from app.core.db import build_engine, build_sessionmaker
 from app.core.errors import register_error_handlers
 from app.core.logging import RequestIDMiddleware, configure_logging
+from app.core.providers import build_providers
 from app.core.redis import build_redis
 from app.modules.health.router import router as health_router
 
@@ -78,6 +79,8 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.state.engine = build_engine(settings.DATABASE_URL)
     app.state.sessionmaker = build_sessionmaker(app.state.engine)
     app.state.redis = build_redis(settings.REDIS_URL)
+    # External services (D-028): fakes locally and in tests, real ones elsewhere.
+    app.state.providers = build_providers(settings)
 
     # Probes at the root, unversioned; product routers go under /v1.
     app.include_router(health_router)

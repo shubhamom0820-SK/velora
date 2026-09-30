@@ -39,7 +39,10 @@ use the **fake** providers from `app/core/providers/`.
 - `make_thread(a, b, status="active", messages=0)`.
 - `clock` — freezes/advances "now" for expiry tests (the app reads time only through
   `core.clock.now()` — never `datetime.now()` directly).
-- `fake_sms.last_code(phone)`, `fake_payments.capture(order_id)`, `fake_moderation.next = "reject:nudity"`.
+- `fake_providers` (T-1.21) — every external service as its in-memory fake; the `app` fixture
+  installs it, so no test reaches a real provider. `fake_providers.sms.last_code(phone)`,
+  `fake_providers.payments.capture(order_id)` (a signed webhook to deliver),
+  `fake_providers.moderation.next = "reject:nudity"` (one-shot).
 
 ## Tests that must never be skipped 🔒
 

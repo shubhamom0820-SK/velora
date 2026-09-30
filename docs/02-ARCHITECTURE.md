@@ -233,7 +233,7 @@ that person in the last 7 days → `wallet.credit(reason=refund_banned_partner)`
 
 | Var | Used by | Notes |
 |---|---|---|
-| `ENV` | api, worker | `local` / `staging` / `production` |
+| `ENV` | api, worker | `local` / `staging` / `production` — required, no default: a deploy that forgets it refuses to start rather than becoming `local` |
 | `DATABASE_URL` | api, worker | `postgresql+asyncpg://…` |
 | `REDIS_URL` | api, worker | |
 | `JWT_SECRET` | api | 64+ random bytes |
@@ -252,10 +252,16 @@ that person in the last 7 days → `wallet.credit(reason=refund_banned_partner)`
 | `FACEMATCH_PROVIDER` | worker | `rekognition` \| `fake` |
 | `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, `AWS_REGION` | worker | `AWS_REGION` defaults to `ap-south-1` |
 | `R2_ACCOUNT_ID`, `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY`, `R2_BUCKET_PUBLIC`, `R2_BUCKET_PRIVATE`, `PUBLIC_CDN_URL` | api, worker | |
+| `STORAGE_PROVIDER` | api, worker | `s3` \| `fake` (`s3` covers R2 and local MinIO, T-4.1) |
 | `R2_ENDPOINT_URL` | api, worker | S3 endpoint override; points at local MinIO, empty for real R2 |
+| `PUSH_PROVIDER` | api, worker | `webpush` \| `fake` |
 | `VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY`, `VAPID_SUBJECT` | api, worker | public key also in web |
 | `SENTRY_DSN` | all | |
 | `NEXT_PUBLIC_API_URL`, `NEXT_PUBLIC_WS_URL`, `NEXT_PUBLIC_VAPID_PUBLIC_KEY`, `NEXT_PUBLIC_RAZORPAY_KEY_ID`, `NEXT_PUBLIC_SENTRY_DSN` | web | public by definition |
+
+Every `*_PROVIDER` may be `fake` only while `ENV` is `local`. Anywhere else the API refuses to
+start, naming each fake, until a real provider is set (D-045) — a fake gateway grants free
+credits and a fake sign-in lets anyone in as anyone.
 
 `.env.example` in each app lists every var. Values that point at local infrastructure from
 `infra/docker-compose.yml` are filled in so a fresh clone runs with no setup; every genuine
