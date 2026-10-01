@@ -15,6 +15,8 @@ from typing import Annotated, Literal
 
 from pydantic import Field, field_validator, model_validator
 from pydantic_settings import BaseSettings, NoDecode, SettingsConfigDict
+from redis.asyncio.connection import parse_url as parse_redis_url
+from sqlalchemy.engine import make_url
 
 Env = Literal["local", "staging", "production"]
 PhoneProvider = Literal["firebase", "msg91", "fake"]
@@ -119,22 +121,36 @@ class Settings(BaseSettings):
     # --- Observability. The SDK itself arrives in T-9.12. ---
     SENTRY_DSN: str = ""
 
-    # A URL with the wrong scheme fails here, when the image checks settings
-    # before uvicorn starts, instead of in every worker at startup — which
-    # crash-loops a "running" machine (T-1.22, when REDIS_URL held a command).
-    # The messages never include the value, which may carry a password.
+    # A malformed URL fails here, when the image checks settings before uvicorn
+    # starts, instead of in every worker at startup — which crash-loops a
+    # "running" machine. T-1.22 hit both: REDIS_URL holding a command, then a
+    # stray closing quote. Each URL goes through the parser its client uses
+    # (no connection is made), and the messages never include the value or
+    # the parser's own error, either of which may carry a password.
     @field_validator("DATABASE_URL")
     @classmethod
-    def _database_url_scheme(cls, v: str) -> str:
+    def _database_url_parses(cls, v: str) -> str:
         if not v.startswith("postgresql+asyncpg://"):
             raise ValueError("must start with postgresql+asyncpg:// (the async driver)")
+        try:
+            make_url(v).port  # noqa: B018 — parsing the port is the check
+        except Exception:  # noqa: BLE001 — any parse failure means the same thing
+            raise ValueError(
+                "isn't a valid database URL; check for stray quotes or spaces"
+            ) from None
         return v
 
     @field_validator("REDIS_URL")
     @classmethod
-    def _redis_url_scheme(cls, v: str) -> str:
+    def _redis_url_parses(cls, v: str) -> str:
         if not v.startswith(("redis://", "rediss://")):
             raise ValueError("must start with rediss:// (or redis:// locally)")
+        try:
+            parse_redis_url(v)
+        except Exception:  # noqa: BLE001 — any parse failure means the same thing
+            raise ValueError(
+                "isn't a valid Redis URL; check for stray quotes or spaces"
+            ) from None
         return v
 
     @field_validator("CORS_ORIGINS", mode="before")

@@ -169,6 +169,27 @@ def _error(**overrides: str) -> str:
             "rediss://",
         ),
         ("REDIS_URL", "https://default:hunter2@redis.example", "rediss://"),
+        # T-1.22's second failure: a closing quote pasted with the URL.
+        (
+            "REDIS_URL",
+            'rediss://default:hunter2@redis.example:6379"',
+            "valid Redis URL",
+        ),
+        (
+            "REDIS_URL",
+            "rediss://default:hunter2@redis.example:6379 ",
+            "valid Redis URL",
+        ),
+        (
+            "DATABASE_URL",
+            'postgresql+asyncpg://u:hunter2@db.example:5432"/velora',
+            "valid database URL",
+        ),
+        (
+            "DATABASE_URL",
+            "postgresql+asyncpg://u:hunter2@db.example:54x2/velora",
+            "valid database URL",
+        ),
     ],
 )
 def test_a_url_with_the_wrong_scheme_is_named_but_not_echoed(
