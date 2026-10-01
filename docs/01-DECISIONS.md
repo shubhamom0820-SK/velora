@@ -449,10 +449,24 @@ Supersedes D-023's region for the API and worker: they run on Fly.io in **Singap
 Postgres (Supabase) and Redis (Upstash) stay in **Mumbai**, so Indian users' data stays in India.
 Moving it out would take a new decision, after the DPDP session (P-0.7).
 
-**The cost, plainly:** every request now crosses Singapore to Mumbai and back several times, since
-a profile load makes several queries. That adds roughly 350 ms (the founder's estimate) on top of
-the user's own latency to Singapore. 09-RESEARCH's C7 (basic quality, swipe lag first) names lag as
-a real complaint driver, so this works against something we said we'd be better at.
+**The cost, plainly — measured, not estimated:** every request crosses Singapore to Mumbai and back
+several times. Measured from the staging API machine on 1 October 2026:
+- **165 ms per round trip**, the same over Supabase's direct host (IPv6) and its pooler (IPv4), so
+  the route itself costs that;
+- **1,156 ms for a pooled connection checkout plus one query** — SQLAlchemy spends round trips on a
+  liveness ping, `BEGIN`, the query and `ROLLBACK`;
+- **2.85–3.5 s to open a new connection** (TLS, authentication, first-connect queries);
+- so **a profile load, with a few queries, costs about 1–1.5 s of server time**, on top of the
+  user's own latency to Singapore.
+
+**Amended 1 October 2026:** the decision was first recorded on an estimate of "roughly 350 ms", the
+founder's. The measurements above show that was wrong by 3–4×. The decision stands — the founder
+is shipping on Singapore — but on the true cost. 09-RESEARCH's C7 (basic quality, swipe lag first)
+names lag as a real complaint driver, so this works against something we said we'd be better at.
+
+**A known optimisation:** dropping the per-checkout liveness ping (`pool_pre_ping`, one round trip
+on every request) in favour of recycling connections by age saves 165 ms per request. The round
+trips themselves stay for as long as the API is in Singapore and the data in Mumbai.
 
 **Why anyway:** Fly deprecated `bom` on 25 September 2026 (the date per the founder), and no India
 region remains on Fly. On 1 October its API refused new machines there: "Region bom is deprecated

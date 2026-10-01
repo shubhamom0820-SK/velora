@@ -32,7 +32,14 @@ log = structlog.get_logger(__name__)
 # a bound, a hung Postgres makes /readyz hang instead of fail, and the platform
 # health check times out with no signal. Infrastructure timing, not a product
 # limit, so it does not belong in app_config.
-READINESS_TIMEOUT_S = 2.0
+#
+# It must cover opening a new connection, which the first check does. From Fly
+# Singapore to Supabase Mumbai (D-048) that measured 2.85-3.5 s — 165 ms per
+# round trip, times TLS, authentication and SQLAlchemy's first-connect queries.
+# At the old 2 s every check cancelled its own connection and none could pass.
+# Kept under Fly's 10 s check timeout (infra/fly.api.toml), so a slow database
+# is reported as 503 NOT_READY rather than as the check timing out.
+READINESS_TIMEOUT_S = 8.0
 
 router = APIRouter(tags=["health"])
 
