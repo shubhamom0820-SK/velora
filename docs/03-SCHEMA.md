@@ -225,7 +225,7 @@ Check `user_low < user_high`. Unique `(user_low, user_high)`.
 | last_message_at | timestamptz null | |
 | message_count | int default 0 | for masking + call gates |
 Check `user_low < user_high`. Unique `(user_low, user_high)`.
-Check `status <> 'knotted' OR (knotted_at IS NOT NULL AND expires_at IS NULL)` — a Velora never
+Check `status <> 'knotted' OR (knotted_at IS NOT NULL AND expires_at IS NULL)` — a Knot never
 carries an expiry, so the expiry cron can never kill a conversation both people were told is
 permanent. Check `status <> 'active' OR expires_at IS NOT NULL` — an active thread always expires;
 every way into `active` (open, reopen, untie) sets a fresh expiry of `app_config.thread_hours`
@@ -441,6 +441,9 @@ trace is exactly the person with admin access (T-1.13).
 `key text pk, value jsonb not null, updated_at`. Seeds: `swipe_daily_limit_men=50`,
 `discovery_radius_km=25`, `thread_hours=24`, `mask_first_n_messages=20`, `kudos_min_messages=6`,
 `gift_free_daily_limit=3`, `gift_same_recipient_cooldown_h=24`.
+`thread_hours` is also promised in the landing copy ("Threads last a day", "24-hour", in
+`web/src/i18n/en.ts`), written out because it's copy, not a computation (T-2.1). Change the copy
+with the setting.
 
 ### waitlist
 `id uuid pk, email citext not null unique, city text null, created_at`.

@@ -58,6 +58,11 @@ expect "web loads" "$web/" 200 'Velora'
 # ...and it must be our build, calling this API. A page that merely says "Velora" could be anyone's:
 # velora-staging.vercel.app is another company's site, and it passed the line above. Only our
 # build has this API's URL compiled into its scripts (NEXT_PUBLIC_API_URL).
+#
+# It passes because the root layout (web/src/app/layout.tsx) mounts QueryProvider, which imports
+# src/lib/api.ts, so every page's scripts, the landing page's included, carry the URL. The landing
+# page itself is server-rendered (T-2.1). Moving the providers off marketing pages makes this check
+# fail, closed, with the message below, and it then needs a new identity marker (P-37).
 if [[ "$status" == 200 ]]; then
   calls_api=no
   for chunk in $(grep -o '/_next/static/chunks/[^"]*\.js' <<<"$body" | sort -u || true); do

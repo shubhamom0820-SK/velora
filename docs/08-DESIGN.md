@@ -1,8 +1,11 @@
 # 08 · Design system
 
 The prototype (`docs/prototype/velora-prototype-reference.html`) is the visual reference for every
-screen. It predates the rename to Velora, so it says "Knot" — the screens and flows are the
-reference, not the name. This file turns it into rules so the real app stays consistent.
+screen. It predates the rename to Velora, so it uses "Knot" as the app's name — the screens and
+flows are the reference, not the name. **Only the brand changed.** Where the prototype names the
+app, read Velora (`APP_NAME`). Thread and Knot stay as the product's nouns ("Tie the knot",
+"Knots last", the Knots tab) and are never replaced (CLAUDE.md rule 17). This file turns the
+prototype into rules so the real app stays consistent.
 
 ## 1. Tokens — the only place colours live
 
@@ -19,6 +22,7 @@ One theme: the black · white · red blend (D-014, Locked). These values match t
   /* chrome (black): header, bottom nav, hero, match sheet, wallet card, lock screen */
   --chrome:#141113; --chrome-ink:#F3EFEE; --chrome-mute:#A29A9C; --chrome-line:#2B2528;
   --chrome-accent:#E8475A; --chrome-accent-soft:rgba(232,71,90,.16);
+  --chrome-glow:radial-gradient(circle at 50% 0%, rgba(207,42,64,.22) 0%, transparent 60%); /* landing hero */
   /* on-photo text (cards, call screen) */
   --on-photo:#FFFFFF; --photo-scrim:linear-gradient(to top, rgba(6,3,6,.94), rgba(6,3,6,.55) 52%, transparent);
   --shadow-1:0 4px 14px rgba(207,42,64,.24); --shadow-2:0 10px 26px rgba(20,12,15,.14);
@@ -29,7 +33,9 @@ One theme: the black · white · red blend (D-014, Locked). These values match t
 
 Rules:
 - Text on `--accent` is `--on-accent`. Text on photos is `--on-photo` over `--photo-scrim`.
-- Anything inside a chrome area uses the `--chrome-*` set.
+- Anything inside a chrome area uses the `--chrome-*` set, except filled buttons, which stay
+  `--accent` with `--on-accent` text, as in the prototype. White on `--chrome-accent` is about
+  3.8:1, under the 4.5:1 button text needs; on `--accent` it is about 5.2:1.
 - Contrast: body text ≥ 4.5:1, large text ≥ 3:1 (checked in T-9.11).
 - `<meta name="theme-color">` = `--chrome`. A meta tag can't read a CSS variable, so this is the
   one colour literal outside `tokens.css`: `web/src/styles/theme-color.ts`, which must equal
@@ -69,7 +75,8 @@ Checked value by value against the prototype in T-1.19, and corrected where the 
   Screen padding 20–24 mobile, 24 desktop.
 - Radius: 12 inputs and buttons (both sizes) · 14 cards · 16 chat bubbles · 24 sheets · 26 swipe
   card · 999 pills. The prototype's few 10 px buttons (admin actions, the waitlist form) become 12
-  when their screens use `Button`.
+  when their screens use `Button`, and so does the landing header's pill-shaped "Get started"
+  (T-2.1).
 - Content max-width: 520 px for app screens (centred on desktop) · 720 legal pages · 760 admin ·
   900 landing.
 - Motion: 150 ms for press/hover, 250–300 ms for sheets, spring for the deck. Respect

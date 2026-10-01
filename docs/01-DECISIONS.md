@@ -22,9 +22,14 @@ closed-testing requirement, instant updates, shareable `velora.app/@username` li
 
 ### D-003 · Threads and Knots — Locked
 Every conversation opens as a **Thread** that expires 24h after opening. Both people tapping
-"Tie the knot" converts it to a **Velora**: permanent, free messaging for both, forever.
+"Tie the knot" converts it to a **Knot**: permanent, free messaging for both, forever.
 An expired thread is archived read-only, never deleted, and can be re-opened for 3 credits.
 **Rule:** permanence is granted by the other person, never bought.
+**Corrected 1 October 2026:** from `f85315e` until today the body read "converts it to a
+**Velora**", a drafting slip that contradicted its own heading. The slip spread to CLAUDE.md, the
+README, 03-SCHEMA, 06-TESTING and three code comments; this entry and all of them were corrected
+to Knot in the same commit. Velora is the company name, and Thread and Knot are product nouns
+(CLAUDE.md rule 17).
 
 ### D-004 · Action prices — Locked (values tunable)
 Prices live in the `action_prices` table, not in code, so they can change without a deploy.

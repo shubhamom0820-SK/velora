@@ -482,7 +482,7 @@ async def test_one_match_per_pair(db: AsyncSession) -> None:
     assert state == UNIQUE_VIOLATION
 
 
-# The Velora promise, guarded from both sides (D-003).
+# The Knot promise, guarded from both sides (D-003).
 
 
 async def test_a_knotted_thread_cannot_carry_an_expiry(db: AsyncSession) -> None:
@@ -541,7 +541,7 @@ async def test_an_active_thread_must_expire(db: AsyncSession) -> None:
 
 
 async def test_untying_back_to_active_needs_a_fresh_expiry(db: AsyncSession) -> None:
-    """Untie (04-API: DELETE /threads/{id}/knot) returns a Velora to active."""
+    """Untie (04-API: DELETE /threads/{id}/knot) returns a Knot to active."""
     low, high = await _pair(db)
     thread_id = await _thread(db, low, high)
     await db.execute(

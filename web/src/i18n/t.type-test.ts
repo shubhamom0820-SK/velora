@@ -6,7 +6,7 @@ import { t } from "./t";
 
 export function typeChecks(): void {
   t("placeholder.login");
-  t("placeholder.marketing", { app: "Velora" });
+  t("landing.join", { app: "Velora" });
 
   // @ts-expect-error — a key that isn't in en.ts must not compile.
   t("placeholder.nope");

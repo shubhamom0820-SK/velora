@@ -26,6 +26,7 @@ describe("/dev/ui", () => {
     ).toBeInTheDocument();
     for (const section of [
       "Button",
+      "ButtonLink",
       "Chip",
       "Field",
       "TextArea",

@@ -12,6 +12,7 @@ import { useState, type ReactNode } from "react";
 
 import { Avatar } from "@/components/ui/Avatar";
 import { Button } from "@/components/ui/Button";
+import { ButtonLink } from "@/components/ui/ButtonLink";
 import { Chip } from "@/components/ui/Chip";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { ErrorState } from "@/components/ui/ErrorState";
@@ -103,6 +104,23 @@ export function UiGallery() {
           <Button variant="chrome" disabled>
             Disabled
           </Button>
+        </div>
+      </Section>
+
+      <Section title="ButtonLink">
+        <Row>
+          <ButtonLink href="/dev/ui">Primary link</ButtonLink>
+          <ButtonLink href="/dev/ui" variant="ghost" size="sm">
+            Ghost sm link
+          </ButtonLink>
+        </Row>
+        <div className="bg-chrome rounded-card flex flex-wrap gap-3 p-4">
+          <ButtonLink href="/dev/ui" size="sm">
+            Primary sm on chrome
+          </ButtonLink>
+          <ButtonLink href="/dev/ui" variant="chrome">
+            Chrome link
+          </ButtonLink>
         </div>
       </Section>
 

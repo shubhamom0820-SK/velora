@@ -1,7 +1,7 @@
 """`threads` and `thread_clears` — 03-SCHEMA.md §4.
 
 A thread expires `app_config.thread_hours` (seeded 24) after opening unless both
-people tie the knot, which makes it a permanent Velora (D-003). Two CHECKs guard
+people tie the knot, which makes it a permanent Knot (D-003). Two CHECKs guard
 that promise from both sides, whatever code path writes the row:
 
 - a knotted thread has `knotted_at` and **no** `expires_at` — otherwise the

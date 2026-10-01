@@ -253,10 +253,17 @@ One migration per task, each with a working `downgrade()`. Build exactly `03-SCH
 # Sprint 2 — Public site (week 3)
 
 ### T-2.1 · Landing page
-- [ ] **Needs:** T-1.19
-- [ ] `(marketing)/page.tsx` from the prototype: header, hero, three feature cards, waitlist box, footer links. Server-rendered, no client JS except the waitlist form.
+- [x] **Needs:** T-1.19
+- [x] `(marketing)/page.tsx` from the prototype: header, hero, three feature cards, footer links. Server-rendered, with no page-level client JS. The waitlist box moved to T-2.3, with its form.
+- [x] **Checklist A exception, on purpose:** the landing copy writes `app_config.thread_hours` out
+  ("Threads last a day", and "24-hour" twice) instead of reading the setting. 03-SCHEMA's
+  never-hardcode rule is about behaviour: the API must never hardcode the number when it computes
+  expiry. Landing copy is a promise, not a computation, and making the page dynamic to render one
+  number would cost the static prerender the Lighthouse target rests on. Comments in
+  `web/src/i18n/en.ts`, 03-SCHEMA §8 and the seed test (`api/tests/test_reference_data.py`) say to
+  change the copy with the setting. The seed migration is merged, so it can't carry one (rule 11).
 - [ ] **Done when:** Lighthouse mobile ≥ 90 performance, 100 accessibility on staging.
-- [ ] **Commit:** `feat(web): landing page [T-2.1]`
+- [x] **Commit:** `feat(web): landing page [T-2.1]`
 
 ### T-2.2 · Legal pages
 - [ ] **Needs:** T-2.1
@@ -268,7 +275,11 @@ One migration per task, each with a working `downgrade()`. Build exactly `03-SCH
 ### T-2.3 · Waitlist
 - [ ] **Needs:** T-1.13, T-2.1
 - [ ] API `POST /v1/waitlist {email, city?}` — validate email, citext unique (duplicate → 201 anyway), rate limit 5/min/IP.
-- [ ] Web form with success state.
+- [ ] The landing page's waitlist box, from the prototype (moved from T-2.1): heading, text, form
+  and success state arrive together, so nothing on the page asks for an email it can't keep. The
+  form is the landing page's one client component: add it to `CLIENT_COMPONENTS_ALLOWED` in
+  `(marketing)/page.test.tsx`. The prototype's 48 px below the box is off the spacing scale; round
+  it per 08-DESIGN §3.
 - [ ] **Commit:** `feat: waitlist [T-2.3]`
 
 ### T-2.4 · SEO and sharing
@@ -1154,3 +1165,15 @@ Claude Code adds items here instead of doing unplanned work. Format:
 
   Found during T-1.22's first deploy.
   **Decided (D-048):** the API and worker run on Fly in Singapore; Postgres and Redis stay in Mumbai.
+- [ ] P-37 · Give the staging smoke check a new identity marker before the web's providers move
+  off marketing pages. **Due in whichever task moves them.** Worst case: every deploy's smoke
+  check fails with a misleading cause ("another site at that URL, or NEXT_PUBLIC_API_URL unset"),
+  and the quick fix is to weaken the check, which reopens the hole where another company's site
+  passed for our staging (T-1.22). The check passes because `/`'s scripts contain the API's URL,
+  and they do only because the root layout mounts `QueryProvider`, which imports `src/lib/api.ts`.
+  A task that moves the providers to the `(app)` and `(auth)` layouts, for example to make the
+  landing page lighter, must replace the marker in the same commit with one that only our build
+  carries, and prove it both ways: it fails against another site and passes against ours. The
+  coupling is also written above the check in `scripts/staging-smoke`.
+
+  Found while planning T-2.1.

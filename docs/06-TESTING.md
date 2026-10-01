@@ -63,7 +63,7 @@ If any of these fails, nothing ships.
 11. **Contact masking** (T-7.3): numbers, spaced digits, emails, UPI IDs, social handles masked in
     the first 20 messages; `body_raw` never returned by any user-facing endpoint.
 12. **Expired thread** (T-7.6): sending → `THREAD_EXPIRED`; re-open charges exactly 3.
-13. **Velora is mutual** (T-7.7): one tap never converts; two taps always do.
+13. **A Knot is mutual** (T-7.7): one tap never converts; two taps always do.
 14. **Private data** (T-4.4, T-4.5): processed images contain no EXIF; selfies never appear in
     any public response.
 15. **Refresh reuse** (T-3.4): replaying a rotated refresh token revokes the family.

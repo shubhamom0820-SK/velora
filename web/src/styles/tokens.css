@@ -27,6 +27,12 @@
   --chrome-line: #2b2528;
   --chrome-accent: #e8475a;
   --chrome-accent-soft: rgba(232, 71, 90, 0.16);
+  /* the landing hero's red glow, over --chrome */
+  --chrome-glow: radial-gradient(
+    circle at 50% 0%,
+    rgba(207, 42, 64, 0.22) 0%,
+    transparent 60%
+  );
   /* on-photo text (cards, call screen) */
   --on-photo: #ffffff;
   --photo-scrim: linear-gradient(

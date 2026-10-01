@@ -7,7 +7,7 @@ The detail lives in `docs/`. When a rule here conflicts with anything else, this
 
 A web-first dating app for India. Women use it free. Men buy **credits**.
 Every conversation starts as a **Thread** that expires in 24 hours.
-If both people tap "Tie the knot", it becomes a **Velora** — permanent and free forever.
+If both people tap "Tie the knot", it becomes a **Knot** — permanent and free forever.
 Permanence is granted by the other person, never bought.
 
 ## Read order
@@ -123,6 +123,10 @@ make e2e         # Playwright
 16. **Environment gates are allowlists, never blacklists.** A gate names the environments where
     something IS served or allowed (`ENV == "local"`), never the ones where it isn't
     (`ENV != "production"`). A blacklist fails open the moment a new environment name exists.
+17. **The brand and the product nouns are separate, and never substitute for each other.**
+    Velora is the company name and may still change (D-015); code reads it from `APP_NAME`.
+    Thread and Knot are product nouns and never change with the brand. A future rename touches
+    the brand only — never a find-replace across the docs.
 
 ## Naming
 
