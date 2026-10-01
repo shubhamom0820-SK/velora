@@ -1,5 +1,8 @@
 # Staging
 
+> **Status, 2026-10-01: blocked at the API deploy.** Fly refused to provision in `bom` ("Region bom is
+> deprecated…"); where the API runs is an open decision. See P-36 in `docs/05-PLAN.md`.
+
 How staging is built, deployed and checked (T-1.22, D-046). Production (T-2.6) follows the same
 shape; copy these steps and change the names.
 
@@ -163,10 +166,17 @@ Settings → Environments → **new environment `staging`**.
 |---|---|---|
 | Secret | `STAGING_MIGRATION_DATABASE_URL` | the **session pooler** connection, as the owner |
 | Secret | `FLY_API_TOKEN` | Fly's deploy token |
-| Secret | `VERCEL_TOKEN` | Vercel's access token |
+| Secret | `VERCEL_TOKEN` | a Vercel access token **scoped to the `velora-staging` project, with no expiry** |
 | Secret | `VERCEL_ORG_ID`, `VERCEL_PROJECT_ID` | from the Vercel project |
 | Variable | `STAGING_API_URL` | `https://velora-api-staging.fly.dev` |
 | Variable | `STAGING_WEB_URL` | `https://velora-staging.vercel.app` |
+
+**`VERCEL_TOKEN`'s tradeoff, chosen on purpose:** it reaches only the `velora-staging` project, so a
+leak can't touch anything else, but it never expires, so nothing retires it on its own. Revoke it at
+any suspicion and create a fresh one, as was done on 2026-10-01 after two earlier tokens were
+pasted into a terminal by mistake (both revoked). Production (T-2.6) gets its own token; decide its
+expiry then. The Vercel CLI's own login token won't do: it's a short-lived OAuth token, expiring
+within the hour and refreshed only on your machine, so CI would break as soon as it lapsed.
 
 ## After a deploy
 

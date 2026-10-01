@@ -233,7 +233,8 @@ One migration per task, each with a working `downgrade()`. Build exactly `03-SCH
   Also runnable by hand for any commit whose CI passed. GitHub runs `workflow_run` and
   `workflow_dispatch` workflows only from the default branch, so the first deploy follows the merge.
 - [x] After every deploy, `scripts/staging-smoke` checks staging from the outside, bodies included.
-- [ ] **Done when:** staging web loads and staging `/readyz` is 200.
+- [ ] **Done when:** staging web loads and staging `/readyz` is 200. **Blocked by P-36:** Fly refused
+  to provision the API in `bom`.
 - [x] **Commit:** `ci: staging deploy [T-1.22]`
 
 ---
@@ -1110,3 +1111,32 @@ Claude Code adds items here instead of doing unplanned work. Format:
   extensions in an `extensions` schema rather than `public` — since that difference hid the bug
   `67e81c6c203d` fixed. Best done before discovery leans on PostGIS (T-6.2). Found setting up
   staging in T-1.22.
+- [ ] P-36 · Decide where the API and worker run, now that Fly won't provision in Mumbai. **Blocks
+  T-1.22's Done-when. The decision is open, and the founder makes it fresh, not against a deadline.**
+  - **What Fly said** (deploy run 36793830288, 2026-10-01 00:01 UTC, request ID
+    `01M3TC93PM16F2PE40187YC8D7-iad`): "Region bom is deprecated and cannot have new resources
+    provisioned. Please consider using an alternate region such as sin". `fly platform regions`
+    (flyctl 0.4.110) no longer lists `bom`.
+  - **Temporary or permanent is not confirmed.** The wording isn't Fly's capacity error, which reads
+    "could not find a good candidate…", so waiting a day probably won't help. But Fly hasn't
+    announced it: its region-consolidation post lists Mumbai as an active region, not among the
+    retired ones. And in September 2025 a different `bom` refusal ("…organization is on a legacy or
+    non-paid plan") turned out to be a Fly bug, fixed after a community post. **Next step: ask Fly
+    support whether `bom` is retired for good or refused for this account, quoting the request ID.**
+  - **Constraint:** Indian users' data (photos, phone numbers) stays in India until the DPDP lawyer
+    session (P-0.7) says otherwise. Moving to Singapore is a legal and positioning question, not a
+    latency tradeoff, and it's off the table for now. If `bom` is gone for good, the founder leans
+    towards another host in Mumbai for the API and worker (for example AWS `ap-south-1` or Google
+    Cloud Run `asia-south1`). That gets decided properly, with WebSocket support (D-025) checked,
+    and recorded as a decision superseding D-023's region.
+  - **Staging as it stands:**
+    - Supabase (Mumbai) is migrated to head.
+    - Fly app `velora-api-staging` has five staged secrets, a shared IPv4 and a dedicated IPv6, and
+      no machines.
+    - Vercel project `velora-staging` exists but hasn't been deployed.
+    - R2 isn't enabled.
+
+    Until this is settled, every push to `main` runs `deploy.yml`, which migrates and then fails at
+    its `api` job. That's harmless, but expect the red run.
+
+  Found during T-1.22's first deploy.
