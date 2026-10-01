@@ -55,6 +55,24 @@ expect "API schema hidden (P-31)" "$api/openapi.json" 404 '"code":"NOT_FOUND"' '
 expect "API docs hidden (P-31)" "$api/docs" 404 '"code":"NOT_FOUND"' 'swagger'
 
 expect "web loads" "$web/" 200 'Velora'
+# ...and it must be our build, calling this API. A page that merely says "Velora" could be anyone's:
+# velora-staging.vercel.app is another company's site, and it passed the line above. Only our
+# build has this API's URL compiled into its scripts (NEXT_PUBLIC_API_URL).
+if [[ "$status" == 200 ]]; then
+  calls_api=no
+  for chunk in $(grep -o '/_next/static/chunks/[^"]*\.js' <<<"$body" | sort -u || true); do
+    fetch "$web$chunk"
+    if [[ "$status" == 200 && "$body" == *"$api"* ]]; then
+      calls_api=yes
+      break
+    fi
+  done
+  if [[ "$calls_api" == yes ]]; then
+    say "ok   web is our build, calling $api"
+  else
+    fail "web: no script on $web calls $api — another site at that URL, or NEXT_PUBLIC_API_URL unset"
+  fi
+fi
 expect "web /admin hidden (P-30)" "$web/admin" 404 '' 'Coming soon.'
 expect "web /dev/ui hidden" "$web/dev/ui" 404 '' 'UI primitives'
 expect "web /dev/health hidden" "$web/dev/health" 404 '' 'API health'

@@ -12,7 +12,7 @@ shape; copy these steps and change the names.
 | Piece | Where | Name |
 |---|---|---|
 | API | Fly.io, `sin` (Singapore; D-048) | app `velora-api-staging` → `https://velora-api-staging.fly.dev` |
-| Web | Vercel, its own project | `velora-staging` → `https://velora-staging.vercel.app` |
+| Web | Vercel, its own project | `velora-staging` → `https://velora-staging-black.vercel.app` |
 | Postgres | Supabase, Mumbai (`ap-south-1`) | project `velora-staging` |
 | Redis | Upstash, Mumbai | database `velora-staging` |
 | Objects | Cloudflare R2 | buckets `velora-staging-public`, `velora-staging-private` |
@@ -32,7 +32,8 @@ any commit whose CI passed):
 4. **web** builds and deploys with the Vercel CLI. The project has no Git connection
    (`web/vercel.json` also turns Git deploys off), so the web can't go live around the gate.
 5. **smoke** runs `scripts/staging-smoke` against staging from the outside, bodies included:
-   `/readyz`, the hidden schema and docs, the web, the hidden `/admin` and `/dev/*`, and CORS.
+   `/readyz`, the hidden schema and docs, the web (it must be our build, calling this API), the
+   hidden `/admin` and `/dev/*`, and CORS.
 
 **The first deploy happens after T-1.22 merges.** GitHub only triggers a workflow that exists on
 the default branch — `workflow_run`, `workflow_dispatch`, and `gh run list --workflow <file>` all
@@ -187,9 +188,12 @@ bucket's CDN domain are set with T-4.1, when storage is built.
 1. New project `velora-staging`, **not connected to Git**, framework Next.js, root directory left
    empty (the workflow deploys from `web/`), Node 24.
 2. **Environment Variables → Production:** `NEXT_PUBLIC_API_URL` = `https://velora-api-staging.fly.dev`.
-3. If Vercel gives the project a URL other than `https://velora-staging.vercel.app`, change
-   `CORS_ORIGINS` in `infra/fly.api.toml` and `STAGING_WEB_URL` below to match. The smoke check's
-   CORS line fails until they agree.
+3. **Read the project's URL from Settings → Domains; don't assume it.** Vercel gives a project
+   `<name>.vercel.app` only when no one else holds that name, and otherwise adds a suffix.
+   `velora-staging.vercel.app` belongs to another company's project, so ours is
+   `velora-staging-black.vercel.app`. Put the real URL in `CORS_ORIGINS` (`infra/fly.api.toml`)
+   and in `STAGING_WEB_URL` below. The smoke check fails if the URL serves anything other than
+   this build calling this API, and its CORS line fails until the two settings agree.
 4. Create an **access token** (Account → Tokens). Copy the org and project IDs from the project's
    settings.
 
@@ -204,7 +208,7 @@ Settings → Environments → **new environment `staging`**.
 | Secret | `VERCEL_TOKEN` | a Vercel access token **scoped to the `velora-staging` project, with no expiry** |
 | Secret | `VERCEL_ORG_ID`, `VERCEL_PROJECT_ID` | from the Vercel project |
 | Variable | `STAGING_API_URL` | `https://velora-api-staging.fly.dev` |
-| Variable | `STAGING_WEB_URL` | `https://velora-staging.vercel.app` |
+| Variable | `STAGING_WEB_URL` | `https://velora-staging-black.vercel.app` |
 
 **`VERCEL_TOKEN`'s tradeoff, chosen on purpose:** it reaches only the `velora-staging` project, so a
 leak can't touch anything else, but it never expires, so nothing retires it on its own. Revoke it at
@@ -218,12 +222,27 @@ within the hour and refreshed only on your machine, so CI would break as soon as
 The **smoke** job is the check. To run it by hand:
 
 ```
-scripts/staging-smoke https://velora-api-staging.fly.dev https://velora-staging.vercel.app
+scripts/staging-smoke https://velora-api-staging.fly.dev https://velora-staging-black.vercel.app
 ```
 
 A configuration error (a missing secret, a fake provider) stops the container with the message
 instead of crash-looping: the image checks settings once before uvicorn starts its workers. Read
 it in Fly's logs.
+
+## Before any T-3 auth work: close the CORS hole
+
+Until 1 October 2026, `CORS_ORIGINS` named `https://velora-staging.vercel.app`, which is another
+company's site, not ours (Vercel section, step 3). The API allows credentials
+(`allow_credentials=True`), so it would accept credentialed requests from their pages and let
+those pages read the answers. Staging has no sign-in and no users yet, so there was nothing to
+read. **This must be closed, and checked closed, before any T-3 auth work lands.** Closed means
+their origin gets no `access-control-allow-origin` back:
+
+```
+curl -s -o /dev/null -D - -X OPTIONS https://velora-api-staging.fly.dev/healthz \
+  -H 'Origin: https://velora-staging.vercel.app' -H 'Access-Control-Request-Method: GET' \
+  | grep -i '^access-control-allow-origin' || echo closed
+```
 
 ## What staging can't do yet
 
