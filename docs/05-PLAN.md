@@ -275,7 +275,13 @@ One migration per task, each with a working `downgrade()`. Build exactly `03-SCH
 - [x] `/terms`, `/privacy`, `/refunds`, `/contact` as TSX pages, written in plain language from our own decisions — no lawyer, no copied policy. Contact shows the company name, registered office, support email and **Grievance Officer name + email** (IT Rules). A fact we don't have yet shows as "To be confirmed", and production can't build while any is missing (D-053).
 - [x] Footer links on every marketing page; the footer's city is Phagwara (D-013).
 - [x] **Checklist A exception, on purpose:** the pages write out two `app_config` values in words — `thread_hours` ("lasts a day") and `mask_first_n_messages` ("first 20 messages") — for T-2.1's reason: copy is a promise, not a computation. Comments in `en.ts`, 03-SCHEMA §8 and the seed test say to change the copy with the setting.
-- [ ] **Done when:** all four reachable, linked, and printable.
+- [x] **Done when:** all four reachable, linked, and printable. **Proved on staging, 1 October 2026,**
+  by deploy run 36903641112 (commit `1d52ee5`, attempt 2): its smoke job passed every check,
+  each legal page returning 200 with its title. Every marketing page's footer links all four
+  (checked on `/`, `/terms`, `/privacy`, `/refunds` and `/contact`). Each page, printed from
+  staging to PDF, prints the policy alone, on white, sections whole, footer and back link dropped.
+  Attempt 1 failed closed: `APP_ENV` had been stored as a Vercel Secret, which `vercel pull`
+  writes as `[SENSITIVE]`, and the gate refused it (D-053). It is now Config (`infra/STAGING.md`).
 - [x] **Commit:** `feat(web): legal pages [T-2.2]`
 
 ### T-2.3 · Waitlist
