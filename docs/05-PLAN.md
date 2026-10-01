@@ -23,7 +23,7 @@ never done silently.
 
 - [ ] **P-0.1** Trademark search for the name on the IP India public search. Record result in D-015.
 - [ ] **P-0.2** Register company (OPC recommended) → PAN, GST, current account.
-- [ ] **P-0.3** Buy domain `velora.app` (or chosen name). Point DNS to Cloudflare.
+- [ ] **P-0.3** Buy domain `velora.app` (or chosen name). Point DNS to Cloudflare. Read D-015 first: another business trades as "Velora" (recorded 1 October 2026).
 - [ ] **P-0.4** DLT (needed only to move off Firebase later — start it anyway, it is slow): entity → header → OTP template `{#var#} is your Velora verification code. Valid for 5 minutes. Do not share it.`
 - [ ] **P-0.5** MSG91 account; link DLT IDs; send one test SMS to yourself.
 - [ ] **P-0.12** Firebase: project, Phone provider on, App Check + reCAPTCHA Enterprise enforced, authorised domains, daily SMS quota cap, billing alert. Confirm the **real per-SMS price for IN** in the billing console and write it into D-035.

@@ -136,6 +136,14 @@ Sprint 2's landing page and everything after inherit whatever goes in there.
 Trademark search pending ("The Velora" is an established wedding brand). Keep the name in one
 constant (`APP_NAME`) in both apps so a rename is trivial.
 
+**Recorded 1 October 2026, not assessed:** another business trades as "Velora" and holds the name
+on Vercel. `https://velora-staging.vercel.app`, the address staging was meant to have, is that
+business's site, titled "Velora | Bespoke fronts for IKEA systems". Vercel gave our project
+`velora-staging-black.vercel.app` because the name was taken. Seen by Claude while checking the
+staging deploy (T-1.22), by loading that page and its 404 page, and nothing more: nothing else
+about the business was looked up. Recorded at the founder's request, for before the domain is
+bought (P-0.3).
+
 ### D-041 · Intent is a multi-select catalogue — Locked
 Intent — what someone is looking for — is a catalogue, the same shape as interests: the `intents`
 table (10 rows) and `profile_intents`, **1 to 3 per user**, enforced in the service (P-25). This is
