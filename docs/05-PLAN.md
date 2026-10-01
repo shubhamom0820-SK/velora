@@ -262,7 +262,12 @@ One migration per task, each with a working `downgrade()`. Build exactly `03-SCH
   number would cost the static prerender the Lighthouse target rests on. Comments in
   `web/src/i18n/en.ts`, 03-SCHEMA §8 and the seed test (`api/tests/test_reference_data.py`) say to
   change the copy with the setting. The seed migration is merged, so it can't carry one (rule 11).
-- [ ] **Done when:** Lighthouse mobile ≥ 90 performance, 100 accessibility on staging.
+- [x] **Done when:** Lighthouse mobile ≥ 90 performance, 100 accessibility on staging.
+  **Measured 1 October 2026 by Claude**, on `https://velora-staging-black.vercel.app/` serving
+  `c10e589` (deploy run 36892558024, smoke passed): Lighthouse 13.5.0, mobile, simulated
+  throttling, three runs. Performance 98, 99 and 100; accessibility 100 in all three, with every
+  weighted audit passing. The LCP element was the hero's paragraph, so it measured this page. Run
+  locally with Chrome, because PageSpeed Insights' shared keyless quota was spent (HTTP 429).
 - [x] **Commit:** `feat(web): landing page [T-2.1]`
 
 ### T-2.2 · Legal pages
