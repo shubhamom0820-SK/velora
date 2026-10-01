@@ -244,6 +244,9 @@ curl -s -o /dev/null -D - -X OPTIONS https://velora-api-staging.fly.dev/healthz 
   | grep -i '^access-control-allow-origin' || echo closed
 ```
 
+**Closed and checked on 1 October 2026**, after deploy run 36845884410: that command printed
+`closed`, and the smoke check, run by hand against their URL, failed on both the web and CORS.
+
 ## What staging can't do yet
 
 - **Sign-in can't keep a session on staging** until the web and API share a site: the refresh

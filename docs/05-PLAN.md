@@ -205,10 +205,14 @@ One migration per task, each with a working `downgrade()`. Build exactly `03-SCH
   `infra/fly.api.toml`, region `sin` (D-048: Fly retired `bom`), health check `/readyz`. No release command: migrations run
   from CI as the owner (D-046). The worker's Fly app moved to T-4.4, which builds the worker.
 - [ ] Supabase staging project (enable PostGIS, pg_trgm, citext); Upstash staging DB; R2 staging buckets.
-  All by hand, from `infra/STAGING.md`.
-- [ ] Supabase's Data API off, and the app-role migration strips `anon` and `authenticated` of every
+  All by hand, from `infra/STAGING.md`. **Open, for R2 alone (1 October 2026):** Supabase (Mumbai,
+  migrated to head) and Upstash (Mumbai) are serving staging (deploy run 36845884410). R2 isn't
+  enabled on the Cloudflare account yet, which only its dashboard can do, so there are no buckets.
+- [x] Supabase's Data API off, and the app-role migration strips `anon` and `authenticated` of every
   privilege on our tables. Left on, it serves every table in `public` over REST to anyone with the
   project's anon key. The runbook ends with a SQL check that those roles hold nothing.
+  Checked 1 October 2026: that query returned no rows, and every row of the app-role check was
+  true. The Data API was never enabled, per the founder at setup.
 - [x] Database pool sized for 2 workers (`DB_POOL_SIZE`, `DB_MAX_OVERFLOW`): each worker opens its
   own pool, so staging's budget is 2 × (5 + 2) = 14 connections, recorded in `infra/STAGING.md`.
 - [x] Note: Supabase manages extensions from its dashboard. T-1.8's migration uses `create extension if not exists`, so upgrade is a no-op there — but its `downgrade()` drops them, so never downgrade a Supabase database to base.
@@ -220,8 +224,11 @@ One migration per task, each with a working `downgrade()`. Build exactly `03-SCH
 - [x] Tests, connected as that role: the writes each guard refuses are refused — UPDATE, DELETE and
   TRUNCATE on `ledger_entries` and `audit_log`; DELETE and TRUNCATE on `payments`, whose UPDATE
   stays allowed because a payment's status moves — and both bypasses are denied.
-- [ ] A separate Vercel project `velora-staging`, with no Git connection, deployed with `--prod` from
-  `deploy.yml`: one stable URL, which the API's `CORS_ORIGINS` names.
+- [x] A separate Vercel project `velora-staging`, with no Git connection, deployed with `--prod` from
+  `deploy.yml`: one stable URL, which the API's `CORS_ORIGINS` names. Its URL is
+  `https://velora-staging-black.vercel.app`: `velora-staging.vercel.app` is another company's site
+  (D-015, `infra/STAGING.md`). Deployed by run 36845884410; no Git connection, checked through
+  Vercel's API on 1 October 2026.
 - [x] Serve `/openapi.json` and `/docs` only when `ENV == "local"` (from P-31). `create_app()`
   serves them everywhere but production — a blacklist — so public staging would publish the full
   schema of the wallet, payment and admin routes. Nothing needs them outside local: `make types`
@@ -233,7 +240,10 @@ One migration per task, each with a working `downgrade()`. Build exactly `03-SCH
   Also runnable by hand for any commit whose CI passed. GitHub runs `workflow_run` and
   `workflow_dispatch` workflows only from the default branch, so the first deploy follows the merge.
 - [x] After every deploy, `scripts/staging-smoke` checks staging from the outside, bodies included.
-- [ ] **Done when:** staging web loads and staging `/readyz` is 200.
+- [x] **Done when:** staging web loads and staging `/readyz` is 200. **Proved by deploy run
+  36845884410** (commit `c57634f`), whose smoke job passed every check against
+  `https://velora-staging-black.vercel.app`, including that the web is our build calling this API.
+  Run 36843892361 also went green but proves nothing: its smoke job checked another company's site.
 - [x] **Commit:** `ci: staging deploy [T-1.22]`
 
 ---
@@ -1128,7 +1138,7 @@ Claude Code adds items here instead of doing unplanned work. Format:
     towards another host in Mumbai for the API and worker (for example AWS `ap-south-1` or Google
     Cloud Run `asia-south1`). That gets decided properly, with WebSocket support (D-025) checked,
     and recorded as a decision superseding D-023's region.
-  - **Staging as it stands:**
+  - **Staging as it stood when this was filed** (it has deployed since; see T-1.22):
     - Supabase (Mumbai) is migrated to head.
     - Fly app `velora-api-staging` has five staged secrets, a shared IPv4 and a dedicated IPv6, and
       no machines.
