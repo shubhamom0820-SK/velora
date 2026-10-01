@@ -4,12 +4,12 @@
 
 ```mermaid
 flowchart LR
-  B[Browser / PWA<br/>Next.js on Vercel] -- REST /v1 --> A[FastAPI<br/>Fly.io bom]
+  B[Browser / PWA<br/>Next.js on Vercel] -- REST /v1 --> A[FastAPI<br/>Fly.io sin]
   B -- WebSocket /ws --> A
   B -- presigned PUT --> R2[(Cloudflare R2)]
   A --> PG[(Postgres + PostGIS<br/>Supabase Mumbai)]
   A --> RD[(Redis<br/>Upstash)]
-  W[ARQ worker<br/>Fly.io bom] --> PG
+  W[ARQ worker<br/>Fly.io sin] --> PG
   W --> RD
   A -- enqueue --> RD
   RD -- jobs --> W

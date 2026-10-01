@@ -443,6 +443,32 @@ can hide the next one.
 closes the gap without eliminating it: `postgis:17` images ship PostGIS 3.5, and Supabase's is 3.3,
 so staging stays the only place PostGIS behaviour is verified.
 
+
+### D-048 · The API runs on Fly in Singapore; the data stays in Mumbai — Locked
+Supersedes D-023's region for the API and worker: they run on Fly.io in **Singapore (`sin`)**.
+Postgres (Supabase) and Redis (Upstash) stay in **Mumbai**, so Indian users' data stays in India.
+Moving it out would take a new decision, after the DPDP session (P-0.7).
+
+**The cost, plainly:** every request now crosses Singapore to Mumbai and back several times, since
+a profile load makes several queries. That adds roughly 350 ms (the founder's estimate) on top of
+the user's own latency to Singapore. 09-RESEARCH's C7 (basic quality, swipe lag first) names lag as
+a real complaint driver, so this works against something we said we'd be better at.
+
+**Why anyway:** Fly deprecated `bom` on 25 September 2026 (the date per the founder), and no India
+region remains on Fly. On 1 October its API refused new machines there: "Region bom is deprecated
+and cannot have new resources provisioned" (P-36). Shipping now matters more than the latency does
+at this stage.
+
+**Why the data stays in Mumbai:** moving the API back to an India host later is cheap — a different
+host, a redeploy, a DNS change. Moving the database after launch, with live user data, is not.
+Keeping it in Mumbai is what keeps the India option open.
+
+**Rejected: everything in Singapore** (Supabase and Upstash moved too). That would move Indian
+users' photos and phone numbers out of India before the DPDP session — a legal and positioning
+question, not a latency one. **Deferred: another India host for the API** (for example AWS
+`ap-south-1` or Google Cloud Run `asia-south1`). It's the right home eventually, but it means
+redesigning the deploy just built, and it waits while shipping matters more.
+
 ---
 
 ## Adding a decision

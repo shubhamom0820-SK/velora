@@ -202,7 +202,7 @@ One migration per task, each with a working `downgrade()`. Build exactly `03-SCH
 - [x] `api/Dockerfile` (multi-stage, uv, non-root, base images pinned by digest). uvicorn with 2
   workers, not gunicorn: uvicorn restarts dead workers itself, and the image checks settings once
   before any worker starts, so a configuration error stops the container instead of crash-looping.
-  `infra/fly.api.toml`, region `bom`, health check `/readyz`. No release command: migrations run
+  `infra/fly.api.toml`, region `sin` (D-048: Fly retired `bom`), health check `/readyz`. No release command: migrations run
   from CI as the owner (D-046). The worker's Fly app moved to T-4.4, which builds the worker.
 - [ ] Supabase staging project (enable PostGIS, pg_trgm, citext); Upstash staging DB; R2 staging buckets.
   All by hand, from `infra/STAGING.md`.
@@ -233,8 +233,7 @@ One migration per task, each with a working `downgrade()`. Build exactly `03-SCH
   Also runnable by hand for any commit whose CI passed. GitHub runs `workflow_run` and
   `workflow_dispatch` workflows only from the default branch, so the first deploy follows the merge.
 - [x] After every deploy, `scripts/staging-smoke` checks staging from the outside, bodies included.
-- [ ] **Done when:** staging web loads and staging `/readyz` is 200. **Blocked by P-36:** Fly refused
-  to provision the API in `bom`.
+- [ ] **Done when:** staging web loads and staging `/readyz` is 200.
 - [x] **Commit:** `ci: staging deploy [T-1.22]`
 
 ---
@@ -1111,7 +1110,7 @@ Claude Code adds items here instead of doing unplanned work. Format:
   extensions in an `extensions` schema rather than `public` — since that difference hid the bug
   `67e81c6c203d` fixed. Best done before discovery leans on PostGIS (T-6.2). Found setting up
   staging in T-1.22.
-- [ ] P-36 · Decide where the API and worker run, now that Fly won't provision in Mumbai. **Blocks
+- [x] P-36 · Decide where the API and worker run, now that Fly won't provision in Mumbai. **Blocks
   T-1.22's Done-when. The decision is open, and the founder makes it fresh, not against a deadline.**
   - **What Fly said** (deploy run 36793830288, 2026-10-01 00:01 UTC, request ID
     `01M3TC93PM16F2PE40187YC8D7-iad`): "Region bom is deprecated and cannot have new resources
@@ -1140,3 +1139,4 @@ Claude Code adds items here instead of doing unplanned work. Format:
     its `api` job. That's harmless, but expect the red run.
 
   Found during T-1.22's first deploy.
+  **Decided (D-048):** the API and worker run on Fly in Singapore; Postgres and Redis stay in Mumbai.

@@ -1,7 +1,8 @@
 # Staging
 
-> **Status, 2026-10-01: blocked at the API deploy.** Fly refused to provision in `bom` ("Region bom is
-> deprecated…"); where the API runs is an open decision. See P-36 in `docs/05-PLAN.md`.
+> **Region (D-048):** the API runs on Fly in **Singapore**, because Fly retired Mumbai. Postgres and
+> Redis stay in **Mumbai**, so Indian users' data stays in India — and every query crosses Singapore
+> to Mumbai and back, the latency D-048 accepts for now.
 
 How staging is built, deployed and checked (T-1.22, D-046). Production (T-2.6) follows the same
 shape; copy these steps and change the names.
@@ -10,7 +11,7 @@ shape; copy these steps and change the names.
 
 | Piece | Where | Name |
 |---|---|---|
-| API | Fly.io, `bom` | app `velora-api-staging` → `https://velora-api-staging.fly.dev` |
+| API | Fly.io, `sin` (Singapore; D-048) | app `velora-api-staging` → `https://velora-api-staging.fly.dev` |
 | Web | Vercel, its own project | `velora-staging` → `https://velora-staging.vercel.app` |
 | Postgres | Supabase, Mumbai (`ap-south-1`) | project `velora-staging` |
 | Redis | Upstash, Mumbai | database `velora-staging` |
@@ -47,7 +48,9 @@ The pool is per process, and the image runs **2 uvicorn workers**, each with its
 | Migrations | the owner (`postgres`) | session pooler, IPv4 (GitHub's runners have no IPv6) | 1, during a deploy |
 | Worker | `velora_api` | direct | arrives with T-4.4; add its pool here |
 
-Supabase's smallest compute allows 60 direct connections, and its own services use some. Change
+That's **one machine**: `deploy.yml` passes `--ha=false`, because Fly's default of two would double
+the sum. Supabase's smallest compute allows 60 direct connections, and its own services use some.
+Change
 `DB_POOL_SIZE` / `DB_MAX_OVERFLOW` in `infra/fly.api.toml`, never the image, and redo this sum
 whenever workers, machines or pools change — two machines doubles it. Production starts from this
 table, not from a guess.
@@ -132,7 +135,8 @@ bucket's CDN domain are set with T-4.1, when storage is built.
 
 ### 4. Fly
 
-1. Create the app `velora-api-staging` (organisation on the paid plan, region `bom`).
+1. Create the app `velora-api-staging` (organisation on the paid plan). Its region, `sin`, comes from
+   `infra/fly.api.toml`: Fly retired `bom` (D-048).
 2. **Secrets** (Dashboard → the app → Secrets). The non-secret settings are in
    `infra/fly.api.toml`.
 

@@ -31,7 +31,7 @@ Permanence is granted by the other person, never bought.
 | Cache/queue | Redis + ARQ |
 | HTTP out | httpx (async) — never `requests` |
 | Storage | Cloudflare R2 via aioboto3, presigned URLs only |
-| Hosting | Vercel (web) · Fly.io `bom` (api + worker) · Supabase `ap-south-1` · Upstash |
+| Hosting | Vercel (web) · Fly.io `sin` (api + worker) · Supabase `ap-south-1` · Upstash Mumbai — data stays in India (D-048) |
 | Tooling | uv, ruff, mypy, pytest, pnpm, eslint, prettier, vitest + Testing Library, Playwright, pre-commit, gitleaks — D-039, D-042 |
 
 ## Repo layout

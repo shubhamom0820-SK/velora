@@ -108,11 +108,13 @@ jobs:
           version: ${{ env.FLYCTL_VERSION }}
 
       # api/ is the build context; the config's path is absolute because the
-      # working directory moves to api/.
+      # working directory moves to api/. --ha=false: one machine, which is what
+      # the connection budget assumes (infra/STAGING.md). Fly's default of two
+      # would double it past velora_api's limit of 20.
       - name: flyctl deploy
         env:
           FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
-        run: flyctl deploy api --config "$GITHUB_WORKSPACE/infra/fly.api.toml" --remote-only
+        run: flyctl deploy api --config "$GITHUB_WORKSPACE/infra/fly.api.toml" --remote-only --ha=false
 
   web:
     name: web — Vercel

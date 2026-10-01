@@ -4,8 +4,10 @@
 # (infra/STAGING.md). There is no release command: migrations run from CI as the
 # database owner, so the owner's credentials are never on Fly (D-046).
 
+# Singapore: Fly retired Mumbai (`bom`). Postgres and Redis stay in Mumbai, so
+# every query crosses Singapore to Mumbai and back — the cost D-048 accepts.
 app = "velora-api-staging"
-primary_region = "bom"
+primary_region = "sin"
 
 [build]
   # Both relative to this file.
