@@ -23,7 +23,10 @@ export default function LandingPage() {
       <SiteHeader />
       <main className="flex-1">
         <Hero />
-        <ul className="mx-auto grid max-w-225 grid-cols-[repeat(auto-fit,minmax(240px,1fr))] gap-3 px-6 pb-10">
+        {/* pt-3 matches the gap between the cards, so the first one starts the
+            set instead of falling out of the hero. The prototype has them flush;
+            the founder changed that on review. */}
+        <ul className="mx-auto grid max-w-225 grid-cols-[repeat(auto-fit,minmax(240px,1fr))] gap-3 px-6 pt-3 pb-10">
           {FEATURES.map(({ key, icon }) => (
             <FeatureCard
               key={key}
