@@ -118,7 +118,7 @@ One migration per task, each with a working `downgrade()`. Build exactly `03-SCH
 
 ### T-1.15 · Dev seed
 - [ ] **Needs:** T-1.14, T-3.1
-- **Why T-3.1:** phone numbers are hashed and encrypted with its `core/security.py`, so the seeded test accounts are the ones login finds. Parts that need later code live in those tasks: placeholder photos in T-4.4, verification rows in T-4.5, the test man's 60 credits in T-5.1 (rule 5).
+- **Why T-3.1:** phone numbers are hashed and encrypted with its `core/security.py`, so the seeded test accounts are the ones login finds. Parts that need later code live in those tasks: placeholder photos in T-4.4, verification rows in T-4.5, the test man's 60 Velas in T-5.1 (rule 5).
 - [ ] `make seed` (local only — refuses unless `ENV` is `local`; an allowlist, so an environment added later can't pass by default): the 20 prototype profiles (`docs/prototype/`, the `P` array), each with the rows signup creates (T-3.3), onboarding done, `is_verified` where the prototype has `v`, and a location at its neighbourhood's centroid (`area_id`; `city` Bengaluru, `hometown` from `from`); prototype women seek men and men seek women. 3 of the women — the prototype's `likedYou`: Ananya, Meera, Riya — like the test man. A test man (`+91 90000 00001`, `test_man`, seeking women), a test woman (`+91 90000 00002`, `test_woman`, seeking men, verified), and a moderator (`+91 90000 00003`, onboarding not started, so not in discovery).
 - [ ] Interests: each profile keeps its 3 prototype tags plus 2 drafted by Claude from its `about` text; Kavya's "Carnatic" (not in the catalogue) is replaced. Intents: the prototype's value mapped — `serious` → Something serious, `longterm` → Long term, `short` → Casual dating, `chat` → Go with the flow — then roughly a third get a 2nd intent and a few a 3rd, fitting their `about`, so D-041's 1–3 and any-overlap filter run on real data. Show the founder all 20 (interests and the intent spread) before `/done`. The data file's note says the additions were drafted by Claude from the prototype's about text and reviewed by the founder.
 - [ ] The seed's output never contains a phone number (rule 15).
@@ -493,9 +493,9 @@ One migration per task, each with a working `downgrade()`. Build exactly `03-SCH
 
 ---
 
-# Sprint 5 — Credits core (week 8)
+# Sprint 5 — Velas core (week 8)
 
-Built before discovery and chat because swipes, threads and unlocks all spend credits.
+Built before discovery and chat because swipes, threads and unlocks all spend Velas.
 
 ### T-5.1 · Wallet service
 - [ ] **Needs:** T-1.12, T-1.5, T-1.15
@@ -564,7 +564,7 @@ Built before discovery and chat because swipes, threads and unlocks all spend cr
 - [ ] Card with `@use-gesture/react` + `@react-spring/web`: drag with rotation, LIKE/PASS overlays by drag distance, fling threshold 100 px or velocity, up = super. Tap = open profile. Keyboard ← → ↑ on desktop.
 - [ ] Optimistic swipe: advance immediately, rollback + toast on error.
 - [ ] Action row: pass, super (price tag for men), like. Swipes-left counter for men.
-- [ ] Match celebration sheet → "Open thread · 5 credits" / "Keep swiping".
+- [ ] Match celebration sheet → "Open thread · 5 Velas" / "Keep swiping".
 - [ ] Empty states: no one nearby / filters too narrow (clear button).
 - [ ] 60 fps on the test phone (check Chrome performance panel).
 - [ ] **Commit:** `feat(web): discover deck [T-6.5]`
@@ -680,7 +680,7 @@ Built before discovery and chat because swipes, threads and unlocks all spend cr
 
 ### T-8.1 · Packs and orders
 - [ ] **Needs:** T-5.1, T-1.21
-- [ ] `GET /packs`: active packs for the user's price-test variant (`users.id` hash → A/B, stable). `POST /payments/orders {pack_id}` + `Idempotency-Key`: copy amount + credits from the pack, compute first-purchase bonus, create provider order, insert `payments` (`created`), return checkout params.
+- [ ] `GET /packs`: active packs for the user's price-test variant (`users.id` hash → A/B, stable). `POST /payments/orders {pack_id}` + `Idempotency-Key`: copy amount + `credits` from the pack, compute first-purchase bonus, create provider order, insert `payments` (`created`), return checkout params.
 - [ ] Fake provider: returns a fake order and exposes a local-only endpoint that simulates the webhook.
 - [ ] **Commit:** `feat(payments): packs and order creation [T-8.1]`
 
@@ -729,7 +729,7 @@ Built before discovery and chat because swipes, threads and unlocks all spend cr
 ### T-8.10 · Web gifts
 - [ ] **Needs:** T-8.9, T-5.5
 - [ ] Gift button on a woman's profile → sheet with the 6 gifts in a 3×2 grid: asset, label, and
-  either "Free" or the credit price. Free ones show the remaining daily count.
+  either "Free" or the price in Velas. Free ones show the remaining daily count.
 - [ ] Sending: optimistic disable, success toast, balance updates from `wallet.updated`.
   `GIFT_LIMIT_REACHED` / `GIFT_COOLDOWN` → friendly inline copy with when they can send again.
   `INSUFFICIENT_CREDITS` → store sheet.
@@ -739,12 +739,12 @@ Built before discovery and chat because swipes, threads and unlocks all spend cr
 
 ### T-8.6 · Referrals
 - [ ] **Needs:** T-8.2
-- [ ] `POST /referrals/apply {code}` only before onboarding `done`, not own code, once. Reward both (credits from `app_config`) when the referee completes selfie verification or first purchase, whichever first; idempotent. `GET /referrals/me`.
+- [ ] `POST /referrals/apply {code}` only before onboarding `done`, not own code, once. Reward both (Velas from `app_config`) when the referee completes selfie verification or first purchase, whichever first; idempotent. `GET /referrals/me`.
 - [ ] **Commit:** `feat(referrals): codes and rewards [T-8.6]`
 
 ### T-8.7 · Web store and checkout
 - [ ] **Needs:** T-8.2, T-5.5
-- [ ] Store sheet from the prototype (packs, per-credit and per-thread price, first-purchase banner). Load Razorpay Checkout script on demand. On success callback → poll `/payments/{id}` every 1.5 s (max 60 s) → toast + wallet refresh. Failure/dismiss → "Payment didn't go through" sheet with retry.
+- [ ] Store sheet from the prototype (packs, per-Vela and per-thread price, first-purchase banner). Load Razorpay Checkout script on demand. On success callback → poll `/payments/{id}` every 1.5 s (max 60 s) → toast + wallet refresh. Failure/dismiss → "Payment didn't go through" sheet with retry.
 - [ ] CSP enforced now (T-2.5 follow-up).
 - [ ] **Commit:** `feat(web): store and razorpay checkout [T-8.7]`
 
@@ -772,7 +772,7 @@ Built before discovery and chat because swipes, threads and unlocks all spend cr
 
 ### T-9.3 · Refund when a partner is banned
 - [ ] **Needs:** T-9.2, T-5.1
-- [ ] On ban: find credits other users spent on this person in the last 7 days (threads opened with them, voice unlocks, album requests) → `wallet.credit(refund_banned_partner)` each, idempotent per ref, notify.
+- [ ] On ban: find Velas other users spent on this person in the last 7 days (threads opened with them, voice unlocks, album requests) → `wallet.credit(refund_banned_partner)` each, idempotent per ref, notify.
 - [ ] **Commit:** `feat(safety): refunds for banned partners [T-9.3]`
 
 ### T-9.4 · Notifications
@@ -783,7 +783,7 @@ Built before discovery and chat because swipes, threads and unlocks all spend cr
 
 ### T-9.5 · Admin panel
 - [ ] **Needs:** T-9.2
-- [ ] API: all `/admin/*` routes in `04-API.md`, `require_role(moderator)`; credit grants and bans `admin` only; every call writes `audit_log`; viewing messages of a thread logs who looked and why (reason required).
+- [ ] API: all `/admin/*` routes in `04-API.md`, `require_role(moderator)`; Vela grants and bans `admin` only; every call writes `audit_log`; viewing messages of a thread logs who looked and why (reason required).
 - [ ] Web `/admin`: metrics tiles, report queue with SLA timer (24 h), user search + detail (photos, reports, fraud signals, ledger, threads), moderation queue (approve/reject), actions with confirmation dialogs, audit log.
 - [ ] Web `/admin` renders only for `role in (moderator, admin)`, read through `useMe()`; anyone else
   gets the 404 page — replacing T-1.22's `next dev`-only gate (from P-30). **This gate is UX, not
@@ -850,7 +850,7 @@ Built before discovery and chat because swipes, threads and unlocks all spend cr
 - [ ] **T-10.1** Invite codes: signup requires a code during beta (`app_config.beta_invite_only`); women's codes unlimited, men's limited per code.
 - [ ] **T-10.2** Product analytics (PostHog, EU/India region if available): events `signup_step_completed`, `swipe`, `match`, `thread_opened`, `message_sent`, `knot_tied`, `thread_expired_unanswered`, `purchase_started`, `purchase_paid`, `report_filed`. No message content, no phone numbers.
 - [ ] **T-10.3** Metrics queries for the weekly review: D1/D7 retention, thread → knot rate, % threads expiring with zero replies, paying conversion (men), revenue per paying user, reports per 100 users, active gender ratio.
-- [ ] **T-10.4** Price test: variant A (₹1,500 / 25 credits) vs B (₹999 / 25) assigned 50/50; compare revenue per paying man after 3 weeks.
+- [ ] **T-10.4** Price test: variant A (₹1,500 / 25 Velas) vs B (₹999 / 25) assigned 50/50; compare revenue per paying man after 3 weeks.
 - [ ] **T-10.7** First-thread-free test (risk R1 in `09-RESEARCH.md`): half of new men get their first thread free. Measure paying conversion, threads per man, and revenue per man — not just the free-thread take-up.
 - [ ] **T-10.5** Moderator runbook: report handling per reason, SLA, escalation (minor suspected → immediate ban + preserve evidence), canned replies.
 - [ ] **T-10.6** Feedback loop: in-app "Send feedback" → `feedback` table; weekly triage into Proposed tasks.
@@ -863,12 +863,12 @@ Each becomes a full task with steps when it's pulled in.
 
 | ID | Feature | Notes |
 |---|---|---|
-| B-1 | Voice calls (knots only, 4 cr/min, first 60 s free) | Agora Web SDK, server-minted tokens |
-| B-2 | Video calls (10 cr/min) + live frame moderation | biggest cost line — check unit economics first |
+| B-1 | Voice calls (knots only, 4 Velas/min, first 60 s free) | Agora Web SDK, server-minted tokens |
+| B-2 | Video calls (10 Velas/min) + live frame moderation | biggest cost line — check unit economics first |
 | B-3 | Vibe Room (3-min anonymous text, mutual reveal → thread) | needs strong moderation |
-| B-4 | Boost (30 cr / 30 min) | ranking multiplier |
-| B-5 | Who viewed you (15 cr reveal) | `profile_views` already recorded in T-6.3 |
-| B-6 | Wink (2 cr) | |
+| B-4 | Boost (30 Velas / 30 min) | ranking multiplier |
+| B-5 | Who viewed you (15 Velas reveal) | `profile_views` already recorded in T-6.3 |
+| B-6 | Wink (2 Velas) | |
 | B-7 | Paid incognito | |
 | B-8 | Daily streaks | |
 | B-9 | Rewarded ads | needs an ad network that supports web rewarded |
@@ -1027,7 +1027,7 @@ Claude Code adds items here instead of doing unplanned work. Format:
   **Done:** committed as `docs/prototype/velora-prototype-reference.html`. It predates the Velora
   rename, so it says "Knot": the screens and flows are the reference, not the name.
 - [ ] P-23 · Define what a variant-B man sees in `GET /packs` (T-8.1) — T-1.14 seeds variant B as
-  one row, `entry-25` (25 credits, ₹999). Read literally, "active packs for the user's price-test
+  one row, `entry-25` (25 Velas, ₹999). Read literally, "active packs for the user's price-test
   variant" gives a B user a one-pack store. What D-005 describes is A's ladder with the entry pack
   in place of `pack-25`. Decide in T-8.1, with a test that B sees four packs. Found during T-1.14.
 - [ ] P-24 · Make the catalogue columns NOT NULL — `areas.city`, `areas.name`, `areas.centroid`,

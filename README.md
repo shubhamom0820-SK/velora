@@ -1,6 +1,6 @@
 # Velora
 
-Velora is a web-first dating app for India. Women use it free; men buy credits. Every conversation
+Velora is a web-first dating app for India. Women use it free; men buy Velas. Every conversation
 starts as a **Thread** that expires in 24 hours, and if both people tap "Tie the knot" it becomes a
 **Knot** — permanent and free forever. Permanence is granted by the other person, never bought.
 The web app is Next.js on Vercel; the API and worker are FastAPI on Fly.io Singapore, backed by

@@ -5,7 +5,7 @@ The detail lives in `docs/`. When a rule here conflicts with anything else, this
 
 ## What Velora is
 
-A web-first dating app for India. Women use it free. Men buy **credits**.
+A web-first dating app for India. Women use it free. Men buy **Velas**.
 Every conversation starts as a **Thread** that expires in 24 hours.
 If both people tap "Tie the knot", it becomes a **Knot** — permanent and free forever.
 Permanence is granted by the other person, never bought.
@@ -95,7 +95,7 @@ make e2e         # Playwright
 3. **Stay in scope.** Do not touch files outside the task. No drive-by refactors, renames, or
    "improvements". Note them under "Proposed tasks" instead.
 4. **No new dependencies** without asking. If approved, record it in `docs/01-DECISIONS.md`.
-5. **Money is sacred.** Every credit change goes through `wallet.service.debit()` / `credit()`,
+5. **Money is sacred.** Every change in Velas goes through `wallet.service.debit()` / `credit()`,
    which lock the wallet row with `SELECT ... FOR UPDATE` inside one transaction and append to
    `ledger_entries`. Never write `wallets.balance` anywhere else. The ledger is append-only.
 6. **The server decides.** Prices, balances, expiry, gender, age, permissions — always computed
@@ -126,7 +126,9 @@ make e2e         # Playwright
 17. **The brand and the product nouns are separate, and never substitute for each other.**
     Velora is the company name and may still change (D-015); code reads it from `APP_NAME`.
     Thread and Knot are product nouns and never change with the brand. A future rename touches
-    the brand only — never a find-replace across the docs.
+    the brand only — never a find-replace across the docs. The one deliberate exception is
+    **Vela**, the unit of paid balance (D-049): it derives from the brand and is renamed with it,
+    in copy and prose only, never in identifiers.
 
 ## Naming
 

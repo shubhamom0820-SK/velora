@@ -216,7 +216,7 @@ Indexes that make this fast are listed in `03-SCHEMA.md`. Target: p95 < 80 ms at
    Else in one transaction: mark `paid`, credit pack + bonus via `wallet.credit()`.
 4. Browser polls `GET /v1/payments/{id}` until `paid`, then refreshes wallet.
 
-**Refund when a partner is banned:** admin ban → service finds credits the reporter/others spent on
+**Refund when a partner is banned:** admin ban → service finds Velas the reporter/others spent on
 that person in the last 7 days → `wallet.credit(reason=refund_banned_partner)`.
 
 ## 10. Uploads and moderation
@@ -262,7 +262,7 @@ that person in the last 7 days → `wallet.credit(reason=refund_banned_partner)`
 
 Every `*_PROVIDER` may be `fake` only while `ENV` is `local`. Anywhere else the API refuses to
 start, naming each fake, until a real provider is set (D-045) — a fake gateway grants free
-credits and a fake sign-in lets anyone in as anyone.
+Velas and a fake sign-in lets anyone in as anyone.
 
 `.env.example` in each app lists every var. Values that point at local infrastructure from
 `infra/docker-compose.yml` are filled in so a fresh clone runs with no setup; every genuine

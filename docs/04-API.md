@@ -58,31 +58,31 @@ the source for `web/src/types/api.ts`.
 | GET | /users/by-username/{u} | ✅ | → `PublicProfile` | T-6.6 |
 | GET | /search | ✅ | `?q=` → `Page<CardLite>` (`@` prefix = username lookup) | T-6.6 |
 | GET | /likes | ✅ | → `Page<LikeCard>` (blurred unless revealed; free for women) | T-6.7 |
-| POST | /likes/{user_id}/reveal | ✅ | → `PublicProfile` (20 credits) | T-6.7 |
+| POST | /likes/{user_id}/reveal | ✅ | → `PublicProfile` (20 Velas) | T-6.7 |
 
 ## Threads & messages
 | Method | Path | Auth | Body → Response | Task |
 |---|---|---|---|---|
 | GET | /threads | ✅ | `?tier=threads|knots&filter=all|unread|recent&q=&cursor=` → `Page<ThreadRow>` | T-7.2 |
-| POST | /threads | ✅ | `{match_id}` or `{user_id, first_message}` → `Thread` (5 credits) | T-7.1 |
+| POST | /threads | ✅ | `{match_id}` or `{user_id, first_message}` → `Thread` (5 Velas) | T-7.1 |
 | GET | /threads/{id} | ✅ | → `Thread` | T-7.2 |
 | GET | /threads/{id}/messages | ✅ | `?cursor=` → `Page<Message>` | T-7.3 |
 | POST | /threads/{id}/messages | ✅ | `{client_msg_id, kind, body?, media_key?, duration_s?}` → `Message` | T-7.3 |
 | POST | /threads/{id}/read | ✅ | `{up_to_message_id}` → 204 | T-7.5 |
-| POST | /threads/{id}/reopen | ✅ | → `Thread` (3 credits) | T-7.6 |
+| POST | /threads/{id}/reopen | ✅ | → `Thread` (3 Velas) | T-7.6 |
 | POST | /threads/{id}/knot | ✅ | → `Thread` (sets your tap; converts when both) | T-7.7 |
 | DELETE | /threads/{id}/knot | ✅ | → `Thread` (untie → active, fresh 24h) | T-7.7 |
 | POST | /threads/{id}/clear | ✅ | → 204 (one-sided) | T-7.8 |
 | POST | /threads/clear | ✅ | `{thread_ids[]}` or `{expired: true}` → `{cleared}` | T-7.8 |
 | DELETE | /threads/{id}/clear | ✅ | → 204 (undo / restore) | T-7.8 |
 | POST | /media/voice-upload-url | ✅ | `{thread_id}` → `{media_key, put_url}` (women only) | T-7.9 |
-| POST | /messages/{id}/unlock | ✅ | → `{url}` (5 credits, men) | T-7.9 |
+| POST | /messages/{id}/unlock | ✅ | → `{url}` (5 Velas, men) | T-7.9 |
 | GET | /messages/{id}/media | ✅ | → `{url}` (signed, 10 min, only if unlocked or sender) | T-7.9 |
 
 ## Album, kudos, safety
 | Method | Path | Auth | Body → Response | Task |
 |---|---|---|---|---|
-| POST | /album-requests | ✅ | `{owner_id}` → `AlbumRequest` (5 credits) | T-8.4 |
+| POST | /album-requests | ✅ | `{owner_id}` → `AlbumRequest` (5 Velas) | T-8.4 |
 | GET | /album-requests/incoming | ✅ | → `AlbumRequest[]` | T-8.4 |
 | POST | /album-requests/{id}/decide | ✅ | `{grant: bool}` → `AlbumRequest` (decline → refund) | T-8.4 |
 | POST | /album-requests/{id}/revoke | ✅ | → 204 | T-8.4 |
@@ -99,6 +99,10 @@ the source for `web/src/types/api.ts`.
 | GET | /blocks | ✅ | → `BlockedUser[]` | T-9.1 |
 
 ## Wallet & payments
+Users see Velas (D-049). The contract keeps the neutral name `credits` in fields, paths and error
+codes (`credits`, `bonus_credits`, `/admin/users/{id}/credits`, `INSUFFICIENT_CREDITS`); the web
+turns them into copy.
+
 | Method | Path | Auth | Body → Response | Task |
 |---|---|---|---|---|
 | GET | /wallet | ✅ | → `{balance}` | T-5.3 |

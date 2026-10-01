@@ -335,6 +335,9 @@ Index `(user_id, created_at desc)`.
 
 ## 6. Money
 
+Users see Velas (D-049). Every column, table and constraint here keeps the neutral name `credits`
+(`credits`, `bonus_credits`, `credits_charged`, `credit_packs`), so a rename never needs a migration.
+
 ### wallets
 | column | type | notes |
 |---|---|---|
@@ -400,8 +403,8 @@ Triggers `payments_no_delete` and `payments_no_truncate`: payments are never har
 
 ### referrals
 `referee_id uuid pk fk users, referrer_id uuid fk users, rewarded_at timestamptz null, created_at`.
-Check `referee_id <> referrer_id` — a self-referral would farm credits on both sides of one account.
-Reward (both get credits) only after the referee's first paid purchase or selfie verification.
+Check `referee_id <> referrer_id` — a self-referral would farm Velas on both sides of one account.
+Reward (both get Velas) only after the referee's first paid purchase or selfie verification.
 
 ---
 
@@ -459,7 +462,7 @@ Unique ignores case (citext). No format check in the database: T-2.3 validates i
 - `action_prices`, `credit_packs`, `app_config` — from D-004 / D-005 / §8
 - `areas` — 40 neighbourhoods for the launch city
 - **dev only** (`make seed`): the 20 prototype profiles (10 women, 10 men) with photos,
-  a moderator account, and a man with 60 credits for testing.
+  a moderator account, and a man with 60 Velas for testing.
 
 The reference data is two data migrations — T-1.14's, and P-25's for intents — with every insert
 `ON CONFLICT DO NOTHING`: re-running them changes nothing and never resets a value tuned since.

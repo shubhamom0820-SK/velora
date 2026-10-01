@@ -4,8 +4,9 @@ The prototype (`docs/prototype/velora-prototype-reference.html`) is the visual r
 screen. It predates the rename to Velora, so it uses "Knot" as the app's name — the screens and
 flows are the reference, not the name. **Only the brand changed.** Where the prototype names the
 app, read Velora (`APP_NAME`). Thread and Knot stay as the product's nouns ("Tie the knot",
-"Knots last", the Knots tab) and are never replaced (CLAUDE.md rule 17). This file turns the
-prototype into rules so the real app stays consistent.
+"Knots last", the Knots tab) and are never replaced (CLAUDE.md rule 17). Its "credits" are
+Velas, the unit of paid balance (D-049). This file turns the prototype into rules so the real
+app stays consistent.
 
 ## 1. Tokens — the only place colours live
 
@@ -104,8 +105,8 @@ Checked value by value against the prototype in T-1.19, and corrected where the 
 | Icon | a Lucide icon at stroke 2; decorative (hidden) unless given a label |
 | EmptyState / ErrorState | icon, title, body, action |
 | Countdown | shared ticker; `4h 59m left` → `12m 30s left` → `Expired` |
-| GiftGrid | 6 tiles, 3×2; free tiles show remaining count, paid show credits |
-| PriceTag | shows credits for men, "free" for women (reads from `/prices`) |
+| GiftGrid | 6 tiles, 3×2; free tiles show remaining count, paid show Velas |
+| PriceTag | shows Velas for men, "free" for women (reads from `/prices`) |
 
 T-1.19 built Button, Chip, Field, TextArea, Toggle, Sheet, Toast, Avatar, Skeleton, Spinner, Icon,
 EmptyState and ErrorState; `/dev/ui` (under `next dev` only) shows each in every state. The rest
@@ -134,5 +135,5 @@ prices, history) · Store sheet · Checkout states (processing, failed) · You �
 ## 6. Copy voice
 
 Short, warm, plain. Say what happens, not what the system is. "Cleared from your chats" not
-"Deleted". "This thread disappears in 4h" not "TTL remaining". Prices always in credits with the
-number first: "Open thread · 5 credits". Never shame or pressure ("Only 2 left!").
+"Deleted". "This thread disappears in 4h" not "TTL remaining". Prices always in Velas with the
+number first: "Open thread · 5 Velas". Never shame or pressure ("Only 2 left!").

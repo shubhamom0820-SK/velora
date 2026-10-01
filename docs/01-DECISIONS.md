@@ -496,6 +496,22 @@ question, not a latency one. **Deferred: another India host for the API** (for e
 `ap-south-1` or Google Cloud Run `asia-south1`). It's the right home eventually, but it means
 redesigning the deploy just built, and it waits while shipping matters more.
 
+### D-049 · Vela is the unit of paid balance — Locked
+What men buy and spend is a **Vela** (plural **Velas**): "1 Vela", "5 Velas". It replaces
+"credits" in everything users read and in the docs' prose. In the schema, the API and code the
+unit keeps its neutral accounting name, `credits`, so renaming the unit never needs a migration or
+an API change. Earlier decisions say "credits"; read it as Velas.
+
+**A deliberate coupling:** Vela derives from the brand, so if D-015 forces a new name, the unit is
+renamed with it. That is the one exception to CLAUDE.md rule 17, and because only copy carries the
+name, it stays a copy change.
+
+"Token" was never the unit; auth, design and platform tokens keep their names.
+
+**Rejected: renaming the schema, API and code identifiers too** — a migration across live money
+tables and an API break, repeated whenever the brand changes. Decided by the founder on
+1 October 2026.
+
 ---
 
 ## Adding a decision

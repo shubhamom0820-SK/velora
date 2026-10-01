@@ -48,7 +48,7 @@ use the **fake** providers from `app/core/providers/`.
 
 If any of these fails, nothing ships.
 
-1. **Wallet concurrency** (T-5.4): 50 parallel debits on 10 credits → exactly 2 succeed.
+1. **Wallet concurrency** (T-5.4): 50 parallel debits on 10 Velas → exactly 2 succeed.
 2. **Wallet idempotency** (T-5.4): same key 50× concurrently → one entry.
 3. **Webhook idempotency** (T-8.2): same capture 5× concurrently → credited once.
 4. **Webhook signature** (T-8.2): bad signature → no credit.
@@ -83,7 +83,7 @@ A test in this list is marked `@pytest.mark.critical`; CI runs them first and fa
 | J5 | Voice note from woman → man unlocks (−5) → plays | T-7.13 |
 | J6 | Both tie the knot → Knots tab, no countdown | T-7.13 |
 | J7 | Thread expires → read-only → re-open (−3) | T-7.13 |
-| J8 | Buy credits (fake gateway) → balance updates | T-8.7 |
+| J8 | Buy Velas (fake gateway) → balance updates | T-8.7 |
 | J9 | Payment fails → retry sheet → success | T-8.7 |
 | J10 | Report with also-block → confirmation shown → person gone everywhere | T-9.1 |
 | J11 | Moderator resolves a report and freezes the account | T-9.5 |

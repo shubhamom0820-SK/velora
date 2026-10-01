@@ -67,7 +67,7 @@ profiles and intuitive navigation.
 
 | Complaint | What we do | Where |
 |---|---|---|
-| C5 inbox flood | A man pays credits to open any conversation — spam is not economically possible | D-002, D-004 |
+| C5 inbox flood | A man pays Velas to open any conversation — spam is not economically possible | D-002, D-004 |
 | C4 dead matches | Threads expire in 24 h; only a mutual knot persists | D-003 |
 | C2 fake profiles | Mandatory selfie liveness + face match for women; every photo moderated before it is visible | D-008, T-4.4, T-4.5 |
 | C2 push to WhatsApp | Contact details masked server-side for the first 20 messages; solicitation patterns rejected | D-030, T-7.3 |

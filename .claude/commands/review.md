@@ -5,7 +5,7 @@ Review the uncommitted changes for task $ARGUMENTS. Do not fix anything unless I
 3. Walk `docs/07-CHECKLISTS.md` section A, plus B (if an endpoint changed), C (if a migration was
    added), D (if a screen changed) and E (if auth, wallet, payments or uploads were touched).
 4. Search the diff for these and report every hit:
-   - literal credit amounts, prices, limits or durations (should come from `action_prices`/`app_config`)
+   - literal amounts in Velas (`credits` in code), prices, limits or durations (should come from `action_prices`/`app_config`)
    - `datetime.now`, `time.sleep`, `import requests`, `psycopg2`
    - hex colours outside `web/src/styles/tokens.css`
    - `print(` in Python, `console.log` in web code
