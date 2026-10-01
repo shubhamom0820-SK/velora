@@ -54,6 +54,8 @@ _REAL_PROVIDERS = {
     "STORAGE_PROVIDER": "s3",
     "PUSH_PROVIDER": "webpush",
 }
+# What staging and production must set beyond that: Redis over TLS.
+_DEPLOYED = {**_REAL_PROVIDERS, "REDIS_URL": "rediss://default:x@redis.example:6379/0"}
 
 
 def _settings(**overrides: str) -> Settings:
@@ -99,8 +101,8 @@ def test_invalid_env_is_rejected() -> None:
 
 def test_env_flags() -> None:
     assert _settings(ENV="local").debug is True
-    assert _settings(ENV="production", **_REAL_PROVIDERS).is_production is True
-    assert _settings(ENV="production", **_REAL_PROVIDERS).debug is False
+    assert _settings(ENV="production", **_DEPLOYED).is_production is True
+    assert _settings(ENV="production", **_DEPLOYED).debug is False
 
 
 # --- Fakes run only where ENV is local (D-045) ---------------------------------
@@ -112,7 +114,7 @@ def test_a_fake_provider_outside_local_refuses_to_start(
     env: str, provider: str
 ) -> None:
     with pytest.raises(ValidationError) as excinfo:
-        _settings(ENV=env, **{**_REAL_PROVIDERS, provider: "fake"})
+        _settings(ENV=env, **{**_DEPLOYED, provider: "fake"})
 
     message = str(excinfo.value)
     assert f"ENV={env} cannot use fake providers ({provider})" in message
@@ -128,7 +130,7 @@ def test_every_fake_is_named_at_once() -> None:
 
 @pytest.mark.parametrize("env", ["staging", "production"])
 def test_real_providers_start_outside_local(env: str) -> None:
-    settings = _settings(ENV=env, **_REAL_PROVIDERS)
+    settings = _settings(ENV=env, **_DEPLOYED)
 
     assert all(getattr(settings, name) != "fake" for name in _REAL_PROVIDERS)
 
@@ -136,3 +138,70 @@ def test_real_providers_start_outside_local(env: str) -> None:
 def test_local_may_use_fakes_and_real_providers() -> None:
     assert _settings(ENV="local").PAYMENTS_PROVIDER == "fake"
     assert _settings(ENV="local", **_REAL_PROVIDERS).PAYMENTS_PROVIDER == "razorpay"
+
+
+# --- URLs: a wrong scheme fails at the settings check, and no value is echoed --
+
+
+def _error(**overrides: str) -> str:
+    with pytest.raises(ValidationError) as excinfo:
+        _settings(**overrides)
+    return str(excinfo.value)
+
+
+@pytest.mark.parametrize(
+    ("name", "value", "expected"),
+    [
+        (
+            "DATABASE_URL",
+            "postgresql://velora:hunter2@db.example:5432/velora",
+            "postgresql+asyncpg://",
+        ),
+        (
+            "DATABASE_URL",
+            "mysql://velora:hunter2@db.example/velora",
+            "postgresql+asyncpg://",
+        ),
+        # T-1.22's failure: the command that should have set REDIS_URL, as its value.
+        (
+            "REDIS_URL",
+            "printf 'REDIS_URL=%s' hunter2 | fly secrets import",
+            "rediss://",
+        ),
+        ("REDIS_URL", "https://default:hunter2@redis.example", "rediss://"),
+    ],
+)
+def test_a_url_with_the_wrong_scheme_is_named_but_not_echoed(
+    name: str, value: str, expected: str
+) -> None:
+    message = _error(**{name: value})
+
+    assert name in message
+    assert expected in message
+    assert "hunter2" not in message
+    assert "input_value" not in message
+
+
+@pytest.mark.parametrize("env", ["staging", "production"])
+def test_plain_redis_is_refused_outside_local(env: str) -> None:
+    message = _error(
+        ENV=env,
+        **{**_DEPLOYED, "REDIS_URL": "redis://default:hunter2@redis.example:6379/0"},
+    )
+
+    assert f"ENV={env} needs REDIS_URL to use rediss://" in message
+    assert "hunter2" not in message
+
+
+def test_plain_redis_is_fine_locally_and_tls_everywhere() -> None:
+    assert _settings(ENV="local").REDIS_URL.startswith("redis://")
+    assert _settings(ENV="production", **_DEPLOYED).REDIS_URL.startswith("rediss://")
+
+
+def test_no_validation_error_echoes_a_value() -> None:
+    """hide_input_in_errors: even an unrelated error never prints what was given."""
+    message = _error(ENV="staging-ish", JWT_SECRET="hunter2-jwt")
+
+    assert "ENV" in message
+    assert "hunter2-jwt" not in message
+    assert "input_value" not in message

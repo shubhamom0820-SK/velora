@@ -100,7 +100,14 @@ async def test_schema_and_docs_are_not_served_outside_local(
     env: str, path: str
 ) -> None:
     status, body = await _get(
-        _settings("velora_test", 1, ENV=env, **_REAL_PROVIDERS), path
+        _settings(
+            "velora_test",
+            1,
+            ENV=env,
+            REDIS_URL="rediss://default:x@redis.example:6379/0",
+            **_REAL_PROVIDERS,
+        ),
+        path,
     )
 
     assert status == 404

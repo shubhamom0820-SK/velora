@@ -61,6 +61,37 @@ reaches it, and well under the instance's 60, so a runaway pool can't starve the
 Supabase's own services. When the worker (T-4.4) or a second machine raises the sum, raise the limit
 with it (`alter role velora_api connection limit N`) and record the new number and reason here.
 
+## How secrets get set
+
+A secret is never printed, never a command-line argument (`ps` shows arguments to every process),
+and never taken from the clipboard by a command you copied.
+
+- **A value only you have** (a Redis URL, a token): paste it at a hidden prompt that checks it
+  before writing anything. Nothing echoes as you paste; press Enter. In zsh:
+
+  ```
+  read -rs 'v?Paste the rediss:// URL (nothing will show), then Enter: '; echo
+  if [[ $v == rediss://* ]]; then printf 'REDIS_URL=%s\n' "$v" | fly secrets import --stage -a velora-api-staging; else echo "Not a rediss:// URL, nothing changed."; fi; unset v
+
+  read -rs 'v?Paste the token (nothing will show), then Enter: '; echo
+  if [[ -n $v ]]; then printf '%s' "$v" | gh secret set VERCEL_TOKEN --env staging; fi; unset v
+  ```
+
+  In bash, `read -rsp 'prompt' v`. **Never `"$(pbpaste)"`:** to run such a command you copy it,
+  which replaces the secret on the clipboard, so it can only hand over the command text. In T-1.22
+  that put the command itself into Fly's `REDIS_URL`.
+- **A value we generate:** straight into your login Keychain (service `velora-staging`), then piped
+  from there into Fly or GitHub. Store with `security -i` reading the command on stdin. Never pipe
+  into `security add-generic-password … -w`: it prompts twice, so a pipe stores an **empty**
+  password and still exits 0.
+- **What the Keychain holds** (`security find-generic-password -s velora-staging -a <account> -w`):
+  `db-owner` (the database owner's password, which you set), `velora-api-db`, `jwt-secret`,
+  `phone-pepper`, `phone-enc-key`. Never rotate `phone-enc-key` or `phone-pepper` without a
+  migration plan (02-ARCHITECTURE §11).
+- **Settings check URLs, and never echo a value:** a wrong scheme stops the container before uvicorn
+  starts, naming the setting (`DATABASE_URL` must be `postgresql+asyncpg://`; `REDIS_URL` must be
+  `rediss://` outside local), and a validation error never prints what it was given.
+
 ## First-time setup (the founder, in each dashboard)
 
 Nothing here goes in git. Generate every secret fresh for staging; never reuse a local one.

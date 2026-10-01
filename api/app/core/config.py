@@ -29,6 +29,9 @@ PushProvider = Literal["webpush", "fake"]
 # payments gateway grants free credits and a fake sign-in lets anyone in as
 # anyone, so every other environment must name a real provider for each of these.
 FAKES_ALLOWED_IN: frozenset[str] = frozenset({"local"})
+# Where Redis may be reached without TLS (`redis://`): an allowlist again.
+# Everywhere else it's `rediss://` (Upstash requires it).
+PLAIN_REDIS_ALLOWED_IN: frozenset[str] = frozenset({"local"})
 PROVIDER_SETTINGS = (
     "AUTH_PHONE_PROVIDER",
     "SMS_PROVIDER",
@@ -46,6 +49,9 @@ class Settings(BaseSettings):
         env_file_encoding="utf-8",
         extra="ignore",
         case_sensitive=True,
+        # A validation error names the setting but never echoes its value: one
+        # day the bad value is a database URL, and the error lands in Fly's logs.
+        hide_input_in_errors=True,
     )
 
     # --- Core: required, no defaults. Missing one fails startup. ---
@@ -113,6 +119,24 @@ class Settings(BaseSettings):
     # --- Observability. The SDK itself arrives in T-9.12. ---
     SENTRY_DSN: str = ""
 
+    # A URL with the wrong scheme fails here, when the image checks settings
+    # before uvicorn starts, instead of in every worker at startup — which
+    # crash-loops a "running" machine (T-1.22, when REDIS_URL held a command).
+    # The messages never include the value, which may carry a password.
+    @field_validator("DATABASE_URL")
+    @classmethod
+    def _database_url_scheme(cls, v: str) -> str:
+        if not v.startswith("postgresql+asyncpg://"):
+            raise ValueError("must start with postgresql+asyncpg:// (the async driver)")
+        return v
+
+    @field_validator("REDIS_URL")
+    @classmethod
+    def _redis_url_scheme(cls, v: str) -> str:
+        if not v.startswith(("redis://", "rediss://")):
+            raise ValueError("must start with rediss:// (or redis:// locally)")
+        return v
+
     @field_validator("CORS_ORIGINS", mode="before")
     @classmethod
     def _split_origins(cls, v: object) -> object:
@@ -136,6 +160,18 @@ class Settings(BaseSettings):
                 f"ENV={self.ENV} cannot use fake providers ({', '.join(fakes)}): fakes run "
                 f"only where ENV is {', '.join(sorted(FAKES_ALLOWED_IN))} (D-045). "
                 "Set a real provider for each."
+            )
+        return self
+
+    @model_validator(mode="after")
+    def _redis_uses_tls_where_required(self) -> Settings:
+        """Plain `redis://` only where allowed; elsewhere `rediss://` (TLS)."""
+        if self.ENV not in PLAIN_REDIS_ALLOWED_IN and not self.REDIS_URL.startswith(
+            "rediss://"
+        ):
+            raise ValueError(
+                f"ENV={self.ENV} needs REDIS_URL to use rediss:// (TLS); plain redis:// "
+                f"is only for ENV {', '.join(sorted(PLAIN_REDIS_ALLOWED_IN))}."
             )
         return self
 

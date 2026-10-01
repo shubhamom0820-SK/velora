@@ -153,8 +153,10 @@ jobs:
 
       - name: Serves /healthz, hides its schema outside local
         run: |
+          # Outside local, Redis must be rediss:// (TLS); it's never reached here.
           docker run -d --name api -p 127.0.0.1:8000:8000 \
-            -e ENV=staging -e DATABASE_URL -e REDIS_URL -e JWT_SECRET -e PHONE_PEPPER -e PHONE_ENC_KEY \
+            -e ENV=staging -e DATABASE_URL -e REDIS_URL=rediss://ci:ci@127.0.0.1:6379/1 \
+            -e JWT_SECRET -e PHONE_PEPPER -e PHONE_ENC_KEY \
             -e AUTH_PHONE_PROVIDER=firebase -e SMS_PROVIDER=msg91 -e PAYMENTS_PROVIDER=razorpay \
             -e MODERATION_PROVIDER=sightengine -e FACEMATCH_PROVIDER=rekognition \
             -e STORAGE_PROVIDER=s3 -e PUSH_PROVIDER=webpush "$IMAGE"

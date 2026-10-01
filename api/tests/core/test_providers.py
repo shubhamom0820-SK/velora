@@ -68,7 +68,9 @@ def test_local_defaults_build_every_fake() -> None:
 
 @pytest.mark.parametrize("env", ["local", "staging", "production"])
 def test_real_settings_build_every_real_provider(env: str) -> None:
-    providers = build_providers(_settings(ENV=env, **_REAL))
+    providers = build_providers(
+        _settings(ENV=env, REDIS_URL="rediss://default:x@redis.example:6379/0", **_REAL)
+    )
 
     assert isinstance(providers.sms, Msg91Sms)
     assert isinstance(providers.payments, RazorpayPayments)
