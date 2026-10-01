@@ -92,4 +92,11 @@
     color: var(--ink);
     font-family: var(--font-system);
   }
+
+  /* A printed page is ink on paper: no page background (T-2.2's legal pages). */
+  @media print {
+    body {
+      background: none;
+    }
+  }
 }

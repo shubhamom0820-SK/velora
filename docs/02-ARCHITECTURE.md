@@ -234,6 +234,7 @@ that person in the last 7 days → `wallet.credit(reason=refund_banned_partner)`
 | Var | Used by | Notes |
 |---|---|---|
 | `ENV` | api, worker | `local` / `staging` / `production` — required, no default: a deploy that forgets it refuses to start rather than becoming `local` |
+| `APP_ENV` | web (build) | `local` / `ci` / `staging` / `production`. Read while the legal pages build: a missing legal fact is allowed only where it's `local`, `ci` or `staging` (or under `next dev`); unset or anything else fails the build (D-053) |
 | `DATABASE_URL` | api, worker | `postgresql+asyncpg://…` |
 | `REDIS_URL` | api, worker | |
 | `DB_POOL_SIZE`, `DB_MAX_OVERFLOW` | api, worker | per process (default 5 and 5); budget = processes × (both), recorded in `infra/STAGING.md` |

@@ -2,7 +2,6 @@ import { Clock, Link2, Shield } from "lucide-react";
 
 import { FeatureCard } from "@/components/marketing/FeatureCard";
 import { Hero } from "@/components/marketing/Hero";
-import { SiteFooter } from "@/components/marketing/SiteFooter";
 import { SiteHeader } from "@/components/marketing/SiteHeader";
 import { t } from "@/i18n/t";
 
@@ -15,11 +14,12 @@ const FEATURES = [
 
 /**
  * The landing page (T-2.1), from the prototype. Server-rendered, with no
- * page-level client JS; the waitlist box arrives with its form in T-2.3.
+ * page-level client JS; the waitlist box arrives with its form in T-2.3. The
+ * footer comes from the marketing layout.
  */
 export default function LandingPage() {
   return (
-    <div className="bg-bg flex min-h-dvh flex-col">
+    <>
       <SiteHeader />
       <main className="flex-1">
         <Hero />
@@ -37,7 +37,6 @@ export default function LandingPage() {
           ))}
         </ul>
       </main>
-      <SiteFooter />
-    </div>
+    </>
   );
 }

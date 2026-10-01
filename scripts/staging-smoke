@@ -82,6 +82,12 @@ expect "web /admin hidden (P-30)" "$web/admin" 404 '' 'Coming soon.'
 expect "web /dev/ui hidden" "$web/dev/ui" 404 '' 'UI primitives'
 expect "web /dev/health hidden" "$web/dev/health" 404 '' 'API health'
 
+# The legal pages (T-2.2): reachable, each with its own title.
+expect "web /terms" "$web/terms" 200 'Terms and conditions'
+expect "web /privacy" "$web/privacy" 200 'Privacy policy'
+expect "web /refunds" "$web/refunds" 200 'Refund policy'
+expect "web /contact" "$web/contact" 200 'Contact and grievances'
+
 # The API must accept the web's origin, or every browser call fails.
 headers="$(curl -s --max-time 20 -o /dev/null -D - -H "Origin: $web" "$api/healthz" || true)"
 allowed="$(grep -i '^access-control-allow-origin:' <<<"$headers" | tr -d '\r' | cut -d' ' -f2- || true)"

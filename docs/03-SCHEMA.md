@@ -125,7 +125,8 @@ Indexes: `GIST(location)`, `GIN(username gin_trgm_ops)`, `GIN(first_name gin_trg
 ### areas  (seed data for location fallback)
 `id uuid pk, city text, name text, centroid geography(Point,4326)`. Unique `(city, name)`.
 Seed: 40 Bengaluru neighbourhoods (D-013's default), drafted by Claude and reviewed by the founder
-(T-1.14); centroids are approximate to about 1 km.
+(T-1.14); centroids are approximate to about 1 km. D-013 is now Phagwara; P-38 replaces these
+before T-4.10 reads them.
 
 ### interests  (seed: 24, T-1.14)
 `id smallint pk, slug text unique, label text`.
@@ -444,9 +445,11 @@ trace is exactly the person with admin access (T-1.13).
 `key text pk, value jsonb not null, updated_at`. Seeds: `swipe_daily_limit_men=50`,
 `discovery_radius_km=25`, `thread_hours=24`, `mask_first_n_messages=20`, `kudos_min_messages=6`,
 `gift_free_daily_limit=3`, `gift_same_recipient_cooldown_h=24`.
-`thread_hours` is also promised in the landing copy ("Threads last a day", "24-hour", in
-`web/src/i18n/en.ts`), written out because it's copy, not a computation (T-2.1). Change the copy
-with the setting.
+Two settings are also promised in copy, in `web/src/i18n/en.ts`, written out because copy is a
+promise, not a computation. Change the copy with the setting:
+- `thread_hours`: the landing page ("Threads last a day", "24-hour", T-2.1) and `/terms` ("lasts
+  a day", T-2.2).
+- `mask_first_n_messages`: `/terms` and `/privacy` ("first 20 messages", T-2.2).
 
 ### waitlist
 `id uuid pk, email citext not null unique, city text null, created_at`.

@@ -52,43 +52,26 @@ describe("/ (landing)", () => {
 
     expect(screen.getByText(t("landing.ageNote"))).toBeInTheDocument();
   });
-
-  it("links the four legal pages from the footer", () => {
-    render(<LandingPage />);
-
-    const nav = screen.getByRole("navigation", {
-      name: t("landing.footer.label"),
-    });
-    const links = within(nav).getAllByRole("link");
-    expect(links.map((a) => [a.textContent, a.getAttribute("href")])).toEqual([
-      [t("landing.footer.terms"), "/terms"],
-      [t("landing.footer.privacy"), "/privacy"],
-      [t("landing.footer.refunds"), "/refunds"],
-      [t("landing.footer.contact"), "/contact"],
-    ]);
-    expect(
-      within(screen.getByRole("contentinfo")).getByText(
-        t("landing.footer.copyright", {
-          year: new Date().getFullYear(),
-          app: APP_NAME,
-        }),
-      ),
-    ).toBeInTheDocument();
-  });
 });
 
-// T-2.1 ships no page-level client JS: the landing page and everything it
-// renders stay server components. T-2.3's waitlist form will be the one entry
+// T-2.1 ships no page-level client JS: the marketing pages and everything they
+// render stay server components. T-2.3's waitlist form will be the one entry
 // here, as the landing page's only client component.
 const CLIENT_COMPONENTS_ALLOWED = new Set<string>();
 
+// Every file under these folders, so a new marketing page or component is
+// checked the day it's added (T-2.2 added the legal pages and their layout).
+function componentsIn(dir: string): string[] {
+  return readdirSync(dir, { recursive: true, encoding: "utf8" })
+    .filter((name) => name.endsWith(".tsx") && !name.endsWith(".test.tsx"))
+    .map((name) => join(dir, name));
+}
+
 const SERVER_ONLY = [
-  "src/app/(marketing)/page.tsx",
+  ...componentsIn("src/app/(marketing)"),
+  ...componentsIn("src/components/marketing"),
   "src/components/ui/ButtonLink.tsx",
   "src/components/ui/Icon.tsx",
-  ...readdirSync("src/components/marketing")
-    .filter((name) => name.endsWith(".tsx") && !name.endsWith(".test.tsx"))
-    .map((name) => join("src/components/marketing", name)),
 ];
 
 describe("the landing page's JavaScript", () => {
@@ -99,13 +82,23 @@ describe("the landing page's JavaScript", () => {
     },
   );
 
-  it("checks every marketing component", () => {
+  it("checks every marketing page and component", () => {
     expect(SERVER_ONLY).toEqual(
       expect.arrayContaining([
+        "src/app/(marketing)/layout.tsx",
+        "src/app/(marketing)/page.tsx",
+        "src/app/(marketing)/terms/page.tsx",
+        "src/app/(marketing)/privacy/page.tsx",
+        "src/app/(marketing)/refunds/page.tsx",
+        "src/app/(marketing)/contact/page.tsx",
         "src/components/marketing/SiteHeader.tsx",
         "src/components/marketing/Hero.tsx",
         "src/components/marketing/FeatureCard.tsx",
         "src/components/marketing/SiteFooter.tsx",
+        "src/components/marketing/LegalPage.tsx",
+        "src/components/marketing/LegalSection.tsx",
+        "src/components/marketing/LegalFact.tsx",
+        "src/components/marketing/LegalFactList.tsx",
       ]),
     );
   });

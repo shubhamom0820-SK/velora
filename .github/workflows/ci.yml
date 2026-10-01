@@ -122,6 +122,10 @@ jobs:
 
       - name: Build (next build)
         working-directory: web
+        # The legal pages may show a missing fact only where APP_ENV allows it
+        # (D-053); CI builds to prove the app compiles, not to ship it.
+        env:
+          APP_ENV: ci
         run: pnpm build
 
   image:

@@ -166,9 +166,12 @@ async def test_app_config_seeds(db: AsyncSession) -> None:
     assert dict(rows.tuples().all()) == {
         "swipe_daily_limit_men": 50,
         "discovery_radius_km": 25,
-        # Promised in the landing copy ("Threads last a day", "24-hour", in
-        # web/src/i18n/en.ts): a migration changing it changes that copy too (T-2.1).
+        # Promised in copy, in web/src/i18n/en.ts: the landing page ("Threads last
+        # a day", "24-hour", T-2.1) and /terms ("lasts a day", T-2.2). A migration
+        # changing it changes that copy too.
         "thread_hours": 24,
+        # Promised on /terms and /privacy ("first 20 messages", T-2.2): a migration
+        # changing it changes that copy too.
         "mask_first_n_messages": 20,
         "kudos_min_messages": 6,
         "gift_free_daily_limit": 3,

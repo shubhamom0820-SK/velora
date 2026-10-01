@@ -22,7 +22,7 @@ never done silently.
 # Phase 0 — Founder tasks (no code, run in parallel)
 
 - [ ] **P-0.1** Trademark search for the name on the IP India public search. Record result in D-015.
-- [ ] **P-0.2** Register company (OPC recommended) → PAN, GST, current account.
+- [ ] **P-0.2** Register company (OPC recommended) → PAN, GST, current account. Then fill the missing facts in `web/src/lib/legal.ts` (D-053), and change Terms' "Who we are" to name the company directly instead of pointing to the contact page: Terms should name the entity it binds.
 - [ ] **P-0.3** Buy domain `velora.app` (or chosen name). Point DNS to Cloudflare. Read D-015 first: another business trades as "Velora" (recorded 1 October 2026).
 - [ ] **P-0.4** DLT (needed only to move off Firebase later — start it anyway, it is slow): entity → header → OTP template `{#var#} is your Velora verification code. Valid for 5 minutes. Do not share it.`
 - [ ] **P-0.5** MSG91 account; link DLT IDs; send one test SMS to yourself.
@@ -31,8 +31,8 @@ never done silently.
   **Ticked with three still to set up**, none needed before Sprint 4: Sightengine (T-4.4), AWS for
   Rekognition (T-4.5 — signed up, but its payment method failed verification) and Sentry (T-9.12).
   Each is on its task's **Needs** line, which `/task` checks before planning.
-- [ ] **P-0.7** Lawyer session: gender-based pricing, IT Rules 2021 obligations, DPDP consent. Get Terms, Privacy, Refund policy drafted.
-- [ ] **P-0.8** After T-2.2 is live: apply to Razorpay and Cashfree.
+- [ ] **P-0.7** Review our own legal text before real users arrive — no lawyer at this stage (the founder's call, 1 October 2026). Check Terms, Privacy, Refunds and Contact (T-2.2) against the decisions they cite and against what the product actually does at go-live; against the IT Rules 2021 (Grievance Officer, timelines) and the DPDP Act (notice, consent, rights — section 16 and Rule 15 take effect on 13 May 2027; check for any restricted-country notification); and gender-based pricing. Start with the law-and-courts text (D-052), the weakest part we wrote ourselves. Look closely, not in passing, at the under-18 section: it keeps a hashed phone number of someone just identified as a minor (D-009). The mechanism and saying so openly are right, but minors plus retention is the most scrutinised combination there is. Privacy has no section yet on what happens to people's data if the app shuts down or is sold; add one when there is something honest to say. Gates T-9.15, not the production build (D-053).
+- [ ] **P-0.8** After T-2.2 is live: apply to Razorpay and Cashfree. Before applying, confirm each gateway's exact refund and cancellation-policy requirement against `/refunds` (D-050).
 - [ ] **P-0.9** Buy a ₹10–12k Android phone for testing.
 - [ ] **P-0.10** 15 conversations with women aged 22–28 in the launch city about why they left their last dating app. Write findings in `docs/research.md`.
 - [ ] **P-0.11** Decide D-013 (city), D-014 (theme), confirm D-005 (packs).
@@ -271,11 +271,12 @@ One migration per task, each with a working `downgrade()`. Build exactly `03-SCH
 - [x] **Commit:** `feat(web): landing page [T-2.1]`
 
 ### T-2.2 · Legal pages
-- [ ] **Needs:** T-2.1
-- [ ] `/terms`, `/privacy`, `/refunds`, `/contact` as MDX or TSX pages. Contact shows company name, address, support email, **Grievance Officer name + email** (IT Rules). Text from the lawyer (P-0.7); until then clearly marked placeholder.
-- [ ] Footer links on every marketing page.
+- [x] **Needs:** T-2.1
+- [x] `/terms`, `/privacy`, `/refunds`, `/contact` as TSX pages, written in plain language from our own decisions — no lawyer, no copied policy. Contact shows the company name, registered office, support email and **Grievance Officer name + email** (IT Rules). A fact we don't have yet shows as "To be confirmed", and production can't build while any is missing (D-053).
+- [x] Footer links on every marketing page; the footer's city is Phagwara (D-013).
+- [x] **Checklist A exception, on purpose:** the pages write out two `app_config` values in words — `thread_hours` ("lasts a day") and `mask_first_n_messages` ("first 20 messages") — for T-2.1's reason: copy is a promise, not a computation. Comments in `en.ts`, 03-SCHEMA §8 and the seed test say to change the copy with the setting.
 - [ ] **Done when:** all four reachable, linked, and printable.
-- [ ] **Commit:** `feat(web): legal pages [T-2.2]`
+- [x] **Commit:** `feat(web): legal pages [T-2.2]`
 
 ### T-2.3 · Waitlist
 - [ ] **Needs:** T-1.13, T-2.1
@@ -299,7 +300,7 @@ One migration per task, each with a working `downgrade()`. Build exactly `03-SCH
 - [ ] **Commit:** `feat(web): security headers [T-2.5]`
 
 ### T-2.6 · Production domains
-- [ ] **Needs:** P-0.3, T-1.22
+- [ ] **Needs:** P-0.3, T-1.22, and the **legal facts final** (P-0.2, P-0.3) — production can't build the legal pages while any is missing (D-053)
 - [ ] `velora.app` → Vercel prod; `api.velora.app` → Fly prod app; SSL issued. Prod DB/Redis/R2 created but empty.
 - [ ] **Done when:** `https://velora.app` shows the landing page; `https://api.velora.app/healthz` is 200. → **Unblocks P-0.8.**
 - [ ] **Commit:** `chore(infra): production domains [T-2.6]`
@@ -382,6 +383,7 @@ One migration per task, each with a working `downgrade()`. Build exactly `03-SCH
 - [ ] **Needs:** T-3.10, T-3.7
 - [ ] Screens from the prototype: phone, OTP (4 boxes, paste support, resend timer from `resend_after_s`), DOB (native date input; under-18 message), gender (with lock warning), seeking + intents (pick 1–3), name/hometown/city, username (debounced availability 400 ms, shows `velora.app/@name`).
 - [ ] Each screen: submit disabled until valid; server errors shown inline from `ApiError.code` via `en.ts`.
+- [ ] Phone step: a consent line naming Google before the code is sent — Google's Firebase sends it, processes the number in the United States and keeps it for abuse prevention (D-048, `/privacy`). Firebase asks apps to get this consent.
 - [ ] **Commit:** `feat(web): onboarding steps 1-7 [T-3.11]`
 
 ### T-3.12 · Web onboarding 8, 10, 11
@@ -401,6 +403,8 @@ One migration per task, each with a working `downgrade()`. Build exactly `03-SCH
   `FIREBASE_TOKEN_INVALID`; throttle 10/IP/hour and 5/phone/hour.
 - [ ] Then reuse the exact same service as T-3.3: banned check → find-or-create user + profile +
   wallet + prefs → session + cookies → `{access_token, user}`.
+- [ ] The phone screen shows T-3.11's consent line naming Google before `signInWithPhoneNumber`
+  runs (D-048, `/privacy`). Deleting the Firebase user after sign-in is P-39, not this task.
 - [ ] Web: Firebase JS SDK on the phone screen (invisible reCAPTCHA), `signInWithPhoneNumber`,
   6-digit code box (Firebase codes are 6 digits, not 4 — the OTP screen adapts to
   `AUTH_PHONE_PROVIDER`), resend cooldown, friendly copy for `auth/too-many-requests`,
@@ -449,6 +453,8 @@ One migration per task, each with a working `downgrade()`. Build exactly `03-SCH
   Add its pool to the connection budget in `infra/STAGING.md`.
 - [ ] `moderate_photo(photo_id)`: fetch raw → Pillow open (reject if not an image) → `ImageOps.exif_transpose` → resize longest side 1600 → save JPEG q85 **without EXIF** → `ModerationProvider.check()` → approve (write public copy for `public` kind) or reject with reason (`nudity`, `minor_suspected`, `no_face`, `text_overlay`, `other`). `minor_suspected` also opens an internal report.
 - [ ] Idempotent: re-running on an approved photo does nothing.
+- [ ] Sightengine: turn on deleting each image right after its check, so photos don't stay on its
+  servers in the US and Europe — `/privacy` says they're deleted there (D-048).
 - [ ] Tests with the fake provider for approve and each reject path; test that output has no EXIF.
 - [ ] Extend `make seed` (T-1.15): an approved public photo at position 0 for every onboarded seeded user — a placeholder from the prototype's `c1`/`c2` gradient, re-encoded like any upload and stored through `StorageProvider`. Re-running creates no duplicates.
 - [ ] **Commit:** `feat(worker): photo moderation pipeline [T-4.4]`
@@ -485,7 +491,7 @@ One migration per task, each with a working `downgrade()`. Build exactly `03-SCH
 
 
 ### T-4.10 · Location
-- [ ] **Needs:** T-3.5
+- [ ] **Needs:** T-3.5, and **P-38** (the seeded areas are still Bengaluru's; D-013 is Phagwara)
 - [ ] `PUT /me/location` accepts `{lat,lng}` (must be inside India bounding box) or `{area_id}` (uses centroid). `GET /areas?city=`.
 - [ ] Web: onboarding asks permission once with a clear reason; on deny → area picker. Location refreshed on app open if > 6 h old.
 - [ ] **Commit:** `feat(profiles): location [T-4.10]`
@@ -695,7 +701,7 @@ Built before discovery and chat because swipes, threads and unlocks all spend Ve
 
 ### T-8.3 · Refund requests
 - [ ] **Needs:** T-8.2
-- [ ] `POST /refund-requests` (own payment, within 7 days, only if credits from it are unspent — compute from ledger). Admin processes the gateway refund manually in MVP and records it (`payments.status = refunded`, `wallet.debit(refund)` of the unspent credits).
+- [ ] `POST /refund-requests` for **broken transactions only** (D-050): a payment that went through without granting Velas, or a duplicate charge for one purchase. A change of mind isn't a claim — purchases are final. In MVP an admin resolves each claim: missing Velas are granted through `wallet.credit()` (idempotent on the payment), and a duplicate charge is refunded to the original payment method in the gateway and recorded (`payments.status = refunded`). This task defines the claim kinds and the `status` values.
 - [ ] **Commit:** `feat(payments): refund requests [T-8.3]`
 
 ### T-8.4 · Private album
@@ -772,13 +778,14 @@ Built before discovery and chat because swipes, threads and unlocks all spend Ve
 
 ### T-9.3 · Refund when a partner is banned
 - [ ] **Needs:** T-9.2, T-5.1
-- [ ] On ban: find Velas other users spent on this person in the last 7 days (threads opened with them, voice unlocks, album requests) → `wallet.credit(refund_banned_partner)` each, idempotent per ref, notify.
+- [ ] On ban: find Velas other users spent on this person in the last 7 days (threads opened with them, voice unlocks, album requests) → `wallet.credit(refund_banned_partner)` each, idempotent per ref, notify. The 7 days is also stated on `/refunds` (D-050): change both together.
 - [ ] **Commit:** `feat(safety): refunds for banned partners [T-9.3]`
 
 ### T-9.4 · Notifications
 - [ ] **Needs:** T-7.4
 - [ ] VAPID keys; `POST/DELETE /push/subscriptions`; `send_push` worker (drop subscriptions on 404/410); notification prefs; in-app `notifications` list. Kinds: match, message (only if not connected), like, knot requested/accepted, thread expiring, album decided, low balance.
 - [ ] Web: Serwist service worker (push + notificationclick → open the right route), permission asked **after the first match**, not on load; generic-text option; iOS note when not installed.
+- [ ] Update `/privacy` (T-2.2) to say what push notifications carry and who delivers them.
 - [ ] **Commit:** `feat(notifications): web push and in-app list [T-9.4]`
 
 ### T-9.5 · Admin panel
@@ -794,7 +801,7 @@ Built before discovery and chat because swipes, threads and unlocks all spend Ve
 
 ### T-9.6 · Settings and data rights
 - [ ] **Needs:** T-3.5
-- [ ] Hide profile, hide age, hide distance, show kudos; pause (hidden + no notifications); export (JSON of own data, generated by worker, signed link valid 24 h); delete (status `deleted`, profile hidden immediately, anonymised after 30 days by cron; payments and ledger kept, detached from identity).
+- [ ] Hide profile, hide age, hide distance, show kudos; pause (hidden + no notifications); export (JSON of own data, generated by worker, signed link valid 24 h); delete (status `deleted`, profile hidden immediately, anonymised after 30 days by cron; payments and ledger kept, detached from identity). What's erased and kept follows D-051, which `/privacy` states: messages stay in the other person's chat as from "Deleted account" and as moderation records, and a hashed phone number is kept so deletion can't escape a ban. Change the page with the code.
 - [ ] **Commit:** `feat(settings): privacy and data rights [T-9.6]`
 
 ### T-9.7 · PWA
@@ -839,7 +846,7 @@ Built before discovery and chat because swipes, threads and unlocks all spend Ve
 - [ ] **Commit:** `docs(ops): backup and restore runbook [T-9.14]`
 
 ### T-9.15 · Go live
-- [ ] **Needs:** T-9.13, T-9.14, P-0.5, P-0.8
+- [ ] **Needs:** T-9.13, T-9.14, P-0.5, P-0.7, P-0.8
 - [ ] Production env: real SMS, real Razorpay live keys + webhook URL, real moderation and face match, VAPID keys. Run the pre-launch checklist in `07-CHECKLISTS.md`. Do one real ₹ purchase yourself and refund it.
 - [ ] **Commit:** `chore(release): v1.0.0 [T-9.15]`
 
@@ -848,7 +855,7 @@ Built before discovery and chat because swipes, threads and unlocks all spend Ve
 # Sprint 10 — Closed beta operations (weeks 16–19)
 
 - [ ] **T-10.1** Invite codes: signup requires a code during beta (`app_config.beta_invite_only`); women's codes unlimited, men's limited per code.
-- [ ] **T-10.2** Product analytics (PostHog, EU/India region if available): events `signup_step_completed`, `swipe`, `match`, `thread_opened`, `message_sent`, `knot_tied`, `thread_expired_unanswered`, `purchase_started`, `purchase_paid`, `report_filed`. No message content, no phone numbers.
+- [ ] **T-10.2** Product analytics (PostHog, EU/India region if available): events `signup_step_completed`, `swipe`, `match`, `thread_opened`, `message_sent`, `knot_tied`, `thread_expired_unanswered`, `purchase_started`, `purchase_paid`, `report_filed`. No message content, no phone numbers. Update `/privacy` (T-2.2) to say what it collects and where it goes.
 - [ ] **T-10.3** Metrics queries for the weekly review: D1/D7 retention, thread → knot rate, % threads expiring with zero replies, paying conversion (men), revenue per paying user, reports per 100 users, active gender ratio.
 - [ ] **T-10.4** Price test: variant A (₹1,500 / 25 Velas) vs B (₹999 / 25) assigned 50/50; compare revenue per paying man after 3 weeks.
 - [ ] **T-10.7** First-thread-free test (risk R1 in `09-RESEARCH.md`): half of new men get their first thread free. Measure paying conversion, threads per man, and revenue per man — not just the free-thread take-up.
@@ -1182,3 +1189,21 @@ Claude Code adds items here instead of doing unplanned work. Format:
   coupling is also written above the check in `scripts/staging-smoke`.
 
   Found while planning T-2.1.
+- [ ] P-38 · Seed Phagwara's areas, replacing Bengaluru's. **Due before T-4.10** (on its Needs
+  line). Worst case: someone in Phagwara who denies location access is offered a list of
+  Bengaluru neighbourhoods, so their area, and every distance shown to them, is wrong. D-013 is
+  now Phagwara, but the reference-data migration seeded 40 Bengaluru neighbourhoods as the
+  decision's old default, and `make seed`'s profiles sit in Bengaluru localities. A new data
+  migration replaces the areas (never an edit of the merged one, rule 11), and the dev seed's
+  localities follow. Label the centroids with who drafted and who reviewed them, as T-1.14's were.
+
+  Found while planning T-2.2.
+- [ ] P-39 · Delete the Firebase user right after sign-in. **After T-3.14 works plainly.** Worst
+  case without it: every user's phone number sits in Firebase's records in the United States for
+  as long as the account exists, and up to 180 days after we delete it. Deleting the Firebase user
+  straight after the token exchange shrinks that to the sign-in itself. Google's abuse-prevention
+  copy stays either way (D-048), so this shrinks the footprint, not the disclosure on `/privacy`.
+  Kept out of T-3.14 on purpose: auth is where cleverness causes outages, so sign-in works plainly
+  first.
+
+  Found while planning T-2.2.

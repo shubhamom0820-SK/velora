@@ -162,8 +162,10 @@ New Redis database `velora-staging`, region Mumbai, TLS on. Copy its `rediss://�
 
 ### 3. Cloudflare R2
 
-Buckets `velora-staging-public` and `velora-staging-private`. Their API token and the public
-bucket's CDN domain are set with T-4.1, when storage is built.
+Buckets `velora-staging-public` and `velora-staging-private`, created with the **`apac` location
+hint**: nearest to users and the Singapore worker. A hint is best effort, not a guarantee, so the
+Privacy page says only "stored by Cloudflare, outside India" (D-048). Their API token and the
+public bucket's CDN domain are set with T-4.1, when storage is built.
 
 ### 4. Fly
 
@@ -187,7 +189,11 @@ bucket's CDN domain are set with T-4.1, when storage is built.
 
 1. New project `velora-staging`, **not connected to Git**, framework Next.js, root directory left
    empty (the workflow deploys from `web/`), Node 24.
-2. **Environment Variables → Production:** `NEXT_PUBLIC_API_URL` = `https://velora-api-staging.fly.dev`.
+2. **Environment Variables → Production:** `NEXT_PUBLIC_API_URL` = `https://velora-api-staging.fly.dev`,
+   and `APP_ENV` = `staging`. The legal pages still have facts missing (D-053), and a build without
+   `APP_ENV=staging` refuses them, so the staging deploy fails until it's set. From the CLI, in
+   `web/`: `printf staging | pnpm dlx vercel env add APP_ENV production`. Production (T-2.6) sets
+   `production`.
 3. **Read the project's URL from Settings → Domains; don't assume it.** Vercel gives a project
    `<name>.vercel.app` only when no one else holds that name, and otherwise adds a suffix.
    `velora-staging.vercel.app` belongs to another company's project, so ours is

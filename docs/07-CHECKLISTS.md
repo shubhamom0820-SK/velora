@@ -68,7 +68,7 @@
 
 ## F. Before go-live (T-9.15)
 
-- [ ] Legal pages final (lawyer-approved), grievance officer published
+- [ ] Legal pages reviewed by the founder (P-0.7), every legal fact filled in (D-053), Grievance Officer published
 - [ ] Sign-in works on 3 networks (Jio, Airtel, Vi) on the live provider; if using Path B, DLT template approved
 - [ ] Firebase App Check rejects a request from an unauthorised domain
 - [ ] Razorpay live keys; webhook URL set to production; one real purchase + refund done

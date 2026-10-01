@@ -123,8 +123,17 @@ server-side, per viewer.
 Optional 4-digit PIN locks the app on this device. Stored as an argon2 hash server-side.
 5 wrong attempts → session revoked, must re-login by OTP.
 
-### D-013 · Launch city — Open (default: Bengaluru)
-One city only for beta and launch. Discovery radius default 25 km.
+### D-013 · Launch city and registered office: Phagwara — Locked
+One city only for beta and launch. Discovery radius default 25 km. **Phagwara, Punjab, India** is
+both the launch city and the company's registered office (P-0.2). The footer and the Contact page
+read it from `web/src/lib/legal.ts`.
+
+**Why this is the low-risk way round:** the launch city is cheap to change later — it is seed data
+(`areas`) and a default — while a registered office is not. Committing to Phagwara for both costs
+a data migration if the launch city ever has to move.
+
+The seeded areas are still Bengaluru's, from when Bengaluru was this decision's default; P-38
+replaces them before T-4.10 reads them. Closed by the founder on 1 October 2026.
 
 ### D-014 · Theme — Locked (black · white · red blend)
 The app has one theme, the blend: black chrome (header, bottom nav, hero, sheets), soft-white
@@ -496,6 +505,25 @@ question, not a latency one. **Deferred: another India host for the API** (for e
 `ap-south-1` or Google Cloud Run `asia-south1`). It's the right home eventually, but it means
 redesigning the deploy just built, and it waits while shipping matters more.
 
+**Amended 1 October 2026: what actually stays in India.** The database (profiles, messages, the
+ledger, payments and our hashed and encrypted copy of each phone number) and Redis are in Mumbai.
+The rest is not: Firebase Authentication processes phone numbers in the United States and Google
+keeps them for abuse prevention (D-035); Cloudflare R2, which has no India location, stores
+photos, selfies, voice notes and album images; Sightengine moderates photos on servers in the US
+and Europe; and every request is processed in Singapore. "Data stays in India" was our own
+promise, not a legal requirement: DPDP section 16 allows transfers except to countries the
+government restricts, none is restricted as of September 2026, and the section takes effect on
+13 May 2027. The rejection of "everything in Singapore" rested partly on keeping photos and phone
+numbers in India, which this setup doesn't do either. What still holds: the database carries most
+of the personal data, and moving it later, with live data, is the expensive move. The Privacy
+page says where each kind of data goes (T-2.2).
+
+**Follow-ups decided the same day:** the R2 buckets use the `apac` location hint, for latency; it
+is best effort, so the Privacy page says only "stored by Cloudflare, outside India" and never
+names a region we aren't guaranteed (`infra/STAGING.md`). Sightengine deletes each image right
+after its check (T-4.4). The phone step asks for consent and names Google (T-3.11, T-3.14);
+deleting the Firebase user right after sign-in waits for P-39.
+
 ### D-049 · Vela is the unit of paid balance — Locked
 What men buy and spend is a **Vela** (plural **Velas**): "1 Vela", "5 Velas". It replaces
 "credits" in everything users read and in the docs' prose. In the schema, the API and code the
@@ -511,6 +539,74 @@ name, it stays a copy change.
 **Rejected: renaming the schema, API and code identifiers too** — a migration across live money
 tables and an API break, repeated whenever the brand changes. Decided by the founder on
 1 October 2026.
+
+### D-050 · Velas are final and never expire; broken payments are fixed — Locked
+**Purchases are final.** Someone who bought Velas and changed their mind gets nothing back, whether
+or not they spent them.
+
+**A broken payment is ours to fix.** A payment that went through without granting Velas, or a
+duplicate charge for one purchase, is a broken transaction, not a change of mind: the missing
+Velas are granted, and the duplicate charge is refunded to the original payment method.
+Webhook-only grants, idempotent on the payment (D-026), are what make both fixable.
+
+**Two cases return Velas automatically**, because the product works that way: a declined request
+to see a private album (D-004), and Velas spent on someone who is then banned, for the 7 days
+before the ban (T-9.3).
+
+**Velas never expire.** They have no cash value and can't be transferred or given to another
+account. Expiry would earn a little and cost a lot in anger, chargebacks and support, and it cuts
+against D-003's principle that permanence is granted, never bought.
+
+`/refunds` and `/terms` say all of this plainly (T-2.2). Payment gateways require a visible refund
+and cancellation policy for merchant approval; P-0.8 confirms each gateway's exact requirement.
+**Supersedes** T-8.3's earlier plan to refund unspent credits within 7 days of purchase: T-8.3 now
+handles broken-transaction claims only. Decided by the founder on 1 October 2026.
+
+### D-051 · What deleting an account erases, and what it keeps — Locked
+**Erased:** the profile, photos, private album and everything else other people can see of the
+person, except their messages.
+
+**Messages stay.** The other person keeps their copy, with the sender shown as "Deleted account",
+and the messages stay as moderation records. Erasing them would let an abuser destroy a victim's
+evidence by deleting their account: the hole D-006 closes for clearing a chat.
+
+**Kept:** the ledger and payment records, reports and moderation records, and a hashed phone
+number, so a banned or reported person can't delete and re-register to escape it. Deletion must
+not be a route around a ban.
+
+The Privacy page says this plainly (T-2.2): users deserve to know what survives, including Google's
+copy of the phone number, which is outside our control (D-048). Decided by the founder on
+1 October 2026.
+
+### D-052 · Terms we can stand behind — Locked
+**Law and courts:** Indian law, and the courts with jurisdiction over the registered office in
+Phagwara (D-013). The exact court is named once registration completes (P-0.2) and shows as
+outstanding until then. No liability language the founder can't explain and stand behind.
+
+**Grievances:** the IT Rules' timelines exactly: acknowledged within 24 hours, resolved within 15
+days. Nothing faster is promised: a solo founder can't keep a shorter promise, and a missed
+promise on that page is worse than the statutory one.
+
+The law-and-courts text is the first thing P-0.7's review checks: of the text we wrote ourselves,
+it is the weakest. Decided by the founder on 1 October 2026.
+
+### D-053 · Missing legal facts can't reach production — Locked
+The legal pages (T-2.2) state facts we don't have yet: the company's name, registered office
+address and court, and the Grievance Officer's name (P-0.2), and the support and grievance emails
+(P-0.3). `web/src/lib/legal.ts` holds every fact, each either known or marked missing with the
+plan item that brings it, and a missing one shows as "To be confirmed".
+
+A page with a missing fact builds only under `next dev` or where `APP_ENV` is `local`, `ci` or
+`staging`: an allowlist with no default (CLAUDE.md rule 16, the D-045 pattern). Anywhere else,
+`next build` fails and names every missing fact. Production sets `APP_ENV=production`, so it can't
+ship until P-0.2 and P-0.3 are done; forgetting to set it fails the same way.
+
+It blocks on facts only, never on a review. P-0.7 is the founder's own review of the text and
+gates going live (T-9.15), not the build.
+
+**Rejected: a check in the production deploy workflow** — T-2.6 hasn't built that workflow yet,
+and a check that lives in a future file can be forgotten; a build that fails closed can't.
+Decided by the founder on 1 October 2026.
 
 ---
 
