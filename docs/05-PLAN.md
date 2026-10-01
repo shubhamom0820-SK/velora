@@ -208,6 +208,8 @@ One migration per task, each with a working `downgrade()`. Build exactly `03-SCH
   All by hand, from `infra/STAGING.md`. **Open, for R2 alone (1 October 2026):** Supabase (Mumbai,
   migrated to head) and Upstash (Mumbai) are serving staging (deploy run 36845884410). R2 isn't
   enabled on the Cloudflare account yet, which only its dashboard can do, so there are no buckets.
+  **Moved:** R2 is now on T-4.1's Needs line, the first task that uses the buckets — tick this with
+  T-4.1.
 - [x] Supabase's Data API off, and the app-role migration strips `anon` and `authenticated` of every
   privilege on our tables. Left on, it serves every table in `public` over REST to anyone with the
   project's anon key. The runbook ends with a SQL check that those roles hold nothing.
@@ -404,7 +406,9 @@ One migration per task, each with a working `downgrade()`. Build exactly `03-SCH
 # Sprint 4 — Photos and verification (weeks 6–7)
 
 ### T-4.1 · Storage provider
-- [ ] **Needs:** T-1.21, T-1.2
+- [ ] **Needs:** T-1.21, T-1.2, and **R2 enabled on the Cloudflare account, with the staging buckets
+  `velora-staging-public` and `velora-staging-private`** (`infra/STAGING.md` §3) — not enabled yet
+  (T-1.22)
 - [ ] Real `StorageProvider` on aioboto3 (works for R2 and MinIO): `presign_put(bucket, key, content_type, max_bytes, ttl=300)`, `presign_get(bucket, key, ttl=600)`, `get_bytes`, `put_bytes`, `copy`, `delete`.
 - [ ] Key helpers: `raw/{user_id}/{photo_id}`, `p/{photo_id}.jpg`, `voice/{thread_id}/{message_id}.webm`, `album/{photo_id}/{viewer_id}.jpg`.
 - [ ] **Commit:** `feat(storage): r2 presigned urls [T-4.1]`
