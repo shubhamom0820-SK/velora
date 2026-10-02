@@ -158,13 +158,22 @@ jobs:
       - name: Serves /healthz, hides its schema outside local
         run: |
           # Outside local, Redis must be rediss:// (TLS); it's never reached here.
+          # Staging as fly.api.toml sets it, CLIENT_IP_HEADER included (D-056).
           docker run -d --name api -p 127.0.0.1:8000:8000 \
             -e ENV=staging -e DATABASE_URL -e REDIS_URL=rediss://ci:ci@127.0.0.1:6379/1 \
-            -e JWT_SECRET -e PHONE_PEPPER -e PHONE_ENC_KEY \
+            -e JWT_SECRET -e PHONE_PEPPER -e PHONE_ENC_KEY -e CLIENT_IP_HEADER=Fly-Client-IP \
             -e AUTH_PHONE_PROVIDER=firebase -e SMS_PROVIDER=msg91 -e PAYMENTS_PROVIDER=razorpay \
             -e MODERATION_PROVIDER=sightengine -e FACEMATCH_PROVIDER=rekognition \
             -e STORAGE_PROVIDER=s3 -e PUSH_PROVIDER=webpush "$IMAGE"
           for _ in $(seq 1 30); do curl -sf -o /dev/null http://127.0.0.1:8000/healthz && break; sleep 1; done
+          # A container that never answers says why in its own log. Print it: without
+          # it the only clue is "/healthz never answered", and finding out costs a
+          # reproduction (T-2.3's first CI run).
+          if ! curl -sf -o /dev/null http://127.0.0.1:8000/healthz; then
+            echo "::error::The container never answered /healthz. Its log:"
+            docker logs api 2>&1 | tail -n 40
+            exit 1
+          fi
           test "$(curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:8000/healthz)" = 200
           body="$(curl -s -w '\n%{http_code}' http://127.0.0.1:8000/openapi.json)"
           echo "$body"
@@ -185,6 +194,24 @@ jobs:
           echo "$output" | tail -n 5
           test "$status" = 1
           grep -q 'ENV=staging cannot use fake providers' <<<"$output"
+
+      # D-056's refusal, proved in the image that actually runs, not only in the
+      # tests: everything staging needs except CLIENT_IP_HEADER. Without it, per-IP
+      # limits would key on an address the client chooses.
+      - name: Staging without CLIENT_IP_HEADER refuses to start
+        run: |
+          set +e
+          output="$(timeout 60 docker run --rm -e ENV=staging -e DATABASE_URL \
+            -e REDIS_URL=rediss://ci:ci@127.0.0.1:6379/1 \
+            -e JWT_SECRET -e PHONE_PEPPER -e PHONE_ENC_KEY \
+            -e AUTH_PHONE_PROVIDER=firebase -e SMS_PROVIDER=msg91 -e PAYMENTS_PROVIDER=razorpay \
+            -e MODERATION_PROVIDER=sightengine -e FACEMATCH_PROVIDER=rekognition \
+            -e STORAGE_PROVIDER=s3 -e PUSH_PROVIDER=webpush "$IMAGE" 2>&1)"
+          status=$?
+          set -e
+          echo "$output" | tail -n 5
+          test "$status" = 1
+          grep -q 'ENV=staging needs CLIENT_IP_HEADER' <<<"$output"
 
   repo:
     name: repo — types, hooks, gate
