@@ -59,7 +59,9 @@ velora/
 hook enforces it, with one exception, `src/styles/theme-color.ts`) and `src/i18n/en.ts` (every
 user-facing string, read through `t()`, with one exception, `src/app/opengraph-image.alt.txt`, which
 Next reads as a file; a test holds it to `en.ts`). `src/lib/site.ts` says where the site lives and
-that only production is indexed (T-2.4). `src/components/ui/` holds the shared primitives (T-1.19),
+that only production is indexed (T-2.4). `src/lib/security-headers.ts` is the CSP and the other
+security headers, exactly as strict as today's pages: a task that needs more widens it there
+(D-059). `src/components/ui/` holds the shared primitives (T-1.19),
 each with a vitest test beside it; `/dev/ui` shows them all under `next dev` and 404s everywhere
 else. Feature components go in `src/components/<feature>/`. Server data (T-1.18):
 `src/lib/api.ts` is the only code that calls `fetch` (ESLint enforces it), typed from

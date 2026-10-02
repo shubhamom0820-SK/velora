@@ -752,6 +752,53 @@ line to one (P-0.7).
 
 Decided by the founder on 2 October 2026.
 
+### D-059 · The CSP is as strict as today's pages, and each task widens it — Locked
+**Enforced from T-2.5, not report-only:** `default-src 'self'; script-src 'self' 'unsafe-inline';
+connect-src 'self' <the API>; object-src 'none'; base-uri 'none'; form-action 'self';
+frame-ancestors 'none'`, with `X-Frame-Options: DENY`, `X-Content-Type-Options: nosniff`,
+`Referrer-Policy: strict-origin-when-cross-origin` and a `Permissions-Policy` denying the camera,
+the microphone, location and Chrome's ad topics. `web/src/lib/security-headers.ts` builds it.
+Under `next dev` only (an allowlist, rule 16) it adds what React's tooling and `/dev/ui` need.
+
+**Each task widens it there, deliberately; nothing is loosened ahead of time** for features that
+don't exist yet. Firebase sign-in (T-3.14), photos (T-4.6), the selfie camera (T-4.7), location
+(T-4.10), voice notes (T-7.11), real time (T-7.12), checkout (T-8.7), Sentry (T-9.12) and
+analytics (T-10.2) each fail until their task widens it, and the failure would look like the new
+feature's bug rather than the policy's. So the coupling is written where each builder will stand:
+in the policy's comment, and as a line on each task.
+
+**`'unsafe-inline'` for scripts is a trade with an expiry.** Next writes its page data as inline
+scripts, and without the allowance the waitlist form never hydrates (T-2.5's trial). Nonces would
+render every page per request, with no CDN cache and a slower first byte, spending the Lighthouse
+margin. The allowance was justified by a threat model in which no user-supplied text renders.
+That stops being true at T-3.11 (the user's own name and `@username`) and sharply at T-6.5 (other
+people's names and bios), and both carry a line to re-examine it there. React's escaping is the
+real defence for user text; the CSP is the second line, and a weakened `script-src` matters
+exactly then.
+
+**Framing is forbidden explicitly** (`frame-ancestors 'none'` and `DENY`), never left to a
+default: a dating app is never framed.
+
+**Silent until T-9.12.** An enforced policy with no reporting doesn't say when it blocks something
+real; a violation in production stays invisible until a user complains. T-9.12 wires its reports
+to Sentry.
+
+**Left out:** `upgrade-insecure-requests`, never measured, and by its definition it would break
+`next start` and the E2E over local http. HSTS is Vercel's (max-age two years). `includeSubDomains`
+and preload are T-2.6's decision, with their own record: preload is close to irreversible, because
+browsers hardcode it and removal takes months.
+
+**02-ARCHITECTURE §12 now describes what is served.** Until T-2.5 it described the eventual policy
+(Razorpay, the CDN, Firebase, and the camera, microphone and location allowed) as though it were
+running. That's the error D-048's "what actually stays in India" amendment (1 October 2026)
+corrected: a document stating the intended thing as the running thing. Widening happens at the
+task that needs it, and §12 changes with it.
+
+**Rejected:** report-only (it protects nothing, and no collector exists to read it); nonces (every
+page dynamic, spending the margin); Next's experimental hash-based SRI (experimental, and not shown
+to cover the inline page data); loosening ahead of time for the tasks above. Decided by the
+founder on 2 October 2026.
+
 ---
 
 ## Adding a decision

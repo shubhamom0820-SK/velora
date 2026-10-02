@@ -375,10 +375,14 @@ One migration per task, each with a working `downgrade()`. Build exactly `03-SCH
 - [x] **Commit:** `feat(web): seo basics [T-2.4]`
 
 ### T-2.5 · Security headers
-- [ ] **Needs:** T-1.17
-- [ ] `next.config` headers from `02-ARCHITECTURE.md §12`; CSP in report-only first, then enforce after T-8.7 adds Razorpay.
-- [ ] **Done when:** securityheaders.com grade A on staging.
-- [ ] **Commit:** `feat(web): security headers [T-2.5]`
+- [x] **Needs:** T-1.17
+- [x] `next.config` headers (02-ARCHITECTURE §12, D-059), from `web/src/lib/security-headers.ts`: an enforced CSP exactly as strict as today's pages allow; framing forbidden by `frame-ancestors 'none'` and `X-Frame-Options: DENY`; `nosniff`; Referrer-Policy; and a Permissions-Policy denying the camera, the microphone and location. Each later task widens it deliberately, and the module's comment and each task's line name them. Not report-only: with no collector it protects nothing (T-9.12 wires reporting). HSTS stays Vercel's; preload is T-2.6's decision.
+- [ ] **Done when, on staging:** securityheaders.com grade A; the five headers as served, HSTS
+  without `preload`, and no `X-Powered-By`; headless Chrome shows no CSP violation on the seven
+  pages, client-side navigation works, and the waitlist form hydrates and joins for real (201, an
+  `example.com` address); and Lighthouse mobile on `/`, five runs fixed in advance and all reported,
+  keeps ≥ 90 performance and 100 accessibility.
+- [x] **Commit:** `feat(web): security headers [T-2.5]`
 
 ### T-2.6 · Production domains
 - [ ] **Needs:** P-0.3, T-1.22, and the **legal facts final** (P-0.2, P-0.3) — production can't build the legal pages while any is missing (D-053)
@@ -388,6 +392,7 @@ One migration per task, each with a working `downgrade()`. Build exactly `03-SCH
   `https://veloraapp.co.in/sitemap.xml`; the sitemap lists the five public pages on that address;
   `/` has no `noindex` while `/discover` and `/login` still do; `og:image` is on `veloraapp.co.in`;
   and Lighthouse SEO on `/` is 100. Unit tests cover it until then; this is the real check.
+- [ ] **HSTS, decided here with its own record (D-059).** Vercel sends `max-age=63072000` today. Whether to add `includeSubDomains` (every subdomain, staging included, HTTPS-only for two years) and whether to submit to the preload list is this task's decision, written down. Preload is close to irreversible: browsers hardcode it, and removal takes months. Never set in passing.
 - [ ] **Commit:** `chore(infra): production domains [T-2.6]`
 
 ---
@@ -468,6 +473,7 @@ One migration per task, each with a working `downgrade()`. Build exactly `03-SCH
 ### T-3.11 · Web onboarding 1–7
 - [ ] **Needs:** T-3.10, T-3.7
 - [ ] **New dependencies, the first forms to use them:** web `react-hook-form` and `zod`, with `@hookform/resolvers` to join them. CLAUDE.md pins them, but nothing has installed them: T-2.3's waitlist form uses plain React state on purpose, because two form libraries for one email field would spend the landing page's performance score (98–100, T-2.1). Ask before installing, and record them in `01-DECISIONS.md` (rule 4).
+- [ ] **Re-examine the CSP's `'unsafe-inline'` for scripts here (D-059).** It was justified while no user-supplied text rendered, and this is the first task that renders some: the user's own name and `@username`. Decide again, nonces or keep it, and write the reason down (a new decision if it changes). React's escaping is the real defence; the CSP is the second line. T-6.5 re-examines it again.
 - [ ] Screens from the prototype: phone, OTP (4 boxes, paste support, resend timer from `resend_after_s`), DOB (native date input; under-18 message), gender (with lock warning), seeking + intents (pick 1–3), name/hometown/city, username (debounced availability 400 ms, shows `veloraapp.co.in/@name`).
 - [ ] Each screen: submit disabled until valid; server errors shown inline from `ApiError.code` via `en.ts`.
 - [ ] Phone step: a consent line naming Google before the code is sent — Google's Firebase sends it, processes the number in the United States and keeps it for abuse prevention (D-048, `/privacy`). Firebase asks apps to get this consent.
@@ -497,7 +503,7 @@ One migration per task, each with a working `downgrade()`. Build exactly `03-SCH
   `AUTH_PHONE_PROVIDER`), resend cooldown, friendly copy for `auth/too-many-requests`,
   `auth/invalid-phone-number`, `auth/code-expired`.
 - [ ] Sign the user out of Firebase immediately after the exchange — we keep our own session.
-- [ ] CSP updated for Firebase Auth and reCAPTCHA domains (follow-up to T-2.5).
+- [ ] **Widen the CSP here, deliberately (D-059).** T-2.5's policy allows no outside script, connect or frame host, so Firebase's SDK and its reCAPTCHA check fail at sign-in until this task adds exactly the Google hosts Firebase documents (`script-src`, `connect-src`, `frame-src`), each with its reason in `web/src/lib/security-headers.ts`. A CSP error at sign-in is this line, not a Firebase bug.
 - [ ] Tests: forged token rejected; expired rejected; reused token rejected; non-Indian number
   rejected; banned phone rejected; a valid token creates exactly one user.
 - [ ] **Done when:** on staging, sign in at `https://staging.veloraapp.co.in` with a Firebase
@@ -563,12 +569,14 @@ One migration per task, each with a working `downgrade()`. Build exactly `03-SCH
 - [ ] **Needs:** T-4.3, T-3.12
 - [ ] 6-slot grid; tap empty slot → file picker (`accept="image/*"`, `capture` not forced); client resize to ≤ 2000 px before upload (canvas) to save data; PUT to presigned URL with progress; states per slot: uploading %, checking, approved, rejected (with reason + retry). Drag to reorder (or up/down buttons on mobile).
 - [ ] Women see the private-album note.
+- [ ] **Widen the CSP here (D-059):** `connect-src` for R2's upload endpoint (the presigned PUT), and `img-src` for `PUBLIC_CDN_URL` and `blob:` previews. Uploads and previews fail with a CSP error until then.
 - [ ] **Commit:** `feat(web): photo upload step [T-4.6]`
 
 ### T-4.7 · Web selfie step
 - [ ] **Needs:** T-4.5, T-4.6
 - [ ] Request challenge → show pose instruction → `getUserMedia({video:{facingMode:"user"}})` → live mirrored preview → capture to canvas → upload as `kind=selfie` → submit → poll `GET /verification/latest` every 2 s (max 60 s) → result. Handles permission denied with instructions per browser.
 - [ ] Men: "Skip for now". Women: cannot skip.
+- [ ] **Allow the camera here (D-059):** T-2.5's Permissions-Policy has `camera=()`, so `getUserMedia` is refused until this task makes it `camera=(self)`; add `blob:` wherever the captured frame shows. T-4.9's fake-camera E2E fails until then.
 - [ ] **Commit:** `feat(web): selfie verification step [T-4.7]`
 
 ### T-4.8 · Finish onboarding
@@ -586,6 +594,7 @@ One migration per task, each with a working `downgrade()`. Build exactly `03-SCH
 - [ ] **Needs:** T-3.5, and **P-38** (the seeded areas are still Bengaluru's; D-013 is Phagwara)
 - [ ] `PUT /me/location` accepts `{lat,lng}` (must be inside India bounding box) or `{area_id}` (uses centroid). `GET /areas?city=`.
 - [ ] Web: onboarding asks permission once with a clear reason; on deny → area picker. Location refreshed on app open if > 6 h old.
+- [ ] **Allow location here (D-059):** T-2.5's Permissions-Policy has `geolocation=()`, so the browser refuses the position without ever asking until this task makes it `geolocation=(self)`. Until then everyone silently lands on the area picker.
 - [ ] **Commit:** `feat(profiles): location [T-4.10]`
 
 
@@ -665,6 +674,7 @@ Built before discovery and chat because swipes, threads and unlocks all spend Ve
 - [ ] Match celebration sheet → "Open thread · 5 Velas" / "Keep swiping".
 - [ ] Empty states: no one nearby / filters too narrow (clear button).
 - [ ] 60 fps on the test phone (check Chrome performance panel).
+- [ ] **Re-examine the CSP's `'unsafe-inline'` again here (D-059):** the first task that renders other people's text, their names and bios. If T-3.11 kept the allowance, the threat is now someone else's input on your page.
 - [ ] **Commit:** `feat(web): discover deck [T-6.5]`
 
 ### T-6.6 · Search and @username
@@ -760,11 +770,13 @@ Built before discovery and chat because swipes, threads and unlocks all spend Ve
 - [ ] Bubbles, day separators, "Sent/Read" on my last message, typing dots, voice player (locked card with price for men), icebreakers when empty, knot bar (tie / waiting), expired panel (re-open · 3 / tie), header with countdown or "Knotted · permanent", ⋯ → profile menu.
 - [ ] Composer: text (Enter sends, Shift+Enter newline), mic for women (MediaRecorder, hold or tap-to-record, 60 s cap, preview before send). Optimistic send with `client_msg_id`; failed → retry.
 - [ ] Rejected message → inline explanation, text kept in composer.
+- [ ] **Allow the microphone here (D-059):** T-2.5's Permissions-Policy has `microphone=()`, so recording is refused until this task makes it `microphone=(self)`; add `media-src` for voice notes' storage origin and `blob:` for the preview.
 - [ ] **Commit:** `feat(web): conversation screen [T-7.11]`
 
 ### T-7.12 · Web real-time client
 - [ ] **Needs:** T-7.4, T-7.11
 - [ ] `src/lib/ws.ts`: ticket → connect; exponential backoff 1→30 s with jitter; pause when tab hidden > 5 min; on reconnect refetch open thread + list. Events update TanStack Query caches (append message, bump row, update wallet, knot state).
+- [ ] **Widen the CSP here (D-059):** `connect-src` for `wss://` on the API host. The socket fails with a CSP error until then.
 - [ ] **Commit:** `feat(web): realtime client [T-7.12]`
 
 ### T-7.13 · E2E chat
@@ -843,7 +855,7 @@ Built before discovery and chat because swipes, threads and unlocks all spend Ve
 ### T-8.7 · Web store and checkout
 - [ ] **Needs:** T-8.2, T-5.5
 - [ ] Store sheet from the prototype (packs, per-Vela and per-thread price, first-purchase banner). Load Razorpay Checkout script on demand. On success callback → poll `/payments/{id}` every 1.5 s (max 60 s) → toast + wallet refresh. Failure/dismiss → "Payment didn't go through" sheet with retry.
-- [ ] CSP enforced now (T-2.5 follow-up).
+- [ ] **Widen the CSP here (D-059):** Razorpay Checkout's script, frame and connect hosts, exactly as Razorpay documents them. The CSP has been enforced since T-2.5, so checkout fails with a CSP error until this lands.
 - [ ] **Commit:** `feat(web): store and razorpay checkout [T-8.7]`
 
 ### T-8.8 · Web album, kudos, referral UI
@@ -925,6 +937,7 @@ Built before discovery and chat because swipes, threads and unlocks all spend Ve
 ### T-9.12 · Observability
 - [ ] **Needs:** T-1.22, and a **Sentry account** — not created yet (P-0.6)
 - [ ] Sentry in api, worker, web (release = git sha). Alerts: 5xx > 1% for 5 min, webhook signature failures, any job failing 3×, ledger reconciliation mismatch, queue depth > 1,000. Uptime check on `/readyz`.
+- [ ] **Widen the CSP here, and wire its reporting (D-059):** `connect-src` for Sentry's ingest host, and the CSP's reports (`report-to`, with `report-uri` as the fallback) sent to Sentry's security endpoint. Until then the enforced policy is silent: a violation in production stays invisible until a user complains.
 - [ ] **Commit:** `chore(ops): error tracking and alerts [T-9.12]`
 
 ### T-9.13 · Security review
@@ -948,7 +961,7 @@ Built before discovery and chat because swipes, threads and unlocks all spend Ve
 # Sprint 10 — Closed beta operations (weeks 16–19)
 
 - [ ] **T-10.1** Invite codes: signup requires a code during beta (`app_config.beta_invite_only`); women's codes unlimited, men's limited per code.
-- [ ] **T-10.2** Product analytics (PostHog, EU/India region if available): events `signup_step_completed`, `swipe`, `match`, `thread_opened`, `message_sent`, `knot_tied`, `thread_expired_unanswered`, `purchase_started`, `purchase_paid`, `report_filed`. No message content, no phone numbers. Update `/privacy` (T-2.2) to say what it collects and where it goes.
+- [ ] **T-10.2** Product analytics (PostHog, EU/India region if available): events `signup_step_completed`, `swipe`, `match`, `thread_opened`, `message_sent`, `knot_tied`, `thread_expired_unanswered`, `purchase_started`, `purchase_paid`, `report_filed`. No message content, no phone numbers. Update `/privacy` (T-2.2) to say what it collects and where it goes. Widen the CSP here for the provider's script and connect hosts, deliberately (D-059).
 - [ ] **T-10.3** Metrics queries for the weekly review: D1/D7 retention, thread → knot rate, % threads expiring with zero replies, paying conversion (men), revenue per paying user, reports per 100 users, active gender ratio.
 - [ ] **T-10.4** Price test: variant A (₹1,500 / 25 Velas) vs B (₹999 / 25) assigned 50/50; compare revenue per paying man after 3 weeks.
 - [ ] **T-10.7** First-thread-free test (risk R1 in `09-RESEARCH.md`): half of new men get their first thread free. Measure paying conversion, threads per man, and revenue per man — not just the free-thread take-up.
@@ -1333,3 +1346,21 @@ Claude Code adds items here instead of doing unplanned work. Format:
   forged header doesn't change `request.client`.
 
   Found in T-2.3.
+- [ ] P-41 · Give `Avatar` size classes instead of an inline style. **Before any production page
+  renders it.** Worst case: the first page that does shows avatars at the wrong size, because the
+  CSP (D-059) blocks the server-rendered `style="width:…;height:…"`; the size never recovers after
+  hydration, and the tempting fix, `style-src 'unsafe-inline'`, loosens every page. Today `Avatar`
+  appears only on `/dev/ui`, where `next dev`'s allowances cover it. Map its sizes to classes on
+  the spacing scale (08-DESIGN §3), and check the page shows no CSP violation.
+
+  Found in T-2.5.
+- [ ] P-42 · Security headers on the API's responses. **Before T-3.5's `/me`, the first
+  authenticated response a browser can cache.** Worst case: a browser or shared cache keeps one
+  person's `/me`, threads or messages and shows them later (a shared phone, the back button), or a
+  browser sniffs a JSON body as HTML. The web's headers (D-059) cover only the web; the API on Fly
+  sends none. Two matter: `X-Content-Type-Options: nosniff` on every response, and
+  `Cache-Control: no-store` on every authenticated one. A Starlette middleware in `create_app()`,
+  with tests that read both off real responses, a public one and an authenticated one. Low urgency
+  until then.
+
+  Found in T-2.5.

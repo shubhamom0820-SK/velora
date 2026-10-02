@@ -273,9 +273,16 @@ secret is left empty. Real secret values are never committed.
 ## 12. Security baseline
 
 - CORS: exact origins only, credentials allowed.
-- Web headers (Next.js): CSP (self + Razorpay + R2 CDN + API + Firebase Auth and Google reCAPTCHA domains for Path A), HSTS, `X-Frame-Options: DENY`,
-  `Referrer-Policy: strict-origin-when-cross-origin`, `Permissions-Policy` allowing camera,
-  microphone, geolocation for self only.
+- Web headers (Next.js, from `web/src/lib/security-headers.ts`, D-059), on every response: an
+  enforced CSP, `default-src 'self'; script-src 'self' 'unsafe-inline'; connect-src 'self' <the
+  API>; object-src 'none'; base-uri 'none'; form-action 'self'; frame-ancestors 'none'`;
+  `X-Frame-Options: DENY`; `X-Content-Type-Options: nosniff`; `Referrer-Policy:
+  strict-origin-when-cross-origin`; and `Permissions-Policy: camera=(), microphone=(),
+  geolocation=(), browsing-topics=()`. HSTS is Vercel's (`max-age=63072000`). **This is what is
+  served, not a target.** Each task that needs more widens it there, deliberately: Firebase
+  (T-3.14), R2 and the CDN (T-4.6), the camera (T-4.7), location (T-4.10), the microphone
+  (T-7.11), WebSockets (T-7.12), Razorpay (T-8.7), Sentry (T-9.12) and analytics (T-10.2). This
+  line changes with each.
 - Rate limits (Redis, sliding window):
 
 | Route group | Limit |
