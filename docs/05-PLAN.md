@@ -1165,7 +1165,7 @@ Claude Code adds items here instead of doing unplanned work. Format:
   `api/.dockerignore` excluding `.env*` before the first image is built, and a CI check that the
   built image contains no `.env` in any layer. Found in T-1.21.
   **Moved:** now a step in T-1.22 — tick this with T-1.22.
-- [ ] P-33 · Put staging's web and API on one site, or sign-in can't keep a session there. **Due
+- [x] P-33 · Put staging's web and API on one site, or sign-in can't keep a session there. **Due
   before T-2.3**, where the founder slotted it on 2 October 2026: built between tasks while nothing
   is in flight, so T-2.3 is built once, against staging's final addresses. On T-2.3's and T-3.4's
   Needs lines. **Needs:** the nameservers on Cloudflare (P-0.3).
@@ -1186,6 +1186,14 @@ Claude Code adds items here instead of doing unplanned work. Format:
   environment (D-055), so production's and staging's never collide.
   **Its own check can't prove a cookie flows:** nothing sets one before T-3.3. T-3.14's Done-when
   is that proof, a session surviving a reload on staging. Found planning T-1.22.
+  **Done, proved by deploy run 36995339160** (commit `017f71a`, 2 October 2026): its smoke job,
+  pointed at `https://api.staging.veloraapp.co.in` and `https://staging.veloraapp.co.in`, passed
+  every check, including that the web is our build calling the new API and that CORS allows the
+  new origin. Both certificates are Let's Encrypt's and verify; both records are DNS-only CNAMEs.
+  Run by hand by Claude the same day, the check passes on that pair and fails on both old
+  addresses: the old web address, which now 308-redirects to the new one (9 failures, CORS among
+  them), and the old API address, which the new build doesn't call (1 failure). That the cookie
+  flows is still T-3.14's to prove.
 - [ ] P-34 · Move local and CI to Postgres 17, closing the gap with Supabase (D-047). Staging runs
   Postgres 17.11 with PostGIS 3.3.7; local and CI run 16 with PostGIS 3.4. Switch
   `infra/docker-compose.yml`, and with it CI (which starts the same compose services), to a pinned
