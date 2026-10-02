@@ -420,7 +420,7 @@ One migration per task, each with a working `downgrade()`. Build exactly `03-SCH
 - [ ] **Commit:** `feat(web): onboarding about, interests, pin [T-3.12]`
 
 ### T-3.14 · Firebase phone sign-in (launch path)
-- [ ] **Needs:** T-3.3, and T-3.10 (it restores the session on reload, which the Done-when checks)
+- [ ] **Needs:** T-3.3, T-3.10 (it restores the session on reload, which the Done-when checks), and T-3.11 (its phone and OTP screens, which this task's web step puts Firebase on)
 - [ ] **New dependencies (approved, recorded in D-035):** api `firebase-admin`; web `firebase`.
 - [ ] Firebase console: project created, Phone provider enabled, **App Check with reCAPTCHA
   Enterprise enforced on Authentication**, authorised domains = `veloraapp.co.in` + `staging.veloraapp.co.in`
