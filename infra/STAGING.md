@@ -260,7 +260,7 @@ curl -s -o /dev/null -D - -X OPTIONS https://velora-api-staging.fly.dev/healthz 
 
 - **Sign-in can't keep a session on staging** until the web and API share a site: the refresh
   cookie is `SameSite=Lax` (D-024), and `*.vercel.app` and `*.fly.dev` are different sites. P-33
-  fixes it with `velora.app` subdomains, which needs the domain (P-0.3), which waits on the
-  trademark search (P-0.1, D-015). T-3.4 needs P-33.
+  fixes it with subdomains of `veloraapp.co.in`, bought 2 October 2026 (P-0.3, D-015). T-2.3
+  and T-3.4 need P-33.
 - **Every provider is a real one that isn't built yet** (D-045): each raises if called, and
   nothing calls one before its task.

@@ -49,7 +49,7 @@
 
 ## E. Security (run fully at T-9.13, partially on every money/auth PR)
 
-- [ ] Refresh cookie `HttpOnly; Secure; SameSite=Lax`, scoped to `/v1/auth`
+- [ ] Refresh cookie `HttpOnly; Secure; SameSite=Lax`, scoped to `/v1/auth`, host-only: no `Domain` attribute (D-054)
 - [ ] CSRF header required on refresh
 - [ ] Access token never in localStorage, never in a URL
 - [ ] WebSocket uses single-use tickets only

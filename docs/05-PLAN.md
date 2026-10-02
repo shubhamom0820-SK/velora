@@ -22,8 +22,23 @@ never done silently.
 # Phase 0 — Founder tasks (no code, run in parallel)
 
 - [ ] **P-0.1** Trademark search for the name on the IP India public search. Record result in D-015.
+  **Partly done:** the founder searched the public web on 1 October 2026 (findings in D-015).
+  **Still owed:** a class-specific search of the Indian trademark registry for dating services and
+  software (Nice classes 45, 9 and 42, as Claude mapped them). D-015 was closed and the domain
+  bought (P-0.3) before it, so a conflict found here means a new name and a new domain.
 - [ ] **P-0.2** Register company (OPC recommended) → PAN, GST, current account. Then fill the missing facts in `web/src/lib/legal.ts` (D-053), and change Terms' "Who we are" to name the company directly instead of pointing to the contact page: Terms should name the entity it binds.
-- [ ] **P-0.3** Buy domain `velora.app` (or chosen name). Point DNS to Cloudflare. Read D-015 first: another business trades as "Velora" (recorded 1 October 2026).
+- [ ] **P-0.3** Buy the domain (D-015 says why this one). Move its nameservers to Cloudflare. Then set up the support and Grievance Officer mailboxes: their addresses are the `supportEmail` and `grievanceOfficerEmail` facts in `web/src/lib/legal.ts`, and production can't build without them (D-053). Put each address there once it has forwarded a test message.
+  **The domain is done:** `veloraapp.co.in`, registered 2 October 2026 with Hostinger, expiring
+  2 October 2027. Claude read both dates and the registrar from the public WHOIS the same day.
+  WHOIS privacy and auto-renewal are on and the registrant email is verified, per the founder.
+  Web at the apex, API at `api.veloraapp.co.in` (T-2.6).
+  **DNS goes to Cloudflare, for two reasons** (founder, 2 October 2026): T-4.1's R2 custom domain
+  needs the zone on Cloudflare, and Cloudflare Email Routing, which is free, forwards
+  `support@veloraapp.co.in` and `grievance@veloraapp.co.in` to Gmail: the two mailboxes this item
+  owes. **Order:** nameservers first, then the mailboxes, then P-33.
+  **Still to do:** both. On 2 October the nameservers were still Hostinger's parking servers
+  (`aurora` and `nebula.dns-parking.com`), with no DNSSEC to switch off first. T-2.6 waits on the
+  mailboxes.
 - [ ] **P-0.4** DLT (needed only to move off Firebase later — start it anyway, it is slow): entity → header → OTP template `{#var#} is your Velora verification code. Valid for 5 minutes. Do not share it.`
 - [ ] **P-0.5** MSG91 account; link DLT IDs; send one test SMS to yourself.
 - [ ] **P-0.12** Firebase: project, Phone provider on, App Check + reCAPTCHA Enterprise enforced, authorised domains, daily SMS quota cap, billing alert. Confirm the **real per-SMS price for IN** in the billing console and write it into D-035.
@@ -285,7 +300,7 @@ One migration per task, each with a working `downgrade()`. Build exactly `03-SCH
 - [x] **Commit:** `feat(web): legal pages [T-2.2]`
 
 ### T-2.3 · Waitlist
-- [ ] **Needs:** T-1.13, T-2.1
+- [ ] **Needs:** T-1.13, T-2.1, and **P-33** (slotted before it, so the form is built once, against staging's final addresses)
 - [ ] API `POST /v1/waitlist {email, city?}` — validate email, citext unique (duplicate → 201 anyway), rate limit 5/min/IP.
 - [ ] The landing page's waitlist box, from the prototype (moved from T-2.1): heading, text, form
   and success state arrive together, so nothing on the page asks for an email it can't keep. The
@@ -307,8 +322,8 @@ One migration per task, each with a working `downgrade()`. Build exactly `03-SCH
 
 ### T-2.6 · Production domains
 - [ ] **Needs:** P-0.3, T-1.22, and the **legal facts final** (P-0.2, P-0.3) — production can't build the legal pages while any is missing (D-053)
-- [ ] `velora.app` → Vercel prod; `api.velora.app` → Fly prod app; SSL issued. Prod DB/Redis/R2 created but empty.
-- [ ] **Done when:** `https://velora.app` shows the landing page; `https://api.velora.app/healthz` is 200. → **Unblocks P-0.8.**
+- [ ] `veloraapp.co.in` → Vercel prod; `api.veloraapp.co.in` → Fly prod app; SSL issued. Prod DB/Redis/R2 created but empty.
+- [ ] **Done when:** `https://veloraapp.co.in` shows the landing page; `https://api.veloraapp.co.in/healthz` is 200. → **Unblocks P-0.8.**
 - [ ] **Commit:** `chore(infra): production domains [T-2.6]`
 
 ---
@@ -330,10 +345,10 @@ One migration per task, each with a working `downgrade()`. Build exactly `03-SCH
 - [ ] **Commit:** `feat(auth): send otp [T-3.2]`
 
 ### T-3.3 · OTP verify and signup
-- [ ] **Needs:** T-3.2
+- [ ] **Needs:** T-3.2, and the **cookie scope settled** (D-054), because this task sets the first cookie and its tests would lock in a wrong scope: the refresh cookie is host-only on the API (decided 2 October 2026); the readable `csrf` cookie, which reaches staging from production, is still open
 - [ ] `POST /v1/auth/otp/verify`. Wrong code → attempts+1, `OTP_INVALID` with attempts left; 5th wrong → delete key, `OTP_TOO_MANY`. Correct → delete key.
 - [ ] Find user by `phone_hash`, or create in **one transaction**: `users` (+ referral code), `profiles`, `wallets` (0), `notification_prefs`.
-- [ ] Create session (family), set refresh cookie (`HttpOnly; Secure; SameSite=Lax; Domain=COOKIE_DOMAIN; Path=/v1/auth`), set readable `csrf` cookie, return `{access_token, user: Me}`.
+- [ ] Create session (family), set refresh cookie (`HttpOnly; Secure; SameSite=Lax; Path=/v1/auth`, no `Domain`: host-only on the API, D-054), set readable `csrf` cookie, return `{access_token, user: Me}`.
 - [ ] Refuse if user status `banned`.
 - [ ] Tests: new user creates all 4 rows; existing user doesn't duplicate; banned → `ACCOUNT_BANNED`.
 - [ ] **Commit:** `feat(auth): verify otp and create account [T-3.3]`
@@ -387,7 +402,7 @@ One migration per task, each with a working `downgrade()`. Build exactly `03-SCH
 
 ### T-3.11 · Web onboarding 1–7
 - [ ] **Needs:** T-3.10, T-3.7
-- [ ] Screens from the prototype: phone, OTP (4 boxes, paste support, resend timer from `resend_after_s`), DOB (native date input; under-18 message), gender (with lock warning), seeking + intents (pick 1–3), name/hometown/city, username (debounced availability 400 ms, shows `velora.app/@name`).
+- [ ] Screens from the prototype: phone, OTP (4 boxes, paste support, resend timer from `resend_after_s`), DOB (native date input; under-18 message), gender (with lock warning), seeking + intents (pick 1–3), name/hometown/city, username (debounced availability 400 ms, shows `veloraapp.co.in/@name`).
 - [ ] Each screen: submit disabled until valid; server errors shown inline from `ApiError.code` via `en.ts`.
 - [ ] Phone step: a consent line naming Google before the code is sent — Google's Firebase sends it, processes the number in the United States and keeps it for abuse prevention (D-048, `/privacy`). Firebase asks apps to get this consent.
 - [ ] **Commit:** `feat(web): onboarding steps 1-7 [T-3.11]`
@@ -401,7 +416,7 @@ One migration per task, each with a working `downgrade()`. Build exactly `03-SCH
 - [ ] **Needs:** T-3.3
 - [ ] **New dependencies (approved, recorded in D-035):** api `firebase-admin`; web `firebase`.
 - [ ] Firebase console: project created, Phone provider enabled, **App Check with reCAPTCHA
-  Enterprise enforced on Authentication**, authorised domains = `velora.app` + Vercel preview +
+  Enterprise enforced on Authentication**, authorised domains = `veloraapp.co.in` + Vercel preview +
   `localhost`, daily SMS quota capped, billing alert set at a fixed rupee amount.
 - [ ] `POST /v1/auth/firebase {id_token}`: verify signature and `aud`/`iss`/`exp` against Google's
   public keys (cached); require `phone_number` and `firebase.sign_in_provider == "phone"`;
@@ -596,7 +611,7 @@ Built before discovery and chat because swipes, threads and unlocks all spend Ve
 ### T-6.8 · Profile pages
 - [ ] **Needs:** T-6.3
 - [ ] In-app profile screen from the prototype (gallery, chips, kudos, message button, album section, ⋯ menu).
-- [ ] Public shareable page `velora.app/@username` (SSR): logged-out visitors see first name, age, city, main photo, and "Join Velora to message"; logged-in users are redirected to the in-app profile.
+- [ ] Public shareable page `veloraapp.co.in/@username` (SSR): logged-out visitors see first name, age, city, main photo, and "Join Velora to message"; logged-in users are redirected to the in-app profile.
 - [ ] **Commit:** `feat(web): profile screens and share page [T-6.8]`
 
 ### T-6.9 · Filters
@@ -1137,13 +1152,19 @@ Claude Code adds items here instead of doing unplanned work. Format:
   built image contains no `.env` in any layer. Found in T-1.21.
   **Moved:** now a step in T-1.22 — tick this with T-1.22.
 - [ ] P-33 · Put staging's web and API on one site, or sign-in can't keep a session there. **Due
-  before T-3.4** (on its Needs line). Staging's web is `*.vercel.app` and its API `*.fly.dev`:
-  different sites, so D-024's `SameSite=Lax` refresh cookie, scoped to `.velora.app`, never flows
-  between them. Refresh and logout (T-3.4) could then only be tested locally. The fix is staging
-  subdomains of the real domain (e.g. `staging.velora.app` and `api.staging.velora.app`).
-  **The chain that gates it:** the trademark search (P-0.1) settles the name (D-015, still Open) →
-  only then is the domain bought (P-0.3) → P-33 → T-3.4. A name change after P-0.3 would mean buying
-  again. Found planning T-1.22.
+  before T-2.3**, where the founder slotted it on 2 October 2026: built between tasks while nothing
+  is in flight, so T-2.3 is built once, against staging's final addresses. On T-2.3's and T-3.4's
+  Needs lines. **Needs:** the nameservers on Cloudflare (P-0.3).
+  Staging's web is `*.vercel.app` and its API `*.fly.dev`: different sites, so D-024's
+  `SameSite=Lax` refresh cookie never flows between them. Refresh and logout (T-3.4) could then
+  only be tested locally. The fix is staging subdomains of the real domain (e.g.
+  `staging.veloraapp.co.in` and `api.staging.veloraapp.co.in`).
+  **Unblocked 2 October 2026:** the domain is bought (P-0.3, D-015), ahead of the trademark search
+  (P-0.1), so a rename forced by that search would mean buying again.
+  **Cookie scope settled (D-054):** staging's subdomains are the same site as production's, so a
+  site-wide production cookie would reach staging's API. The refresh cookie is host-only on each
+  API host instead, so neither environment's reaches the other. The readable `csrf` cookie is
+  still open (T-3.3's Needs line). Found planning T-1.22.
 - [ ] P-34 · Move local and CI to Postgres 17, closing the gap with Supabase (D-047). Staging runs
   Postgres 17.11 with PostGIS 3.3.7; local and CI run 16 with PostGIS 3.4. Switch
   `infra/docker-compose.yml`, and with it CI (which starts the same compose services), to a pinned

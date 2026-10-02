@@ -136,7 +136,7 @@ become immutable once `onboarding_step` passes `gender`.
 
 ## 6. Real-time protocol
 
-Connect: `POST /v1/ws/ticket` → `{ticket}` (single use, 30 s) → `wss://api.velora.app/ws?ticket=…`.
+Connect: `POST /v1/ws/ticket` → `{ticket}` (single use, 30 s) → `wss://api.veloraapp.co.in/ws?ticket=…`.
 
 Envelope, both directions: `{ "type": "…", "id": "<uuid>", "data": { … } }`
 
@@ -241,7 +241,7 @@ that person in the last 7 days → `wallet.credit(reason=refund_banned_partner)`
 | `JWT_SECRET` | api | 64+ random bytes |
 | `PHONE_PEPPER`, `PHONE_ENC_KEY` | api | never rotate without a migration plan |
 | `CORS_ORIGINS` | api | comma list, exact origins |
-| `COOKIE_DOMAIN` | api | `.velora.app` |
+| `COOKIE_DOMAIN` | api | the readable `csrf` cookie's domain, e.g. `.veloraapp.co.in`. The refresh cookie has none: host-only on the API (D-054) |
 | `AUTH_PHONE_PROVIDER` | api, web | `firebase` \| `msg91` \| `fake` |
 | `FIREBASE_PROJECT_ID`, `FIREBASE_SERVICE_ACCOUNT_JSON` | api | token verification |
 | `NEXT_PUBLIC_FIREBASE_*` | web | apiKey, authDomain, projectId, appId, App Check site key — public by design |
@@ -295,7 +295,7 @@ secret is left empty. Real secret values are never committed.
 
 | | local | staging | production |
 |---|---|---|---|
-| Web | `pnpm dev` :3000 | Vercel project `velora-staging` (its own; stable URL) | Vercel prod `velora.app` |
+| Web | `pnpm dev` :3000 | Vercel project `velora-staging` (its own; stable URL) | Vercel prod `veloraapp.co.in` |
 | API | uvicorn :8000 | Fly `velora-api-staging` | Fly `velora-api` |
 | DB | docker postgis | Supabase project `velora-staging` | Supabase `velora-prod` |
 | Providers | fake | real (test keys) | real (live keys) |

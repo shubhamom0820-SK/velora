@@ -146,9 +146,30 @@ Sprint 2's landing page and everything after inherit whatever goes in there.
 **Rejected:** the other two prototypes, dark and soft light. Their tokens remain in git history
 (08-DESIGN before this lock); a dark mode, if ever wanted, would be a new decision.
 
-### D-015 · Name "Velora" — Open
-Trademark search pending ("The Velora" is an established wedding brand). Keep the name in one
-constant (`APP_NAME`) in both apps so a rename is trivial.
+### D-015 · Name "Velora", domain `veloraapp.co.in` — Locked
+The brand is **Velora**. Keep the name in one constant (`APP_NAME`) in both apps so a rename is
+trivial.
+
+**The domain is `veloraapp.co.in`, not velora-something.** Every sensible Velora domain was either
+registered or premium-priced: `velora.app` alone was ₹85,101, the price the founder was quoted when
+buying on 2 October 2026. So the brand keeps its name and the domain carries "app". That domain
+search has been done; don't reopen it. Bought from Hostinger on 2 October 2026 (P-0.3).
+
+Web at `veloraapp.co.in`, API at `api.veloraapp.co.in` (T-2.6). Where an earlier decision says
+`velora.app` (D-001, D-024, D-025), read `veloraapp.co.in`. The shape is unchanged: web at the
+apex, API on `api.`, one site. D-024's cookie scope is changed separately, by D-054.
+
+**Closed on a partial trademark search.** "The Velora" is an established wedding brand, and
+another business trades as "Velora" on Vercel (below). The founder searched the public web on
+1 October 2026 and found more Indian entities trading as Velora: VELORA HARDWARE (INDIA) PVT LTD,
+which holds Indian trademarks; VELORA CHEMICALS; VELORA ENTERPRISES; VELORA LABS LLP; VELORAQ
+PRIVATE LIMITED, in Punjab; and a registered "velora-kitchen" mark. Outside India, VELORA LLC in
+the US.
+
+**Not done:** a class-specific search of the Indian trademark registry for dating services or
+software. P-0.1 stays open for it. If it forces a new name, a new decision supersedes this one,
+the domain is bought again, and Vela is renamed with the brand (D-049). Closed by the founder on
+2 October 2026.
 
 **Recorded 1 October 2026, not assessed:** another business trades as "Velora" and holds the name
 on Vercel. `https://velora-staging.vercel.app`, the address staging was meant to have, is that
@@ -607,6 +628,27 @@ gates going live (T-9.15), not the build.
 **Rejected: a check in the production deploy workflow** — T-2.6 hasn't built that workflow yet,
 and a check that lives in a future file can be forgotten; a build that fails closed can't.
 Decided by the founder on 1 October 2026.
+
+### D-054 · The refresh cookie is host-only on the API — Locked
+Supersedes D-024's cookie scope. The refresh cookie carries no `Domain` attribute, so the browser
+keeps it for the API's own host and sends it nowhere else: `api.veloraapp.co.in` in production,
+staging's API host on staging. It is still `HttpOnly; Secure; SameSite=Lax; Path=/v1/auth`, and
+the rest of D-024 stands.
+
+**Why:** the cookie is HttpOnly, so only the API ever reads it; the web never can. Scoping it to
+the whole site was always wider than anything needed, so host-only is the right scope on its own
+merits. Staging stops receiving production refresh tokens as a consequence: staging's subdomains
+are the same site as production's (P-33), and a site-wide cookie would reach staging's API. Each
+environment's refresh cookie stays on its own API host, so the two never reach each other.
+
+**Not covered: the readable `csrf` cookie.** The web reads it to send `X-CSRF` (D-024), so it
+can't be host-only on the API: in production it must be scoped to `veloraapp.co.in`, which
+reaches staging too. It isn't a credential on its own, so nothing leaks. But staging's pages then
+see two cookies named `csrf`, and staging's refresh can fail for anyone signed in to production.
+It is settled before T-3.3 (on its Needs line).
+
+**Rejected: staging on a domain of its own.** It would keep the environments apart but leave
+production's refresh cookie wider than anything needs. Decided by the founder on 2 October 2026.
 
 ---
 
