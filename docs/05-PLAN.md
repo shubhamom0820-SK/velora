@@ -23,9 +23,15 @@ never done silently.
 
 - [ ] **P-0.1** Trademark search for the name on the IP India public search. Record result in D-015.
   **Partly done:** the founder searched the public web on 1 October 2026 (findings in D-015).
-  **Still owed:** a class-specific search of the Indian trademark registry for dating services and
-  software (Nice classes 45, 9 and 42, as Claude mapped them). D-015 was closed and the domain
-  bought (P-0.3) before it, so a conflict found here means a new name and a new domain.
+  **Classes 9, 42 and 45 searched on 3 October 2026, but not on the registry** (founder; findings
+  in D-015). IP India's public search returned an empty page, so the search ran on mirror
+  databases: no mark in those classes, and the only registered VELORA in India is in class 21,
+  kitchen utensils. A mirror is only as current as its last copy of the registry, so that can't
+  tick this box. US marks turned up too; they matter only at a US store listing or in US
+  marketing (D-015, B-15).
+  **Still owed:** the same search, Nice classes 45, 9 and 42 as Claude mapped them, on IP India's
+  own public search once it answers. D-015 was closed and the domain bought (P-0.3) before it, so
+  a conflict found there means a new name and a new domain.
 - [ ] **P-0.2** Register company (OPC recommended) → PAN, GST, current account. Then fill the missing facts in `web/src/lib/legal.ts` (D-053), and change Terms' "Who we are" to name the company directly instead of pointing to the contact page: Terms should name the entity it binds.
   **The four legal facts are in** (the founder, 2 October 2026; D-058): a sole proprietorship,
   not the OPC recommended above, named "Shubham Kumar, sole proprietor", word for word as the
@@ -1008,7 +1014,7 @@ Each becomes a full task with steps when it's pulled in.
 | B-11 | View-once photos | |
 | B-13 | Hindi UI | `hi.ts` alongside `en.ts` |
 | B-14 | Second city | |
-| B-15 | Native Android (React Native + Expo) | only if beta gates are met |
+| B-15 | Native Android (React Native + Expo) | only if beta gates are met. **Before listing:** Velora Studios LLC holds VELORA as a US mark for software and polices it, so a listing in the US store could draw a complaint (P-0.1, D-015) |
 | B-16 | **Closure kit for knots** — "End chat" with a reason, closure message to the other person, and a gentle nudge after 48 h of no reply | answers C4/R2 in `09-RESEARCH.md`; cheap and hits the most emotional complaint |
 | B-17 | **Date safety kit** — share plans with a friend, check-in timer, emergency contact | strongest women-side differentiator for India (C5) |
 | B-18 | **Profile prompts** — 3 of ~20 short questions instead of one about field | fewer bots, better openers (C2/C7) |

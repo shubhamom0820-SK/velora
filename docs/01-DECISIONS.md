@@ -171,6 +171,21 @@ software. P-0.1 stays open for it. If it forces a new name, a new decision super
 the domain is bought again, and Vela is renamed with the brand (D-049). Closed by the founder on
 2 October 2026.
 
+**Searched again on 3 October 2026, on mirrors, not the registry** (founder). IP India's public
+search returned an empty page, so the class search ran on mirror databases, which are only as
+current as their last copy of the registry. **India:** the only registered VELORA found is
+application 2699359, in class 21 (household and kitchen utensils), registered in 2014; no mark was
+found in classes 9, 42 or 45. Unrelated companies carry the name in other trades: Velora
+Chemicals, Velora Weaves, Velora Enterprises. **United States:** Velora Studios LLC holds two
+registered marks, VELORA (3947376) and VELORA STUDIOS (3947378), issued in 2011 and renewed in
+2020, for design, web, hosting, software and technology services. It publishes a page warning
+against using the name for software, SaaS and digital products, so the marks are actively
+policed. **Nothing is blocked today:** a US registration doesn't reach India, and Velora is
+web-first, with no app-store listing. **It would matter at a US app-store listing or in US
+marketing,** so a line goes wherever either is first planned: the only app-store listing planned
+is native Android (B-15), which carries it, and US marketing isn't planned anywhere. P-0.1 stays
+open until the registry itself is searched.
+
 **Recorded 1 October 2026, not assessed:** another business trades as "Velora" and holds the name
 on Vercel. `https://velora-staging.vercel.app`, the address staging was meant to have, is that
 business's site, titled "Velora | Bespoke fronts for IKEA systems". Vercel gave our project
