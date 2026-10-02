@@ -377,11 +377,30 @@ One migration per task, each with a working `downgrade()`. Build exactly `03-SCH
 ### T-2.5 · Security headers
 - [x] **Needs:** T-1.17
 - [x] `next.config` headers (02-ARCHITECTURE §12, D-059), from `web/src/lib/security-headers.ts`: an enforced CSP exactly as strict as today's pages allow; framing forbidden by `frame-ancestors 'none'` and `X-Frame-Options: DENY`; `nosniff`; Referrer-Policy; and a Permissions-Policy denying the camera, the microphone and location. Each later task widens it deliberately, and the module's comment and each task's line name them. Not report-only: with no collector it protects nothing (T-9.12 wires reporting). HSTS stays Vercel's; preload is T-2.6's decision.
-- [ ] **Done when, on staging:** securityheaders.com grade A; the five headers as served, HSTS
+- [x] **Done when, on staging:** securityheaders.com grade A; the five headers as served, HSTS
   without `preload`, and no `X-Powered-By`; headless Chrome shows no CSP violation on the seven
   pages, client-side navigation works, and the waitlist form hydrates and joins for real (201, an
   `example.com` address); and Lighthouse mobile on `/`, five runs fixed in advance and all reported,
   keeps ≥ 90 performance and 100 accessibility.
+  **Proved on staging, 2 October 2026,** on deploy run 37037751830 (commit `8b4604f`, smoke
+  passed):
+  - **Served headers, read by Claude:** all ten URLs checked (the seven pages, a script, the
+    share image and robots.txt) carry exactly the five headers; HSTS is `max-age=63072000` with
+    no `preload`; there's no `X-Powered-By`; the CSP names staging's API.
+  - **The browser, by Claude in headless Chrome:** no CSP violation on the seven pages; a real
+    join through the form answered 201 (`t-2.5-done-when-browser@example.com`); client-side
+    navigation works; and framed from another origin, Chrome refused: "Framing
+    'https://staging.veloraapp.co.in/' violates the following Content Security Policy
+    directive: "frame-ancestors 'none'". The request has been blocked."
+  - **securityheaders.com, read by the founder** in their own browser (Cloudflare refuses curl
+    and headless Chrome), 17:09:50 UTC, results hidden: **grade A**. Six headers detected (CSP,
+    Permissions-Policy, Referrer-Policy, HSTS, X-Content-Type-Options, X-Frame-Options), and one
+    warning, the predicted one, capping it at A: "This policy contains 'unsafe-inline' which is
+    dangerous in the script-src directive." It also found what our checks couldn't:
+    `access-control-allow-origin: *` on the page, Vercel's default (P-43, D-059's amendment).
+  - **Lighthouse** 13.5.0, mobile, five runs fixed in advance and all reported: performance 100,
+    100, 99, 100, 100; accessibility 100 in all five; SEO 66, failing only `is-crawlable`
+    (staging's `noindex`).
 - [x] **Commit:** `feat(web): security headers [T-2.5]`
 
 ### T-2.6 · Production domains
@@ -1364,3 +1383,16 @@ Claude Code adds items here instead of doing unplanned work. Format:
   until then.
 
   Found in T-2.5.
+- [ ] P-43 · Decide `Access-Control-Allow-Origin` on the web's own responses. **Before any
+  authenticated content renders.** Worst case: Vercel's blanket `access-control-allow-origin: *`
+  reaches production on authenticated responses, telling every site it may read them. Browsers
+  refuse credentialed requests against a wildcard, so today it's near enough harmless (the pages
+  are public and no cookies are involved), but nobody chose it and it has no place on an
+  authenticated surface. securityheaders.com flagged it in the founder's scan (T-2.5): "This is a
+  very lax CORS policy. Such a policy should only be used on a public CDN." Claude's HEAD of `/`
+  showed it too, before T-2.5. **First establish where it appears:** every response, or only
+  prerendered ones. Then set what we want in `web/src/lib/security-headers.ts`, beside the other
+  headers, and make the check "exactly these headers, and nothing else" (D-059's amendment): an
+  inclusion check can never find a header we didn't want.
+
+  Found in T-2.5's Done-when.

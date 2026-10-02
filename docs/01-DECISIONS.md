@@ -799,6 +799,15 @@ page dynamic, spending the margin); Next's experimental hash-based SRI (experime
 to cover the inline page data); loosening ahead of time for the tasks above. Decided by the
 founder on 2 October 2026.
 
+**Amended 2 October 2026 (T-2.5's Done-when): check "exactly these, and nothing else".** The
+founder's securityheaders.com scan found `access-control-allow-origin: *` on the page response:
+Vercel's default, never decided, the same shape as `X-Powered-By`. Our checks missed it because
+they asked whether the five headers we wanted were present. That's an inclusion check, and it can
+never find a sixth header we didn't want. Where we care about what is served, the check is
+"exactly these, and nothing else". P-43 deals with the wildcard. The outside grader stays in
+Done-whens: we had read the headers, watched Chrome refuse the frame and run Lighthouse, and the
+outsider still saw the thing we hadn't thought to look for.
+
 ---
 
 ## Adding a decision
