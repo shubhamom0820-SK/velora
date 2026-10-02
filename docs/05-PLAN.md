@@ -346,11 +346,26 @@ One migration per task, each with a working `downgrade()`. Build exactly `03-SCH
   nothing. A disallow stops Google reading a page's `noindex`, so the page can still surface from
   links elsewhere while we believe it's hidden, and listing a path advertises it (P-30). The
   obvious-looking fix, "just disallow it", is the wrong one (the founder, 2 October 2026).
-- [ ] **Done when, on staging:** Lighthouse mobile on `/` stays at ≥ 90 performance and 100
+- [x] **Done when, on staging:** Lighthouse mobile on `/` stays at ≥ 90 performance and 100
   accessibility over several runs, all reported (its SEO score is under 100 there by design:
   staging is `noindex`); `robots.txt` disallows nothing and names no sitemap; `/` and `/discover`
   say `noindex`; `og:image` is an absolute URL on the staging address; and the share image, the
   favicon and the apple icon each answer 200 with their type.
+  **Proved on staging, 2 October 2026, by Claude,** on deploy run 37006559216 (commit `629d66e`,
+  smoke passed). Fetched the way crawlers fetch, with no JavaScript and no cookies:
+  - **Pages:** `/` as WhatsApp, Facebook, X and Google, and `/terms`, `/privacy`, `/refunds`,
+    `/contact`, `/discover` and `/login` as Facebook. Each answered 200 with its own title,
+    `noindex, nofollow`, and `og:image` absolute on `https://staging.veloraapp.co.in/`.
+  - **The share image itself:** the URL the tag points to, fetched as WhatsApp, Facebook and X,
+    answered 200 `image/jpeg`, 1200 × 630, 42,679 bytes: the committed file byte for byte
+    (SHA-256). This is the check that would have caught T-2.4's first build, whose previews were
+    blank while every tag looked right.
+  - **The rest:** `robots.txt` is `Allow: /`, with no disallow and no sitemap; the sitemap is
+    empty; the favicon (`image/x-icon`) and the apple icon (`image/png`) answer 200.
+  - **Lighthouse** 13.5.0, mobile, simulated throttling, local Chrome, five runs fixed in advance
+    and all reported: performance 98, 100, 99, 100, 99; accessibility 100 in all five; SEO 66 in
+    all five, failing only `is-crawlable`, which is the `noindex` working. Same 158 KiB of script
+    as T-2.3's runs (90, 100, 100, 100).
 - [x] **Commit:** `feat(web): seo basics [T-2.4]`
 
 ### T-2.5 · Security headers
