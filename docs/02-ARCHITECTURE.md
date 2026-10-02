@@ -241,7 +241,7 @@ that person in the last 7 days → `wallet.credit(reason=refund_banned_partner)`
 | `JWT_SECRET` | api | 64+ random bytes |
 | `PHONE_PEPPER`, `PHONE_ENC_KEY` | api | never rotate without a migration plan |
 | `CORS_ORIGINS` | api | comma list, exact origins |
-| `COOKIE_DOMAIN` | api | the readable `csrf` cookie's domain, e.g. `.veloraapp.co.in`. The refresh cookie has none: host-only on the API (D-054) |
+| `COOKIE_DOMAIN` | api | the readable CSRF cookie's domain (D-055): `veloraapp.co.in` in production, `staging.veloraapp.co.in` on staging. The refresh cookie has none: host-only on the API (D-054) |
 | `AUTH_PHONE_PROVIDER` | api, web | `firebase` \| `msg91` \| `fake` |
 | `FIREBASE_PROJECT_ID`, `FIREBASE_SERVICE_ACCOUNT_JSON` | api | token verification |
 | `NEXT_PUBLIC_FIREBASE_*` | web | apiKey, authDomain, projectId, appId, App Check site key — public by design |

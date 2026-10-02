@@ -27,15 +27,21 @@ never done silently.
   software (Nice classes 45, 9 and 42, as Claude mapped them). D-015 was closed and the domain
   bought (P-0.3) before it, so a conflict found here means a new name and a new domain.
 - [ ] **P-0.2** Register company (OPC recommended) → PAN, GST, current account. Then fill the missing facts in `web/src/lib/legal.ts` (D-053), and change Terms' "Who we are" to name the company directly instead of pointing to the contact page: Terms should name the entity it binds.
-- [ ] **P-0.3** Buy the domain (D-015 says why this one). Move its nameservers to Cloudflare. Then set up the support and Grievance Officer mailboxes: their addresses are the `supportEmail` and `grievanceOfficerEmail` facts in `web/src/lib/legal.ts`, and production can't build without them (D-053). Put each address there once it has forwarded a test message.
+- [ ] **P-0.3** Buy the domain (D-015 says why this one). Move its nameservers to Cloudflare. Then set up the support and Grievance Officer mailboxes: their addresses are the `supportEmail` and `grievanceOfficerEmail` facts in `web/src/lib/legal.ts`, and production can't build without them (D-053). Put each address there once it has received and sent a test message, and in the same change add Zoho to `/privacy` (`web/src/i18n/en.ts`) in both places: the list of who handles user data, since from then on it holds every support and grievance email, and "Where your data is", which lists what stays in India (D-048): that mail does, in Zoho's India data centre.
   **The domain is done:** `veloraapp.co.in`, registered 2 October 2026 with Hostinger, expiring
   2 October 2027. Claude read both dates and the registrar from the public WHOIS the same day.
   WHOIS privacy and auto-renewal are on and the registrant email is verified, per the founder.
   Web at the apex, API at `api.veloraapp.co.in` (T-2.6).
-  **DNS goes to Cloudflare, for two reasons** (founder, 2 October 2026): T-4.1's R2 custom domain
-  needs the zone on Cloudflare, and Cloudflare Email Routing, which is free, forwards
-  `support@veloraapp.co.in` and `grievance@veloraapp.co.in` to Gmail: the two mailboxes this item
-  owes. **Order:** nameservers first, then the mailboxes, then P-33.
+  **DNS goes to Cloudflare** (founder, 2 October 2026): T-4.1's R2 custom domain needs the zone
+  there, and P-33's staging records go there too.
+  **The mailboxes are on Zoho Mail's free tier** (founder, 2 October 2026; five users, one
+  domain): `support@veloraapp.co.in` and `grievance@veloraapp.co.in`. Zoho sends as well as
+  receives, so grievance acknowledgements go out from the grievance address. **Sign up on Zoho's
+  India data centre (`zoho.in`):** it is chosen once and hard to move. The MX records point at
+  Zoho; add its SPF and DKIM records and a DMARC record too, or those replies land in spam.
+  **Rejected: Cloudflare Email Routing.** It's free but only forwards, so replies would go out from
+  a personal Gmail address, which undercuts the Grievance Officer section (D-052).
+  **Order:** nameservers first, then the mailboxes, then P-33.
   **Still to do:** both. On 2 October the nameservers were still Hostinger's parking servers
   (`aurora` and `nebula.dns-parking.com`), with no DNSSEC to switch off first. T-2.6 waits on the
   mailboxes.
@@ -345,17 +351,18 @@ One migration per task, each with a working `downgrade()`. Build exactly `03-SCH
 - [ ] **Commit:** `feat(auth): send otp [T-3.2]`
 
 ### T-3.3 · OTP verify and signup
-- [ ] **Needs:** T-3.2, and the **cookie scope settled** (D-054), because this task sets the first cookie and its tests would lock in a wrong scope: the refresh cookie is host-only on the API (decided 2 October 2026); the readable `csrf` cookie, which reaches staging from production, is still open
+- [ ] **Needs:** T-3.2, and the **cookie scope settled**, because this task sets the first cookies and its tests would lock in a wrong scope. Settled 2 October 2026: the refresh cookie is host-only on the API (D-054), and both cookies are named for their environment (D-055)
 - [ ] `POST /v1/auth/otp/verify`. Wrong code → attempts+1, `OTP_INVALID` with attempts left; 5th wrong → delete key, `OTP_TOO_MANY`. Correct → delete key.
 - [ ] Find user by `phone_hash`, or create in **one transaction**: `users` (+ referral code), `profiles`, `wallets` (0), `notification_prefs`.
-- [ ] Create session (family), set refresh cookie (`HttpOnly; Secure; SameSite=Lax; Path=/v1/auth`, no `Domain`: host-only on the API, D-054), set readable `csrf` cookie, return `{access_token, user: Me}`.
+- [ ] Create session (family), set the refresh cookie (`refresh_prod`, `refresh_staging`, `refresh_local`; `HttpOnly; Secure; SameSite=Lax; Path=/v1/auth`, no `Domain`: host-only on the API, D-054), set the readable CSRF cookie (`csrf_prod`, `csrf_staging`, `csrf_local`), scoped to `COOKIE_DOMAIN`, return `{access_token, user: Me}`. Both names come from `ENV` with no fallback (D-055).
+- [ ] Set staging's `COOKIE_DOMAIN` to `staging.veloraapp.co.in` in `infra/fly.api.toml` (P-33 leaves it unset).
 - [ ] Refuse if user status `banned`.
-- [ ] Tests: new user creates all 4 rows; existing user doesn't duplicate; banned → `ACCOUNT_BANNED`.
+- [ ] Tests: new user creates all 4 rows; existing user doesn't duplicate; banned → `ACCOUNT_BANNED`; the refresh cookie has no `Domain`; both cookies' names follow `ENV`.
 - [ ] **Commit:** `feat(auth): verify otp and create account [T-3.3]`
 
 ### T-3.4 · Refresh and logout
 - [ ] **Needs:** T-3.3, and **P-33** (staging's web and API on one site, or the refresh cookie can't flow there)
-- [ ] `POST /v1/auth/refresh`: require `X-CSRF` equal to `csrf` cookie; look up `token_hash`; if revoked → revoke whole family (reuse attack) → `SESSION_REVOKED`; else rotate (new session, old `revoked_at` + `replaced_by`).
+- [ ] `POST /v1/auth/refresh`: require `X-CSRF` equal to this environment's CSRF cookie (D-055); look up the `token_hash` of this environment's refresh cookie; if revoked → revoke whole family (reuse attack) → `SESSION_REVOKED`; else rotate (new session, old `revoked_at` + `replaced_by`).
 - [ ] `POST /v1/auth/logout`: revoke current session, clear cookies.
 - [ ] Tests: rotation works; reusing an old token kills the family; missing CSRF → 401.
 - [ ] **Commit:** `feat(auth): refresh rotation and logout [T-3.4]`
@@ -394,7 +401,7 @@ One migration per task, each with a working `downgrade()`. Build exactly `03-SCH
 
 ### T-3.10 · Web auth client
 - [ ] **Needs:** T-1.18, T-3.4
-- [ ] Access token in Zustand (memory only). On app load: call `/auth/refresh` once to restore a session.
+- [ ] Access token in Zustand (memory only). On app load: call `/auth/refresh` once to restore a session, sending `X-CSRF` from this environment's CSRF cookie (D-055).
 - [ ] On any 401 `TOKEN_EXPIRED`: single-flight refresh, then retry the request once.
 - [ ] `useMe()` query; `<OnboardingGate>` redirects to the correct step from `onboarding_step`; `(app)` routes require `done`.
 - [ ] PIN lock screen: shown on load and after 5 min hidden if a PIN is set.
@@ -413,11 +420,11 @@ One migration per task, each with a working `downgrade()`. Build exactly `03-SCH
 - [ ] **Commit:** `feat(web): onboarding about, interests, pin [T-3.12]`
 
 ### T-3.14 · Firebase phone sign-in (launch path)
-- [ ] **Needs:** T-3.3
+- [ ] **Needs:** T-3.3, and T-3.10 (it restores the session on reload, which the Done-when checks)
 - [ ] **New dependencies (approved, recorded in D-035):** api `firebase-admin`; web `firebase`.
 - [ ] Firebase console: project created, Phone provider enabled, **App Check with reCAPTCHA
-  Enterprise enforced on Authentication**, authorised domains = `veloraapp.co.in` + Vercel preview +
-  `localhost`, daily SMS quota capped, billing alert set at a fixed rupee amount.
+  Enterprise enforced on Authentication**, authorised domains = `veloraapp.co.in` + `staging.veloraapp.co.in`
+  (the Done-when signs in there) + Vercel preview + `localhost`, daily SMS quota capped, billing alert set at a fixed rupee amount.
 - [ ] `POST /v1/auth/firebase {id_token}`: verify signature and `aud`/`iss`/`exp` against Google's
   public keys (cached); require `phone_number` and `firebase.sign_in_provider == "phone"`;
   reject non-`+91` → `PHONE_NOT_SUPPORTED`; reject a reused `jti` (Redis until expiry) →
@@ -434,6 +441,11 @@ One migration per task, each with a working `downgrade()`. Build exactly `03-SCH
 - [ ] CSP updated for Firebase Auth and reCAPTCHA domains (follow-up to T-2.5).
 - [ ] Tests: forged token rejected; expired rejected; reused token rejected; non-Indian number
   rejected; banned phone rejected; a valid token creates exactly one user.
+- [ ] **Done when:** on staging, sign in at `https://staging.veloraapp.co.in` with a Firebase
+  test phone number (fixed code, no SMS, no cost), reload, and the session is still there,
+  restored by `/auth/refresh`. This is the first real sign-in staging can do (D-045 allows only
+  real providers there), so it is the first proof that P-33's subdomains carry the refresh cookie.
+  Until it passes, P-33 is believed, not proven.
 - [ ] **Commit:** `feat(auth): firebase phone sign-in [T-3.14]`
 
 ### T-3.13 · E2E signup
@@ -1157,14 +1169,21 @@ Claude Code adds items here instead of doing unplanned work. Format:
   Needs lines. **Needs:** the nameservers on Cloudflare (P-0.3).
   Staging's web is `*.vercel.app` and its API `*.fly.dev`: different sites, so D-024's
   `SameSite=Lax` refresh cookie never flows between them. Refresh and logout (T-3.4) could then
-  only be tested locally. The fix is staging subdomains of the real domain (e.g.
-  `staging.veloraapp.co.in` and `api.staging.veloraapp.co.in`).
+  only be tested locally.
+  **The fix, approved 2 October 2026:** web at `staging.veloraapp.co.in`, API at
+  `api.staging.veloraapp.co.in`, both DNS records DNS-only. The API nests under the web's name so
+  staging's CSRF cookie, scoped to `staging.veloraapp.co.in`, never reaches production (D-055).
+  The old address, `velora-staging-black.vercel.app`, redirects to the new one: left serving, it
+  would be a live URL that looks like our product while CORS quietly refuses its API calls, and
+  it's in old docs. Staging's `COOKIE_DOMAIN` stays unset until T-3.3 sets it.
   **Unblocked 2 October 2026:** the domain is bought (P-0.3, D-015), ahead of the trademark search
   (P-0.1), so a rename forced by that search would mean buying again.
-  **Cookie scope settled (D-054):** staging's subdomains are the same site as production's, so a
-  site-wide production cookie would reach staging's API. The refresh cookie is host-only on each
-  API host instead, so neither environment's reaches the other. The readable `csrf` cookie is
-  still open (T-3.3's Needs line). Found planning T-1.22.
+  **Cookie scope settled:** staging's subdomains are the same site as production's, so a site-wide
+  production cookie would reach staging. The refresh cookie is host-only on each API host
+  (D-054), so neither environment's reaches the other; both cookies are named for their
+  environment (D-055), so production's and staging's never collide.
+  **Its own check can't prove a cookie flows:** nothing sets one before T-3.3. T-3.14's Done-when
+  is that proof, a session surviving a reload on staging. Found planning T-1.22.
 - [ ] P-34 · Move local and CI to Postgres 17, closing the gap with Supabase (D-047). Staging runs
   Postgres 17.11 with PostGIS 3.3.7; local and CI run 16 with PostGIS 3.4. Switch
   `infra/docker-compose.yml`, and with it CI (which starts the same compose services), to a pinned

@@ -51,6 +51,7 @@
 
 - [ ] Refresh cookie `HttpOnly; Secure; SameSite=Lax`, scoped to `/v1/auth`, host-only: no `Domain` attribute (D-054)
 - [ ] CSRF header required on refresh
+- [ ] Both auth cookies named for their environment (`refresh_prod`, `csrf_staging`, …), never a bare name (D-055)
 - [ ] Access token never in localStorage, never in a URL
 - [ ] WebSocket uses single-use tickets only
 - [ ] Webhook signature verified on raw body before JSON parsing

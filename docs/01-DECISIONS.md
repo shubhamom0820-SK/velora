@@ -650,6 +650,36 @@ It is settled before T-3.3 (on its Needs line).
 **Rejected: staging on a domain of its own.** It would keep the environments apart but leave
 production's refresh cookie wider than anything needs. Decided by the founder on 2 October 2026.
 
+### D-055 · Auth cookies are named for their environment — Locked
+Settles what D-054 left open. Both auth cookies carry their environment in their names: the
+refresh cookie is `refresh_prod`, `refresh_staging` or `refresh_local`, and the readable CSRF
+cookie `csrf_prod`, `csrf_staging` or `csrf_local`. No environment gets a bare name. The CSRF
+cookie's `Domain` is `COOKIE_DOMAIN`, so the web can read it: `veloraapp.co.in` in production,
+`staging.veloraapp.co.in` on staging.
+
+**Why the CSRF cookie:** the web reads it to send `X-CSRF` (D-024), so it can't be host-only on
+the API like the refresh cookie (D-054). Production's must be scoped to the whole of
+`veloraapp.co.in`, which reaches staging. Named apart, the two never collide: staging reads only
+`csrf_staging`. Staging's own is scoped to `staging.veloraapp.co.in`, which is why staging's API
+is `api.staging.`, not `staging-api.`: its cookie never reaches production (P-33).
+
+**Why the refresh cookie too:** host-only (D-054) already keeps each environment's apart, but that
+protection rests on a single property. If the cookie is later made domain-scoped, by undoing D-054
+by accident or copying a snippet, the collision comes back silently and sign-in starts failing at
+random. With per-environment names, the same mistake shows up as two differently named cookies
+sitting harmlessly side by side. It is the shape of D-053's gate and rule 16: when a thing can
+fail invisibly, make it fail visibly instead. One rule for both cookies also leaves no exception
+for anyone to remember.
+
+**Why production is named too:** a bare name would make production the implicit default that
+every future environment collides with: a preview deploy, a second staging, a local build pointed
+at staging. Name every environment and none is the one the others shadow. It is rule 16's
+principle, no implicit default.
+
+**Rejected, both Claude's proposals:** a bare `csrf` in production beside `csrf_staging`, which
+leaves production as that implicit default; and an unnamed refresh cookie, which is safe only
+while nothing changes its scope. Decided by the founder on 2 October 2026.
+
 ---
 
 ## Adding a decision
