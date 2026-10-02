@@ -57,7 +57,9 @@ velora/
 `web/` is Next.js 16, scaffolded in T-1.17: `src/app/` (route groups `(marketing)` `(auth)`
 `(app)` `admin`), `src/styles/tokens.css` (design tokens — the only place colours live; a pre-commit
 hook enforces it, with one exception, `src/styles/theme-color.ts`) and `src/i18n/en.ts` (every
-user-facing string, read through `t()`). `src/components/ui/` holds the shared primitives (T-1.19),
+user-facing string, read through `t()`, with one exception, `src/app/opengraph-image.alt.txt`, which
+Next reads as a file; a test holds it to `en.ts`). `src/lib/site.ts` says where the site lives and
+that only production is indexed (T-2.4). `src/components/ui/` holds the shared primitives (T-1.19),
 each with a vitest test beside it; `/dev/ui` shows them all under `next dev` and 404s everywhere
 else. Feature components go in `src/components/<feature>/`. Server data (T-1.18):
 `src/lib/api.ts` is the only code that calls `fetch` (ESLint enforces it), typed from

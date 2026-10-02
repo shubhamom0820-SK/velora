@@ -7,6 +7,11 @@
 export const en = {
   meta: {
     description: "A web-first dating app for India.",
+    // A page's title in the tab and in search results, "Privacy policy ·
+    // Velora". Next fills in %s (T-2.4).
+    titleTemplate: "%s · {app}",
+    // The home page's title: the brand, then the landing headline.
+    homeTitle: "{app} · {headline}",
   },
   placeholder: {
     comingSoon: "Coming soon.",
@@ -21,6 +26,9 @@ export const en = {
     // headlineThreads ("a day"), intro and features.threads.title ("24-hour")
     // promise app_config.thread_hours, seeded 24. Copy, not a computation, so
     // it's written out rather than read: change it with the setting (T-2.1).
+    // The headline is also baked into the share image's pixels: change it, and
+    // regenerate src/app/opengraph-image.png and its alt text (T-2.4,
+    // 08-DESIGN §7). A test fails until the alt text matches.
     headlineThreads: "Threads last a day.",
     headlineKnots: "Knots last.",
     intro:

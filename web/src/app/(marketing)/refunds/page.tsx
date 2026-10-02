@@ -5,6 +5,13 @@ import { LegalSection } from "@/components/marketing/LegalSection";
 import { t } from "@/i18n/t";
 import { APP_NAME } from "@/lib/app";
 import { LEGAL } from "@/lib/legal";
+import { publicPageMetadata } from "@/lib/site";
+
+export const generateMetadata = publicPageMetadata(
+  "/refunds",
+  t("legal.refunds.title"),
+  t("legal.refunds.intro"),
+);
 
 /**
  * /refunds (T-2.2, D-050): purchases are final, a broken payment is ours to

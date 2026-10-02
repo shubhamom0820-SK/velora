@@ -1,17 +1,14 @@
 import type { Metadata, Viewport } from "next";
 
 import { ToastProvider } from "@/components/ui/ToastProvider";
-import { t } from "@/i18n/t";
-import { APP_NAME } from "@/lib/app";
 import { QueryProvider } from "@/lib/queries/QueryProvider";
+import { rootMetadata } from "@/lib/site";
 import { THEME_COLOR } from "@/styles/theme-color";
 
 import "./globals.css";
 
-export const metadata: Metadata = {
-  title: APP_NAME,
-  description: t("meta.description"),
-};
+// Titles, the share preview, and `noindex` everywhere but production (T-2.4).
+export const metadata: Metadata = rootMetadata();
 
 export const viewport: Viewport = {
   themeColor: THEME_COLOR,

@@ -1,10 +1,17 @@
 import { Clock, Link2, Shield } from "lucide-react";
-
 import { FeatureCard } from "@/components/marketing/FeatureCard";
 import { Hero } from "@/components/marketing/Hero";
 import { SiteHeader } from "@/components/marketing/SiteHeader";
 import { WaitlistBox } from "@/components/marketing/WaitlistBox";
 import { t } from "@/i18n/t";
+import { homeTitle, publicPageMetadata } from "@/lib/site";
+
+// The landing intro doubles as the description: it promises thread_hours too.
+export const generateMetadata = publicPageMetadata(
+  "/",
+  homeTitle(),
+  t("landing.intro"),
+);
 
 // The prototype's own icons: its "Link" is Lucide's link-2.
 const FEATURES = [

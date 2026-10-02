@@ -5,6 +5,13 @@ import { LegalSection } from "@/components/marketing/LegalSection";
 import { t } from "@/i18n/t";
 import { APP_NAME } from "@/lib/app";
 import { LEGAL, PLACE } from "@/lib/legal";
+import { publicPageMetadata } from "@/lib/site";
+
+export const generateMetadata = publicPageMetadata(
+  "/contact",
+  t("legal.contact.title"),
+  t("legal.contact.intro", { app: APP_NAME }),
+);
 
 /**
  * /contact (T-2.2): who runs the app and who handles complaints (IT Rules).

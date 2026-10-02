@@ -137,3 +137,26 @@ prices, history) · Store sheet · Checkout states (processing, failed) · You �
 Short, warm, plain. Say what happens, not what the system is. "Cleared from your chats" not
 "Deleted". "This thread disappears in 4h" not "TTL remaining". Prices always in Velas with the
 number first: "Open thread · 5 Velas". Never shame or pressure ("Only 2 left!").
+
+## 7. Brand images
+
+The share preview and the icons, beside the root layout in `web/src/app/` (T-2.4). Made by Claude
+on 2 October 2026 from `tokens.css` itself, rendered with headless Chrome in the system font stack
+(§2) as it draws on macOS, so every colour is a token. They're committed as images, never as code
+holding a hex value.
+
+| File | What it shows |
+|---|---|
+| `opengraph-image.jpg` | 1200 × 630, every page's link preview: the landing hero. `--chrome` under `--chrome-glow`, "Threads last a day. Knots last." in `--chrome-ink` at display weight, the wordmark top left, `veloraapp.co.in` in `--chrome-mute` along the bottom. JPEG at quality 90, because the glow is a gradient and PNG compresses it poorly (152 KB against 43 KB). |
+| `opengraph-image.alt.txt` | Its alt text: exactly the home page's title, the brand and the headline. |
+| `apple-icon.png` | 180 × 180: a V in `--chrome-ink` on `--chrome`, with margins, since iOS crops it to a rounded square. |
+| `favicon.ico` | The same V at 16, 32 and 48 px, filling more of its tile. White, not red: at 16 px red on black muddies, and white stays legible (the founder). Its PNGs are RGBA, which Next requires. |
+
+**Regenerate them** when the name changes (the wordmark and the V; rule 17), when the landing
+headline changes (it promises `thread_hours`, 03-SCHEMA §8; a test fails until the alt text
+matches it), when the theme changes (D-014), or when the domain does.
+
+**Known, and accepted for now** (the founder, 2 October 2026): the red glow barely shows at full
+size, and WhatsApp's own re-encode will likely remove what's left, so the image reads as black
+with type and the accent does no work there. The domain line isn't readable at phone preview
+size. The type and the wordmark carry the image. Weigh both the next time it's made.

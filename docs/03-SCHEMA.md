@@ -447,8 +447,10 @@ trace is exactly the person with admin access (T-1.13).
 `gift_free_daily_limit=3`, `gift_same_recipient_cooldown_h=24`.
 Two settings are also promised in copy, in `web/src/i18n/en.ts`, written out because copy is a
 promise, not a computation. Change the copy with the setting:
-- `thread_hours`: the landing page ("Threads last a day", "24-hour", T-2.1) and `/terms` ("lasts
-  a day", T-2.2).
+- `thread_hours`: the landing page ("Threads last a day", "24-hour", T-2.1), `/terms` ("lasts
+  a day", T-2.2), and the share image, whose pixels say "Threads last a day"
+  (`web/src/app/opengraph-image.jpg`, T-2.4): the easiest one to forget. 08-DESIGN §7 says how to
+  regenerate it.
 - `mask_first_n_messages`: `/terms` and `/privacy` ("first 20 messages", T-2.2).
 
 ### waitlist

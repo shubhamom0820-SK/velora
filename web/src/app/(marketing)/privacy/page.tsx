@@ -5,6 +5,13 @@ import { LegalSection } from "@/components/marketing/LegalSection";
 import { t } from "@/i18n/t";
 import { APP_NAME } from "@/lib/app";
 import { LEGAL } from "@/lib/legal";
+import { publicPageMetadata } from "@/lib/site";
+
+export const generateMetadata = publicPageMetadata(
+  "/privacy",
+  t("legal.privacy.title"),
+  t("legal.privacy.intro", { app: APP_NAME }),
+);
 
 const COLLECTED = [
   "phone",

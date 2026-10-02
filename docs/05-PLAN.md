@@ -338,9 +338,20 @@ One migration per task, each with a working `downgrade()`. Build exactly `03-SCH
 - [x] **Commit:** `feat: waitlist [T-2.3]`
 
 ### T-2.4 · SEO and sharing
-- [ ] **Needs:** T-2.1
-- [ ] Metadata API titles/descriptions, OG image (static), `sitemap.xml`, `robots.txt` (disallow `/admin`, `/(app)` routes), favicon + icons.
-- [ ] **Commit:** `feat(web): seo basics [T-2.4]`
+- [x] **Needs:** T-2.1
+- [x] Metadata API titles/descriptions, OG image (static), `sitemap.xml`, `robots.txt`, favicon + icons.
+- [x] **Kept out of search with `noindex`, never a robots.txt disallow.** Every page outside
+  production says `noindex` (an allowlist on `APP_ENV`), and so do the `(app)` and `(auth)` groups
+  in every environment, which covers the routes added to them later. robots.txt disallows
+  nothing. A disallow stops Google reading a page's `noindex`, so the page can still surface from
+  links elsewhere while we believe it's hidden, and listing a path advertises it (P-30). The
+  obvious-looking fix, "just disallow it", is the wrong one (the founder, 2 October 2026).
+- [ ] **Done when, on staging:** Lighthouse mobile on `/` stays at ≥ 90 performance and 100
+  accessibility over several runs, all reported (its SEO score is under 100 there by design:
+  staging is `noindex`); `robots.txt` disallows nothing and names no sitemap; `/` and `/discover`
+  say `noindex`; `og:image` is an absolute URL on the staging address; and the share image, the
+  favicon and the apple icon each answer 200 with their type.
+- [x] **Commit:** `feat(web): seo basics [T-2.4]`
 
 ### T-2.5 · Security headers
 - [ ] **Needs:** T-1.17
@@ -352,6 +363,10 @@ One migration per task, each with a working `downgrade()`. Build exactly `03-SCH
 - [ ] **Needs:** P-0.3, T-1.22, and the **legal facts final** (P-0.2, P-0.3) — production can't build the legal pages while any is missing (D-053)
 - [ ] `veloraapp.co.in` → Vercel prod; `api.veloraapp.co.in` → Fly prod app; SSL issued. Prod DB/Redis/R2 created but empty.
 - [ ] **Done when:** `https://veloraapp.co.in` shows the landing page; `https://api.veloraapp.co.in/healthz` is 200. → **Unblocks P-0.8.**
+- [ ] **Done when, T-2.4's production side, which only production can prove:** `robots.txt` names
+  `https://veloraapp.co.in/sitemap.xml`; the sitemap lists the five public pages on that address;
+  `/` has no `noindex` while `/discover` and `/login` still do; `og:image` is on `veloraapp.co.in`;
+  and Lighthouse SEO on `/` is 100. Unit tests cover it until then; this is the real check.
 - [ ] **Commit:** `chore(infra): production domains [T-2.6]`
 
 ---

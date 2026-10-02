@@ -7,6 +7,13 @@ import { LegalSection } from "@/components/marketing/LegalSection";
 import { t } from "@/i18n/t";
 import { APP_NAME } from "@/lib/app";
 import { LEGAL, PLACE } from "@/lib/legal";
+import { publicPageMetadata } from "@/lib/site";
+
+export const generateMetadata = publicPageMetadata(
+  "/terms",
+  t("legal.terms.title"),
+  t("legal.terms.intro", { app: APP_NAME }),
+);
 
 const LINK = "underline underline-offset-2";
 
