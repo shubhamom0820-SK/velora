@@ -193,7 +193,8 @@ public bucket's CDN domain are set with T-4.1, when storage is built.
    Keychain and staged the same day (T-3.1). A key's shape says nothing about whether the Keychain
    copy is the same value as Fly's, so compare them by SHA-256 computed in each place, first 8 hex
    characters (the value never leaves either). A copy that was never the same value fails only on
-   the day it's restored: every stored PIN, or every phone number, at once.
+   the day it's restored: every stored PIN, or every phone number, at once. Compared by Claude on
+   3 October 2026, after deploy run 37079492855: all four match.
 
    The owner's credentials are **not** a Fly secret.
 3. Create a **deploy token** for this app only (Tokens → Create deploy token).

@@ -494,7 +494,23 @@ One migration per task, each with a working `downgrade()`. Build exactly `03-SCH
 - [x] Unit tests for each, written so a deliberately weakened primitive fails: 31 weakened versions (a fixed salt, unchecked parameters, `==` for CSRF, the wall clock for expiry, no pepper and the rest), each turned at least one test red.
 - [x] `make_user(gender="male", onboarded=True, credits=0, verified=None)` factory in `tests/conftest.py` returning `(user, access_token)` (moved from T-1.5; needs `users` from T-1.9). `verified` follows D-008 unless given; `credits` other than 0 raises until T-5.1 (rule 5).
 - [x] **Staging made ready before `main` moved:** on 3 October 2026 Claude read staging's keys on the machine, lengths and hex only: `JWT_SECRET` at 128 lowercase hex characters, `PHONE_PEPPER` and `PHONE_ENC_KEY` at 64 each, matching `infra/STAGING.md`'s claim. `CODE_PEPPER` was generated into the Keychain and staged the same day (Fly lists it as `Staged`), so the deploy that needs it can start. There is no production Fly app yet. 20 hashes were timed on staging's machine: a median of 18.4 ms (D-062).
-- [ ] **Done when, on staging:** rebased onto `main`, which moved during the build, and gated on the rebased commit, not the one built, with P-0.3's lines in `05-PLAN.md` kept beside these (the founder, 3 October 2026); the deploy comes up on the new `Settings`; and `CODE_PEPPER`'s SHA-256 computed on the machine matches the Keychain copy's computed locally, first 8 hex characters. A shape check passes any 64 hex characters, so only a match proves the transfer landed intact. A mismatch costs nothing until the day Fly's copy is lost and restored from the Keychain: then every stored PIN becomes unverifiable at once.
+- [x] **Done when, on staging:** rebased onto `main`, which moved during the build, and gated on the rebased commit, not the one built, with P-0.3's lines in `05-PLAN.md` kept beside these (the founder, 3 October 2026); the deploy comes up on the new `Settings`; and `CODE_PEPPER`'s SHA-256 computed on the machine matches the Keychain copy's computed locally, first 8 hex characters. A shape check passes any 64 hex characters, so only a match proves the transfer landed intact. A mismatch costs nothing until the day Fly's copy is lost and restored from the Keychain: then every stored PIN becomes unverifiable at once.
+  **Proved on staging, 3 October 2026,** on deploy run 37079492855 (commit `bcc3773`, smoke
+  passed):
+  - **Rebased and gated:** onto `72ef3a2` (P-0.3), whose plan lines stand beside these. The first
+    commit's CI run, 37078451050, failed: GitHub's YAML read the unquoted, all-digit test keys as
+    numbers (`PHONE_PEPPER` arrived as `7.07070707070707E+63`), and the new key checks refused them
+    on their first real run, before anything deployed. `bcc3773` quotes them and makes the guard
+    parse `ci.yml`. Its run, 37079193472, was green in 1 m 36 s: the `api` job took 63 s, against
+    55 s before T-3.1.
+  - **The deploy came up:** release v27, the machine started with its health check passing, and its
+    image has `app/core/security.py`. Startup checks all four keys' shapes, so it couldn't have
+    started on a malformed one.
+  - **The match, read by Claude:** SHA-256 of each key computed on the machine and of its Keychain
+    copy computed locally, first 8 hex characters, the values never leaving either place.
+    `CODE_PEPPER`: `fd4ae0b5` on both. The other three, carried the same way in T-1.22 and never
+    confirmed until now, match too: `JWT_SECRET` `f5fbdd09`, `PHONE_PEPPER` `f7d127c0`,
+    `PHONE_ENC_KEY` `9d5de66c`.
 - [x] **Commit:** `feat(auth): security primitives [T-3.1]`
 
 ### T-3.2 · OTP send
