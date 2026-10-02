@@ -15,7 +15,8 @@ export type Missing = {
 
 export type Fact = string | Missing;
 
-function missing(what: string, waitsOn: Missing["waitsOn"]): Missing {
+/** A fact the pages need but we don't have yet: the next one goes through here (D-053). */
+export function missing(what: string, waitsOn: Missing["waitsOn"]): Missing {
   return { missing: true, what, waitsOn };
 }
 
@@ -58,8 +59,8 @@ export type LegalFacts = {
   readonly supportEmail: Fact;
 };
 
-// P-0.2's four facts are settled (D-058); the two emails wait on the mailboxes
-// (P-0.3), so production still can't build (D-053).
+// Every fact is known: P-0.2's four (D-058) and P-0.3's two mailboxes, so the
+// production build's gate lets the legal pages through (D-053).
 export const LEGAL: LegalFacts = {
   // Word for word: it must match the proprietor's PAN and bank account, which
   // Razorpay's KYC compares. A "tidier" name stalls payouts (D-058).
@@ -68,8 +69,10 @@ export const LEGAL: LegalFacts = {
   // The court follows the registered office, not the launch city (D-058).
   court: "The courts at Hajipur, Vaishali district, Bihar",
   grievanceOfficerName: "Shubham Kumar",
-  grievanceOfficerEmail: missing("the Grievance Officer's email", "P-0.3"),
-  supportEmail: missing("the support email", "P-0.3"),
+  // Aliases on one Zoho Mail user in its India data centre, proven by a
+  // message received and a reply sent (P-0.3).
+  grievanceOfficerEmail: "grievance@veloraapp.co.in",
+  supportEmail: "support@veloraapp.co.in",
 };
 
 export function missingFacts(facts: LegalFacts = LEGAL): Missing[] {

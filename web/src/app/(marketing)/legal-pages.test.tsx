@@ -4,6 +4,9 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { t } from "@/i18n/t";
 import { OFFICE_ADDRESS } from "@/lib/legal";
 
+/** The two mailboxes (P-0.3): the only email addresses a legal page may show. */
+const MAILBOXES = ["support@veloraapp.co.in", "grievance@veloraapp.co.in"];
+
 import ContactPage from "./contact/page";
 import PrivacyPage from "./privacy/page";
 import RefundsPage from "./refunds/page";
@@ -36,13 +39,13 @@ afterEach(() => {
   vi.restoreAllMocks();
 });
 
-describe("the legal pages, on staging with facts still missing", () => {
+describe("the legal pages, with every fact known", () => {
   beforeEach(() => {
     vi.stubEnv("APP_ENV", "staging");
   });
 
   it.each(PAGES)(
-    "%s has one h1, says it isn't final, and links back home",
+    "%s has one h1, no 'not final' note, and links back home",
     (_path, Page, title) => {
       render(<Page />);
 
@@ -50,7 +53,8 @@ describe("the legal pages, on staging with facts still missing", () => {
       expect(
         screen.getByRole("heading", { level: 1, name: t(title) }),
       ).toBeInTheDocument();
-      expect(screen.getByText(t("legal.notFinal"))).toBeInTheDocument();
+      // The note shows only while a fact is missing (LegalPage.test.tsx).
+      expect(screen.queryByText(t("legal.notFinal"))).toBeNull();
       expect(
         screen.getByRole("link", { name: t("legal.back") }),
       ).toHaveAttribute("href", "/");
@@ -63,24 +67,35 @@ describe("the legal pages, on staging with facts still missing", () => {
     expect(container.textContent).not.toMatch(/\d+\s*Velas?\b/);
   });
 
-  it.each(PAGES)("%s invents no email address", (_path, Page) => {
-    const { container } = render(<Page />);
+  it.each(PAGES)(
+    "%s shows no email address but our two mailboxes",
+    (_path, Page) => {
+      const { container } = render(<Page />);
 
-    expect(container.textContent).not.toContain("@");
-    expect(container.querySelector('a[href^="mailto:"]')).toBeNull();
-  });
+      // Text node by text node: textContent joins neighbouring elements without
+      // a space, which would glue a label onto the address beside it.
+      const walker = document.createTreeWalker(container, NodeFilter.SHOW_TEXT);
+      const shown: string[] = [];
+      for (let node = walker.nextNode(); node; node = walker.nextNode()) {
+        shown.push(...(node.textContent?.match(/[\w.+-]+@[\w.-]+\w/g) ?? []));
+      }
+      const linked = [...container.querySelectorAll('a[href^="mailto:"]')].map(
+        (a) => a.getAttribute("href"),
+      );
+      for (const email of shown) expect(MAILBOXES).toContain(email);
+      for (const href of linked)
+        expect(MAILBOXES.map((m) => `mailto:${m}`)).toContain(href);
+    },
+  );
 });
 
 describe("the legal pages in a production build", () => {
   it.each(PAGES)(
-    "%s refuses to build while a legal fact is missing (D-053)",
+    "%s builds now that every legal fact is known (D-053)",
     (_path, Page) => {
       vi.stubEnv("APP_ENV", "production");
-      vi.spyOn(console, "error").mockImplementation(() => {});
 
-      expect(() => render(<Page />)).toThrow(
-        "The legal pages can't be built with APP_ENV=production. Still missing:",
-      );
+      expect(() => render(<Page />)).not.toThrow();
     },
   );
 });
@@ -135,8 +150,8 @@ describe("/refunds", () => {
 });
 
 describe("/contact", () => {
-  it("names who runs it and the registered office, with only the two emails to come", () => {
-    vi.stubEnv("APP_ENV", "staging");
+  it("names who runs it, the registered office and both mailboxes, with nothing left to confirm", () => {
+    vi.stubEnv("APP_ENV", "production");
     const { container } = render(<ContactPage />);
 
     expect(screen.getByText(t("legal.facts.runBy"))).toBeInTheDocument();
@@ -148,8 +163,14 @@ describe("/contact", () => {
     expect(container.textContent).not.toMatch(/\bcompany\b/i);
     // The registered office isn't the launch city (D-058): no Phagwara line under it.
     expect(container.textContent).not.toMatch(/Phagwara|Punjab/);
-    // The support email and the Grievance Officer's email (P-0.3).
-    expect(screen.getAllByText(t("legal.toBeConfirmed"))).toHaveLength(2);
+    // The mailboxes as mail links (P-0.3), and nothing "to be confirmed".
+    expect(
+      screen.getByRole("link", { name: "support@veloraapp.co.in" }),
+    ).toHaveAttribute("href", "mailto:support@veloraapp.co.in");
+    expect(
+      screen.getByRole("link", { name: "grievance@veloraapp.co.in" }),
+    ).toHaveAttribute("href", "mailto:grievance@veloraapp.co.in");
+    expect(screen.queryByText(t("legal.toBeConfirmed"))).toBeNull();
   });
 });
 

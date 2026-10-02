@@ -4,33 +4,42 @@ import {
   assertLegalFactsComplete,
   LEGAL,
   type LegalFacts,
+  missing,
   missingFacts,
   OFFICE_ADDRESS,
   REGISTERED_OFFICE,
 } from "./legal";
 
-// D-053, proved both ways: a missing legal fact builds only where it's allowed,
-// and every refusal names each missing fact and what brings it.
-// P-0.2's four facts are in (D-058); only the two emails are still to come.
+// D-053, proved both ways. Every real fact is known now, so the gate's refusal
+// is exercised with stand-in gaps: a missing fact builds only where it's
+// allowed, and every refusal names each missing fact and what brings it.
+const GAPS: LegalFacts = {
+  ...LEGAL,
+  grievanceOfficerEmail: missing("the Grievance Officer's email", "P-0.3"),
+  supportEmail: missing("the support email", "P-0.3"),
+};
 const EVERY_GAP = [
   "the Grievance Officer's email (P-0.3)",
   "the support email (P-0.3)",
 ];
 
-const KNOWN: LegalFacts = {
-  companyName: "Example Private Limited",
-  registeredOffice: "1 Example Road, Example Town 100001, India",
-  court: "Example court",
-  grievanceOfficerName: "A. Person",
-  grievanceOfficerEmail: "grievance@example.in",
-  supportEmail: "support@example.in",
-};
-
 describe("the legal facts", () => {
-  it("are missing only where the mailboxes (P-0.3) bring them", () => {
-    expect(missingFacts().map((gap) => `${gap.what} (${gap.waitsOn})`)).toEqual(
-      EVERY_GAP,
-    );
+  it("are all known: P-0.2's four and P-0.3's two", () => {
+    expect(missingFacts()).toEqual([]);
+  });
+
+  it("let a production build through now (D-053)", () => {
+    expect(() =>
+      assertLegalFactsComplete(LEGAL, {
+        NODE_ENV: "production",
+        APP_ENV: "production",
+      }),
+    ).not.toThrow();
+  });
+
+  it("give the two mailboxes on our own domain, proven by mail both ways (P-0.3)", () => {
+    expect(LEGAL.supportEmail).toBe("support@veloraapp.co.in");
+    expect(LEGAL.grievanceOfficerEmail).toBe("grievance@veloraapp.co.in");
   });
 });
 
@@ -39,7 +48,7 @@ describe("assertLegalFactsComplete", () => {
     "lets a missing fact show where APP_ENV is %s",
     (appEnv) => {
       expect(() =>
-        assertLegalFactsComplete(LEGAL, {
+        assertLegalFactsComplete(GAPS, {
           NODE_ENV: "production",
           APP_ENV: appEnv,
         }),
@@ -49,7 +58,7 @@ describe("assertLegalFactsComplete", () => {
 
   it("lets a missing fact show under next dev", () => {
     expect(() =>
-      assertLegalFactsComplete(LEGAL, { NODE_ENV: "development" }),
+      assertLegalFactsComplete(GAPS, { NODE_ENV: "development" }),
     ).not.toThrow();
   });
 
@@ -62,7 +71,7 @@ describe("assertLegalFactsComplete", () => {
     "refuses where APP_ENV is %s, naming every missing fact",
     (appEnv, where) => {
       expect(() =>
-        assertLegalFactsComplete(LEGAL, {
+        assertLegalFactsComplete(GAPS, {
           NODE_ENV: "production",
           APP_ENV: appEnv,
         }),
@@ -73,19 +82,10 @@ describe("assertLegalFactsComplete", () => {
     },
   );
 
-  it("lets production build once every fact is known", () => {
-    expect(() =>
-      assertLegalFactsComplete(KNOWN, {
-        NODE_ENV: "production",
-        APP_ENV: "production",
-      }),
-    ).not.toThrow();
-  });
-
   it("names only the facts still missing", () => {
     expect(() =>
       assertLegalFactsComplete(
-        { ...KNOWN, supportEmail: LEGAL.supportEmail },
+        { ...LEGAL, supportEmail: missing("the support email", "P-0.3") },
         { NODE_ENV: "production", APP_ENV: "production" },
       ),
     ).toThrow("Still missing: the support email (P-0.3).");

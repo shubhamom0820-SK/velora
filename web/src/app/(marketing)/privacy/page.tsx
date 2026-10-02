@@ -29,6 +29,7 @@ const COLLECTED = [
 const WHERE = [
   "database",
   "waitlist",
+  "mail",
   "servers",
   "media",
   "moderation",

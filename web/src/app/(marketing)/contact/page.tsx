@@ -16,7 +16,7 @@ export const generateMetadata = publicPageMetadata(
 /**
  * /contact (T-2.2): who runs the app and who handles complaints (IT Rules).
  * Each fact comes from src/lib/legal.ts: who runs it and where notice goes are
- * settled (D-058); the two emails wait on the mailboxes (P-0.3, D-053).
+ * settled (D-058), and the two emails are the mailboxes (P-0.3).
  */
 export default function ContactPage() {
   return (

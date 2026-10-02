@@ -228,6 +228,8 @@ export const en = {
         // T-2.3: the waitlist table is in the same database.
         waitlist:
           "If you joined the waitlist, your email and city are stored in Mumbai, India, too.",
+        // P-0.3: one Zoho Mail user in its India data centre (D-048 holds).
+        mail: "If you write to our support or grievance address, your email is kept by Zoho, in India.",
         servers:
           "Every request you make is handled by our servers in Singapore.",
         media:
@@ -243,7 +245,8 @@ export const en = {
       others: {
         title: "Who else handles your data",
         // D-023, D-026, D-027, D-028, D-035, D-048.
-        body: "Google (sign-in codes), Razorpay (payments), Sightengine (photo checks), Amazon Web Services (selfie checks), Cloudflare (storing photos and voice notes), Supabase (our database), Upstash (our cache), Fly.io (our servers) and Vercel (our website).",
+        // P-0.3: Zoho holds every support and grievance email.
+        body: "Google (sign-in codes), Razorpay (payments), Sightengine (photo checks), Amazon Web Services (selfie checks), Cloudflare (storing photos and voice notes), Supabase (our database), Upstash (our cache), Fly.io (our servers), Vercel (our website) and Zoho (our support and grievance email).",
       },
       cookies: {
         title: "Cookies",

@@ -39,18 +39,21 @@ never done silently.
   Kumar as Grievance Officer. They're in `legal.ts`, and Terms now names the proprietor directly.
   **Still open, for the founder to confirm separately:** PAN, GST and the current account. T-2.6
   stays blocked on P-0.3's two mailboxes: four of the six legal facts.
-- [ ] **P-0.3** Buy the domain (D-015 says why this one). Move its nameservers to Cloudflare. Then set up the support and Grievance Officer mailboxes: their addresses are the `supportEmail` and `grievanceOfficerEmail` facts in `web/src/lib/legal.ts`, and production can't build without them (D-053). Put each address there once it has received and sent a test message, and in the same change add Zoho to `/privacy` (`web/src/i18n/en.ts`) in both places: the list of who handles user data, since from then on it holds every support and grievance email, and "Where your data is", which lists what stays in India (D-048): that mail does, in Zoho's India data centre.
+  **3 October 2026:** the mailboxes are in (P-0.3), so all six legal facts are known and a
+  production build lets the legal pages through (D-053).
+- [x] **P-0.3** Buy the domain (D-015 says why this one). Move its nameservers to Cloudflare. Then set up the support and Grievance Officer mailboxes: their addresses are the `supportEmail` and `grievanceOfficerEmail` facts in `web/src/lib/legal.ts`, and production can't build without them (D-053). Put each address there once it has received and sent a test message, and in the same change add Zoho to `/privacy` (`web/src/i18n/en.ts`) in both places: the list of who handles user data, since from then on it holds every support and grievance email, and "Where your data is", which lists what stays in India (D-048): that mail does, in Zoho's India data centre.
   **The domain is done:** `veloraapp.co.in`, registered 2 October 2026 with Hostinger, expiring
   2 October 2027. Claude read both dates and the registrar from the public WHOIS the same day.
   WHOIS privacy and auto-renewal are on and the registrant email is verified, per the founder.
   Web at the apex, API at `api.veloraapp.co.in` (T-2.6).
   **DNS goes to Cloudflare** (founder, 2 October 2026): T-4.1's R2 custom domain needs the zone
   there, and P-33's staging records go there too.
-  **The mailboxes are on Zoho Mail's free tier** (founder, 2 October 2026; five users, one
-  domain): `support@veloraapp.co.in` and `grievance@veloraapp.co.in`. Zoho sends as well as
-  receives, so grievance acknowledgements go out from the grievance address. **Sign up on Zoho's
-  India data centre (`zoho.in`):** it is chosen once and hard to move. The MX records point at
-  Zoho; add its SPF and DKIM records and a DMARC record too, or those replies land in spam.
+  **The mailboxes are on Zoho Mail** (founder, 2 October 2026): `support@veloraapp.co.in` and
+  `grievance@veloraapp.co.in`. Planned on the free tier (five users, one domain), set up as two
+  aliases on one paid user. Zoho sends as well as receives, so grievance acknowledgements go out
+  from the grievance address. **Sign up on Zoho's India data centre (`zoho.in`):** it is chosen
+  once and hard to move. The MX records point at Zoho; add its SPF and DKIM records and a DMARC
+  record too, or those replies land in spam.
   **Rejected: Cloudflare Email Routing.** It's free but only forwards, so replies would go out from
   a personal Gmail address, which undercuts the Grievance Officer section (D-052).
   **Order:** nameservers first, then the mailboxes, then P-33.
@@ -58,7 +61,65 @@ never done silently.
   (`aaron` and `lilyana.ns.cloudflare.com`) by 14:58 IST, read from the registry by Claude. Both
   answered for the zone, with Hostinger's parking A and MX records gone; there was no DNSSEC to
   switch off. P-33 started from there.
-  **Still to do:** the mailboxes, which T-2.6 waits on.
+  **The mailboxes, 3 October 2026:** both addresses are aliases on one paid Zoho Mail user in
+  Zoho's India data centre, so support and grievance mail stays in India (D-048). They're in
+  `legal.ts`, and `/privacy` names Zoho in both places this task asks for.
+  **Proved by the mail, not a status page** (founder): a message from an outside account reached
+  `grievance@` and a reply came back. Gmail's own `Authentication-Results` line on the reply read
+  `dkim=pass` with `header.s=zmail` and `spf=pass` with `smtp.mailfrom=grievance@veloraapp.co.in`:
+  Google checking the signature against the key in our DNS, not a checker reporting that a
+  record exists.
+  **That test's `dmarc=pass` wasn't Gmail's verdict.** Claude first put it down to Hostinger's
+  stale zone (below); the founder found it was worse, and wrote it down in these words: "Gmail's
+  own Authentication-Results line carried only dkim=pass and spf=pass. The dmarc=pass sat inside
+  arc=pass(...), which is Gmail relaying what Zoho's own ARC seal asserted. So I quoted a
+  vendor's self-report as the receiving server's verdict." It's a sharper version of the same
+  trap: not only "which DNS answered" but "whose assertion am I reading". Our zone had no DMARC
+  record then: Claude read its absence at both of our nameservers.
+  **DMARC is `v=DMARC1; p=quarantine`** (founder, 3 October 2026), for two reasons, the second
+  deciding. Only Zoho sends as this domain, so mail claiming to come from it that Zoho didn't
+  send goes to spam, including mail posing as `support@` or `grievance@`. And the value tells the
+  zones apart: a verdict showing `p=QUARANTINE` can only have come from ours, since Hostinger's
+  stale record says `p=none`. Claude read it the same day from both of our nameservers, as
+  authoritative answers, along with the MX records (`mx`, `mx2` and `mx3.zoho.in`), SPF
+  (`v=spf1 include:zoho.in ~all`), the `zmail` DKIM key and Zoho's verification record.
+  **Then Gmail's own verdict, for each address** (founder, 3 October 2026): each alias received a
+  message from an outside account and replied, `grievance@` at 02:52 IST and `support@` at 03:11.
+  On both replies Gmail's own line read `dkim=pass` with `header.i=@veloraapp.co.in` and
+  `header.s=zmail`; `spf=pass` with that alias as `smtp.mailfrom`, so each line belongs to its own
+  address, not both to one mailbox; and, as its own clause outside `arc=pass(...)`,
+  `dmarc=pass (p=QUARANTINE sp=QUARANTINE dis=NONE) header.from=veloraapp.co.in`. Both went out
+  from `103.117.158.11`, Zoho's India sender `sender-op-o11.zoho.in`: Claude read the name both
+  ways, reverse and forward.
+  **Zoho's own "verify all records" page showed MX and DKIM failing** while both were live, as
+  the founder confirmed against a public resolver: Zoho's resolver had cached their earlier
+  absence. A vendor's status indicator is a claim; the behaviour is the proof.
+  **Not added, on purpose: two ZeptoMail records Zoho offered.** ZeptoMail, Zoho's service for
+  sending transactional mail, is off. Don't "fix" the gap: the records come with whatever task
+  turns ZeptoMail on.
+  **Hostinger's old zone: emptied, not removed** (founder, 3 October 2026). After the move, its
+  nameservers kept serving their own MX records (`mx1` and `mx2.hostinger.com`) and a `p=none`
+  DMARC record. A resolver still holding the old delegation would deliver mail for `grievance@`,
+  the address the legal pages publish, to Hostinger, where no mailbox exists. Hostinger's panel
+  deletes only record by record, with no way to delete the zone, so the founder deleted all 11,
+  both MX records, the SPF and the DMARC among them. **That's the state we ended up in, not the
+  one we aimed for:** Hostinger's nameservers still answer for the domain, with authority, for an
+  empty zone. A removed zone would answer `REFUSED`, as they do for a domain they don't host, so
+  a resolver still holding the old delegation would fail for a while and retry until it found
+  ours. An empty zone tells it there's nowhere to deliver, and a sender can bounce. That window
+  closes as those resolvers' copies of the old delegation expire: 24 hours after the move, for
+  most.
+  **The deletion took time to reach every answer** (read by Claude): at 03:30 IST, Hostinger's
+  IPv4 addresses already served the empty zone, at a new serial (`2026100205`), while its IPv6
+  addresses still served the deleted MX and `p=none`, at full TTLs that didn't count down: a copy
+  that hadn't caught up. This network's own resolver (Jio's) still returned Hostinger's MX in one
+  of three tries at 03:32. For the next hour the IPv6 answers flipped between old and new. From
+  04:34 all four addresses served the empty zone, three checks in a row five minutes apart, and a
+  burst of 80 queries at 04:45 found no old answer, with serial `2026100205` everywhere. By then
+  Jio's resolver returned only Zoho's MX.
+  **D-053's gate, both ways:** on `main`, a production build (`APP_ENV=production`) refused and
+  named the Grievance Officer's email and the support email (P-0.3); with the two addresses in,
+  it builds, and the built `/contact` shows both. T-2.6 no longer waits on the mailboxes.
 - [ ] **P-0.4** DLT (needed only to move off Firebase later — start it anyway, it is slow): entity → header → OTP template `{#var#} is your Velora verification code. Valid for 5 minutes. Do not share it.`
 - [ ] **P-0.5** MSG91 account; link DLT IDs; send one test SMS to yourself.
 - [ ] **P-0.12** Firebase: project, Phone provider on, App Check + reCAPTCHA Enterprise enforced, authorised domains, daily SMS quota cap, billing alert. Confirm the **real per-SMS price for IN** in the billing console and write it into D-035.
@@ -979,6 +1040,11 @@ Built before discovery and chat because swipes, threads and unlocks all spend Ve
 - [ ] **Needs:** T-9.13, T-9.14, P-0.5, P-0.7, P-0.8
 - [ ] Production env: real SMS, real Razorpay live keys + webhook URL, real moderation and face match, VAPID keys. Run the pre-launch checklist in `07-CHECKLISTS.md`. Do one real ₹ purchase yourself and refund it.
 - [ ] **Write to the waitlist** (T-2.3): its copy promises to tell people when Velora opens near them. Nothing can send bulk email yet, so choose how before launch day, or the list is one we can't write to. A sending service is a new dependency and another processor `/privacy` must name, and its From address needs SPF and DKIM, like the mailboxes (P-0.3). B-14, a second city, writes to it again, by city.
+  **DKIM before the first send, or the launch email goes to spam:** our DMARC record says
+  `p=quarantine` (P-0.3), so mail that isn't authenticated as `veloraapp.co.in` is sent to spam.
+  Set up the service's DKIM for our domain, and prove it with a test send: the receiving server's
+  own `Authentication-Results` line must show `dkim=pass` for our domain and `dmarc=pass`, not a
+  result relayed inside `arc=pass(...)` (P-0.3 says why).
 - [ ] **Commit:** `chore(release): v1.0.0 [T-9.15]`
 
 ---
