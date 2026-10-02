@@ -856,6 +856,15 @@ fail. Startup refuses them anywhere else, compared as bytes so capitals don't hi
 holds CI's four keys to that list, and CI's container checks, which run as staging, draw throwaway
 keys instead.
 
+**CI's keys are quoted in `ci.yml`, and a test parses them:** run 37078451050 showed why. GitHub
+read the unquoted, all-digit test keys as numbers (`PHONE_PEPPER` arrived as
+`7.07070707070707E+63`), and the key checks refused them on their first real run, before anything
+deployed. A regex over the file's text had passed. The test now loads `ci.yml` with PyYAML, a dev
+dependency only (`uv sync --no-dev` keeps it out of the image), and requires each value to come back
+a string, hex, of the right length. PyYAML is YAML 1.1 and GitHub's parser isn't exactly that, so the
+test proves that a YAML parser makes a string, and the quoting makes every parser agree. Keep
+both. Added at the founder's direction on 3 October 2026.
+
 **The token lifetime and the argon2 cost are constants, not `app_config`:** an exception to
 checklist A. A security value that a database write could change, with nothing failing, isn't
 one.

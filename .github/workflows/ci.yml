@@ -32,14 +32,17 @@ env:
   # Settings the API refuses to start without. The keys are the repo's public
   # test keys (PUBLIC_TEST_KEYS in api/app/core/config.py, which the test
   # harness uses too): not secrets, and refused anywhere ENV isn't local (D-060).
-  # A test holds these four to that list.
+  # A test holds these four to that list. Keep them quoted: unquoted, YAML reads
+  # an all-digit one as a number (run 37078451050 got 7.07070707070707E+63). The
+  # test parses them with PyYAML, which isn't GitHub's parser; quoting is what
+  # makes every parser agree, so keep both.
   ENV: local
   DATABASE_URL: postgresql+asyncpg://velora:velora@127.0.0.1:5432/velora_test
   REDIS_URL: redis://127.0.0.1:6379/1
-  JWT_SECRET: 6a6a6a6a6a6a6a6a6a6a6a6a6a6a6a6a6a6a6a6a6a6a6a6a6a6a6a6a6a6a6a6a6a6a6a6a6a6a6a6a6a6a6a6a6a6a6a6a6a6a6a6a6a6a6a6a6a6a6a6a6a6a6a6a
-  PHONE_PEPPER: 7070707070707070707070707070707070707070707070707070707070707070
-  PHONE_ENC_KEY: 6565656565656565656565656565656565656565656565656565656565656565
-  CODE_PEPPER: 6363636363636363636363636363636363636363636363636363636363636363
+  JWT_SECRET: "6a6a6a6a6a6a6a6a6a6a6a6a6a6a6a6a6a6a6a6a6a6a6a6a6a6a6a6a6a6a6a6a6a6a6a6a6a6a6a6a6a6a6a6a6a6a6a6a6a6a6a6a6a6a6a6a6a6a6a6a6a6a6a6a"
+  PHONE_PEPPER: "7070707070707070707070707070707070707070707070707070707070707070"
+  PHONE_ENC_KEY: "6565656565656565656565656565656565656565656565656565656565656565"
+  CODE_PEPPER: "6363636363636363636363636363636363636363636363636363636363636363"
 
 jobs:
   api:

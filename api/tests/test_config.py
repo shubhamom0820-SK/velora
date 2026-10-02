@@ -6,6 +6,7 @@ import re
 from pathlib import Path
 
 import pytest
+import yaml  # type: ignore[import-untyped]
 from pydantic import ValidationError
 
 from app.core.config import PUBLIC_TEST_KEYS, Settings
@@ -362,14 +363,30 @@ def test_local_runs_on_the_public_test_keys() -> None:
 
 
 def test_ci_publishes_exactly_the_refused_keys() -> None:
-    """CI's own keys are the ones staging and production refuse.
+    """CI's own keys are the ones staging and production refuse, and a YAML
+    parser reads each back as the string written.
 
     If ci.yml carried a key that isn't in PUBLIC_TEST_KEYS, a copy of it on
-    staging would start without complaint: the refusal only knows these.
+    staging would start without complaint: the refusal only knows these. And
+    run 37078451050 showed what the file's text doesn't: GitHub read the
+    unquoted, all-digit PHONE_PEPPER as the number 7.07070707070707E+63, and
+    settings refused it. So this parses the file instead of matching it, which
+    also catches `yes`, a leading zero, `0x…` or a folded scalar.
+
+    Keep both halves. PyYAML is YAML 1.1 and GitHub's parser isn't exactly that
+    (they disagree on yes and no, for one), so this proves that a YAML parser
+    makes a string of each value, not that GitHub's does. Quoting the values in
+    ci.yml is what makes every parser agree. Together they're sound; either
+    alone isn't, so neither is redundant.
     """
     ci = Path(__file__).resolve().parents[2] / ".github" / "workflows" / "ci.yml"
-    pattern = rf"^\s+({'|'.join(PUBLIC_TEST_KEYS)}):\s*(\S+)\s*$"
-    published = re.findall(pattern, ci.read_text(), flags=re.MULTILINE)
+    env = yaml.safe_load(ci.read_text())["env"]
 
-    assert dict(published) == dict(PUBLIC_TEST_KEYS)
-    assert len(published) == len(PUBLIC_TEST_KEYS)
+    for name, expected in PUBLIC_TEST_KEYS.items():
+        value = env.get(name)
+        assert isinstance(value, str), (
+            f"{name} parses as {type(value).__name__}, not a string: quote it"
+        )
+        assert re.fullmatch(r"[0-9a-f]+", value), f"{name} isn't lowercase hex"
+        assert len(value) == len(expected), f"{name} is {len(value)} characters"
+        assert value == expected, f"{name} isn't the refused test key"
