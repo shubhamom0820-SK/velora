@@ -16,6 +16,7 @@ _ALL_VARS = [
     "PHONE_ENC_KEY",
     "CORS_ORIGINS",
     "COOKIE_DOMAIN",
+    "CLIENT_IP_HEADER",
     "AUTH_PHONE_PROVIDER",
     "SMS_PROVIDER",
     "PAYMENTS_PROVIDER",
@@ -54,8 +55,13 @@ _REAL_PROVIDERS = {
     "STORAGE_PROVIDER": "s3",
     "PUSH_PROVIDER": "webpush",
 }
-# What staging and production must set beyond that: Redis over TLS.
-_DEPLOYED = {**_REAL_PROVIDERS, "REDIS_URL": "rediss://default:x@redis.example:6379/0"}
+# What staging and production must set beyond that: Redis over TLS, and the
+# header the proxy puts the client's IP in (D-056).
+_DEPLOYED = {
+    **_REAL_PROVIDERS,
+    "REDIS_URL": "rediss://default:x@redis.example:6379/0",
+    "CLIENT_IP_HEADER": "Fly-Client-IP",
+}
 
 
 def _settings(**overrides: str) -> Settings:
@@ -226,3 +232,23 @@ def test_no_validation_error_echoes_a_value() -> None:
     assert "ENV" in message
     assert "hunter2-jwt" not in message
     assert "input_value" not in message
+
+
+# --- Per-IP limits read the proxy's header outside local (D-056) ---------------
+
+
+@pytest.mark.parametrize("env", ["staging", "production"])
+def test_no_client_ip_header_outside_local_refuses_to_start(env: str) -> None:
+    message = _error(ENV=env, **{**_DEPLOYED, "CLIENT_IP_HEADER": ""})
+
+    assert f"ENV={env} needs CLIENT_IP_HEADER (Fly-Client-IP on Fly)" in message
+    assert "X-Forwarded-For is written by the client" in message
+    assert "D-056" in message
+
+
+def test_local_may_read_the_socket_or_a_header() -> None:
+    assert _settings(ENV="local").CLIENT_IP_HEADER == ""
+    assert (
+        _settings(ENV="local", CLIENT_IP_HEADER="Fly-Client-IP").CLIENT_IP_HEADER
+        == "Fly-Client-IP"
+    )

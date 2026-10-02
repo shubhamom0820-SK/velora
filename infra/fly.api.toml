@@ -30,6 +30,9 @@ primary_region = "sin"
   # redirects here, so this is the one origin. Never velora-staging.vercel.app:
   # that's another company's site (infra/STAGING.md).
   CORS_ORIGINS = "https://staging.veloraapp.co.in"
+  # Per-IP rate limits read the client's address from the header Fly's proxy
+  # sets, never X-Forwarded-For, which the client writes (D-056).
+  CLIENT_IP_HEADER = "Fly-Client-IP"
   # Per process, and the image runs 2 uvicorn workers: at most
   # 2 x (5 + 2) = 14 connections to Postgres. The budget is in infra/STAGING.md.
   DB_POOL_SIZE = "5"

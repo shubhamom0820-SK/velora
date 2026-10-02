@@ -3,6 +3,7 @@ import { Clock, Link2, Shield } from "lucide-react";
 import { FeatureCard } from "@/components/marketing/FeatureCard";
 import { Hero } from "@/components/marketing/Hero";
 import { SiteHeader } from "@/components/marketing/SiteHeader";
+import { WaitlistBox } from "@/components/marketing/WaitlistBox";
 import { t } from "@/i18n/t";
 
 // The prototype's own icons: its "Link" is Lucide's link-2.
@@ -13,9 +14,9 @@ const FEATURES = [
 ] as const;
 
 /**
- * The landing page (T-2.1), from the prototype. Server-rendered, with no
- * page-level client JS; the waitlist box arrives with its form in T-2.3. The
- * footer comes from the marketing layout.
+ * The landing page (T-2.1), from the prototype. Server-rendered; its one
+ * client component is the waitlist box's form (T-2.3). The footer comes from
+ * the marketing layout.
  */
 export default function LandingPage() {
   return (
@@ -36,6 +37,7 @@ export default function LandingPage() {
             />
           ))}
         </ul>
+        <WaitlistBox />
       </main>
     </>
   );

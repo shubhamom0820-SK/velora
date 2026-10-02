@@ -52,9 +52,13 @@ for _key, _value in {
 }.items():
     os.environ.setdefault(_key, _value)
 
+from redis.asyncio import Redis
+
 from app.core.config import Settings
 from app.core.db import build_engine, get_session
 from app.core.providers import FakeProviders
+from app.core.ratelimit import KEY_PREFIX as RATE_LIMIT_KEY_PREFIX
+from app.core.redis import build_redis
 from app.main import close_resources, create_app
 
 
@@ -140,6 +144,33 @@ async def client(app: FastAPI) -> AsyncIterator[AsyncClient]:
     transport = ASGITransport(app=app, raise_app_exceptions=False)
     async with AsyncClient(transport=transport, base_url="http://test") as c:
         yield c
+
+
+# --- Redis --------------------------------------------------------------------
+
+
+@pytest.fixture
+async def test_redis() -> AsyncIterator[Redis]:
+    """The test Redis, with no rate-limit windows left over from another test.
+
+    Rate limits outlive a request by design, so without this the sixth test to
+    post from the same address in a minute would fail for a reason it never
+    chose. Cleared before and after.
+    """
+    if not INFRA_UP:
+        pytest.skip(INFRA_DOWN_REASON)
+    client = build_redis(TEST_REDIS_URL)
+
+    async def clear() -> None:
+        async for key in client.scan_iter(match=f"{RATE_LIMIT_KEY_PREFIX}*"):
+            await client.delete(key)
+
+    await clear()
+    try:
+        yield client
+    finally:
+        await clear()
+        await client.aclose()
 
 
 # --- Time ---------------------------------------------------------------------

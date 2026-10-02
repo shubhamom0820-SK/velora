@@ -105,6 +105,7 @@ async def test_schema_and_docs_are_not_served_outside_local(
             1,
             ENV=env,
             REDIS_URL="rediss://default:x@redis.example:6379/0",
+            CLIENT_IP_HEADER="Fly-Client-IP",
             **_REAL_PROVIDERS,
         ),
         path,

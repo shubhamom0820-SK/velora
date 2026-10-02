@@ -308,14 +308,19 @@ One migration per task, each with a working `downgrade()`. Build exactly `03-SCH
 - [x] **Commit:** `feat(web): legal pages [T-2.2]`
 
 ### T-2.3 · Waitlist
-- [ ] **Needs:** T-1.13, T-2.1, and **P-33** (slotted before it, so the form is built once, against staging's final addresses)
-- [ ] API `POST /v1/waitlist {email, city?}` — validate email, citext unique (duplicate → 201 anyway), rate limit 5/min/IP.
-- [ ] The landing page's waitlist box, from the prototype (moved from T-2.1): heading, text, form
+- [x] **Needs:** T-1.13, T-2.1, and **P-33** (slotted before it, so the form is built once, against staging's final addresses)
+- [x] API `POST /v1/waitlist {email, city?}` — validate email, citext unique (duplicate → 201 anyway), rate limit 5/min/IP.
+- [x] The landing page's waitlist box, from the prototype (moved from T-2.1): heading, text, form
   and success state arrive together, so nothing on the page asks for an email it can't keep. The
   form is the landing page's one client component: add it to `CLIENT_COMPONENTS_ALLOWED` in
   `(marketing)/page.test.tsx`. The prototype's 48 px below the box is off the spacing scale; round
   it per 08-DESIGN §3.
-- [ ] **Commit:** `feat: waitlist [T-2.3]`
+- [ ] **Done when, on staging:** joining from `https://staging.veloraapp.co.in` shows "You're on
+  the list"; a sixth try within a minute gets `429 RATE_LIMITED` even when every try forges a
+  different `Fly-Client-IP` and `X-Forwarded-For`, which proves Fly's proxy overwrites the header
+  its docs don't promise to (D-056); and Lighthouse mobile on `/` stays at ≥ 90 performance and
+  100 accessibility with the form on the page.
+- [x] **Commit:** `feat: waitlist [T-2.3]`
 
 ### T-2.4 · SEO and sharing
 - [ ] **Needs:** T-2.1
@@ -411,6 +416,7 @@ One migration per task, each with a working `downgrade()`. Build exactly `03-SCH
 
 ### T-3.11 · Web onboarding 1–7
 - [ ] **Needs:** T-3.10, T-3.7
+- [ ] **New dependencies, the first forms to use them:** web `react-hook-form` and `zod`, with `@hookform/resolvers` to join them. CLAUDE.md pins them, but nothing has installed them: T-2.3's waitlist form uses plain React state on purpose, because two form libraries for one email field would spend the landing page's performance score (98–100, T-2.1). Ask before installing, and record them in `01-DECISIONS.md` (rule 4).
 - [ ] Screens from the prototype: phone, OTP (4 boxes, paste support, resend timer from `resend_after_s`), DOB (native date input; under-18 message), gender (with lock warning), seeking + intents (pick 1–3), name/hometown/city, username (debounced availability 400 ms, shows `veloraapp.co.in/@name`).
 - [ ] Each screen: submit disabled until valid; server errors shown inline from `ApiError.code` via `en.ts`.
 - [ ] Phone step: a consent line naming Google before the code is sent — Google's Firebase sends it, processes the number in the United States and keeps it for abuse prevention (D-048, `/privacy`). Firebase asks apps to get this consent.
@@ -883,6 +889,7 @@ Built before discovery and chat because swipes, threads and unlocks all spend Ve
 ### T-9.15 · Go live
 - [ ] **Needs:** T-9.13, T-9.14, P-0.5, P-0.7, P-0.8
 - [ ] Production env: real SMS, real Razorpay live keys + webhook URL, real moderation and face match, VAPID keys. Run the pre-launch checklist in `07-CHECKLISTS.md`. Do one real ₹ purchase yourself and refund it.
+- [ ] **Write to the waitlist** (T-2.3): its copy promises to tell people when Velora opens near them. Nothing can send bulk email yet, so choose how before launch day, or the list is one we can't write to. A sending service is a new dependency and another processor `/privacy` must name, and its From address needs SPF and DKIM, like the mailboxes (P-0.3). B-14, a second city, writes to it again, by city.
 - [ ] **Commit:** `chore(release): v1.0.0 [T-9.15]`
 
 ---
@@ -1263,3 +1270,12 @@ Claude Code adds items here instead of doing unplanned work. Format:
   first.
 
   Found while planning T-2.2.
+- [ ] P-40 · Stop uvicorn trusting every proxy's `X-Forwarded-For`. **Before anything reads
+  `request.client`.** Worst case: code that reads `request.client.host` gets an address the client
+  chose, so a limit, a ban or an audit-log entry built on it can be forged. The image runs uvicorn
+  with `--proxy-headers --forwarded-allow-ips '*'`, which fills `request.client` from the leftmost
+  `X-Forwarded-For` entry, and the client writes that entry. Nothing reads it today: per-IP limits
+  read `Fly-Client-IP` (D-056). Drop `--proxy-headers`, or trust only Fly's proxy, and test that a
+  forged header doesn't change `request.client`.
+
+  Found in T-2.3.

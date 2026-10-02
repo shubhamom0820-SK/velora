@@ -1,6 +1,7 @@
 import { readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { render, screen, within } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
 
@@ -9,9 +10,18 @@ import { APP_NAME } from "@/lib/app";
 
 import LandingPage from "./page";
 
+// The waitlist form needs a query client, as the root layout provides.
+function renderPage() {
+  render(
+    <QueryClientProvider client={new QueryClient()}>
+      <LandingPage />
+    </QueryClientProvider>,
+  );
+}
+
 describe("/ (landing)", () => {
   it("has one h1, the headline, in the product's nouns rather than the brand", () => {
-    render(<LandingPage />);
+    renderPage();
 
     const h1 = screen.getByRole("heading", { level: 1 });
     expect(h1).toHaveAccessibleName(
@@ -21,21 +31,22 @@ describe("/ (landing)", () => {
     expect(h1).not.toHaveTextContent(APP_NAME);
   });
 
-  it("lists the three feature cards, each under its own heading", () => {
-    render(<LandingPage />);
+  it("lists the three feature cards, each under its own heading, then the waitlist", () => {
+    renderPage();
 
     const headings = screen.getAllByRole("heading", { level: 2 });
     expect(headings.map((h) => h.textContent)).toEqual([
       t("landing.features.threads.title"),
       t("landing.features.knot.title"),
       t("landing.features.safety.title"),
+      t("landing.waitlist.title"),
     ]);
     const main = screen.getByRole("main");
     expect(within(main).getAllByRole("listitem")).toHaveLength(3);
   });
 
   it("sends both calls to action to sign-in", () => {
-    render(<LandingPage />);
+    renderPage();
 
     expect(
       screen.getByRole("link", { name: t("landing.getStarted") }),
@@ -48,16 +59,18 @@ describe("/ (landing)", () => {
   });
 
   it("says who it is for", () => {
-    render(<LandingPage />);
+    renderPage();
 
     expect(screen.getByText(t("landing.ageNote"))).toBeInTheDocument();
   });
 });
 
-// T-2.1 ships no page-level client JS: the marketing pages and everything they
-// render stay server components. T-2.3's waitlist form will be the one entry
-// here, as the landing page's only client component.
-const CLIENT_COMPONENTS_ALLOWED = new Set<string>();
+// The marketing pages and everything they render stay server components, so
+// the landing page ships no client JS of its own beyond this: T-2.3's waitlist
+// form, its only client component.
+const CLIENT_COMPONENTS_ALLOWED = new Set<string>([
+  "src/components/marketing/WaitlistForm.tsx",
+]);
 
 // Every file under these folders, so a new marketing page or component is
 // checked the day it's added (T-2.2 added the legal pages and their layout).
@@ -99,7 +112,35 @@ describe("the landing page's JavaScript", () => {
         "src/components/marketing/LegalSection.tsx",
         "src/components/marketing/LegalFact.tsx",
         "src/components/marketing/LegalFactList.tsx",
+        "src/components/marketing/WaitlistBox.tsx",
+        "src/components/marketing/WaitlistForm.tsx",
       ]),
     );
+  });
+
+  // An allowlist entry that stops being a client component, or stops existing,
+  // would leave a hole the next client component could slip through.
+  it.each([...CLIENT_COMPONENTS_ALLOWED])(
+    "%s, allowed to be a client component, is one",
+    (file) => {
+      expect(readFileSync(file, "utf8")).toMatch(/^\s*["']use client["']/m);
+    },
+  );
+});
+
+describe("the waitlist box", () => {
+  it("names its section, and says the app's name, not the prototype's", () => {
+    renderPage();
+
+    const box = screen.getByRole("region", {
+      name: t("landing.waitlist.title"),
+    });
+    expect(box).toHaveTextContent(
+      t("landing.waitlist.body", { app: APP_NAME }),
+    );
+    expect(box).not.toHaveTextContent("Knot opens");
+    expect(
+      within(box).getByRole("button", { name: t("landing.waitlist.join") }),
+    ).toBeInTheDocument();
   });
 });

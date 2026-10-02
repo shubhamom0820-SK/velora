@@ -41,6 +41,23 @@ export const en = {
         body: "Selfie verification, photo checks, and reports that actually remove people.",
       },
     },
+    // The waitlist box (T-2.3), for people outside the launch city. Its city is
+    // optional and tells us where demand is, the input to choosing a second
+    // city; /privacy says both uses (legal.privacy.collect.waitlist).
+    waitlist: {
+      title: "Not in your city yet?",
+      body: "Leave your email and we'll tell you when {app} opens near you.",
+      email: "Email",
+      emailPlaceholder: "you@email.com",
+      city: "Your city (optional)",
+      join: "Join",
+      joined: "You're on the list",
+      privacyNote: "We use these only for the waitlist.",
+      privacyLink: "Privacy policy",
+      invalidEmail: "Enter an email address, like you@email.com.",
+      rateLimited: "Too many tries. Wait a minute, then try again.",
+      failed: "That didn't go through. Check your connection and try again.",
+    },
     footer: {
       label: "Legal and contact",
       terms: "Terms",
@@ -176,6 +193,9 @@ export const en = {
         // D-026, D-021.
         payments:
           "Your payments. Razorpay handles the payment itself. We keep a record of every payment and a permanent history of your Velas.",
+        // T-2.3: the landing page's waitlist box, before anyone has an account.
+        waitlist:
+          "If you join the waitlist: your email and, if you give it, your city. We use them only to tell you when {app} opens near you and to see where people want it next, and we share them with no one. Ask us through the contact page to take you off the list.",
       },
       where: {
         title: "Where your data is",
@@ -183,6 +203,9 @@ export const en = {
         // so never name a region for Cloudflare.
         database:
           "Your profile, messages, Velas, payment records and our hashed, encrypted copy of your phone number are stored in Mumbai, India.",
+        // T-2.3: the waitlist table is in the same database.
+        waitlist:
+          "If you joined the waitlist, your email and city are stored in Mumbai, India, too.",
         servers:
           "Every request you make is handled by our servers in Singapore.",
         media:

@@ -20,6 +20,7 @@ from app.core.logging import RequestIDMiddleware, configure_logging
 from app.core.providers import build_providers
 from app.core.redis import build_redis
 from app.modules.health.router import router as health_router
+from app.modules.waitlist.router import router as waitlist_router
 
 APP_NAME = "Velora"  # One constant, so a rename stays cheap (D-015).
 SCHEMA_SERVED_IN: frozenset[str] = frozenset({"local"})
@@ -94,6 +95,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
 
     # Probes at the root, unversioned; product routers go under /v1.
     app.include_router(health_router)
+    app.include_router(waitlist_router, prefix="/v1")
 
     return app
 

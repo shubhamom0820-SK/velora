@@ -34,6 +34,11 @@ FAKES_ALLOWED_IN: frozenset[str] = frozenset({"local"})
 # Where Redis may be reached without TLS (`redis://`): an allowlist again.
 # Everywhere else it's `rediss://` (Upstash requires it).
 PLAIN_REDIS_ALLOWED_IN: frozenset[str] = frozenset({"local"})
+# Where a client's IP may come from the socket: an allowlist (D-056). Behind
+# Fly's proxy the socket is the proxy, and uvicorn's own client address trusts
+# X-Forwarded-For, which the client writes; everywhere else the address comes
+# from the header the platform sets, CLIENT_IP_HEADER.
+SOCKET_CLIENT_IP_ALLOWED_IN: frozenset[str] = frozenset({"local"})
 PROVIDER_SETTINGS = (
     "AUTH_PHONE_PROVIDER",
     "SMS_PROVIDER",
@@ -73,6 +78,9 @@ class Settings(BaseSettings):
     # before the validator below sees the comma-separated string.
     CORS_ORIGINS: Annotated[list[str], NoDecode] = Field(default_factory=list)
     COOKIE_DOMAIN: str = ""
+    # The header the platform's proxy puts the client's IP in, for per-IP rate
+    # limits: `Fly-Client-IP` on Fly. Empty only where ENV is local (D-056).
+    CLIENT_IP_HEADER: str = ""
 
     # --- Auth provider selection (D-035) ---
     AUTH_PHONE_PROVIDER: PhoneProvider = "fake"
@@ -188,6 +196,23 @@ class Settings(BaseSettings):
             raise ValueError(
                 f"ENV={self.ENV} needs REDIS_URL to use rediss:// (TLS); plain redis:// "
                 f"is only for ENV {', '.join(sorted(PLAIN_REDIS_ALLOWED_IN))}."
+            )
+        return self
+
+    @model_validator(mode="after")
+    def _client_ip_header_where_required(self) -> Settings:
+        """Outside `SOCKET_CLIENT_IP_ALLOWED_IN`, per-IP limits need the proxy's header.
+
+        Without it the limiter would key on an address the client chooses, and
+        every test would still pass: no test forges a header (D-056).
+        """
+        if self.ENV not in SOCKET_CLIENT_IP_ALLOWED_IN and not self.CLIENT_IP_HEADER:
+            raise ValueError(
+                f"ENV={self.ENV} needs CLIENT_IP_HEADER (Fly-Client-IP on Fly): the "
+                "socket's address is the proxy's, and X-Forwarded-For is written by "
+                "the client, so per-IP rate limits would key on an address anyone can "
+                f"choose (D-056). Only ENV {', '.join(sorted(SOCKET_CLIENT_IP_ALLOWED_IN))} "
+                "may read the socket."
             )
         return self
 

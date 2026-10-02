@@ -147,6 +147,9 @@ turns them into copy.
 | POST | /waitlist | 🔓 | T-2.3 |
 | GET | /healthz · /readyz | 🔓 | T-1.4 |
 
+`POST /waitlist`: `{email, city?}` → `201 {}`, the same for an email already on the list (D-057).
+Five tries a minute per client IP, invalid ones included → `RATE_LIMITED` (D-056).
+
 ---
 
 ## Error codes

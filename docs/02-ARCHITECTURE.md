@@ -242,6 +242,7 @@ that person in the last 7 days → `wallet.credit(reason=refund_banned_partner)`
 | `PHONE_PEPPER`, `PHONE_ENC_KEY` | api | never rotate without a migration plan |
 | `CORS_ORIGINS` | api | comma list, exact origins |
 | `COOKIE_DOMAIN` | api | the readable CSRF cookie's domain (D-055): `veloraapp.co.in` in production, `staging.veloraapp.co.in` on staging. The refresh cookie has none: host-only on the API (D-054) |
+| `CLIENT_IP_HEADER` | api | the header the platform's proxy puts the client's IP in, for per-IP rate limits: `Fly-Client-IP` on Fly. Empty only where `ENV` is `local`, which reads the socket (D-056) |
 | `AUTH_PHONE_PROVIDER` | api, web | `firebase` \| `msg91` \| `fake` |
 | `FIREBASE_PROJECT_ID`, `FIREBASE_SERVICE_ACCOUNT_JSON` | api | token verification |
 | `NEXT_PUBLIC_FIREBASE_*` | web | apiKey, authDomain, projectId, appId, App Check site key — public by design |
@@ -286,6 +287,7 @@ secret is left empty. Real secret values are never committed.
 | Send message | 30 / min / user |
 | Reports | 10 / day / user |
 | Username check | 30 / min |
+| Waitlist | 5 / min / IP, invalid tries included (D-056) |
 | Everything else | 300 / min / user |
 
 - Logs are structured JSON with `request_id`; never log phone, OTP, tokens, message bodies.

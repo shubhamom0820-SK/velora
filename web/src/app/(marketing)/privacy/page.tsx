@@ -16,10 +16,12 @@ const COLLECTED = [
   "selfie",
   "messages",
   "payments",
+  "waitlist",
 ] as const;
 
 const WHERE = [
   "database",
+  "waitlist",
   "servers",
   "media",
   "moderation",
@@ -48,7 +50,7 @@ export default function PrivacyPage() {
       <LegalSection title={t("legal.privacy.collect.title")}>
         <ul className="flex list-disc flex-col gap-2 pl-5">
           {COLLECTED.map((key) => (
-            <li key={key}>{t(`legal.privacy.collect.${key}`)}</li>
+            <li key={key}>{t(`legal.privacy.collect.${key}`, app)}</li>
           ))}
         </ul>
       </LegalSection>

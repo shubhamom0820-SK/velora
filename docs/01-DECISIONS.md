@@ -680,6 +680,39 @@ principle, no implicit default.
 leaves production as that implicit default; and an unnamed refresh cookie, which is safe only
 while nothing changes its scope. Decided by the founder on 2 October 2026.
 
+### D-056 · Per-IP limits key on the address Fly's proxy saw — Locked
+A per-IP rate limit reads the client's address from `CLIENT_IP_HEADER`, which on Fly is
+`Fly-Client-IP`, set by Fly's proxy. Never from `X-Forwarded-For`, whose leftmost entries the
+client writes, and never from `request.client` outside local: behind Fly the socket is the proxy,
+and uvicorn, started with `--forwarded-allow-ips '*'`, fills `request.client` from that same
+client-written header. Settings refuse to start outside local without `CLIENT_IP_HEADER` (rule
+16's allowlist). An IPv6 address counts as its /64, since one home connection usually gets a whole
+/64. A missing or garbled header puts the request in one shared bucket, so leaving the header out
+escapes nothing.
+
+**Why it's a decision:** the failure is invisible. A limiter keyed on a client-written header
+passes every test, because no test forges a header, and limits nothing. Someone later
+"simplifying" it back to `request.client.host` would silently remove the limit, and nothing would
+go red. This entry is what stops that. The tests forge the header for the same reason: keyed on
+`X-Forwarded-For` instead, five of them fail (checked in T-2.3).
+
+**Proved on staging, not taken from Fly's docs:** they don't say whether the proxy overwrites a
+`Fly-Client-IP` the client sends, so the only honest answer is to forge it and watch the limit
+hold. T-2.3's Done-when does that.
+
+**Rejected:** `request.client.host` and `X-Forwarded-For`, for the reasons above. Decided by the
+founder on 2 October 2026.
+
+### D-057 · The waitlist answers a repeat exactly as a new email — Locked
+`POST /v1/waitlist` answers `201` with `{}` whether the email is new or already on the list, in
+any case (citext), and a repeat changes nothing, not even the city.
+
+**Why:** a different answer for a repeat would make the endpoint an email checker: anyone could
+test whether an address is on our list.
+
+**Rejected:** `409 ALREADY_EXISTS` for a repeat, the API's usual answer to a duplicate. Decided by
+the founder on 2 October 2026.
+
 ---
 
 ## Adding a decision
