@@ -31,7 +31,7 @@ api/app/
     config.py             pydantic-settings; every env var declared here
     db.py                 async engine, session dependency, transaction helper
     redis.py              client, pub/sub helpers
-    security.py           JWT, argon2, OTP generation, CSRF
+    security.py           phone numbers, access and refresh tokens, PINs, CSRF (D-060)
     errors.py             AppError + handlers → error envelope
     enums.py              the 20 Postgres enum types as Python enums (shared across modules)
     deps.py               current_user, require_role, rate_limit
@@ -110,7 +110,7 @@ sequenceDiagram
   participant S as SMS provider
   B->>A: POST /v1/auth/otp/send {phone}
   A->>A: validate +91, check banned_identities
-  A->>R: store hash(otp), ttl 5m, attempts=0
+  A->>R: store keyed HMAC(otp) (D-063), ttl 5m, attempts=0
   A->>S: send "1234 is your Velora code"
   B->>A: POST /v1/auth/otp/verify {phone, otp}
   A->>R: compare, max 5 attempts
@@ -125,7 +125,9 @@ sequenceDiagram
 - OTP: 4 digits, 5-minute TTL, 5 verify attempts, resend after 45 s, max 5 sends per phone per hour
   and 20 per IP per hour.
 - **Refresh reuse detection:** presenting a revoked refresh token revokes the whole session family.
-- Phone numbers are stored encrypted (pgcrypto, key from env) plus a peppered SHA-256 hash for lookup.
+- Phone numbers are stored encrypted in the API (Fernet, `PHONE_ENC_KEY`), never by the database,
+  plus an HMAC-SHA256 keyed by `PHONE_PEPPER` for lookup (D-061). PINs are argon2id over a
+  pepper kept off the database (D-062).
 
 ## 5. Onboarding state machine
 
@@ -238,8 +240,10 @@ that person in the last 7 days → `wallet.credit(reason=refund_banned_partner)`
 | `DATABASE_URL` | api, worker | `postgresql+asyncpg://…` |
 | `REDIS_URL` | api, worker | |
 | `DB_POOL_SIZE`, `DB_MAX_OVERFLOW` | api, worker | per process (default 5 and 5); budget = processes × (both), recorded in `infra/STAGING.md` |
-| `JWT_SECRET` | api | 64+ random bytes |
-| `PHONE_PEPPER`, `PHONE_ENC_KEY` | api | never rotate without a migration plan |
+| `JWT_SECRET` | api, worker | `openssl rand -hex 64`: at least 128 hex characters, checked at startup (D-060) |
+| `PHONE_PEPPER` | api, worker | `openssl rand -hex 32`. Never changes once a number is banned: a ban keeps only the hash (D-061) |
+| `PHONE_ENC_KEY` | api, worker | `openssl rand -hex 32`. One key, or several separated by commas, newest first: the first encrypts, every one decrypts, so adding a key is a config change (D-061) |
+| `CODE_PEPPER` | api, worker | `openssl rand -hex 32`. The key behind PIN hashes, and OTP codes from T-3.2, kept off the database (D-062, D-063). Never `PHONE_PEPPER`'s value |
 | `CORS_ORIGINS` | api | comma list, exact origins |
 | `COOKIE_DOMAIN` | api | the readable CSRF cookie's domain (D-055): `veloraapp.co.in` in production, `staging.veloraapp.co.in` on staging. The refresh cookie has none: host-only on the API (D-054) |
 | `CLIENT_IP_HEADER` | api | the header the platform's proxy puts the client's IP in, for per-IP rate limits: `Fly-Client-IP` on Fly. Empty only where `ENV` is `local`, which reads the socket (D-056) |
@@ -261,6 +265,9 @@ that person in the last 7 days → `wallet.credit(reason=refund_banned_partner)`
 | `VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY`, `VAPID_SUBJECT` | api, worker | public key also in web |
 | `SENTRY_DSN` | all | |
 | `NEXT_PUBLIC_API_URL`, `NEXT_PUBLIC_WS_URL`, `NEXT_PUBLIC_VAPID_PUBLIC_KEY`, `NEXT_PUBLIC_RAZORPAY_KEY_ID`, `NEXT_PUBLIC_SENTRY_DSN` | web | public by definition |
+
+The four keys above are checked for shape at startup, everywhere, and the repo's public test keys
+(`PUBLIC_TEST_KEYS` in `core/config.py`) are refused unless `ENV` is `local` (D-060).
 
 Every `*_PROVIDER` may be `fake` only while `ENV` is `local`. Anywhere else the API refuses to
 start, naming each fake, until a real provider is set (D-045) — a fake gateway grants free

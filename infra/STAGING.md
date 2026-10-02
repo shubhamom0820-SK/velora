@@ -88,8 +88,10 @@ and never taken from the clipboard by a command you copied.
   password and still exits 0.
 - **What the Keychain holds** (`security find-generic-password -s velora-staging -a <account> -w`):
   `db-owner` (the database owner's password, which you set), `velora-api-db`, `jwt-secret`,
-  `phone-pepper`, `phone-enc-key`. Never rotate `phone-enc-key` or `phone-pepper` without a
-  migration plan (02-ARCHITECTURE §11).
+  `phone-pepper`, `phone-enc-key`, `code-pepper`. `phone-pepper` never changes once a number is
+  banned; `phone-enc-key` rotates by putting a new key first, `new,old` (D-061); a new
+  `code-pepper` makes every stored PIN fail until it is set again (D-062). The worker's app
+  (T-4.4) needs the same four values.
 - **Settings check URLs, and never echo a value:** a wrong scheme stops the container before uvicorn
   starts, naming the setting (`DATABASE_URL` must be `postgresql+asyncpg://`; `REDIS_URL` must be
   `rediss://` outside local), and a validation error never prints what it was given.
@@ -182,6 +184,16 @@ public bucket's CDN domain are set with T-4.1, when storage is built.
    | `JWT_SECRET` | `openssl rand -hex 64` (64 bytes, 02-ARCHITECTURE §11) |
    | `PHONE_PEPPER` | `openssl rand -hex 32` |
    | `PHONE_ENC_KEY` | `openssl rand -hex 32` |
+   | `CODE_PEPPER` | `openssl rand -hex 32` (T-3.1: PINs, and OTP codes from T-3.2) |
+
+   The API checks the four keys' shape before it starts and refuses the repo's public test keys
+   (D-060), so a wrong one stops the deploy with the setting's name. On 3 October 2026 Claude read
+   the first three on the machine, lengths only, never the values: `JWT_SECRET` 128 lowercase hex
+   characters, `PHONE_PEPPER` and `PHONE_ENC_KEY` 64 each. `CODE_PEPPER` was generated into the
+   Keychain and staged the same day (T-3.1). A key's shape says nothing about whether the Keychain
+   copy is the same value as Fly's, so compare them by SHA-256 computed in each place, first 8 hex
+   characters (the value never leaves either). A copy that was never the same value fails only on
+   the day it's restored: every stored PIN, or every phone number, at once.
 
    The owner's credentials are **not** a Fly secret.
 3. Create a **deploy token** for this app only (Tokens → Create deploy token).

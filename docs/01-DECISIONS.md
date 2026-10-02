@@ -823,6 +823,146 @@ never find a sixth header we didn't want. Where we care about what is served, th
 Done-whens: we had read the headers, watched Chrome refuse the frame and run Lighthouse, and the
 outsider still saw the thing we hadn't thought to look for.
 
+### D-060 · Security primitives come from vetted libraries — Locked
+**The libraries (rule 4):** PyJWT for access tokens, argon2-cffi for PINs, cryptography for phone
+encryption (Fernet) and key derivation (HKDF), phonenumberslite for parsing numbers, and `hmac`,
+`hashlib` and `secrets` from the standard library. `core/security.py` writes no primitive of its
+own. PyJWT was already installed, because `redis` depends on it, and is declared directly anyway:
+what another package happens to pull in is no promise. cryptography arrives with T-3.14 regardless
+(`firebase-admin` needs `pyjwt[crypto]`, and `google-auth` needs cryptography).
+
+**What we write is policy:** India only, which key does what, the token's claims, exactly one
+accepted set of argon2 parameters (D-062), the rule that an empty CSRF value never matches, and
+expiry. PyJWT checks the signature, the algorithm (HS256 only), the audience and that every claim
+is present, but it reads the wall clock, which rule 7 forbids and tests can't move. So expiry is
+compared against `core.clock`, and only after the signature: a forged token is never told it
+expired.
+
+**Access tokens carry `aud` = `ENV`,** and exactly `sub`, `role`, `aud`, `iat` and `exp`, for 15
+minutes (D-024). Separate `JWT_SECRET`s keep staging's tokens out of production; that rests on one
+property, so the audience is a second one (D-055's reasoning). Refresh tokens and CSRF values are
+32 random bytes; a refresh token is stored as plain SHA-256, since 256 random bits leave nothing to
+guess.
+
+**Keys are hex, checked at startup in every environment:** `JWT_SECRET` at least 128 characters
+(`openssl rand -hex 64`); `PHONE_PEPPER`, `CODE_PEPPER` and each `PHONE_ENC_KEY` exactly 64
+(`openssl rand -hex 32`). A short key fails nothing later, it just protects less, so it fails at
+startup, with a message that names the setting and never echoes the value.
+
+**The repo's test keys work only where `ENV` is local** (`PUBLIC_TEST_KEYS`, rule 16). The tests
+and CI need valid keys, and committed keys are public. If one reached staging or production by
+copy and paste, anyone who can read the repo could sign an admin's access token, and nothing would
+fail. Startup refuses them anywhere else, compared as bytes so capitals don't hide one. A test
+holds CI's four keys to that list, and CI's container checks, which run as staging, draw throwaway
+keys instead.
+
+**The token lifetime and the argon2 cost are constants, not `app_config`:** an exception to
+checklist A. A security value that a database write could change, with nothing failing, isn't
+one.
+
+**phonenumberslite, not phonenumbers:** the same library and release without the geocoder, carrier
+and timezone data we never read, 1.2 MB unpacked against 21.9 MB. It validates against number
+ranges that Google updates with each release, so an old copy refuses newly issued Indian numbers at
+signup. Upgrade it with the other dependencies; never pin it and forget it.
+
+**Rejected:** full phonenumbers (above); PyJWT's own expiry check (the wall clock); relying on
+redis's copy of PyJWT. Decided by the founder on 3 October 2026.
+
+### D-061 · Phone numbers are encrypted in the API, not with pgcrypto — Locked
+**This supersedes prose, not a decision.** 02-ARCHITECTURE §4 and 03-SCHEMA said "pgcrypto" from
+the first docs commit (`f85315e`). It was never a numbered decision: no version of this log
+mentions it (checked by Claude with `git log -S`). Those lines now point here.
+
+**The decision:** a number is normalised to E.164, +91 only (D-035). Its lookup key,
+`users.phone_hash`, is HMAC-SHA256 keyed by `PHONE_PEPPER`. Its stored copy, `users.phone_enc`, is
+encrypted in the API with Fernet through MultiFernet: the first key in `PHONE_ENC_KEY` encrypts,
+and every key listed decrypts. The column stays `bytea`, so there was no migration.
+
+**Why:** pgcrypto runs inside Postgres, so the key would travel to Supabase with every insert and
+select, beside the plain number, and could land in its statement logs; pgcrypto's own
+documentation warns about exactly this. Encrypted in the API, the key stays on Fly and Supabase
+only ever holds ciphertext: a dump, a backup or a log gives away no numbers. Fernet is a complete
+recipe (authenticated encryption, a random IV, a version byte), so we write no cipher code. D-048
+doesn't change: the API in Singapore already handles the plain number to hash it, and the stored
+copy stays in Mumbai. The pgcrypto extension stays installed (T-1.8); nothing uses it for numbers.
+
+**What it rules out:** decrypting a number in SQL. No planned task needs to (checked by Claude on
+3 October 2026 against every mention of "phone" in the docs). Login, bans and an admin's search by
+number all go through `phone_hash`, which finds exact numbers only. The few places that show a
+number (T-9.5's user detail, T-9.6's export in the worker) decrypt it in Python. The worker shares
+`Settings`, so it needs the API's keys (T-4.4).
+
+**Rotation:** `PHONE_ENC_KEY` takes a new key first and the old one after it: a config change.
+Re-encrypting old rows can follow at leisure (`MultiFernet.rotate`). `PHONE_PEPPER` never changes
+once any number is banned. `banned_identities` keeps only the hash (D-009, D-051), recomputing it
+would need the plain number, which a ban doesn't keep, and a new pepper would silently unban
+everyone.
+
+**Rejected:** pgcrypto (above); AES-GCM from cryptography's hazmat layer (we'd manage the nonces,
+where Fernet manages everything); SHA-256 of the pepper and the number concatenated (HMAC is the
+construction for a keyed hash). Decided by the founder on 3 October 2026, on condition that the
+code built on MultiFernet from day one, which it does.
+
+### D-062 · PINs: argon2id over a pepper kept off the database — Locked
+**The decision:** a PIN is stored as argon2id over an HMAC of it, under a key derived from
+`CODE_PEPPER` (HKDF, label `pin/v1`). argon2id with 19 MiB of memory, 2 passes, 1 lane, a 16-byte
+salt and a 32-byte hash: OWASP's minimum. `verify_pin` accepts exactly these parameters. A stored
+hash made with any others, weaker or stronger, is refused, where argon2-cffi alone would verify
+it.
+
+**Why the pepper:** a database leak reveals no PINs at all. Without `CODE_PEPPER`, which lives on
+Fly and never in the database, a stored hash can't be tested against even one guess. That matters
+because people reuse their UPI and ATM PINs.
+
+**Why this cost, measured:** on staging's machine, one shared AMD EPYC vCPU with 512 MB and two
+workers, by Claude on 3 October 2026 over 20 hashes: a median of 18.4 ms (17.1 to 27.0) to hash and
+18.1 ms to verify at 19 MiB. RFC 9106's 64 MiB setting, argon2-cffi's default, took 156.9 ms there.
+Each hash holds its memory while it runs, so a process runs at most two at once, at most 76 MiB
+across both workers, and a burst queues. Hashing runs in a thread, so the event loop keeps serving
+(rule 7).
+
+**Raising it buys nothing, so the headroom is not spare capacity.** 18.4 ms is well under the 30 to
+60 ms estimated beforehand, and a gap like that invites spending it. Don't. With `CODE_PEPPER` in
+place, a leak of the database alone reveals no PINs at any cost. The cost matters only in a full
+compromise that takes the pepper too, and there a 4-digit PIN falls in 3 minutes at 19 MiB or 26 at
+64 MiB: 10,000 candidates on one core like staging's. Neither is protection; the pepper is. And
+memory is the binding constraint anyway: at 64 MiB the same two-at-a-time cap holds
+2 × 2 × 64 MiB, 256 MiB of a 512 MB machine.
+
+**A decision, not a tuning knob.** The warning stands at the constant: lowering it weakens every
+PIN stored from then on, and nothing fails. Changing it in either direction makes every stored PIN
+fail `verify_pin` until it is set again, so a change ships with a migration plan (accept the old
+set, re-hash on success). Tests use these exact parameters, and no cheaper set exists in the code.
+If a suite ever needs one, it is allowed only where `ENV` is local, opted into explicitly, with a
+test that staging and production refuse it; never by lowering these. A test pins them.
+
+**`CODE_PEPPER` is its own key, not `PHONE_PEPPER`,** because their lives differ: `PHONE_PEPPER`
+can never change once a number is banned (D-061), and this one can. PINs are optional, so a
+rotation can clear them, and people set a new one after their next sign-in by OTP; or a later task
+can verify under the old pepper and re-hash. It also keys OTP codes, under their own label
+(D-063).
+
+**Rejected:** RFC 9106's 64 MiB profile (8.5 times the time on staging and 3.4 times the memory,
+for minutes more against a leak that already includes the pepper); a cheaper test-only profile
+(nothing leaks if none exists); the pepper later, in T-3.9. This entry's reason would then have
+changed under a locked decision, and the key's machinery is built here anyway. Decided by the
+founder on 3 October 2026.
+
+### D-063 · OTP codes are hashed with a keyed HMAC, not argon2 — Locked
+**The decision:** T-3.2 stores each code as HMAC-SHA256 over the number's hash and the code, under
+a key derived from `CODE_PEPPER` (HKDF, label `otp/v1`, reserved by T-3.1), and compares in
+constant time. Not argon2, as the plan first had it.
+
+**Why:** an OTP's protection is its 5 tries and its 5-minute life, not the hash's cost. On an
+unauthenticated endpoint argon2 is a DoS amplifier: one cheap request costs us 19 MiB and about
+18 ms (measured on staging, D-062) against two slots per process, so a flood stalls every real
+OTP behind the cap. With the pepper kept off the database and Redis, a leak of either reveals no
+codes.
+
+**Rejected:** argon2 (above); plain SHA-256 (10,000 codes, reversed at once); a separate OTP key,
+which would be another secret with the same life, where one key with two labels keeps the uses
+apart. Decided by the founder on 3 October 2026; T-3.2 builds it.
+
 ---
 
 ## Adding a decision

@@ -10,6 +10,7 @@ from starlette.requests import Request
 from app.core.config import Settings
 from app.core.deps import UNKNOWN_CLIENT, bucket_for, client_bucket
 from tests.infra import TEST_DATABASE_URL, TEST_REDIS_URL
+from tests.keys import random_keys
 
 
 def _request(
@@ -34,9 +35,7 @@ _REQUIRED = {
     "ENV": "local",
     "DATABASE_URL": TEST_DATABASE_URL,
     "REDIS_URL": TEST_REDIS_URL,
-    "JWT_SECRET": "x",
-    "PHONE_PEPPER": "x",
-    "PHONE_ENC_KEY": "x",
+    **random_keys(),
 }
 
 

@@ -473,6 +473,8 @@ One migration per task, each with a working `downgrade()`. Build exactly `03-SCH
 ### T-2.6 · Production domains
 - [ ] **Needs:** P-0.3, T-1.22, and the **legal facts final** (P-0.2, P-0.3) — production can't build the legal pages while any is missing (D-053)
 - [ ] `veloraapp.co.in` → Vercel prod; `api.veloraapp.co.in` → Fly prod app; SSL issued. Prod DB/Redis/R2 created but empty.
+- [ ] The prod app's four keys (`JWT_SECRET`, `PHONE_PEPPER`, `PHONE_ENC_KEY`, `CODE_PEPPER`) freshly generated, never staging's: startup refuses the repo's test keys (D-060) but can't know a copy of staging's. Read their shapes on the machine, lengths only, and compare each with its stored copy by SHA-256 prefix, as T-3.1 did for staging.
+- [ ] **And the only copy of production's keys must not be one Mac's Keychain** (the founder, 3 October 2026). Losing `PHONE_ENC_KEY` makes every stored phone number unreadable; losing `CODE_PEPPER` makes every PIN unverifiable; losing `PHONE_PEPPER` silently unbans every banned number, and login can't find any account until every number is re-hashed from its encrypted copy (D-061, D-062). Today that costs nothing, since no data depends on them. Decide here, where production's keys are born, where the second copy lives.
 - [ ] **Done when:** `https://veloraapp.co.in` shows the landing page; `https://api.veloraapp.co.in/healthz` is 200. → **Unblocks P-0.8.**
 - [ ] **Done when, T-2.4's production side, which only production can prove:** `robots.txt` names
   `https://veloraapp.co.in/sitemap.xml`; the sitemap lists the five public pages on that address;
@@ -486,16 +488,19 @@ One migration per task, each with a working `downgrade()`. Build exactly `03-SCH
 # Sprint 3 — Auth and onboarding (weeks 4–5)
 
 ### T-3.1 · Security primitives
-- [ ] **Needs:** T-1.21
-- [ ] `core/security.py`: `normalize_phone()` (phonenumbers, India only, E.164), `hash_phone()` (SHA-256 + pepper), `encrypt_phone()`/`decrypt_phone()`, `make_access_token(user_id, role)` (15 min), `decode_access_token()`, `new_refresh_token()` (32 random bytes, urlsafe), `hash_token()`, `hash_pin()`/`verify_pin()` (argon2), `new_csrf()`.
-- [ ] Unit tests for each, including invalid/expired JWT and non-Indian numbers.
-- [ ] `make_user(gender=…, onboarded=True, credits=0, verified=False)` factory in `tests/conftest.py` returning `(user, access_token)` (moved from T-1.5; needs `users` from T-1.9).
-- [ ] **Commit:** `feat(auth): security primitives [T-3.1]`
+- [x] **Needs:** T-1.21
+- [x] `core/security.py`, every primitive from a vetted library (D-060; PyJWT, argon2-cffi, cryptography and phonenumberslite added): `normalize_phone()` (India only, E.164: `PHONE_NOT_SUPPORTED` for another country's number, `VALIDATION_ERROR` on `phone` for anything else), `hash_phone()` (HMAC-SHA256 keyed by `PHONE_PEPPER`), `encrypt_phone()`/`decrypt_phone()` (Fernet through MultiFernet, in the API, not pgcrypto: D-061), `make_access_token(user_id, role)` (15 min, `aud` = `ENV`), `decode_access_token()` (`AUTH_REQUIRED`, or `TOKEN_EXPIRED` only after a valid signature; expiry by `core.clock`), `new_refresh_token()` (32 random bytes, urlsafe), `hash_token()`, `hash_pin()`/`verify_pin()` (async: argon2id at D-062's exact parameters over a `CODE_PEPPER` key, at most two at once per process), `new_csrf()` and `csrf_matches()` (constant time; empty never matches).
+- [x] Keys checked for shape at startup, everywhere; the repo's public test keys refused unless `ENV` is local (D-060). `CODE_PEPPER` added (D-062), which also keys T-3.2's OTP codes (D-063).
+- [x] Unit tests for each, written so a deliberately weakened primitive fails: 31 weakened versions (a fixed salt, unchecked parameters, `==` for CSRF, the wall clock for expiry, no pepper and the rest), each turned at least one test red.
+- [x] `make_user(gender="male", onboarded=True, credits=0, verified=None)` factory in `tests/conftest.py` returning `(user, access_token)` (moved from T-1.5; needs `users` from T-1.9). `verified` follows D-008 unless given; `credits` other than 0 raises until T-5.1 (rule 5).
+- [x] **Staging made ready before `main` moved:** on 3 October 2026 Claude read staging's keys on the machine, lengths and hex only: `JWT_SECRET` at 128 lowercase hex characters, `PHONE_PEPPER` and `PHONE_ENC_KEY` at 64 each, matching `infra/STAGING.md`'s claim. `CODE_PEPPER` was generated into the Keychain and staged the same day (Fly lists it as `Staged`), so the deploy that needs it can start. There is no production Fly app yet. 20 hashes were timed on staging's machine: a median of 18.4 ms (D-062).
+- [ ] **Done when, on staging:** rebased onto `main`, which moved during the build, and gated on the rebased commit, not the one built, with P-0.3's lines in `05-PLAN.md` kept beside these (the founder, 3 October 2026); the deploy comes up on the new `Settings`; and `CODE_PEPPER`'s SHA-256 computed on the machine matches the Keychain copy's computed locally, first 8 hex characters. A shape check passes any 64 hex characters, so only a match proves the transfer landed intact. A mismatch costs nothing until the day Fly's copy is lost and restored from the Keychain: then every stored PIN becomes unverifiable at once.
+- [x] **Commit:** `feat(auth): security primitives [T-3.1]`
 
 ### T-3.2 · OTP send
 - [ ] **Needs:** T-3.1
 - [ ] This is Path B (MSG91, used after DLT approval). Build it behind `AUTH_PHONE_PROVIDER`; the launch path is T-3.14.
-- [ ] `POST /v1/auth/otp/send`. Normalise phone → reject if in `banned_identities` (respond generic, don't reveal). Rate limits per `02-ARCHITECTURE.md §12`. Generate 4-digit code, store `otp:{phone_hash}` = argon2(code) + attempts 0, TTL 300 s; resend lock 45 s. Send via `SmsProvider`.
+- [ ] `POST /v1/auth/otp/send`. Normalise phone → reject if in `banned_identities` (respond generic, don't reveal). Rate limits per `02-ARCHITECTURE.md §12`. Generate 4-digit code, store `otp:{phone_hash}` = keyed HMAC of the code under `CODE_PEPPER`'s `otp/v1` key, not argon2 (D-063), + attempts 0, TTL 300 s; resend lock 45 s. Send via `SmsProvider`.
 - [ ] Tests: happy path; resend too soon → `RATE_LIMITED`; 6th send in an hour → `RATE_LIMITED`; banned → 200 but no SMS sent.
 - [ ] **Commit:** `feat(auth): send otp [T-3.2]`
 
@@ -519,6 +524,9 @@ One migration per task, each with a working `downgrade()`. Build exactly `03-SCH
 ### T-3.5 · Current user
 - [ ] **Needs:** T-3.4
 - [ ] `deps.current_user` (decode JWT, load user, reject frozen/banned/deleted), `deps.onboarded_user` (also require `done`), `deps.require_role()`.
+  The access token's `role` was right when it was signed and can lag a demotion by up to 15
+  minutes (T-3.1); whether `require_role` trusts it or the user row it loads anyway is this task's
+  call.
 - [ ] `GET /v1/me` → `Me` schema. Throttled `last_active_at` update (Redis key, once per 60 s).
 - [ ] **Commit:** `feat(users): current user and /me [T-3.5]`
 
@@ -546,6 +554,9 @@ One migration per task, each with a working `downgrade()`. Build exactly `03-SCH
 ### T-3.9 · PIN
 - [ ] **Needs:** T-3.5
 - [ ] `POST /auth/pin/set` (4 digits, not `0000`/`1234`/all-same), `POST /auth/pin/verify` (5 fails → revoke all sessions, `SESSION_REVOKED`). Skippable in onboarding.
+  `hash_pin`/`verify_pin` are T-3.1's (D-062). `verify_pin` returns False both for a wrong PIN and
+  for a stored hash it refuses (other parameters, unreadable), logging only the latter; whether that
+  counts against `pin_failed` is this task's call.
 - [ ] **Commit:** `feat(auth): pin lock [T-3.9]`
 
 ### T-3.10 · Web auth client
@@ -634,7 +645,9 @@ One migration per task, each with a working `downgrade()`. Build exactly `03-SCH
 - [ ] ARQ worker bootstrap (`workers/main.py`) + `make worker`.
 - [ ] Deploy the worker to Fly staging (moved from T-1.22): `infra/fly.worker.toml` beside
   `fly.api.toml`, the same image and least-privilege role, deployed by `deploy.yml` after the API.
-  Add its pool to the connection budget in `infra/STAGING.md`.
+  Add its pool to the connection budget in `infra/STAGING.md`. It shares `Settings`, so it needs
+  the API's four keys as secrets, the same values (from the Keychain, `infra/STAGING.md`):
+  otherwise it can't read the numbers or hashes the API wrote, or doesn't start (D-060, D-061).
 - [ ] `moderate_photo(photo_id)`: fetch raw → Pillow open (reject if not an image) → `ImageOps.exif_transpose` → resize longest side 1600 → save JPEG q85 **without EXIF** → `ModerationProvider.check()` → approve (write public copy for `public` kind) or reject with reason (`nudity`, `minor_suspected`, `no_face`, `text_overlay`, `other`). `minor_suspected` also opens an internal report.
 - [ ] Idempotent: re-running on an approved photo does nothing.
 - [ ] Sightengine: turn on deleting each image right after its check, so photos don't stay on its
@@ -698,6 +711,7 @@ Built before discovery and chat because swipes, threads and unlocks all spend Ve
 - [ ] `amount <= 0` → programming error (raise, don't silently accept).
 - [ ] Publishes `wallet.updated` after commit (not before).
 - [ ] Extend `make seed` (T-1.15): credit the test man 60 through `credit(reason='admin_grant', idempotency_key='seed:test-man-credits')`, so a re-run changes nothing.
+- [ ] `make_user(credits=N)` (T-3.1) credits through `credit(reason='admin_grant')`; until then it refuses anything but 0, so no test writes a balance (rule 5).
 - [ ] **Commit:** `feat(wallet): row-locked debit and credit [T-5.1]`
 
 ### T-5.2 · Prices
@@ -987,6 +1001,10 @@ Built before discovery and chat because swipes, threads and unlocks all spend Ve
   protection:** anyone can download the page's JavaScript, and the Next.js server never sees a
   session there (D-024). Every `/admin/*` endpoint must carry its own `require_role(...)`; the
   API's role check is the only thing guarding admin data.
+- [ ] **User search finds a phone number only in full, never by prefix or part** (D-061). Numbers are
+  stored as a keyed hash and an encrypted copy, so search normalises and hashes the number typed and
+  matches it exactly. "Whose number ends in 4321?" has no answer, by design: support asks for the
+  whole number.
 - [ ] **Commit:** `feat(admin): moderation panel [T-9.5]`
 
 ### T-9.6 · Settings and data rights

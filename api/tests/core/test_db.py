@@ -15,6 +15,7 @@ from app.core.config import Settings, get_settings
 from app.core.db import get_session
 from app.main import close_resources, create_app
 from tests.infra import requires_infra
+from tests.keys import random_keys
 
 _TEST_DB_URL = "postgresql+asyncpg://velora:velora@127.0.0.1:5432/velora_test"
 _DEV_DB_URL = "postgresql+asyncpg://velora:velora@127.0.0.1:5432/velora"
@@ -42,9 +43,7 @@ async def test_get_session_uses_the_apps_database_not_the_global_one(
             ENV="local",
             DATABASE_URL=_TEST_DB_URL,
             REDIS_URL="redis://127.0.0.1:6379/1",
-            JWT_SECRET="x",
-            PHONE_PEPPER="x",
-            PHONE_ENC_KEY="x",
+            **random_keys(),  # type: ignore[arg-type]
         )
     )
 

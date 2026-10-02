@@ -15,6 +15,7 @@ from httpx import ASGITransport, AsyncClient
 
 from app.core.config import Settings
 from app.main import close_resources, create_app
+from tests.keys import random_keys
 
 # D-045: outside local, every provider must be a real one.
 _REAL_PROVIDERS = {
@@ -35,9 +36,7 @@ def _settings(database: str, redis_db: int, **overrides: Any) -> Settings:
             "ENV": "local",
             "DATABASE_URL": f"postgresql+asyncpg://velora:velora@127.0.0.1:5432/{database}",
             "REDIS_URL": f"redis://127.0.0.1:6379/{redis_db}",
-            "JWT_SECRET": "x",
-            "PHONE_PEPPER": "x",
-            "PHONE_ENC_KEY": "x",
+            **random_keys(),
             **overrides,
         },
     )

@@ -10,11 +10,21 @@ from typing import Annotated
 import pytest
 from fastapi import Depends, FastAPI
 from httpx import AsyncClient
-from sqlalchemy import text
+from sqlalchemy import select, text
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession
 
 from app.core import clock as clock_module
 from app.core.db import get_session
+from app.core.enums import Gender, OnboardingStep, Role, Seeking
+from app.core.security import (
+    decode_access_token,
+    decrypt_phone,
+    hash_phone,
+    normalize_phone,
+)
+from app.modules.profiles.models import Profile
+from app.modules.users.models import User
+from tests.conftest import MakeUser
 from tests.infra import (
     ensure_test_database,
     infra_policy,
@@ -157,3 +167,110 @@ def test_clock_is_not_left_frozen() -> None:
     `clock` fixture put the wall clock back."""
     assert clock_module.now().year >= 2026
     assert clock_module.now() != datetime(2026, 1, 2, tzinfo=UTC)
+
+
+# --- make_user -----------------------------------------------------------------
+
+
+async def test_make_user_writes_the_four_rows_signup_creates(
+    db: AsyncSession, make_user: MakeUser
+) -> None:
+    user, _ = await make_user()
+
+    for table in ("profiles", "wallets", "notification_prefs"):
+        rows = await db.execute(
+            text(f"select count(*) from {table} where user_id = :id"), {"id": user.id}
+        )
+        assert rows.scalar_one() == 1, table
+    balance = await db.execute(
+        text("select balance from wallets where user_id = :id"), {"id": user.id}
+    )
+    assert balance.scalar_one() == 0
+
+
+async def test_a_made_user_is_found_the_way_login_will_look(
+    db: AsyncSession, app: FastAPI, make_user: MakeUser
+) -> None:
+    user, _ = await make_user()
+    settings = app.state.settings
+
+    phone = decrypt_phone(user.phone_enc, settings)
+    found = await db.execute(
+        select(User.id).where(
+            User.phone_hash == hash_phone(normalize_phone(phone), settings)
+        )
+    )
+
+    assert found.scalar_one() == user.id
+
+
+async def test_make_users_token_is_one_the_app_accepts(
+    app: FastAPI, make_user: MakeUser
+) -> None:
+    user, token = await make_user()
+
+    claims = decode_access_token(token, app.state.settings)
+
+    assert (claims.user_id, claims.role) == (user.id, Role.USER)
+
+
+@pytest.mark.parametrize(
+    ("gender", "seeking"), [("male", Seeking.WOMEN), ("female", Seeking.MEN)]
+)
+async def test_an_onboarded_user_is_done_adult_and_seeking_the_other_gender(
+    db: AsyncSession, make_user: MakeUser, gender: str, seeking: Seeking
+) -> None:
+    user, _ = await make_user(gender=gender)
+    profile = await db.get(Profile, user.id)
+
+    assert user.onboarding_step is OnboardingStep.DONE
+    assert user.gender is Gender(gender)
+    assert user.dob is not None
+    assert user.dob.year <= clock_module.today_ist().year - 24
+    assert profile is not None
+    assert profile.seeking is seeking
+    assert profile.username and profile.first_name and profile.about
+
+
+async def test_a_user_still_onboarding_is_at_seeking_with_an_empty_profile(
+    db: AsyncSession, make_user: MakeUser
+) -> None:
+    user, _ = await make_user(gender="female", onboarded=False)
+    profile = await db.get(Profile, user.id)
+
+    assert user.onboarding_step is OnboardingStep.SEEKING
+    assert user.is_verified is False
+    assert profile is not None
+    assert (profile.username, profile.seeking, profile.about) == (None, None, None)
+
+
+async def test_verified_follows_d008_unless_given(make_user: MakeUser) -> None:
+    woman, _ = await make_user(gender="female")
+    man, _ = await make_user(gender="male")
+    verified_man, _ = await make_user(gender="male", verified=True)
+
+    assert (woman.is_verified, man.is_verified, verified_man.is_verified) == (
+        True,
+        False,
+        True,
+    )
+
+
+async def test_an_onboarded_woman_who_isnt_verified_cant_be_made(
+    make_user: MakeUser,
+) -> None:
+    with pytest.raises(ValueError, match=r"always verified \(D-008\)"):
+        await make_user(gender="female", verified=False)
+
+
+async def test_velas_wait_for_the_wallet_service(make_user: MakeUser) -> None:
+    with pytest.raises(NotImplementedError, match=r"T-5.1 .*\(rule 5\)"):
+        await make_user(credits=5)
+
+
+async def test_two_made_users_never_collide(make_user: MakeUser) -> None:
+    first, _ = await make_user()
+    second, _ = await make_user()
+
+    assert first.phone_hash != second.phone_hash
+    assert first.referral_code != second.referral_code

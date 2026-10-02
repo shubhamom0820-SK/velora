@@ -2,10 +2,14 @@
 
 from __future__ import annotations
 
+import re
+from pathlib import Path
+
 import pytest
 from pydantic import ValidationError
 
-from app.core.config import Settings
+from app.core.config import PUBLIC_TEST_KEYS, Settings
+from tests.keys import random_keys
 
 _ALL_VARS = [
     "ENV",
@@ -14,6 +18,7 @@ _ALL_VARS = [
     "JWT_SECRET",
     "PHONE_PEPPER",
     "PHONE_ENC_KEY",
+    "CODE_PEPPER",
     "CORS_ORIGINS",
     "COOKIE_DOMAIN",
     "CLIENT_IP_HEADER",
@@ -39,9 +44,7 @@ _REQUIRED = {
     "ENV": "local",
     "DATABASE_URL": "postgresql+asyncpg://velora:velora@127.0.0.1:5432/velora",
     "REDIS_URL": "redis://127.0.0.1:6379/0",
-    "JWT_SECRET": "x",
-    "PHONE_PEPPER": "x",
-    "PHONE_ENC_KEY": "x",
+    **PUBLIC_TEST_KEYS,
 }
 
 
@@ -55,12 +58,14 @@ _REAL_PROVIDERS = {
     "STORAGE_PROVIDER": "s3",
     "PUSH_PROVIDER": "webpush",
 }
-# What staging and production must set beyond that: Redis over TLS, and the
-# header the proxy puts the client's IP in (D-056).
+# What staging and production must set beyond that: Redis over TLS, the header
+# the proxy puts the client's IP in (D-056), and keys that aren't the repo's
+# public test keys (D-060).
 _DEPLOYED = {
     **_REAL_PROVIDERS,
     "REDIS_URL": "rediss://default:x@redis.example:6379/0",
     "CLIENT_IP_HEADER": "Fly-Client-IP",
+    **random_keys(),
 }
 
 
@@ -252,3 +257,119 @@ def test_local_may_read_the_socket_or_a_header() -> None:
         _settings(ENV="local", CLIENT_IP_HEADER="Fly-Client-IP").CLIENT_IP_HEADER
         == "Fly-Client-IP"
     )
+
+
+# --- Keys are checked for shape, everywhere (D-060) -----------------------------
+
+_A64 = "a" * 64
+# Not hex, but recognisable, so a test can prove the value is never echoed.
+_SECRETISH = "hunter2" + "a" * 57
+
+
+@pytest.mark.parametrize(
+    ("name", "value", "expected"),
+    [
+        ("JWT_SECRET", "x", "at least 128 hex characters (64 bytes)"),
+        ("JWT_SECRET", "a" * 126, "at least 128 hex characters (64 bytes)"),
+        ("JWT_SECRET", "a" * 129, "at least 128 hex characters (64 bytes)"),
+        ("JWT_SECRET", _SECRETISH * 2, "openssl rand -hex 64"),
+        ("JWT_SECRET", "a" * 128 + " ", "check for stray quotes or spaces"),
+        ("PHONE_PEPPER", "a" * 63, "exactly 64 hex characters (32 bytes)"),
+        ("PHONE_PEPPER", "a" * 65, "exactly 64 hex characters (32 bytes)"),
+        ("PHONE_PEPPER", _SECRETISH, "openssl rand -hex 32"),
+        ("PHONE_PEPPER", '"' + "a" * 62 + '"', "check for stray quotes or spaces"),
+        ("CODE_PEPPER", "a" * 63, "exactly 64 hex characters (32 bytes)"),
+        ("CODE_PEPPER", _SECRETISH, "openssl rand -hex 32"),
+        ("PHONE_ENC_KEY", "", "one or more keys of exactly 64 hex characters"),
+        ("PHONE_ENC_KEY", _SECRETISH, "one or more keys of exactly 64 hex characters"),
+        ("PHONE_ENC_KEY", f"{_A64}, {'b' * 64}", "with no spaces"),
+        ("PHONE_ENC_KEY", f"{_A64},,{'b' * 64}", "with no spaces"),
+        ("PHONE_ENC_KEY", f"{_A64},", "with no spaces"),
+        ("PHONE_ENC_KEY", f"{_A64},{_A64}", "lists the same key more than once"),
+        # The same bytes in capitals are the same key.
+        (
+            "PHONE_ENC_KEY",
+            f"{_A64},{_A64.upper()}",
+            "lists the same key more than once",
+        ),
+    ],
+)
+def test_a_badly_shaped_key_is_named_but_not_echoed(
+    name: str, value: str, expected: str
+) -> None:
+    message = _error(**{name: value})
+
+    assert name in message
+    assert expected in message
+    assert "hunter2" not in message
+    assert "input_value" not in message
+
+
+def test_well_shaped_keys_are_accepted() -> None:
+    settings = _settings(
+        JWT_SECRET="AB" * 96,  # longer than the minimum, and in capitals
+        PHONE_PEPPER="0f" * 32,
+        CODE_PEPPER="F0" * 32,
+        PHONE_ENC_KEY=f"{'1' * 64},{'2' * 64}",
+    )
+
+    assert settings.JWT_SECRET == "AB" * 96
+    # Newest first: the first encrypts, both decrypt (D-061).
+    assert settings.PHONE_ENC_KEY == ("1" * 64, "2" * 64)
+
+
+# --- The repo's public test keys work only where ENV is local (D-060) -----------
+
+
+@pytest.mark.parametrize("env", ["staging", "production"])
+@pytest.mark.parametrize("name", sorted(PUBLIC_TEST_KEYS))
+def test_a_public_test_key_outside_local_refuses_to_start(env: str, name: str) -> None:
+    message = _error(ENV=env, **{**_DEPLOYED, name: PUBLIC_TEST_KEYS[name]})
+
+    assert f"ENV={env} cannot use the repo's public test keys ({name})" in message
+    assert "anyone who can read the repo" in message
+    assert "D-060" in message
+
+
+def test_every_public_test_key_is_named_at_once() -> None:
+    message = _error(ENV="production", **{**_DEPLOYED, **PUBLIC_TEST_KEYS})
+
+    assert "(JWT_SECRET, PHONE_PEPPER, PHONE_ENC_KEY, CODE_PEPPER)" in message
+
+
+def test_a_public_test_key_in_capitals_is_still_refused() -> None:
+    message = _error(
+        ENV="staging",
+        **{**_DEPLOYED, "JWT_SECRET": PUBLIC_TEST_KEYS["JWT_SECRET"].upper()},
+    )
+
+    assert "public test keys (JWT_SECRET)" in message
+
+
+def test_the_public_encryption_key_is_refused_as_an_older_key_too() -> None:
+    keys = f"{random_keys()['PHONE_ENC_KEY']},{PUBLIC_TEST_KEYS['PHONE_ENC_KEY']}"
+
+    message = _error(ENV="staging", **{**_DEPLOYED, "PHONE_ENC_KEY": keys})
+
+    assert "public test keys (PHONE_ENC_KEY)" in message
+
+
+def test_local_runs_on_the_public_test_keys() -> None:
+    settings = _settings(ENV="local")
+
+    assert settings.JWT_SECRET == PUBLIC_TEST_KEYS["JWT_SECRET"]
+    assert settings.PHONE_ENC_KEY == (PUBLIC_TEST_KEYS["PHONE_ENC_KEY"],)
+
+
+def test_ci_publishes_exactly_the_refused_keys() -> None:
+    """CI's own keys are the ones staging and production refuse.
+
+    If ci.yml carried a key that isn't in PUBLIC_TEST_KEYS, a copy of it on
+    staging would start without complaint: the refusal only knows these.
+    """
+    ci = Path(__file__).resolve().parents[2] / ".github" / "workflows" / "ci.yml"
+    pattern = rf"^\s+({'|'.join(PUBLIC_TEST_KEYS)}):\s*(\S+)\s*$"
+    published = re.findall(pattern, ci.read_text(), flags=re.MULTILINE)
+
+    assert dict(published) == dict(PUBLIC_TEST_KEYS)
+    assert len(published) == len(PUBLIC_TEST_KEYS)

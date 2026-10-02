@@ -29,14 +29,17 @@ env:
   # the release's checksums file into this repo, so a tampered release fails.
   GITLEAKS_VERSION: "8.30.0"
   GITLEAKS_SHA256: "79a3ab579b53f71efd634f3aaf7e04a0fa0cf206b7ed434638d1547a2470a66e"
-  # Settings the API refuses to start without. Placeholders, not secrets: the
-  # same values the test harness sets (api/tests/conftest.py).
+  # Settings the API refuses to start without. The keys are the repo's public
+  # test keys (PUBLIC_TEST_KEYS in api/app/core/config.py, which the test
+  # harness uses too): not secrets, and refused anywhere ENV isn't local (D-060).
+  # A test holds these four to that list.
   ENV: local
   DATABASE_URL: postgresql+asyncpg://velora:velora@127.0.0.1:5432/velora_test
   REDIS_URL: redis://127.0.0.1:6379/1
-  JWT_SECRET: test-secret-not-a-real-key
-  PHONE_PEPPER: test-pepper
-  PHONE_ENC_KEY: test-enc-key
+  JWT_SECRET: 6a6a6a6a6a6a6a6a6a6a6a6a6a6a6a6a6a6a6a6a6a6a6a6a6a6a6a6a6a6a6a6a6a6a6a6a6a6a6a6a6a6a6a6a6a6a6a6a6a6a6a6a6a6a6a6a6a6a6a6a6a6a6a6a
+  PHONE_PEPPER: 7070707070707070707070707070707070707070707070707070707070707070
+  PHONE_ENC_KEY: 6565656565656565656565656565656565656565656565656565656565656565
+  CODE_PEPPER: 6363636363636363636363636363636363636363636363636363636363636363
 
 jobs:
   api:
@@ -139,6 +142,18 @@ jobs:
         with:
           persist-credentials: false
 
+      # Every container below runs as staging, which refuses the repo's public
+      # test keys (D-060), so this job draws throwaway ones, as staging's own are
+      # drawn: the same shapes, never written anywhere.
+      - name: Throwaway keys (staging refuses the repo's test keys)
+        run: |
+          {
+            echo "JWT_SECRET=$(openssl rand -hex 64)"
+            echo "PHONE_PEPPER=$(openssl rand -hex 32)"
+            echo "PHONE_ENC_KEY=$(openssl rand -hex 32)"
+            echo "CODE_PEPPER=$(openssl rand -hex 32)"
+          } >> "$GITHUB_ENV"
+
       # P-32: CI's checkout never has an api/.env, so the check would pass
       # without testing anything. Plant one; .dockerignore must keep it out.
       - name: Plant an api/.env the image must not contain
@@ -161,7 +176,7 @@ jobs:
           # Staging as fly.api.toml sets it, CLIENT_IP_HEADER included (D-056).
           docker run -d --name api -p 127.0.0.1:8000:8000 \
             -e ENV=staging -e DATABASE_URL -e REDIS_URL=rediss://ci:ci@127.0.0.1:6379/1 \
-            -e JWT_SECRET -e PHONE_PEPPER -e PHONE_ENC_KEY -e CLIENT_IP_HEADER=Fly-Client-IP \
+            -e JWT_SECRET -e PHONE_PEPPER -e PHONE_ENC_KEY -e CODE_PEPPER -e CLIENT_IP_HEADER=Fly-Client-IP \
             -e AUTH_PHONE_PROVIDER=firebase -e SMS_PROVIDER=msg91 -e PAYMENTS_PROVIDER=razorpay \
             -e MODERATION_PROVIDER=sightengine -e FACEMATCH_PROVIDER=rekognition \
             -e STORAGE_PROVIDER=s3 -e PUSH_PROVIDER=webpush "$IMAGE"
@@ -188,7 +203,7 @@ jobs:
         run: |
           set +e
           output="$(timeout 60 docker run --rm -e ENV=staging -e DATABASE_URL -e REDIS_URL \
-            -e JWT_SECRET -e PHONE_PEPPER -e PHONE_ENC_KEY "$IMAGE" 2>&1)"
+            -e JWT_SECRET -e PHONE_PEPPER -e PHONE_ENC_KEY -e CODE_PEPPER "$IMAGE" 2>&1)"
           status=$?
           set -e
           echo "$output" | tail -n 5
@@ -203,7 +218,7 @@ jobs:
           set +e
           output="$(timeout 60 docker run --rm -e ENV=staging -e DATABASE_URL \
             -e REDIS_URL=rediss://ci:ci@127.0.0.1:6379/1 \
-            -e JWT_SECRET -e PHONE_PEPPER -e PHONE_ENC_KEY \
+            -e JWT_SECRET -e PHONE_PEPPER -e PHONE_ENC_KEY -e CODE_PEPPER \
             -e AUTH_PHONE_PROVIDER=firebase -e SMS_PROVIDER=msg91 -e PAYMENTS_PROVIDER=razorpay \
             -e MODERATION_PROVIDER=sightengine -e FACEMATCH_PROVIDER=rekognition \
             -e STORAGE_PROVIDER=s3 -e PUSH_PROVIDER=webpush "$IMAGE" 2>&1)"

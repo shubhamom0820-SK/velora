@@ -55,15 +55,15 @@ Intent is not an enum: it is the `intents` catalogue, picked 1 to 3 per user (D-
 | column | type | notes |
 |---|---|---|
 | id | uuid pk | |
-| phone_hash | text not null unique | peppered SHA-256 of E.164 |
-| phone_enc | bytea not null | pgcrypto-encrypted E.164 |
+| phone_hash | text not null unique | HMAC-SHA256 of E.164, keyed by `PHONE_PEPPER` (D-061) |
+| phone_enc | bytea not null | E.164, Fernet-encrypted in the API, never by the database (D-061) |
 | gender | gender_t null | immutable after set (trigger) |
 | dob | date null | immutable after set (trigger) |
 | role | role_t not null default 'user' | |
 | status | user_status_t not null default 'active' | |
 | onboarding_step | onboarding_t not null default 'dob' | |
 | is_verified | boolean not null default false | selfie verified |
-| pin_hash | text null | argon2 |
+| pin_hash | text null | argon2id over a pepper kept off the database (D-062) |
 | pin_failed | smallint not null default 0 | |
 | referral_code | citext unique not null | generated at creation |
 | last_active_at | timestamptz null | updated at most once per minute |

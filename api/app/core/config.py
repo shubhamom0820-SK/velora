@@ -10,7 +10,10 @@ local development and is git-ignored; `.env.example` documents every name.
 
 from __future__ import annotations
 
+import re
+from collections.abc import Mapping
 from functools import lru_cache
+from types import MappingProxyType
 from typing import Annotated, Literal
 
 from pydantic import Field, field_validator, model_validator
@@ -39,6 +42,22 @@ PLAIN_REDIS_ALLOWED_IN: frozenset[str] = frozenset({"local"})
 # X-Forwarded-For, which the client writes; everywhere else the address comes
 # from the header the platform sets, CLIENT_IP_HEADER.
 SOCKET_CLIENT_IP_ALLOWED_IN: frozenset[str] = frozenset({"local"})
+# The keys this repo publishes for the tests and CI: tests/conftest.py and
+# .github/workflows/ci.yml use exactly these. Anyone who can read the repo can
+# sign access tokens, test phone hashes and decrypt phone numbers with them, and
+# nothing would fail, so they work only where ENV is local (rule 16, D-060).
+# Hex of one repeated letter each, so a stray one is recognisable: j(wt),
+# p(epper), e(ncryption), c(ode).
+PUBLIC_TEST_KEYS: Mapping[str, str] = MappingProxyType(
+    {
+        "JWT_SECRET": "6a" * 64,
+        "PHONE_PEPPER": "70" * 32,
+        "PHONE_ENC_KEY": "65" * 32,
+        "CODE_PEPPER": "63" * 32,
+    }
+)
+TEST_KEYS_ALLOWED_IN: frozenset[str] = frozenset({"local"})
+_HEX = re.compile(r"[0-9a-fA-F]+")
 PROVIDER_SETTINGS = (
     "AUTH_PHONE_PROVIDER",
     "SMS_PROVIDER",
@@ -65,9 +84,16 @@ class Settings(BaseSettings):
     ENV: Env
     DATABASE_URL: str
     REDIS_URL: str
+    # Keys: hex from `openssl rand -hex …`, checked below (D-060).
     JWT_SECRET: str
+    # Never changes once a number is banned: a ban keeps only the hash (D-061).
     PHONE_PEPPER: str
-    PHONE_ENC_KEY: str
+    # One key, or several separated by commas, newest first: the first encrypts
+    # and every one decrypts, so adding a key is a config change (D-061).
+    PHONE_ENC_KEY: Annotated[tuple[str, ...], NoDecode]
+    # The pepper for the short codes people type: PINs, and OTP codes from T-3.2
+    # (D-062, D-063). Never PHONE_PEPPER's key: this one can rotate.
+    CODE_PEPPER: str
 
     # --- Database pool, per process (each uvicorn worker opens its own) ---
     DB_POOL_SIZE: int = Field(default=5, ge=1)
@@ -169,6 +195,51 @@ class Settings(BaseSettings):
             return [origin.strip() for origin in v.split(",") if origin.strip()]
         return v
 
+    # Keys are checked for shape, in every environment: a short or mistyped key
+    # fails nothing later, it just protects less, so it fails here (D-060). Like
+    # the URLs above, a message names what's wanted and never echoes the value.
+    @field_validator("JWT_SECRET")
+    @classmethod
+    def _jwt_secret_is_long_hex(cls, v: str) -> str:
+        if not (_HEX.fullmatch(v) and len(v) >= 128 and len(v) % 2 == 0):
+            raise ValueError(
+                "must be at least 128 hex characters (64 bytes): generate it with "
+                "`openssl rand -hex 64`; check for stray quotes or spaces"
+            )
+        return v
+
+    @field_validator("PHONE_PEPPER", "CODE_PEPPER")
+    @classmethod
+    def _pepper_is_32_byte_hex(cls, v: str) -> str:
+        if not (_HEX.fullmatch(v) and len(v) == 64):
+            raise ValueError(
+                "must be exactly 64 hex characters (32 bytes): generate it with "
+                "`openssl rand -hex 32`; check for stray quotes or spaces"
+            )
+        return v
+
+    @field_validator("PHONE_ENC_KEY", mode="before")
+    @classmethod
+    def _split_enc_keys(cls, v: object) -> object:
+        """Comma-separated, newest first, nothing stripped: a stray space is an
+        error to see, not something to tidy away."""
+        if isinstance(v, str):
+            return tuple(v.split(","))
+        return v
+
+    @field_validator("PHONE_ENC_KEY")
+    @classmethod
+    def _enc_keys_are_32_byte_hex(cls, v: tuple[str, ...]) -> tuple[str, ...]:
+        if not v or not all(_HEX.fullmatch(key) and len(key) == 64 for key in v):
+            raise ValueError(
+                "must be one or more keys of exactly 64 hex characters (32 bytes), "
+                "newest first, separated by commas with no spaces: generate one with "
+                "`openssl rand -hex 32`"
+            )
+        if len({bytes.fromhex(key) for key in v}) != len(v):
+            raise ValueError("lists the same key more than once")
+        return v
+
     @model_validator(mode="after")
     def _fakes_only_where_allowed(self) -> Settings:
         """Refuse to start with a fake provider outside `FAKES_ALLOWED_IN`.
@@ -213,6 +284,37 @@ class Settings(BaseSettings):
                 "the client, so per-IP rate limits would key on an address anyone can "
                 f"choose (D-056). Only ENV {', '.join(sorted(SOCKET_CLIENT_IP_ALLOWED_IN))} "
                 "may read the socket."
+            )
+        return self
+
+    @model_validator(mode="after")
+    def _public_test_keys_only_where_allowed(self) -> Settings:
+        """Refuse the repo's test keys outside `TEST_KEYS_ALLOWED_IN` (D-060).
+
+        A copied test key fails nothing: tokens still verify and hashes still
+        match, for us and for anyone who has read the repo. Compared as bytes, so
+        a test key in capitals is still a test key.
+        """
+        if self.ENV in TEST_KEYS_ALLOWED_IN:
+            return self
+        in_use = {
+            "JWT_SECRET": [self.JWT_SECRET],
+            "PHONE_PEPPER": [self.PHONE_PEPPER],
+            "PHONE_ENC_KEY": list(self.PHONE_ENC_KEY),
+            "CODE_PEPPER": [self.CODE_PEPPER],
+        }
+        found = [
+            name
+            for name, test_key in PUBLIC_TEST_KEYS.items()
+            if bytes.fromhex(test_key) in {bytes.fromhex(k) for k in in_use[name]}
+        ]
+        if found:
+            raise ValueError(
+                f"ENV={self.ENV} cannot use the repo's public test keys "
+                f"({', '.join(found)}): anyone who can read the repo could sign access "
+                "tokens and read phone numbers with them. They work only where ENV is "
+                f"{', '.join(sorted(TEST_KEYS_ALLOWED_IN))} (D-060). Generate real ones "
+                "with openssl rand -hex (infra/STAGING.md)."
             )
         return self
 

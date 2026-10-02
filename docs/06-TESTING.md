@@ -35,7 +35,10 @@ use the **fake** providers from `app/core/providers/`.
 
 - `db` — session inside a transaction rolled back after each test.
 - `client` — AsyncClient on the app with dependency overrides for providers.
-- `make_user(gender="male", onboarded=True, credits=0, verified=False)` → `(user, token)`.
+- `make_user(gender="male", onboarded=True, credits=0, verified=None)` → `(user, token)` (T-3.1):
+  the four rows signup creates, and a token the `app` fixture accepts. `verified` follows D-008
+  unless given, and an onboarded woman who isn't verified can't be made; `credits` other than 0
+  raises until T-5.1 credits them through `wallet.service.credit()` (rule 5).
 - `make_thread(a, b, status="active", messages=0)`.
 - `clock` — freezes/advances "now" for expiry tests (the app reads time only through
   `core.clock.now()` — never `datetime.now()` directly).

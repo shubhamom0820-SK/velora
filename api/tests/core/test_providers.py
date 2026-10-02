@@ -25,15 +25,14 @@ from app.core.providers.payments import FakePayments, RazorpayPayments
 from app.core.providers.push import FakePush, PushSubscription, WebPush
 from app.core.providers.sms import FakeSms, Msg91Sms, mask_phone
 from app.core.providers.storage import FakeStorage, ObjectNotFound, S3Storage
+from tests.keys import random_keys
 
 PHONE = "+919812345678"
 
 _REQUIRED = {
     "DATABASE_URL": "postgresql+asyncpg://velora:velora@127.0.0.1:5432/velora",
     "REDIS_URL": "redis://127.0.0.1:6379/0",
-    "JWT_SECRET": "x",
-    "PHONE_PEPPER": "x",
-    "PHONE_ENC_KEY": "x",
+    **random_keys(),
 }
 _REAL = {
     "AUTH_PHONE_PROVIDER": "firebase",

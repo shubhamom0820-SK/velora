@@ -7,14 +7,18 @@ test settings and shares that transaction.
 Every external service is its in-memory fake (`fake_providers`, D-028): the
 `app` fixture installs them, so no test can reach a real provider.
 
-Still to come, with the task that builds what it needs: `make_user` (T-3.1).
+`make_user` builds a signed-up user and the access token the app accepts for
+them.
 """
 
 from __future__ import annotations
 
+import itertools
 import os
 from collections.abc import AsyncIterator, Iterator
+from datetime import date
 from types import ModuleType
+from typing import Protocol
 
 import pytest
 from fastapi import FastAPI
@@ -22,6 +26,7 @@ from httpx import ASGITransport, AsyncClient
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession
 
 from alembic import command as alembic_command
+from app.core.config import PUBLIC_TEST_KEYS
 from tests.infra import (
     INFRA_DOWN_REASON,
     INFRA_UP,
@@ -45,21 +50,32 @@ os.environ["DATABASE_URL"] = TEST_DATABASE_URL
 os.environ["REDIS_URL"] = TEST_REDIS_URL
 for _key, _value in {
     "ENV": "local",
-    "JWT_SECRET": "test-secret-not-a-real-key",
-    "PHONE_PEPPER": "test-pepper",
-    "PHONE_ENC_KEY": "test-enc-key",
+    # The repo's public test keys (D-060): valid here, refused outside local.
+    **PUBLIC_TEST_KEYS,
     "CORS_ORIGINS": "http://localhost:3000",
 }.items():
     os.environ.setdefault(_key, _value)
 
 from redis.asyncio import Redis
 
+from app.core.clock import today_ist
 from app.core.config import Settings
 from app.core.db import build_engine, get_session
+from app.core.enums import Gender, OnboardingStep, Role, Seeking, UserStatus
 from app.core.providers import FakeProviders
 from app.core.ratelimit import KEY_PREFIX as RATE_LIMIT_KEY_PREFIX
 from app.core.redis import build_redis
+from app.core.security import (
+    encrypt_phone,
+    hash_phone,
+    make_access_token,
+    normalize_phone,
+)
 from app.main import close_resources, create_app
+from app.modules.notifications.models import NotificationPrefs
+from app.modules.profiles.models import Profile
+from app.modules.users.models import User
+from app.modules.wallet.models import Wallet
 
 
 def pytest_configure(config: pytest.Config) -> None:
@@ -78,10 +94,8 @@ def make_test_settings() -> Settings:
         ENV="local",
         DATABASE_URL=TEST_DATABASE_URL,
         REDIS_URL=TEST_REDIS_URL,
-        JWT_SECRET="test-secret-not-a-real-key",
-        PHONE_PEPPER="test-pepper",
-        PHONE_ENC_KEY="test-enc-key",
         CORS_ORIGINS=["http://localhost:3000"],
+        **PUBLIC_TEST_KEYS,  # type: ignore[arg-type]
     )
 
 
@@ -144,6 +158,99 @@ async def client(app: FastAPI) -> AsyncIterator[AsyncClient]:
     transport = ASGITransport(app=app, raise_app_exceptions=False)
     async with AsyncClient(transport=transport, base_url="http://test") as c:
         yield c
+
+
+# --- Users --------------------------------------------------------------------
+
+
+class MakeUser(Protocol):
+    async def __call__(
+        self,
+        gender: Gender | str = Gender.MALE,
+        *,
+        onboarded: bool = True,
+        credits: int = 0,
+        verified: bool | None = None,
+    ) -> tuple[User, str]: ...
+
+
+_user_serial = itertools.count(1)
+
+
+@pytest.fixture
+def make_user(db: AsyncSession) -> MakeUser:
+    """A user as signup and onboarding leave them, and an access token the `app`
+    fixture accepts: `user, token = await make_user(gender="female")`.
+
+    It writes the four rows signup creates (users, profiles, wallets at 0,
+    notification_prefs). The phone goes through normalize, hash and encrypt, so
+    a test finds the user exactly as login will.
+
+    - `onboarded=True`: step `done`, 25 or so, the profile filled in, seeking the
+      other gender. No interests, intents or photos: their tasks extend this.
+    - `onboarded=False`: step `seeking`, the one after gender; profile empty.
+    - `verified` follows D-008 unless given: an onboarded woman is verified, and
+      asking for one who isn't raises, since the app can't produce her.
+    - `credits` other than 0 raises until T-5.1: Velas only ever arrive through
+      `wallet.service.credit()` (rule 5).
+    """
+    settings = make_test_settings()
+
+    async def factory(
+        gender: Gender | str = Gender.MALE,
+        *,
+        onboarded: bool = True,
+        credits: int = 0,
+        verified: bool | None = None,
+    ) -> tuple[User, str]:
+        gender = Gender(gender)
+        if credits != 0:
+            raise NotImplementedError(
+                "make_user(credits=…) needs wallet.service.credit(), which T-5.1 "
+                "builds: Velas never arrive any other way (rule 5)."
+            )
+        woman_onboarded = onboarded and gender is Gender.FEMALE
+        if verified is None:
+            verified = woman_onboarded
+        elif woman_onboarded and not verified:
+            raise ValueError(
+                "An onboarded woman is always verified (D-008): the app can't "
+                "produce one who isn't, so tests mustn't either."
+            )
+
+        serial = next(_user_serial)
+        phone = normalize_phone(f"+9198{serial:08d}")
+        user = User(
+            phone_hash=hash_phone(phone, settings),
+            phone_enc=encrypt_phone(phone, settings),
+            gender=gender,
+            dob=date(today_ist().year - 25, 1, 1),
+            role=Role.USER,
+            status=UserStatus.ACTIVE,
+            onboarding_step=OnboardingStep.DONE
+            if onboarded
+            else OnboardingStep.SEEKING,
+            is_verified=verified,
+            referral_code=f"TEST{serial:06d}",
+        )
+        db.add(user)
+        await db.flush()
+        profile = Profile(user_id=user.id)
+        if onboarded:
+            profile.first_name = "Test"
+            profile.username = f"user{serial}"
+            profile.about = "A test profile, with an about long enough for the rules."
+            profile.hometown = "Phagwara"
+            profile.city = "Phagwara"
+            profile.seeking = Seeking.WOMEN if gender is Gender.MALE else Seeking.MEN
+        db.add_all(
+            [profile, Wallet(user_id=user.id), NotificationPrefs(user_id=user.id)]
+        )
+        await db.flush()
+        await db.refresh(user)
+        return user, make_access_token(user.id, user.role, settings)
+
+    return factory
 
 
 # --- Redis --------------------------------------------------------------------
