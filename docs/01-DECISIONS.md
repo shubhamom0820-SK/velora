@@ -713,6 +713,45 @@ test whether an address is on our list.
 **Rejected:** `409 ALREADY_EXISTS` for a repeat, the API's usual answer to a duplicate. Decided by
 the founder on 2 October 2026.
 
+### D-058 · Registered office in Hajipur, launch city Phagwara — Locked
+Supersedes D-013, which bundled two facts into one place. They are now two places, both correct:
+- **The registered office**, where legal notice is served: Shubham Kumar, House No. 163, Anwarpur
+  Chowk, Hajipur, Vaishali, Bihar – 844101. It lives in `web/src/lib/legal.ts` with the other
+  legal facts (P-0.2).
+- **The launch city**, the seeded areas and the first users: Phagwara, Punjab, unchanged, with
+  D-013's 25 km default radius. P-38 is unaffected.
+
+**They differ on purpose. Don't reconcile them.** Hajipur in `legal.ts` and Phagwara in the seed
+data isn't a mismatch: one is where the business is registered and served notice, the other is
+where the app opens first. Making them agree would put a wrong address on the legal pages or the
+wrong city in the product. A test in `legal.test.ts` fails if the registered office changes, and
+its message sends whoever changed it here.
+
+**The footer's town is read from the registered office**, not written separately: one fact
+rendered twice (in full on Contact and in Terms, as its town in the © line), not two facts that
+can drift apart.
+
+**The business is a sole proprietorship** (P-0.2 had recommended an OPC). Its name on record is
+"Shubham Kumar, sole proprietor", and Shubham Kumar is the Grievance Officer. **The name must
+match the proprietor's PAN and bank account exactly:** Razorpay's KYC compares them, and a
+mismatch stalls payouts later. Don't tidy it up. The legal pages label it "Run by", not "Company":
+calling a proprietorship a company is a small untruth on pages whose whole job is being true, the
+same reason T-2.2 wrote its own policies instead of copying one and D-053 never invents a fact.
+
+**The court follows the registered office, not the launch city:** the courts at Hajipur, Vaishali
+district, Bihar. A Bihar address with a Punjab jurisdiction clause reads as careless, and it's the
+first thing anyone would pick at. This replaces D-052's "in Phagwara"; the rest of D-052 stands.
+
+**The clause carries less than it looks like.** Under the Consumer Protection Act 2019 an Indian
+consumer may file where they reside, whatever the terms say, so it governs commercial disputes,
+not users' complaints. Terms says so in one plain sentence: it discloses a right that exists
+whether or not we mention it, and creates no obligation, so its only downside is being redundant.
+Without it, the clause reads as though a user must come to Bihar to complain, which isn't true.
+**Neither the founder nor Claude is a lawyer:** if the terms are ever reviewed properly, show this
+line to one (P-0.7).
+
+Decided by the founder on 2 October 2026.
+
 ---
 
 ## Adding a decision

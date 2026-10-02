@@ -2,7 +2,7 @@ import Link from "next/link";
 
 import { t } from "@/i18n/t";
 import { APP_NAME } from "@/lib/app";
-import { PLACE } from "@/lib/legal";
+import { REGISTERED_OFFICE } from "@/lib/legal";
 
 const LINKS = [
   { href: "/terms", key: "landing.footer.terms" },
@@ -13,7 +13,9 @@ const LINKS = [
 
 /**
  * The black footer on every marketing page (T-2.2's layout): the legal links
- * and the © line, with the registered office's city (D-013). The © line is
+ * and the © line, with the registered office's town: read from the same record
+ * Contact shows in full, so it's one fact rendered twice, not two facts that
+ * can drift apart (D-058). It isn't the launch city, on purpose. The © line is
  * full `--chrome-mute`: the prototype's 70% opacity falls below the contrast
  * its small text needs. Not printed: a printed legal page is the page alone.
  */
@@ -40,8 +42,8 @@ export function SiteFooter() {
         {t("landing.footer.copyright", {
           year: new Date().getFullYear(),
           app: APP_NAME,
-          city: PLACE.city,
-          country: PLACE.country,
+          city: REGISTERED_OFFICE.city,
+          country: REGISTERED_OFFICE.country,
         })}
       </p>
     </footer>

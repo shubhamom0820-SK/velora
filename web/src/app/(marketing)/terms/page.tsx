@@ -6,7 +6,7 @@ import { LegalPage } from "@/components/marketing/LegalPage";
 import { LegalSection } from "@/components/marketing/LegalSection";
 import { t } from "@/i18n/t";
 import { APP_NAME } from "@/lib/app";
-import { LEGAL, PLACE } from "@/lib/legal";
+import { LEGAL } from "@/lib/legal";
 import { publicPageMetadata } from "@/lib/site";
 
 export const generateMetadata = publicPageMetadata(
@@ -27,7 +27,19 @@ export default function TermsPage() {
       intro={t("legal.terms.intro", app)}
     >
       <LegalSection title={t("legal.terms.whoWeAre.title")}>
-        <p>{t("legal.terms.whoWeAre.body", { ...app, ...PLACE })}</p>
+        <p>{t("legal.terms.whoWeAre.body", app)}</p>
+        <LegalFactList
+          facts={[
+            {
+              label: t("legal.facts.runBy"),
+              value: <LegalFact fact={LEGAL.companyName} />,
+            },
+            {
+              label: t("legal.facts.office"),
+              value: <LegalFact fact={LEGAL.registeredOffice} />,
+            },
+          ]}
+        />
       </LegalSection>
       <LegalSection title={t("legal.terms.whoCanJoin.title", app)}>
         <p>{t("legal.terms.whoCanJoin.body")}</p>
@@ -66,7 +78,7 @@ export default function TermsPage() {
         </p>
       </LegalSection>
       <LegalSection title={t("legal.terms.law.title")}>
-        <p>{t("legal.terms.law.body", PLACE)}</p>
+        <p>{t("legal.terms.law.body")}</p>
         <LegalFactList
           facts={[
             {
@@ -75,6 +87,7 @@ export default function TermsPage() {
             },
           ]}
         />
+        <p>{t("legal.terms.law.consumers")}</p>
       </LegalSection>
       <LegalSection title={t("legal.terms.questions.title")}>
         <p>{t("legal.terms.questions.body")}</p>

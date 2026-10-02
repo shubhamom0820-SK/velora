@@ -72,7 +72,9 @@ export const en = {
       privacy: "Privacy",
       refunds: "Refunds",
       contact: "Contact",
-      // {city}, {country}: the registered office (D-013), from src/lib/legal.ts.
+      // {city}, {country}: the registered office's town, read from the same
+      // record Contact shows in full (src/lib/legal.ts, D-058), never written
+      // separately. Not the launch city: the two differ on purpose.
       copyright: "© {year} {app} · {city}, {country}",
     },
   },
@@ -85,6 +87,12 @@ export const en = {
     notFinal:
       "This page isn't final yet: details marked “To be confirmed” are still to come.",
     toBeConfirmed: "To be confirmed",
+    // Labels for who runs the app and where notice goes, on Terms and Contact.
+    // "Run by", not "Company": a sole proprietorship isn't one (D-058).
+    facts: {
+      runBy: "Run by",
+      office: "Registered office",
+    },
     links: {
       terms: "Read our terms and conditions",
       privacy: "Read our privacy policy",
@@ -97,8 +105,8 @@ export const en = {
         "These are the rules for using {app}: how it works, what it costs, and what you and we can expect.",
       whoWeAre: {
         title: "Who we are",
-        // D-013; the company's name and address are on Contact (D-053).
-        body: "{app} is run by the company named on our contact page. Its registered office is in {city}, {state}, {country}.",
+        // P-0.2: Terms names the business it binds, directly (D-058).
+        body: "These terms are an agreement between you and the business that runs {app}:",
       },
       whoCanJoin: {
         title: "Who can use {app}",
@@ -152,9 +160,15 @@ export const en = {
       },
       law: {
         title: "Law and courts",
-        // D-052: the first thing P-0.7's review checks.
-        body: "These terms are governed by the laws of India. Any dispute goes to the courts with jurisdiction over our registered office in {city}, {state}.",
+        // D-052, with D-058's court: the first thing P-0.7's review checks.
+        body: "These terms are governed by the laws of India. Any dispute goes to the court named below.",
         court: "The court",
+        // D-058. It discloses a right that exists whether we mention it or not;
+        // without it, the clause reads as though a user must come to Bihar to
+        // complain. Neither the founder nor Claude is a lawyer: if the terms are
+        // ever reviewed properly, show this line to one (P-0.7).
+        consumers:
+          "If you're a consumer, you can still take a complaint to the Consumer Commission where you live, under the Consumer Protection Act, 2019.",
       },
       questions: {
         title: "Questions and complaints",
@@ -294,9 +308,6 @@ export const en = {
       title: "Contact and grievances",
       intro: "Who runs {app}, how to reach us, and who handles complaints.",
       details: "Our details",
-      company: "Company",
-      office: "Registered office",
-      place: "{city}, {state}, {country}",
       support: "Support",
       grievanceOfficer: "Grievance Officer",
       grievanceEmail: "Grievance Officer's email",

@@ -27,6 +27,12 @@ never done silently.
   software (Nice classes 45, 9 and 42, as Claude mapped them). D-015 was closed and the domain
   bought (P-0.3) before it, so a conflict found here means a new name and a new domain.
 - [ ] **P-0.2** Register company (OPC recommended) → PAN, GST, current account. Then fill the missing facts in `web/src/lib/legal.ts` (D-053), and change Terms' "Who we are" to name the company directly instead of pointing to the contact page: Terms should name the entity it binds.
+  **The four legal facts are in** (the founder, 2 October 2026; D-058): a sole proprietorship,
+  not the OPC recommended above, named "Shubham Kumar, sole proprietor", word for word as the
+  PAN and bank account have it; the registered office in Hajipur; the courts at Hajipur; Shubham
+  Kumar as Grievance Officer. They're in `legal.ts`, and Terms now names the proprietor directly.
+  **Still open, for the founder to confirm separately:** PAN, GST and the current account. T-2.6
+  stays blocked on P-0.3's two mailboxes: four of the six legal facts.
 - [ ] **P-0.3** Buy the domain (D-015 says why this one). Move its nameservers to Cloudflare. Then set up the support and Grievance Officer mailboxes: their addresses are the `supportEmail` and `grievanceOfficerEmail` facts in `web/src/lib/legal.ts`, and production can't build without them (D-053). Put each address there once it has received and sent a test message, and in the same change add Zoho to `/privacy` (`web/src/i18n/en.ts`) in both places: the list of who handles user data, since from then on it holds every support and grievance email, and "Where your data is", which lists what stays in India (D-048): that mail does, in Zoho's India data centre.
   **The domain is done:** `veloraapp.co.in`, registered 2 October 2026 with Hostinger, expiring
   2 October 2027. Claude read both dates and the registrar from the public WHOIS the same day.
@@ -54,7 +60,7 @@ never done silently.
   **Ticked with three still to set up**, none needed before Sprint 4: Sightengine (T-4.4), AWS for
   Rekognition (T-4.5 — signed up, but its payment method failed verification) and Sentry (T-9.12).
   Each is on its task's **Needs** line, which `/task` checks before planning.
-- [ ] **P-0.7** Review our own legal text before real users arrive — no lawyer at this stage (the founder's call, 1 October 2026). Check Terms, Privacy, Refunds and Contact (T-2.2) against the decisions they cite and against what the product actually does at go-live; against the IT Rules 2021 (Grievance Officer, timelines) and the DPDP Act (notice, consent, rights — section 16 and Rule 15 take effect on 13 May 2027; check for any restricted-country notification); and gender-based pricing. Start with the law-and-courts text (D-052), the weakest part we wrote ourselves. Look closely, not in passing, at the under-18 section: it keeps a hashed phone number of someone just identified as a minor (D-009). The mechanism and saying so openly are right, but minors plus retention is the most scrutinised combination there is. Privacy has no section yet on what happens to people's data if the app shuts down or is sold; add one when there is something honest to say. Gates T-9.15, not the production build (D-053).
+- [ ] **P-0.7** Review our own legal text before real users arrive — no lawyer at this stage (the founder's call, 1 October 2026). Check Terms, Privacy, Refunds and Contact (T-2.2) against the decisions they cite and against what the product actually does at go-live; against the IT Rules 2021 (Grievance Officer, timelines) and the DPDP Act (notice, consent, rights — section 16 and Rule 15 take effect on 13 May 2027; check for any restricted-country notification); and gender-based pricing. Start with the law-and-courts text (D-052), the weakest part we wrote ourselves. Look closely, not in passing, at the under-18 section: it keeps a hashed phone number of someone just identified as a minor (D-009). The mechanism and saying so openly are right, but minors plus retention is the most scrutinised combination there is. Privacy has no section yet on what happens to people's data if the app shuts down or is sold; add one when there is something honest to say. Gates T-9.15, not the production build (D-053). Terms' consumer-rights line (D-058) was written without a lawyer, by the founder and Claude: if the terms are ever reviewed properly, show it to one.
 - [ ] **P-0.8** After T-2.2 is live: apply to Razorpay and Cashfree. Before applying, confirm each gateway's exact refund and cancellation-policy requirement against `/refunds` (D-050).
 - [ ] **P-0.9** Buy a ₹10–12k Android phone for testing.
 - [ ] **P-0.10** 15 conversations with women aged 22–28 in the launch city about why they left their last dating app. Write findings in `docs/research.md`.
@@ -1304,6 +1310,9 @@ Claude Code adds items here instead of doing unplanned work. Format:
   decision's old default, and `make seed`'s profiles sit in Bengaluru localities. A new data
   migration replaces the areas (never an edit of the merged one, rule 11), and the dev seed's
   localities follow. Label the centroids with who drafted and who reviewed them, as T-1.14's were.
+
+  The registered office is in Hajipur, and that's deliberate (D-058): these areas stay
+  Phagwara's, the launch city. Don't make the two agree; a test in `legal.test.ts` says why.
 
   Found while planning T-2.2.
 - [ ] P-39 · Delete the Firebase user right after sign-in. **After T-3.14 works plainly.** Worst

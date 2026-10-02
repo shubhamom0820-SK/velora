@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 
 import { t } from "@/i18n/t";
 import { APP_NAME } from "@/lib/app";
+import { REGISTERED_OFFICE } from "@/lib/legal";
 
 import MarketingLayout from "./layout";
 
@@ -28,17 +29,20 @@ describe("the marketing layout", () => {
     ]);
   });
 
-  it("signs the footer with the registered office's city (D-013)", () => {
+  // One fact rendered twice: the footer reads the town from the same record
+  // Contact shows in full, so the two can't drift apart (D-058).
+  it("signs the footer with the registered office's town, read from that one record", () => {
     render(
       <MarketingLayout>
         <main />
       </MarketingLayout>,
     );
 
+    const footer = within(screen.getByRole("contentinfo"));
     expect(
-      within(screen.getByRole("contentinfo")).getByText(
-        `© ${new Date().getFullYear()} ${APP_NAME} · Phagwara, India`,
+      footer.getByText(
+        `© ${new Date().getFullYear()} ${APP_NAME} · ${REGISTERED_OFFICE.city}, ${REGISTERED_OFFICE.country}`,
       ),
-    ).toBeInTheDocument();
+    ).toHaveTextContent("Hajipur, India");
   });
 });

@@ -4,7 +4,7 @@ import { LegalPage } from "@/components/marketing/LegalPage";
 import { LegalSection } from "@/components/marketing/LegalSection";
 import { t } from "@/i18n/t";
 import { APP_NAME } from "@/lib/app";
-import { LEGAL, PLACE } from "@/lib/legal";
+import { LEGAL } from "@/lib/legal";
 import { publicPageMetadata } from "@/lib/site";
 
 export const generateMetadata = publicPageMetadata(
@@ -15,8 +15,8 @@ export const generateMetadata = publicPageMetadata(
 
 /**
  * /contact (T-2.2): who runs the app and who handles complaints (IT Rules).
- * Each fact comes from src/lib/legal.ts; the city is decided (D-013), the rest
- * waits on registration and the domain (D-053).
+ * Each fact comes from src/lib/legal.ts: who runs it and where notice goes are
+ * settled (D-058); the two emails wait on the mailboxes (P-0.3, D-053).
  */
 export default function ContactPage() {
   return (
@@ -28,18 +28,12 @@ export default function ContactPage() {
         <LegalFactList
           facts={[
             {
-              label: t("legal.contact.company"),
+              label: t("legal.facts.runBy"),
               value: <LegalFact fact={LEGAL.companyName} />,
             },
             {
-              label: t("legal.contact.office"),
-              value: (
-                <>
-                  <LegalFact fact={LEGAL.registeredOffice} />
-                  <br />
-                  {t("legal.contact.place", PLACE)}
-                </>
-              ),
+              label: t("legal.facts.office"),
+              value: <LegalFact fact={LEGAL.registeredOffice} />,
             },
             {
               label: t("legal.contact.support"),

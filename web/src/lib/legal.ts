@@ -1,5 +1,5 @@
 /**
- * Every fact the legal pages state about the company (T-2.2), and the gate that
+ * Every fact the legal pages state about the business (T-2.2), and the gate that
  * keeps a missing one out of production (D-053). A fact is either known or
  * missing, and a missing fact names the plan item that brings it. Pages show a
  * missing fact as "To be confirmed"; nothing here is ever invented.
@@ -23,14 +23,33 @@ export function isMissing(fact: Fact): fact is Missing {
   return typeof fact !== "string";
 }
 
-/** The registered office and the launch city (D-013): decided, so not a missing fact. */
-export const PLACE = {
-  city: "Phagwara",
-  state: "Punjab",
+/**
+ * The registered office: where legal notice is served (D-058), as the founder
+ * gave it. Deliberately not the launch city, Phagwara: the two differ on
+ * purpose, so don't make them agree. It's one fact rendered twice: in full on
+ * Contact and in Terms, and as its town in the footer, so they can't drift apart.
+ */
+export const REGISTERED_OFFICE = {
+  addressee: "Shubham Kumar",
+  street: "House No. 163, Anwarpur Chowk",
+  city: "Hajipur",
+  district: "Vaishali",
+  state: "Bihar",
+  pin: "844101",
   country: "India",
 } as const;
 
+/** The registered office on one line, word for word as the founder gave it. */
+export const OFFICE_ADDRESS = [
+  REGISTERED_OFFICE.addressee,
+  REGISTERED_OFFICE.street,
+  REGISTERED_OFFICE.city,
+  REGISTERED_OFFICE.district,
+  `${REGISTERED_OFFICE.state} – ${REGISTERED_OFFICE.pin}`,
+].join(", ");
+
 export type LegalFacts = {
+  /** Who runs the app: a sole proprietorship, so not a company (D-058). */
   readonly companyName: Fact;
   readonly registeredOffice: Fact;
   readonly court: Fact;
@@ -39,14 +58,16 @@ export type LegalFacts = {
   readonly supportEmail: Fact;
 };
 
+// P-0.2's four facts are settled (D-058); the two emails wait on the mailboxes
+// (P-0.3), so production still can't build (D-053).
 export const LEGAL: LegalFacts = {
-  companyName: missing("the company's registered name", "P-0.2"),
-  registeredOffice: missing("the registered office's street address", "P-0.2"),
-  court: missing(
-    "the court with jurisdiction over the registered office",
-    "P-0.2",
-  ),
-  grievanceOfficerName: missing("the Grievance Officer's name", "P-0.2"),
+  // Word for word: it must match the proprietor's PAN and bank account, which
+  // Razorpay's KYC compares. A "tidier" name stalls payouts (D-058).
+  companyName: "Shubham Kumar, sole proprietor",
+  registeredOffice: OFFICE_ADDRESS,
+  // The court follows the registered office, not the launch city (D-058).
+  court: "The courts at Hajipur, Vaishali district, Bihar",
+  grievanceOfficerName: "Shubham Kumar",
   grievanceOfficerEmail: missing("the Grievance Officer's email", "P-0.3"),
   supportEmail: missing("the support email", "P-0.3"),
 };
