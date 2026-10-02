@@ -315,11 +315,26 @@ One migration per task, each with a working `downgrade()`. Build exactly `03-SCH
   form is the landing page's one client component: add it to `CLIENT_COMPONENTS_ALLOWED` in
   `(marketing)/page.test.tsx`. The prototype's 48 px below the box is off the spacing scale; round
   it per 08-DESIGN §3.
-- [ ] **Done when, on staging:** joining from `https://staging.veloraapp.co.in` shows "You're on
+- [x] **Done when, on staging:** joining from `https://staging.veloraapp.co.in` shows "You're on
   the list"; a sixth try within a minute gets `429 RATE_LIMITED` even when every try forges a
   different `Fly-Client-IP` and `X-Forwarded-For`, which proves Fly's proxy overwrites the header
   its docs don't promise to (D-056); and Lighthouse mobile on `/` stays at ≥ 90 performance and
   100 accessibility with the form on the page.
+  **Proved on staging, 2 October 2026, by Claude,** on deploy run 37001771137 (commit `1b259d3`,
+  smoke passed). Every test row's email is at `example.com`, so ours are told apart from people's.
+  - **Joining:** headless Chrome joined from `https://staging.veloraapp.co.in` as
+    `t-2.3-done-when-ui@example.com`. `POST /v1/waitlist` answered 201, "You're on the list"
+    appeared inside the live region, and the form went away.
+  - **The forged header:** six tries over IPv4, each forging a different `Fly-Client-IP`
+    (198.51.100.1–6) and `X-Forwarded-For` (203.0.113.1–6), got five 201s, then `429
+    RATE_LIMITED`. An unforged try was refused too, so the forged ones had counted against this
+    machine's real address. An IPv6 try from the same machine 20 s later was allowed, so clients
+    don't share one bucket either. Fly's proxy overwrites a forged `Fly-Client-IP` (D-056).
+  - **Lighthouse** 13.5.0, mobile, simulated throttling, local Chrome: performance 90, 100, 100,
+    100, and accessibility 100 in all four, with no weighted accessibility audit failing. The 90
+    was the first run, with the same 158 KiB of script and the same server response as the rest:
+    a cold first measurement, not the form. A fifth run hit a Chrome error page from this
+    network's flaky DNS and isn't counted.
 - [x] **Commit:** `feat: waitlist [T-2.3]`
 
 ### T-2.4 · SEO and sharing
