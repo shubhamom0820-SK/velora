@@ -146,8 +146,9 @@ jobs:
           cache-dependency-path: web/pnpm-lock.yaml
 
       # The staging project deploys only from here (web/vercel.json turns off its
-      # Git deploys), so the web can't go live around the CI gate. --prod gives it
-      # the project's one stable URL, which the API's CORS_ORIGINS names.
+      # Git deploys), so the web can't go live around the CI gate. --prod puts it on
+      # the project's production domain, staging.veloraapp.co.in, which the API's
+      # CORS_ORIGINS names (P-33).
       - name: vercel pull
         run: pnpm dlx "vercel@$VERCEL_CLI_VERSION" pull --yes --environment=production --token="$VERCEL_TOKEN"
       - name: vercel build

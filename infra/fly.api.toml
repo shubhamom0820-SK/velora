@@ -25,9 +25,11 @@ primary_region = "sin"
   FACEMATCH_PROVIDER = "rekognition"
   STORAGE_PROVIDER = "s3"
   PUSH_PROVIDER = "webpush"
-  # The staging web's one stable URL (a separate Vercel project, deployed --prod).
-  # Not velora-staging.vercel.app: that's another company's site (infra/STAGING.md).
-  CORS_ORIGINS = "https://velora-staging-black.vercel.app"
+  # The staging web's address (P-33): the same site as this API, api.staging.
+  # under staging., so the refresh cookie can flow. Its old vercel.app address
+  # redirects here, so this is the one origin. Never velora-staging.vercel.app:
+  # that's another company's site (infra/STAGING.md).
+  CORS_ORIGINS = "https://staging.veloraapp.co.in"
   # Per process, and the image runs 2 uvicorn workers: at most
   # 2 x (5 + 2) = 14 connections to Postgres. The budget is in infra/STAGING.md.
   DB_POOL_SIZE = "5"

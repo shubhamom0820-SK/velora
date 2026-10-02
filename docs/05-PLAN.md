@@ -42,9 +42,11 @@ never done silently.
   **Rejected: Cloudflare Email Routing.** It's free but only forwards, so replies would go out from
   a personal Gmail address, which undercuts the Grievance Officer section (D-052).
   **Order:** nameservers first, then the mailboxes, then P-33.
-  **Still to do:** both. On 2 October the nameservers were still Hostinger's parking servers
-  (`aurora` and `nebula.dns-parking.com`), with no DNSSEC to switch off first. T-2.6 waits on the
-  mailboxes.
+  **Nameservers moved, 2 October 2026:** the `.in` registry delegated the domain to Cloudflare
+  (`aaron` and `lilyana.ns.cloudflare.com`) by 14:58 IST, read from the registry by Claude. Both
+  answered for the zone, with Hostinger's parking A and MX records gone; there was no DNSSEC to
+  switch off. P-33 started from there.
+  **Still to do:** the mailboxes, which T-2.6 waits on.
 - [ ] **P-0.4** DLT (needed only to move off Firebase later — start it anyway, it is slow): entity → header → OTP template `{#var#} is your Velora verification code. Valid for 5 minutes. Do not share it.`
 - [ ] **P-0.5** MSG91 account; link DLT IDs; send one test SMS to yourself.
 - [ ] **P-0.12** Firebase: project, Phone provider on, App Check + reCAPTCHA Enterprise enforced, authorised domains, daily SMS quota cap, billing alert. Confirm the **real per-SMS price for IN** in the billing console and write it into D-035.

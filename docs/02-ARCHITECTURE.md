@@ -295,8 +295,8 @@ secret is left empty. Real secret values are never committed.
 
 | | local | staging | production |
 |---|---|---|---|
-| Web | `pnpm dev` :3000 | Vercel project `velora-staging` (its own; stable URL) | Vercel prod `veloraapp.co.in` |
-| API | uvicorn :8000 | Fly `velora-api-staging` | Fly `velora-api` |
+| Web | `pnpm dev` :3000 | Vercel project `velora-staging` at `staging.veloraapp.co.in` | Vercel prod `veloraapp.co.in` |
+| API | uvicorn :8000 | Fly `velora-api-staging` at `api.staging.veloraapp.co.in` | Fly `velora-api` at `api.veloraapp.co.in` |
 | DB | docker postgis | Supabase project `velora-staging` | Supabase `velora-prod` |
 | Providers | fake | real (test keys) | real (live keys) |
 

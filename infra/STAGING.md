@@ -11,8 +11,9 @@ shape; copy these steps and change the names.
 
 | Piece | Where | Name |
 |---|---|---|
-| API | Fly.io, `sin` (Singapore; D-048) | app `velora-api-staging` → `https://velora-api-staging.fly.dev` |
-| Web | Vercel, its own project | `velora-staging` → `https://velora-staging-black.vercel.app` |
+| API | Fly.io, `sin` (Singapore; D-048) | app `velora-api-staging` → `https://api.staging.veloraapp.co.in` |
+| Web | Vercel, its own project | `velora-staging` → `https://staging.veloraapp.co.in` |
+| DNS | Cloudflare | zone `veloraapp.co.in`, records DNS-only (§6) |
 | Postgres | Supabase, Mumbai (`ap-south-1`) | project `velora-staging` |
 | Redis | Upstash, Mumbai | database `velora-staging` |
 | Objects | Cloudflare R2 | buckets `velora-staging-public`, `velora-staging-private` |
@@ -189,7 +190,8 @@ public bucket's CDN domain are set with T-4.1, when storage is built.
 
 1. New project `velora-staging`, **not connected to Git**, framework Next.js, root directory left
    empty (the workflow deploys from `web/`), Node 24.
-2. **Environment Variables → Production:** `NEXT_PUBLIC_API_URL` = `https://velora-api-staging.fly.dev`,
+2. **Environment Variables → Production:** `NEXT_PUBLIC_API_URL` = `https://api.staging.veloraapp.co.in`
+   (exactly, with no trailing slash: the smoke check looks for that string in the web's scripts),
    and `APP_ENV` = `staging`. The legal pages still have facts missing (D-053), and a build without
    `APP_ENV=staging` refuses them, so the staging deploy fails until it's set. From the CLI, in
    `web/`: `printf staging | pnpm dlx vercel env add APP_ENV production --no-sensitive`. Production
@@ -197,16 +199,45 @@ public bucket's CDN domain are set with T-4.1, when storage is built.
    Secret by default, and `vercel pull` can't read a Secret back: it writes the literal
    `[SENSITIVE]`, so the build sees `APP_ENV=[SENSITIVE]` and the gate refuses it. That happened
    on the first T-2.2 deploy (run 36903641112). `APP_ENV` isn't secret, so Config is right.
-3. **Read the project's URL from Settings → Domains; don't assume it.** Vercel gives a project
-   `<name>.vercel.app` only when no one else holds that name, and otherwise adds a suffix.
-   `velora-staging.vercel.app` belongs to another company's project, so ours is
-   `velora-staging-black.vercel.app`. Put the real URL in `CORS_ORIGINS` (`infra/fly.api.toml`)
-   and in `STAGING_WEB_URL` below. The smoke check fails if the URL serves anything other than
-   this build calling this API, and its CORS line fails until the two settings agree.
+3. **The web's address is `staging.veloraapp.co.in`** (Settings → Domains, for Production; its DNS
+   is in §6). Vercel also gives every project a `<name>.vercel.app` address, adding a suffix when
+   the name is taken: `velora-staging.vercel.app` belongs to another company's project, so ours is
+   `velora-staging-black.vercel.app`. That address **redirects** to `staging.veloraapp.co.in` (P-33):
+   left serving, it would be a live URL that looks like our product while CORS quietly refuses its
+   API calls. The custom domain goes in `CORS_ORIGINS` (`infra/fly.api.toml`) and in
+   `STAGING_WEB_URL` below. The smoke check fails if the URL serves anything other than this build
+   calling this API, and its CORS line fails until the two settings agree.
 4. Create an **access token** (Account → Tokens). Copy the org and project IDs from the project's
    settings.
 
-### 6. GitHub
+### 6. DNS, on Cloudflare
+
+The zone `veloraapp.co.in` is on Cloudflare's free plan: the nameservers moved from Hostinger on
+2 October 2026 (P-0.3). Staging puts its web and API on one site, so the refresh cookie can flow
+between them (P-33):
+
+| Type | Name | Target | Read from |
+|---|---|---|---|
+| CNAME | `api.staging` | `rkq9qd8.velora-api-staging.fly.dev` | `fly certs setup api.staging.veloraapp.co.in -a velora-api-staging` |
+| CNAME | `staging` | `09ad61298fe347ed.vercel-dns-017.com` | Vercel's API, below |
+
+- **Read each target from the platform; don't assume it.** Both are specific to the app or the
+  project: Fly's isn't plain `velora-api-staging.fly.dev`, and Vercel's CLI (`vercel domains
+  inspect`) offers only a fallback A record. Vercel's own ranking comes from its API, in `web/`:
+  `pnpm dlx vercel api "/v6/domains/staging.veloraapp.co.in/config?projectIdOrName=velora-staging"`,
+  `recommendedCNAME` rank 1.
+- **CNAMEs, not A records:** a CNAME follows the platform when its IPs change; an A record would go
+  stale and take staging down.
+- **DNS only (grey cloud), never proxied:** Fly and Vercel each issue their own Let's Encrypt
+  certificate, which a proxy gets in the way of, and it keeps Cloudflare out of the path of users'
+  requests.
+- **`api.staging.` sits under `staging.`** so staging's CSRF cookie, scoped to
+  `staging.veloraapp.co.in`, covers both and never reaches production (D-055).
+- **Order:** add the host on the platform first (`fly certs add api.staging.veloraapp.co.in -a
+  velora-api-staging`; the Vercel domain in step 5.3), then the record. Fly's certificate is ready
+  when `fly certs check api.staging.veloraapp.co.in -a velora-api-staging` says `Issued`.
+
+### 7. GitHub
 
 Settings → Environments → **new environment `staging`**.
 
@@ -216,8 +247,8 @@ Settings → Environments → **new environment `staging`**.
 | Secret | `FLY_API_TOKEN` | Fly's deploy token |
 | Secret | `VERCEL_TOKEN` | a Vercel access token **scoped to the `velora-staging` project, with no expiry** |
 | Secret | `VERCEL_ORG_ID`, `VERCEL_PROJECT_ID` | from the Vercel project |
-| Variable | `STAGING_API_URL` | `https://velora-api-staging.fly.dev` |
-| Variable | `STAGING_WEB_URL` | `https://velora-staging-black.vercel.app` |
+| Variable | `STAGING_API_URL` | `https://api.staging.veloraapp.co.in` |
+| Variable | `STAGING_WEB_URL` | `https://staging.veloraapp.co.in` |
 
 **`VERCEL_TOKEN`'s tradeoff, chosen on purpose:** it reaches only the `velora-staging` project, so a
 leak can't touch anything else, but it never expires, so nothing retires it on its own. Revoke it at
@@ -231,7 +262,7 @@ within the hour and refreshed only on your machine, so CI would break as soon as
 The **smoke** job is the check. To run it by hand:
 
 ```
-scripts/staging-smoke https://velora-api-staging.fly.dev https://velora-staging-black.vercel.app
+scripts/staging-smoke https://api.staging.veloraapp.co.in https://staging.veloraapp.co.in
 ```
 
 A configuration error (a missing secret, a fake provider) stops the container with the message
@@ -258,9 +289,9 @@ curl -s -o /dev/null -D - -X OPTIONS https://velora-api-staging.fly.dev/healthz 
 
 ## What staging can't do yet
 
-- **Sign-in can't keep a session on staging** until the web and API share a site: the refresh
-  cookie is `SameSite=Lax` (D-024), and `*.vercel.app` and `*.fly.dev` are different sites. P-33
-  fixes it with subdomains of `veloraapp.co.in`, bought 2 October 2026 (P-0.3, D-015). T-2.3
-  and T-3.4 need P-33.
+- **A session surviving a reload isn't proved yet.** Since P-33 the web and API share a site
+  (`veloraapp.co.in`), so the `SameSite=Lax` refresh cookie (D-024) can flow between them, but
+  nothing sets a cookie until T-3.3. T-3.14's Done-when is the proof: sign in on staging, reload,
+  and the session is still there.
 - **Every provider is a real one that isn't built yet** (D-045): each raises if called, and
   nothing calls one before its task.
