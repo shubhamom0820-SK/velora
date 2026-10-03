@@ -36,7 +36,8 @@ use the **fake** providers from `app/core/providers/`.
 - `db` — session inside a transaction rolled back after each test.
 - `client` — AsyncClient on the app with dependency overrides for providers.
 - `make_user(gender="male", onboarded=True, credits=0, verified=None)` → `(user, token)` (T-3.1):
-  the four rows signup creates, and a token the `app` fixture accepts. `verified` follows D-008
+  the four rows signup creates (through T-3.3's find-or-create service from then on, as `make seed`
+  does), and a token the `app` fixture accepts. `verified` follows D-008
   unless given, and an onboarded woman who isn't verified can't be made; `credits` other than 0
   raises until T-5.1 credits them through `wallet.service.credit()` (rule 5).
 - `make_thread(a, b, status="active", messages=0)`.
@@ -59,7 +60,8 @@ If any of these fails, nothing ships.
 6. **Women never pay** (T-9.9): every paid action by a woman → zero ledger entries.
 6b. **Free gifts stay free** (T-8.9): a free gift creates a `gift_sends` row and **zero** ledger
     entries; a paid gift creates exactly one with the price from the `gifts` table.
-7. **Age gate** (T-3.6): 17y364d refused and banned; exactly 18 today accepted.
+7. **Age gate** (T-3.6): 17y364d refused, the account and everything attached deleted, and only
+   the number's hash kept in `banned_identities` (D-072); exactly 18 today accepted.
 8. **Gender immutable** (T-1.16, T-3.6): second set → `IMMUTABLE_FIELD`; DB trigger also blocks.
 9. **Blocks are total** (T-9.1): after a block, neither side appears to the other anywhere.
 10. **Clearing is one-sided** (T-7.8): A clears → B still sees every message.
@@ -69,7 +71,8 @@ If any of these fails, nothing ships.
 13. **A Knot is mutual** (T-7.7): one tap never converts; two taps always do.
 14. **Private data** (T-4.4, T-4.5): processed images contain no EXIF; selfies never appear in
     any public response.
-15. **Refresh reuse** (T-3.4): replaying a rotated refresh token revokes the family.
+15. **Refresh reuse** (T-3.4): replaying a refresh token rotated more than 10 seconds ago revokes
+    the family; within 10 seconds it's refused without that (D-067).
 16. **Firebase token** (T-3.14): forged, expired, wrong-audience and already-used ID tokens are all
     rejected; a non-`+91` number never creates a user.
 17. **The dev seed stays local** (T-1.15): `ENV` staging and production, a database on another

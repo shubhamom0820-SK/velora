@@ -122,6 +122,8 @@ never done silently.
   it builds, and the built `/contact` shows both. T-2.6 no longer waits on the mailboxes.
 - [ ] **P-0.4** DLT (needed only to move off Firebase later — start it anyway, it is slow): entity → header → OTP template `{#var#} is your Velora verification code. Valid for 5 minutes. Do not share it.`
 - [ ] **P-0.5** MSG91 account; link DLT IDs; send one test SMS to yourself.
+  **When this is done (D-066):** revisit the OTP send limits, the global daily cap and the ₹0.20
+  price behind D-066's figures before Path B is switched on, and build P-46, the MSG91 client.
 - [ ] **P-0.12** Firebase: project, Phone provider on, App Check + reCAPTCHA Enterprise enforced, authorised domains, daily SMS quota cap, billing alert. Confirm the **real per-SMS price for IN** in the billing console and write it into D-035.
   **Never add a test phone number to a project production uses (D-065):** its fixed code signs anyone in as that number wherever the project's tokens are accepted, production included, and in India the number may be a real person's (D-064).
 - [x] **P-0.6** Create accounts: GitHub, Supabase (Mumbai), Upstash, Cloudflare (R2 on), Fly.io (paid plan for `bom`), Vercel, Sentry, Sightengine, AWS (Rekognition, `ap-south-1`).
@@ -521,89 +523,114 @@ One migration per task, each with a working `downgrade()`. Build exactly `03-SCH
 
 ### T-3.2 · OTP send
 - [ ] **Needs:** T-3.1
-- [ ] This is Path B (MSG91, used after DLT approval). Build it behind `AUTH_PHONE_PROVIDER`; the launch path is T-3.14.
-- [ ] `POST /v1/auth/otp/send`. Normalise phone → reject if in `banned_identities` (respond generic, don't reveal). Rate limits per `02-ARCHITECTURE.md §12`. Generate 4-digit code, store `otp:{phone_hash}` = keyed HMAC of the code under `CODE_PEPPER`'s `otp/v1` key, not argon2 (D-063), + attempts 0, TTL 300 s; resend lock 45 s. Send via `SmsProvider`.
-- [ ] **A seeded number never gets a real SMS (T-1.15, D-064).** India reserves no fictional range, so the seed's `+91 90000 00xxx` numbers may be real people's. Where `ENV` is local, a real `SmsProvider` sends only to numbers a developer lists in a local allowlist setting, empty by default; any other number is refused before the provider is called, so neither a seeded number nor a typo reaches a stranger.
-- [ ] Tests: happy path; resend too soon → `RATE_LIMITED`; 6th send in an hour → `RATE_LIMITED`; banned → 200 but no SMS sent; locally, with `SMS_PROVIDER=msg91` and a seeded number, no HTTP request is made.
+- [ ] This is Path B (MSG91, used after DLT approval); the launch path is T-3.14. `/v1/auth/otp/send` and `/v1/auth/otp/verify` are served only where `AUTH_PHONE_PROVIDER` is `msg91` or `fake`, an allowlist (rule 16); everywhere else they 404, so staging and production, on `firebase`, can't send a Path B SMS at all (D-066).
+- [ ] `POST /v1/auth/otp/send {phone}` → `{resend_after_s}`. Normalise the phone; if its hash is in `banned_identities`, answer exactly as for any other number and send nothing. Generate a **6-digit** code (D-066), store `otp:{phone_hash}` = keyed HMAC of the code under `CODE_PEPPER`'s `otp/v1` key, not argon2 (D-063), + attempts 0, TTL 300 s; resend lock 45 s. Send via `SmsProvider`.
+- [ ] `hash_otp` and its constant-time check join `core/security.py` beside the PIN's, under the `otp/v1` label T-3.1 reserved: HMAC over the number's hash and the code (D-063).
+- [ ] Limits (D-066, 02-ARCHITECTURE §12): 5 sends per phone an hour, 20 per IP an hour, 100 an hour per IPv6 /48, 10 per phone a day, and a global daily cap, `app_config.otp_sms_daily_cap`, a new key seeded at 500 by a new data migration (rule 11; list it in 03-SCHEMA §8). At the cap: `503 PROVIDER_UNAVAILABLE`, with a warning logged at 50%, which has nowhere to land until T-9.12 (D-066 records the gap). A banned or unknown number counts against every limit exactly as any other, and a phone at D-066's 10 wrong codes in 24 hours gets `RATE_LIMITED` here (T-3.3's verify keeps that count; T-3.2's test sets it directly).
+- [ ] **The worst case if the limits are wrong** (D-066, at D-035's unconfirmed ₹0.20 an SMS): with only the first two limits, ₹40,000 an hour from 10,000 rented IPs, and ₹2.6 lakh an hour from one cloud IPv6 /48. With the cap, ₹100 a day. Revisit at P-0.5, when MSG91 goes live.
+- [ ] **D-070: `normalize_phone` refuses a number that isn't a mobile** (landline, toll-free 1800, the 140 series), as `VALIDATION_ERROR` on `phone` ("isn't a mobile number"), which settles P-45. Update T-3.1's tests to the new rule, still asserting the exact error for each case; never loosen them.
+- [ ] **A seeded number never gets a real SMS (T-1.15, D-064).** India reserves no fictional range, so the seed's `+91 90000 00xxx` numbers may be real people's. Where `ENV` is local, a real `SmsProvider` is called only for numbers in `SMS_LOCAL_ALLOWED_TO` (comma-separated, each passing `normalize_phone` at startup, empty by default); any other number gets `503 PROVIDER_UNAVAILABLE` naming the setting, before the provider is called, and its stored code is discarded. Settings refuse the setting outside local, where it would look like protection it isn't. Add it to 02-ARCHITECTURE §11 and `api/.env.example`.
+- [ ] `Msg91Sms` stays a stub that **raises** when called, never a fake success: a stub that reports success means "code sent" with no SMS, found only when a real user waits at an empty inbox (D-066). A test holds it to raising. The real client is P-46, after P-0.4 and P-0.5.
+- [ ] Tests: happy path, with a 6-digit code; resend too soon → `RATE_LIMITED`; 6th send in an hour → `RATE_LIMITED`; each of D-066's other limits; the global cap → `503 PROVIDER_UNAVAILABLE`; banned → the same 200 and no SMS; unknown → the same 200; a landline, a toll-free and a 140 number → `VALIDATION_ERROR`; 404 where `AUTH_PHONE_PROVIDER` is `firebase`; locally, with a real provider configured, a seeded number never reaches it (a recording stand-in proves it, since `Msg91Sms` has no HTTP client to watch until P-46); `Msg91Sms` raises.
+- [ ] **At `/done`:** D-070 becomes Locked; tick P-45.
 - [ ] **Commit:** `feat(auth): send otp [T-3.2]`
 
 ### T-3.3 · OTP verify and signup
 - [ ] **Needs:** T-3.2, and the **cookie scope settled**, because this task sets the first cookies and its tests would lock in a wrong scope. Settled 2 October 2026: the refresh cookie is host-only on the API (D-054), and both cookies are named for their environment (D-055)
-- [ ] `POST /v1/auth/otp/verify`. Wrong code → attempts+1, `OTP_INVALID` with attempts left; 5th wrong → delete key, `OTP_TOO_MANY`. Correct → delete key.
-- [ ] Find user by `phone_hash`, or create in **one transaction**: `users` (+ referral code), `profiles`, `wallets` (0), `notification_prefs`.
-- [ ] Create session (family), set the refresh cookie (`refresh_prod`, `refresh_staging`, `refresh_local`; `HttpOnly; Secure; SameSite=Lax; Path=/v1/auth`, no `Domain`: host-only on the API, D-054), set the readable CSRF cookie (`csrf_prod`, `csrf_staging`, `csrf_local`), scoped to `COOKIE_DOMAIN`, return `{access_token, user: Me}`. Both names come from `ENV` with no fallback (D-055).
+- [ ] `POST /v1/auth/otp/verify {phone, otp}`. Wrong code → attempts+1, `OTP_INVALID` with `details.attempts_left`; 5th wrong → delete key, `OTP_TOO_MANY`; no code stored (expired, or never sent) → `OTP_EXPIRED`. Correct → delete key. A phone at 10 wrong codes in 24 hours → `OTP_TOO_MANY` (D-066).
+- [ ] Find user by `phone_hash`, or create in **one transaction**: `users` (+ referral code), `profiles`, `wallets` (0), `notification_prefs`. A referral code is 8 characters of Crockford base32 without 0, O, 1, I or L, in capitals, drawn again on a collision.
+- [ ] Who may sign in (D-067): `banned` → `ACCOUNT_BANNED`; `frozen` → `ACCOUNT_FROZEN`; `paused` may; `deleted` can't occur before T-9.6 and gets `FORBIDDEN` until T-9.6 decides.
+- [ ] Create session (family), valid 30 days from each rotation, storing no IP address or user agent (D-067). Set the refresh cookie (`refresh_prod`, `refresh_staging`, `refresh_local`; `HttpOnly; Secure; SameSite=Lax; Path=/v1/auth`, no `Domain`: host-only on the API, D-054), and the readable CSRF cookie (`csrf_prod`, `csrf_staging`, `csrf_local`): `new_csrf()`'s value, `Secure; SameSite=Lax; Path=/`, `Domain` from `COOKIE_DOMAIN` (host-only where that's empty, locally), 30 days. Return `{access_token, user: Me}`. Both names come from `ENV` with no fallback (D-055), and both cookies are `Secure` locally too (D-067).
+- [ ] **D-071: access tokens gain `auth_time`,** the session family's sign-in time. Update T-3.1's test of the claim set to the new exact set; never loosen it to "at least these".
+- [ ] **P-42, moved here:** a middleware in `create_app()` adds `X-Content-Type-Options: nosniff` to every response and `Cache-Control: no-store` to every `/v1` response, verify's included, since it carries an access token. Tests read both off real responses.
 - [ ] Set staging's `COOKIE_DOMAIN` to `staging.veloraapp.co.in` in `infra/fly.api.toml` (P-33 leaves it unset).
-- [ ] Refuse if user status `banned`.
-- [ ] Point `make_user` (T-3.1) and `make seed` (T-1.15) at this find-or-create service: both write these four rows by hand until now. The seed's referral codes (`TESTMAN`, `ANANYAD`: the username in capitals) follow whatever format this task picks.
-- [ ] Tests: new user creates all 4 rows; existing user doesn't duplicate; banned → `ACCOUNT_BANNED`; the refresh cookie has no `Domain`; both cookies' names follow `ENV`.
+- [ ] Point `make_user` (T-3.1) and `make seed` (T-1.15) at this find-or-create service: both write these four rows by hand until now. The 20 prototype profiles get generated referral codes. The three test accounts keep fixed, readable ones, `TESTMAN`, `TESTWOMAN` and `MODERATOR`: test accounts may be special, and looking up a random code every time is the friction the seed exists to remove (T-8.6 looks codes up and never checks their format).
+- [ ] CLAUDE.md: say why Safari can't sign in locally. It keeps no `Secure` cookie over plain `http://127.0.0.1`, so local sign-in needs Chrome or Firefox; Safari is tested on staging, which has HTTPS (D-067). Written down, the hour isn't lost later.
+- [ ] Tests: new user creates all 4 rows; existing user doesn't duplicate; banned → `ACCOUNT_BANNED`; frozen → `ACCOUNT_FROZEN`; `OTP_INVALID` carries `attempts_left`; 10 wrong codes in 24 hours → `OTP_TOO_MANY`; the refresh cookie has no `Domain`; both cookies' names follow `ENV`; both are `Secure`; the referral code's format; the access token carries `auth_time`; P-42's two headers; sessions keep no IP address or user agent.
+- [ ] **At `/done`:** D-066 and D-071 become Locked; tick P-42.
 - [ ] **Commit:** `feat(auth): verify otp and create account [T-3.3]`
 
 ### T-3.4 · Refresh and logout
 - [ ] **Needs:** T-3.3, and **P-33** (staging's web and API on one site, or the refresh cookie can't flow there)
-- [ ] `POST /v1/auth/refresh`: require `X-CSRF` equal to this environment's CSRF cookie (D-055); look up the `token_hash` of this environment's refresh cookie; if revoked → revoke whole family (reuse attack) → `SESSION_REVOKED`; else rotate (new session, old `revoked_at` + `replaced_by`).
-- [ ] `POST /v1/auth/logout`: revoke current session, clear cookies.
-- [ ] Tests: rotation works; reusing an old token kills the family; missing CSRF → 401.
+- [ ] `POST /v1/auth/refresh`: require `X-CSRF` equal to this environment's CSRF cookie (D-055); look up the `token_hash` of this environment's refresh cookie. If it was revoked less than 10 seconds ago → `SESSION_REVOKED`, leaving its family alone: two tabs refreshing at once cause it (D-067). If longer ago → revoke the whole family (reuse attack) → `SESSION_REVOKED`. Else rotate: a new session valid 30 days, old `revoked_at` + `replaced_by`, a new CSRF value, `auth_time` carried unchanged (D-071).
+- [ ] `POST /v1/auth/logout`: authenticated like refresh, by the refresh cookie and `X-CSRF`, not the access token, so it still works once that has expired (D-067). Revokes the session's family and clears both cookies → 204.
+- [ ] Tests: rotation works; reuse after 10 seconds kills the family (🔒 15); reuse within 10 seconds is refused and doesn't; missing CSRF → 401; logout works with an expired access token and clears both cookies; `auth_time` survives rotation.
 - [ ] **Commit:** `feat(auth): refresh rotation and logout [T-3.4]`
 
 ### T-3.5 · Current user
 - [ ] **Needs:** T-3.4
-- [ ] `deps.current_user` (decode JWT, load user, reject frozen/banned/deleted), `deps.onboarded_user` (also require `done`), `deps.require_role()`.
-  The access token's `role` was right when it was signed and can lag a demotion by up to 15
-  minutes (T-3.1); whether `require_role` trusts it or the user row it loads anyway is this task's
-  call.
-- [ ] `GET /v1/me` → `Me` schema. Throttled `last_active_at` update (Redis key, once per 60 s).
+- [ ] `deps.current_user` (decode JWT, load user, reject frozen → `ACCOUNT_FROZEN`, banned → `ACCOUNT_BANNED`, deleted → `FORBIDDEN`), `deps.onboarded_user` (also require `done`, else `ONBOARDING_INCOMPLETE` with `details.step`), and `deps.require_role()`, which reads the user row `current_user` loads anyway, never the token's `role`: a demotion takes effect at the next request (D-067).
+- [ ] 02-ARCHITECTURE §12's default limit, 300 a minute per user, goes in `current_user`, so every authenticated route inherits it.
+- [ ] **The 15-minute tail (D-067):** a revoked session's access token works until it expires. Bans and freezes are immediate anyway, since `current_user` loads the user; logout, a reuse attack and five wrong PINs (D-069) are not. Accepted, and read with D-069: the PIN lock is a deterrent, not protection.
+- [ ] `GET /v1/me` → `Me` (04-API): the age, never the date of birth, which no screen shows, and no phone number: data nothing displays isn't sent (D-067's discipline). Throttled `last_active_at` update (Redis key, once per 60 s).
+- [ ] **At `/done`:** D-067 becomes Locked.
 - [ ] **Commit:** `feat(users): current user and /me [T-3.5]`
 
 ### T-3.6 · DOB, gender, seeking
 - [ ] **Needs:** T-3.5
-- [ ] `POST /me/dob`: compute age in IST; < 18 → add phone hash to `banned_identities`, set status `banned`, revoke sessions, return `UNDERAGE`. Advance step.
+- [ ] `POST /me/dob`: compute age in IST. Under 18 → **D-072**: in one transaction, delete the user and everything attached (the user row with its encrypted number, profile, wallet, notification preferences, sessions), keep only the number's hash in `banned_identities` (`reason` `underage`, D-009), and return `UNDERAGE`. A date in the future, or more than 100 years ago → `VALIDATION_ERROR`. Otherwise advance.
+- [ ] `/privacy`'s under-18 paragraph (`web/src/i18n/en.ts`) adds that everything else is deleted at once (D-072); `/terms` already says the number is barred.
 - [ ] `POST /me/gender`: only if null → set, advance; else `IMMUTABLE_FIELD`.
 - [ ] The database also refuses the change (T-1.9's `users_identity_immutable` trigger) with SQLSTATE `23514` `check_violation`, which SQLAlchemy raises as `IntegrityError`. Map it to `IMMUTABLE_FIELD` by that SQLSTATE — never by the message text, which Postgres can reword.
-- [ ] `GET /intents`; `POST /me/seeking {seeking, intent_ids}` — 1 to 3 valid distinct ids (D-041), replace the set in one tx → advance.
-- [ ] Steps must happen in order; out-of-order → `ONBOARDING_INCOMPLETE` with the expected step.
-- [ ] Tests for each branch, including "17 years 364 days" and "exactly 18 today".
+- [ ] `GET /intents`; `POST /me/seeking {seeking, intent_ids}`: seeking women, men or everyone, as the prototype offers; 1 to 3 valid distinct ids (D-041), replace the set in one tx → advance.
+- [ ] **The step rule (D-068):** each step's endpoint works at its step, advancing it, and after it, as an edit that doesn't advance; before it → `ONBOARDING_INCOMPLETE` with `details.step`, the user's current step. Once set, dob and gender are `IMMUTABLE_FIELD` instead.
+- [ ] Tests for each branch, including "17 years 364 days" and "exactly 18 today"; after `UNDERAGE` nothing survives but one `banned_identities` row: no user, session, profile, wallet or preferences row (🔒 7); a future date and one 101 years ago → `VALIDATION_ERROR`; a step before its turn → `ONBOARDING_INCOMPLETE` with the current step; an edit after it doesn't move the step.
+- [ ] **At `/done`:** D-072 becomes Locked.
 - [ ] **Commit:** `feat(onboarding): dob, gender, seeking [T-3.6]`
 
 ### T-3.7 · Name, places, username
-- [ ] **Needs:** T-3.6
-- [ ] `PATCH /me/profile` (first_name 1–30 letters/spaces, hometown, city ≤ 40, about 40–300 — trimmed, no URLs, no phone numbers).
-- [ ] `GET /usernames/{u}/available` (regex, reserved words list: admin, knot, support, help, moderator…); `PUT /me/username` handles the unique-violation race → `USERNAME_TAKEN`.
+- [ ] **Needs:** T-3.6, and **one edge of answer 26 settled**: a year range such as "2010-2015" is a run of 8 digits with one separator, so the phone-number rule below refuses it. Either accept that, or start the run at 10 digits, an Indian mobile number's length (asked of the founder on 3 October 2026).
+- [ ] `PATCH /me/profile`: first_name 1–30 characters after trimming, letters in any script (Devanagari, Gurmukhi and the rest), single spaces, and an apostrophe or hyphen inside a name; hometown, city ≤ 40; about 40–300, trimmed, no URLs, no phone numbers. It spans two steps (D-068): `profile` advances once first_name, hometown and city are all set, `about` when about is set at that step; a field of a step not yet reached → `ONBOARDING_INCOMPLETE`.
+- [ ] "No URLs, no phone numbers" in about: URLs, `www.` and bare domains; and a phone number is a **run** of 7 or more digits with at most two separators (space, dash or dot) inside it, never seven digits scattered across a sentence. T-7.3's contact masking builds its own, broader check later.
+- [ ] `GET /usernames/{u}/available` → `{available, suggestion?}`, 30 a minute per user: the regex, then the reserved list (D-068): admin, administrator, mod, moderator, support, help, helpdesk, staff, team, official, root, system, security, api, www, mail, billing, payments, legal, privacy, terms, grievance, knot, knots, thread, threads, vela, velas, me, null, undefined, and the brand from `APP_NAME`, so a rename moves it (rule 17). Matching ignores case, dots and underscores (`ad.min` is admin). The suggestion is the name plus two random digits, checked free.
+- [ ] `PUT /me/username`: typed in any case, stored in lowercase; handles the unique-violation race → `USERNAME_TAKEN`. Changeable until onboarding is `done`, then `IMMUTABLE_FIELD` until T-9.6 designs changes (D-068). The public page stays D-001's `/@username`: usernames never take a bare top-level path, so the reserved list needn't hold route segments.
+- [ ] Tests: each first-name rule both ways; "Call me on 98765 43210" refused and "I was born in 1998 and moved here in 2015" allowed; the year range, as the Needs line settles it; a reserved name, a dotted variant of one, and the brand; `USERNAME_TAKEN` in the race; capitals stored lowercase; a change after `done` → `IMMUTABLE_FIELD`; a field before its step → `ONBOARDING_INCOMPLETE`.
+- [ ] **At `/done`:** D-068 becomes Locked.
 - [ ] **Commit:** `feat(onboarding): profile basics and username [T-3.7]`
 
 ### T-3.8 · Interests
 - [ ] **Needs:** T-3.7
 - [ ] `GET /interests`; `PUT /me/interests` exactly 5 valid distinct ids → replace set in one tx.
+- [ ] The interests step comes after photos (D-068), so a real user reaches it only after T-4.3; tests set the step directly.
 - [ ] **Commit:** `feat(onboarding): interests [T-3.8]`
 
 ### T-3.9 · PIN
-- [ ] **Needs:** T-3.5
-- [ ] `POST /auth/pin/set` (4 digits, not `0000`/`1234`/all-same), `POST /auth/pin/verify` (5 fails → revoke all sessions, `SESSION_REVOKED`). Skippable in onboarding.
-- [ ] The seed's test-woman PIN (`TEST_WOMAN_PIN` in `api/seed/data.py`, T-1.15) must stay valid under whatever rules this adds, a common-PIN blocklist included. A test here checks it, so the seed doesn't break the day the rules land.
-  `hash_pin`/`verify_pin` are T-3.1's (D-062). `verify_pin` returns False both for a wrong PIN and
-  for a stored hash it refuses (other parameters, unreadable), logging only the latter; whether that
-  counts against `pin_failed` is this task's call.
+- [ ] **Needs:** T-3.5, and T-3.6's step rule (D-068), which the `pin` step follows
+- [ ] `POST /auth/pin/set {pin, current_pin?}` → 204: 4 digits (D-012), refusing one digit four times, straight runs either way (0123…, 9876…), alternating pairs (1212) and the 20 most common PINs in DataGenetics' published study → `VALIDATION_ERROR` (D-069). Changing an existing PIN needs `current_pin`, except within 10 minutes of a fresh sign-in, read from `auth_time` (D-071); that is also "forgot PIN": sign out, sign in by OTP, set a new one. At the `pin` onboarding step, setting one advances to `selfie`.
+- [ ] `POST /me/pin/skip` → `Me`: moves `pin` → `selfie` (D-069).
+- [ ] `POST /auth/pin/verify {pin}` → 204, or `PIN_INVALID` with `details.attempts_left`. `pin_failed` goes up by one per wrong PIN, in one atomic update; a correct PIN resets it, and so does a fresh sign-in (add that to T-3.3's sign-in service). **At 5, every session of the user is revoked** → `SESSION_REVOKED`; each revoked session's access token still works for up to 15 minutes (D-067).
+- [ ] A stored hash `verify_pin` refuses (other parameters, unreadable) doesn't count against `pin_failed`: `PIN_INVALID` with `details.reset_required`, and the way out is the fresh sign-in above (D-069). `hash_pin`/`verify_pin` are T-3.1's (D-062).
+- [ ] The PIN endpoints: 10 a minute per user; each check holds 19 MiB for about 18 ms, two at once per process (D-062).
+- [ ] **What the lock doesn't do (D-069, with D-067):** it deters whoever picks up an unlocked phone; it protects nothing. The web keeps a working access token behind the lock screen, so the browser's devtools get past it, and five wrong PINs leave the revoked sessions' tokens working for up to 15 minutes. Never build on it as a security boundary.
+- [ ] The seed's test-woman PIN (`TEST_WOMAN_PIN` in `api/seed/data.py`, T-1.15) must stay valid under these rules; a test here checks it, so the seed doesn't break the day the rules land.
+- [ ] Tests: each refused shape, and 4829 accepted; a change without `current_pin` refused, and allowed within 10 minutes of sign-in; 5 wrong → every session revoked; a refused hash doesn't count and sets `reset_required`; skip advances; the rate limit.
+- [ ] **At `/done`:** D-069 becomes Locked.
 - [ ] **Commit:** `feat(auth): pin lock [T-3.9]`
 
 ### T-3.10 · Web auth client
-- [ ] **Needs:** T-1.18, T-3.4
-- [ ] Access token in Zustand (memory only). On app load: call `/auth/refresh` once to restore a session, sending `X-CSRF` from this environment's CSRF cookie (D-055).
-- [ ] On any 401 `TOKEN_EXPIRED`: single-flight refresh, then retry the request once.
-- [ ] `useMe()` query; `<OnboardingGate>` redirects to the correct step from `onboarding_step`; `(app)` routes require `done`.
-- [ ] PIN lock screen: shown on load and after 5 min hidden if a PIN is set.
+- [ ] **Needs:** T-1.18, T-3.4, T-3.5 (`useMe()` reads `Me`) and T-3.9 (the lock reads `has_pin` and calls `/auth/pin/verify`)
+- [ ] Access token in Zustand (memory only). On load, in the `(auth)` and `(app)` layouts only, call `/auth/refresh` once to restore a session, sending `X-CSRF` from this environment's CSRF cookie (D-055). Marketing pages never call the API: they stay static (Lighthouse, P-37).
+- [ ] Cookie names at build time: `next.config` maps `APP_ENV` to the suffix (production → `prod`, staging → `staging`, anything else under `next dev` → `local`); no new Vercel variable. The api client sends `credentials: "include"` on `/v1/auth/*` only, the refresh cookie's path. Until now it sends no credentials at all, so no cookie would arrive.
+- [ ] On any 401 `TOKEN_EXPIRED`: single-flight refresh, then retry the request once. Refreshes are serialised across tabs with the Web Locks API, so two tabs never rotate one token (D-067's 10-second grace covers what's left).
+- [ ] `useMe()` query; `<OnboardingGate>` redirects to `/onboarding/<step>`, named by `onboarding_t`, placeholders until T-3.11 and T-3.12 build the screens; `(app)` routes require `done`; a failed refresh goes to `/login`.
+- [ ] PIN lock screen (the prototype's PinPad): shown on load and after 5 min hidden if `has_pin`. A deterrent, not protection (D-069).
+- [ ] Local development at `127.0.0.1` only: `localhost:3000` → `127.0.0.1:8000` is cross-site, so the `Lax` refresh cookie silently isn't sent. Remove `localhost` from the local `CORS_ORIGINS` (`api/.env.example`, the test settings), so that mistake fails loudly.
 - [ ] **Commit:** `feat(web): auth session, refresh, route gates, pin lock [T-3.10]`
 
 ### T-3.11 · Web onboarding 1–7
 - [ ] **Needs:** T-3.10, T-3.7
 - [ ] **New dependencies, the first forms to use them:** web `react-hook-form` and `zod`, with `@hookform/resolvers` to join them. CLAUDE.md pins them, but nothing has installed them: T-2.3's waitlist form uses plain React state on purpose, because two form libraries for one email field would spend the landing page's performance score (98–100, T-2.1). Ask before installing, and record them in `01-DECISIONS.md` (rule 4).
 - [ ] **Re-examine the CSP's `'unsafe-inline'` for scripts here (D-059).** It was justified while no user-supplied text rendered, and this is the first task that renders some: the user's own name and `@username`. Decide again, nonces or keep it, and write the reason down (a new decision if it changes). React's escaping is the real defence; the CSP is the second line. T-6.5 re-examines it again.
-- [ ] Screens from the prototype: phone, OTP (4 boxes, paste support, resend timer from `resend_after_s`), DOB (native date input; under-18 message), gender (with lock warning), seeking + intents (pick 1–3), name/hometown/city, username (debounced availability 400 ms, shows `veloraapp.co.in/@name`).
+- [ ] Screens from the prototype: phone, OTP (6 boxes, not the prototype's 4: D-066 and 08-DESIGN's `OtpInput`; paste support, resend timer from `resend_after_s`), DOB (native date input; under-18 message), gender (with lock warning), seeking + intents (pick 1–3), name/hometown/city, username (debounced availability 400 ms, shows `veloraapp.co.in/@name`).
 - [ ] Each screen: submit disabled until valid; server errors shown inline from `ApiError.code` via `en.ts`.
+- [ ] Decide whether onboarding URLs carry the step's enum value, as T-3.10's placeholders do, or a stable slug of their own, so renaming a step never breaks a link.
 - [ ] Phone step: a consent line naming Google before the code is sent — Google's Firebase sends it, processes the number in the United States and keeps it for abuse prevention (D-048, `/privacy`). Firebase asks apps to get this consent.
 - [ ] **Commit:** `feat(web): onboarding steps 1-7 [T-3.11]`
 
 ### T-3.12 · Web onboarding 8, 10, 11
 - [ ] **Needs:** T-3.11, T-3.8, T-3.9
 - [ ] About (40–300 counter), interests (exactly 5), PIN (set + confirm, skip). Photos (9) and selfie (12) come in Sprint 4 — route placeholder that says "coming next".
+- [ ] Interests and PIN come after photos in the step order (D-068), so until T-4.3 a real user can't reach these two screens: test them by setting the step. Their URLs follow T-3.11's enum-or-slug decision.
 - [ ] **Commit:** `feat(web): onboarding about, interests, pin [T-3.12]`
 
 ### T-3.14 · Firebase phone sign-in (launch path)
@@ -621,8 +648,8 @@ One migration per task, each with a working `downgrade()`. Build exactly `03-SCH
 - [ ] The phone screen shows T-3.11's consent line naming Google before `signInWithPhoneNumber`
   runs (D-048, `/privacy`). Deleting the Firebase user after sign-in is P-39, not this task.
 - [ ] Web: Firebase JS SDK on the phone screen (invisible reCAPTCHA), `signInWithPhoneNumber`,
-  6-digit code box (Firebase codes are 6 digits, not 4 — the OTP screen adapts to
-  `AUTH_PHONE_PROVIDER`), resend cooldown, friendly copy for `auth/too-many-requests`,
+  6-digit code box (Path B's codes are 6 digits too since D-066, so the OTP screen is the same
+  on both paths), resend cooldown, friendly copy for `auth/too-many-requests`,
   `auth/invalid-phone-number`, `auth/code-expired`.
 - [ ] Sign the user out of Firebase immediately after the exchange — we keep our own session.
 - [ ] **Widen the CSP here, deliberately (D-059).** T-2.5's policy allows no outside script, connect or frame host, so Firebase's SDK and its reCAPTCHA check fail at sign-in until this task adds exactly the Google hosts Firebase documents (`script-src`, `connect-src`, `frame-src`), each with its reason in `web/src/lib/security-headers.ts`. A CSP error at sign-in is this line, not a Firebase bug.
@@ -646,7 +673,7 @@ One migration per task, each with a working `downgrade()`. Build exactly `03-SCH
 
 ### T-3.13 · E2E signup
 - [ ] **Needs:** T-3.12
-- [ ] Playwright against local stack with `AUTH_PHONE_PROVIDER=fake` (OTP read from a test-only endpoint enabled only when `ENV=local`): new man reaches the photos step; under-18 is refused and can't retry with the same number.
+- [ ] Playwright against local stack with `AUTH_PHONE_PROVIDER=fake` (OTP read from a test-only endpoint enabled only when `ENV=local`): new man reaches the photos step; under-18 is refused and can't retry with the same number (D-072: the account is deleted and only the number's hash kept).
 - [ ] One staging run against the real Firebase path using a Firebase **test phone number** (fixed code, no SMS sent, no cost), only from a Firebase project production doesn't use (D-065), as T-3.14 settles.
 - [ ] **Commit:** `test(e2e): signup flow [T-3.13]`
 
@@ -828,6 +855,7 @@ Built before discovery and chat because swipes, threads and unlocks all spend Ve
 - [ ] **Needs:** T-6.3
 - [ ] In-app profile screen from the prototype (gallery, chips, kudos, message button, album section, ⋯ menu).
 - [ ] Public shareable page `veloraapp.co.in/@username` (SSR): logged-out visitors see first name, age, city, main photo, and "Join Velora to message"; logged-in users are redirected to the in-app profile.
+- [ ] `/@username` is D-001's link, and the `@` keeps usernames out of the routes' namespace: no route segment may begin with `@` (D-068). Next.js reads an `@folder` as a parallel-route slot, so serve `/@username` through a rewrite to an internal route.
 - [ ] **Commit:** `feat(web): profile screens and share page [T-6.8]`
 
 ### T-6.9 · Filters
@@ -984,7 +1012,7 @@ Built before discovery and chat because swipes, threads and unlocks all spend Ve
 
 ### T-8.6 · Referrals
 - [ ] **Needs:** T-8.2
-- [ ] `POST /referrals/apply {code}` only before onboarding `done`, not own code, once. Reward both (Velas from `app_config`) when the referee completes selfie verification or first purchase, whichever first; idempotent. `GET /referrals/me`.
+- [ ] `POST /referrals/apply {code}` only before onboarding `done`, not own code, once. Reward both (Velas from `app_config`) when the referee completes selfie verification or first purchase, whichever first; idempotent. `GET /referrals/me`. Apply looks a code up and never checks its format: the seed's three test accounts carry readable codes outside the generated one (T-3.3).
 - [ ] **Commit:** `feat(referrals): codes and rewards [T-8.6]`
 
 ### T-8.7 · Web store and checkout
@@ -1012,6 +1040,7 @@ Built before discovery and chat because swipes, threads and unlocks all spend Ve
 ### T-9.2 · Fraud scoring v1
 - [ ] **Needs:** T-9.1
 - [ ] Signals written as `fraud_events` by services: report received, contact-info masked, message rejected (abuse / solicitation), > 30 new threads in 24 h, identical first message to > 10 people, > 3 devices in 7 days, location jumps > 500 km in 1 h.
+- [ ] Sessions store no IP address or user agent (D-067), and "> 3 devices in 7 days" needs one of them. Add what this task needs here, with a line on `/privacy`, which lists neither today.
 - [ ] `recompute_fraud` worker: weighted sum with 7-day decay → `fraud_scores` + band. Actions: `shadow` → shown only to other shadowed users; `freeze` → status `frozen`, sessions revoked, admin notified. 3 reports from different users in 24 h → freeze immediately.
 - [ ] **Commit:** `feat(safety): fraud scoring and auto-freeze [T-9.2]`
 
@@ -1045,6 +1074,7 @@ Built before discovery and chat because swipes, threads and unlocks all spend Ve
 ### T-9.6 · Settings and data rights
 - [ ] **Needs:** T-3.5
 - [ ] Hide profile, hide age, hide distance, show kudos; pause (hidden + no notifications); export (JSON of own data, generated by worker, signed link valid 24 h); delete (status `deleted`, profile hidden immediately, anonymised after 30 days by cron; payments and ledger kept, detached from identity). What's erased and kept follows D-051, which `/privacy` states: messages stay in the other person's chat as from "Deleted account" and as moderation records, and a hashed phone number is kept so deletion can't escape a ban. Change the page with the code.
+- [ ] Two things T-3.3 and T-3.7 left here: what a `deleted` account gets at sign-in (`FORBIDDEN` until now, D-067), and whether and how a username can change after onboarding (locked until now, D-068; D-001's `/@username` links depend on it).
 - [ ] **Commit:** `feat(settings): privacy and data rights [T-9.6]`
 
 ### T-9.7 · PWA
@@ -1076,6 +1106,7 @@ Built before discovery and chat because swipes, threads and unlocks all spend Ve
 ### T-9.12 · Observability
 - [ ] **Needs:** T-1.22, and a **Sentry account** — not created yet (P-0.6)
 - [ ] Sentry in api, worker, web (release = git sha). Alerts: 5xx > 1% for 5 min, webhook signature failures, any job failing 3×, ledger reconciliation mismatch, queue depth > 1,000. Uptime check on `/readyz`.
+- [ ] Route D-066's OTP warning, logged at half of `otp_sms_daily_cap`, to the alert channel: until this task it lands only in Fly's logs, which nobody reads.
 - [ ] **Widen the CSP here, and wire its reporting (D-059):** `connect-src` for Sentry's ingest host, and the CSP's reports (`report-to`, with `report-uri` as the fallback) sent to Sentry's security endpoint. Until then the enforced policy is silent: a violation in production stays invisible until a user complains.
 - [ ] **Commit:** `chore(ops): error tracking and alerts [T-9.12]`
 
@@ -1504,7 +1535,8 @@ Claude Code adds items here instead of doing unplanned work. Format:
   with `--proxy-headers --forwarded-allow-ips '*'`, which fills `request.client` from the leftmost
   `X-Forwarded-For` entry, and the client writes that entry. Nothing reads it today: per-IP limits
   read `Fly-Client-IP` (D-056). Drop `--proxy-headers`, or trust only Fly's proxy, and test that a
-  forged header doesn't change `request.client`.
+  forged header doesn't change `request.client`. Still true after T-3.3: sessions store no address
+  (D-067).
 
   Found in T-2.3.
 - [ ] P-41 · Give `Avatar` size classes instead of an inline style. **Before any production page
@@ -1523,6 +1555,8 @@ Claude Code adds items here instead of doing unplanned work. Format:
   `Cache-Control: no-store` on every authenticated one. A Starlette middleware in `create_app()`,
   with tests that read both off real responses, a public one and an authenticated one. Low urgency
   until then.
+  **Moved:** now a step in T-3.3, since its verify is the first response to carry an access token,
+  earlier than `/me` — tick this with T-3.3.
 
   Found in T-2.5.
 - [ ] P-43 · Decide `Access-Control-Allow-Origin` on the web's own responses. **Before any
@@ -1546,8 +1580,18 @@ Claude Code adds items here instead of doing unplanned work. Format:
   October 2026). Sign-in needs an SMS-capable number. Requiring `PhoneNumberType.MOBILE` would
   refuse them up front, with a test each way; Firebase's path (T-3.14) may already refuse them,
   which is worth checking before duplicating it.
+  **Decided:** D-070, mobiles only, built in T-3.2 — tick this with T-3.2.
 
   P-44 is skipped on purpose: the advisor directing T-1.15 (Claude, in a separate chat) recalls
-  it as T-3.1's PIN pepper, closed there, though no file or commit in the repo names it. Never give the number to anything else.
+  it as T-3.1's PIN pepper, closed there, though no file or commit in the repo names it. Never
+  give the number to anything else.
 
   Found while planning T-1.15.
+- [ ] P-46 · Build the MSG91 client. **Needs P-0.4 and P-0.5**: the DLT template and the account.
+  Worst case without it: Path B can't send a single code, because T-3.2's `Msg91Sms` raises by
+  design (D-066), so switching `AUTH_PHONE_PROVIDER` to `msg91` breaks sign-in outright. Build it
+  on httpx against MSG91's own documentation, with the DLT template, tested against a mocked
+  transport, then prove it with one real SMS to the founder's own phone. D-064's local guard wraps
+  it unchanged. Revisit D-066's limits and cap in the same task (P-0.5).
+
+  Found while planning T-3.2 to T-3.10.

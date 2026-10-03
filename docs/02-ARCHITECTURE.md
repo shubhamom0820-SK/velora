@@ -109,9 +109,9 @@ sequenceDiagram
   participant R as Redis
   participant S as SMS provider
   B->>A: POST /v1/auth/otp/send {phone}
-  A->>A: validate +91, check banned_identities
+  A->>A: validate a +91 mobile (D-070), check banned_identities
   A->>R: store keyed HMAC(otp) (D-063), ttl 5m, attempts=0
-  A->>S: send "1234 is your Velora code"
+  A->>S: send "123456 is your Velora code"
   B->>A: POST /v1/auth/otp/verify {phone, otp}
   A->>R: compare, max 5 attempts
   A->>A: find or create user (onboarding_step=dob)
@@ -122,9 +122,13 @@ sequenceDiagram
   A-->>B: {access_token} + new cookie
 ```
 
-- OTP: 4 digits, 5-minute TTL, 5 verify attempts, resend after 45 s, max 5 sends per phone per hour
-  and 20 per IP per hour.
-- **Refresh reuse detection:** presenting a revoked refresh token revokes the whole session family.
+- OTP (Path B, served only where `AUTH_PHONE_PROVIDER` is `msg91` or `fake`): 6 digits, 5-minute
+  TTL, 5 verify attempts per code and 10 wrong codes per phone per 24 hours, resend after 45 s;
+  send limits and the global daily cap are in §12 (D-066). Only Indian mobile numbers sign in
+  (D-070).
+- **Refresh reuse detection:** presenting a revoked refresh token revokes the whole session family,
+  unless it was rotated less than 10 seconds ago, which two tabs refreshing at once cause: that
+  is refused without revoking (D-067). Logout authenticates like refresh, by cookie and `X-CSRF`.
 - Phone numbers are stored encrypted in the API (Fernet, `PHONE_ENC_KEY`), never by the database,
   plus an HMAC-SHA256 keyed by `PHONE_PEPPER` for lookup (D-061). PINs are argon2id over a
   pepper kept off the database (D-062).
@@ -133,8 +137,11 @@ sequenceDiagram
 
 `users.onboarding_step`: `dob → gender → seeking → profile → username → about → photos → interests
 → pin → selfie → done`. The API rejects discovery/threads calls with `ONBOARDING_INCOMPLETE` until
-`done`. Women cannot reach `done` without an approved selfie verification. `gender` and `dob`
-become immutable once `onboarding_step` passes `gender`.
+`done`. Women cannot reach `done` without an approved selfie verification. Each step's endpoint
+works at its step (advancing it) and after it (an edit that doesn't advance), and refuses before
+it with `ONBOARDING_INCOMPLETE` and the current step (D-068). `gender` and `dob` are immutable
+once set (T-1.9's trigger), and a date of birth under 18 deletes the account, keeping only the
+number's hash (D-072).
 
 ## 6. Real-time protocol
 
@@ -294,15 +301,16 @@ secret is left empty. Real secret values are never committed.
 
 | Route group | Limit |
 |---|---|
-| OTP send (Path B) | 5 / phone / hour · 20 / IP / hour |
+| OTP send (Path B) | 5 / phone / hour · 20 / IP / hour · 100 / IPv6 /48 / hour · 10 / phone / day · `otp_sms_daily_cap` (500) in all / day (D-066) |
 | `/auth/firebase` (Path A) | 10 / IP / hour · 5 / phone / hour |
-| OTP verify | 5 attempts / code |
+| OTP verify | 5 attempts / code · 10 wrong / phone / 24 h (D-066) |
+| PIN set and verify | 10 / min / user (D-069) |
 | Swipes | 120 / min (plus daily cap 50 for men, from `app_config`) |
 | Send message | 30 / min / user |
 | Reports | 10 / day / user |
-| Username check | 30 / min |
+| Username check | 30 / min / user |
 | Waitlist | 5 / min / IP, invalid tries included (D-056) |
-| Everything else | 300 / min / user |
+| Everything else | 300 / min / user, in `current_user`, so every authenticated route has it (T-3.5) |
 
 - Logs are structured JSON with `request_id`; never log phone, OTP, tokens, message bodies.
 - Admin routes require `role in (moderator, admin)`; every admin action writes `audit_log`.

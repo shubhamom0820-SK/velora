@@ -94,7 +94,7 @@ Checked value by value against the prototype in T-1.19, and corrected where the 
 | IconButton | round, sizes 40/46/56, optional price tag badge |
 | Chip | default · active · removable |
 | Field / TextArea | label, helper, error, counter |
-| OtpInput | 4 boxes, paste, auto-advance, backspace-back |
+| OtpInput | 6 boxes (D-066; the prototype shows 4), paste, auto-advance, backspace-back |
 | Toggle | on · off · disabled |
 | Sheet | bottom (mobile) / centred (desktop); title; scroll body; sticky footer |
 | Toast | info (ink) · error (accent) · with action (Undo) |

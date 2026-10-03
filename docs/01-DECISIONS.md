@@ -1055,6 +1055,226 @@ The finding is Claude's, from Firebase's documentation. An advisor directing T-1
 a separate chat, not the founder) had it recorded as a decision on 3 October 2026, and the
 founder approved it the same day.
 
+### D-066 · Path B codes: six digits, served only where chosen, with a ceiling in rupees — Open
+**The decision (T-3.2, T-3.3):**
+- `/v1/auth/otp/send` and `/v1/auth/otp/verify` are served only where `AUTH_PHONE_PROVIDER` is
+  `msg91` or `fake`, an allowlist (rule 16). Everywhere else they 404, so staging and production,
+  on `firebase`, can't be made to send a Path B SMS at all.
+- A code is six digits. It is stored as D-063's keyed HMAC, which stands: its "10,000 codes"
+  becomes 1,000,000, and plain SHA-256 would still be reversed at once.
+- Sending is limited to 5 per phone an hour and 20 per IP an hour, as planned, and also to 100 an
+  hour per IPv6 /48, 10 per phone a day, and a global daily cap, `app_config.otp_sms_daily_cap`,
+  seeded at 500. At the cap a send gets `503 PROVIDER_UNAVAILABLE`.
+- Wrong codes: 5 per code, as planned, and 10 per phone across every code in 24 hours. At 10,
+  verify answers `OTP_TOO_MANY` and send `RATE_LIMITED` until the 24 hours pass.
+- A banned or unknown number gets exactly the answer any other number gets, and counts against
+  exactly the same limits. A ban surfaces only at verify, once the person has proven they hold the
+  number.
+- Until P-46 builds it, the MSG91 sender is a stub that raises when called, never one that reports
+  success: that would say "code sent" with no SMS, found only when a real user waits at an empty
+  inbox. A test holds it to raising.
+- Locally, D-064's guard is `SMS_LOCAL_ALLOWED_TO`, empty by default: a real provider is called
+  only for the numbers listed, and any other gets `503 PROVIDER_UNAVAILABLE` naming the setting,
+  its code discarded. Settings refuse the setting outside local, where it would look like
+  protection it isn't.
+
+**Why six digits** (the advisor's reversal of Claude's four): with 10 wrong codes a day allowed,
+four digits give a 0.1% chance a day of guessing one targeted person's code, about 30% over a
+year. For an app whose promise to women is safety, a one-in-three chance that a determined
+stalker reaches a specific account isn't shippable. Six digits with the same cap: 0.001% a day,
+about 0.4% a year. Indian banks, Paytm, PhonePe and Aadhaar all send six; four reads as an app
+that doesn't know what it's doing. Six digits and the cap, both. The prototype's four boxes
+change (08-DESIGN's `OtpInput`), not the code; Firebase's codes are six too (T-3.14).
+
+**Why the ceiling.** The worst case with only 02-ARCHITECTURE §12's first limits, at D-035's MSG91
+price of ₹0.20 an SMS (not yet confirmed, P-0.5): one attacker on one IPv4 address sends 20 an
+hour, ₹96 a day; 10,000 rented residential IPs send 200,000 an hour, ₹40,000 an hour; one cloud
+IPv6 /48 holds 65,536 /64 buckets and sends 1.3 million an hour, ₹2.6 lakh an hour. The per-phone
+limit bounds harassment of one person (120 texts a day), not spending: an attacker rotates
+numbers. MSG91 is prepaid, so the real ceiling would be the wallet, which is also when real users
+stop getting codes. With the global cap the worst case is 500 × ₹0.20 = ₹100 a day. The cost: an
+attacker can spend the cap and stop Path B sign-ins for the rest of the day, which is acceptable
+while Firebase is the launch path.
+
+**Revisit at P-0.5, not on a date:** when MSG91 goes live, the limits, the cap and the price behind
+these figures are checked again before Path B is switched on.
+
+**The 50% warning has nowhere to go yet.** At half the cap the API logs a warning to Fly's logs,
+which nobody reads: that isn't an alert. Nothing routes alerts until T-9.12 (Sentry, after P-0.6's
+account), which carries the line. Until then the gap is known: the first sign of an attack is the
+cap being hit.
+
+**Rejected:** four digits (above); the cap or six digits alone; a stub that pretends to send.
+
+Recommended by Claude in the joint plan for T-3.2 to T-3.10, except four digits, which the advisor
+directing that plan (Claude, in a separate chat) reversed to six; approved by the founder on
+3 October 2026. **Open** until T-3.3 lands, its last part; that task's `/done` marks it Locked.
+
+### D-067 · Sessions: 30 days that slide, a 10-second grace, logout by cookie, a 15-minute tail — Open
+**The decision (T-3.3, T-3.4, T-3.5):**
+- A refresh token is valid for 30 days from its own rotation, with no absolute cap: someone active
+  never pays for another sign-in SMS.
+- Who may sign in: `banned` gets `ACCOUNT_BANNED`, `frozen` gets `ACCOUNT_FROZEN`, `paused` may.
+  `deleted` can't occur before T-9.6 and gets `FORBIDDEN` until T-9.6 decides.
+- Sessions store no IP address and no user agent; both columns stay empty. `/privacy` lists
+  neither, nothing reads them, and reading an address safely would pull in P-40. If T-9.2 needs
+  them, it adds them with a line on `/privacy`.
+- The CSRF cookie holds `new_csrf()`'s value, renewed at every rotation: readable (not HttpOnly),
+  `Secure`, `SameSite=Lax`, `Path=/`, `Domain` from `COOKIE_DOMAIN` (host-only where that's empty,
+  locally), for 30 days. The refresh cookie is D-054's and D-055's.
+- Both cookies are `Secure` locally too. Safari keeps no `Secure` cookie over plain
+  `http://127.0.0.1`, so local sign-in needs Chrome or Firefox, and Safari is tested on staging,
+  which has HTTPS. CLAUDE.md says so (T-3.3).
+- Two tabs refreshing at once: the second presents the token the first has just rotated. A token
+  rotated less than 10 seconds ago gets `401 SESSION_REVOKED` without its family being revoked;
+  after that, reuse revokes the whole family, as planned. The web serialises refreshes across tabs
+  (the Web Locks API, T-3.10), so the grace rarely matters.
+- Logout is authenticated like refresh, by the refresh cookie and `X-CSRF`, not the access token,
+  so it still works once that has expired. It revokes the session's family and clears both
+  cookies.
+- `require_role` reads the user row `current_user` loads anyway, never the token's `role`: a
+  demotion takes effect at the next request.
+- **A revoked session's access token keeps working for up to 15 minutes**, because access tokens
+  are self-contained (D-024). Logout, a reuse attack and five wrong PINs all leave that tail; bans
+  and freezes don't, because `current_user` loads the user. Accepted. Read with D-069: the PIN
+  lockout's revocation leaves this tail, and the PIN lock is a deterrent, not protection.
+
+**Rejected:** an absolute cap (more sign-in SMS for little gained); revoking on every reuse (two
+tabs sign each other out); logout by access token (it fails once that has expired); a session
+check on every request to close the 15 minutes (a database or Redis read per request, for a tail
+D-024 accepted); storing the IP and user agent before anything reads them.
+
+Recommended by Claude in the joint plan for T-3.2 to T-3.10; answered by the advisor directing
+that plan (Claude, in a separate chat); approved by the founder on 3 October 2026. **Open** until T-3.5 lands, its last part; that task's
+`/done` marks it Locked.
+
+### D-068 · Onboarding: a step's endpoint works at the step or after it, never before — Open
+**The decision (T-3.6, T-3.7):**
+- Each onboarding step's endpoint works at that step, advancing it, and after it, as an edit that
+  doesn't advance. Before it: `ONBOARDING_INCOMPLETE`, with `details.step` the user's current step.
+- `dob` and `gender` are the exception: once set, any change is `IMMUTABLE_FIELD`, and T-1.9's
+  trigger refuses it too.
+- `PATCH /me/profile` spans two steps: `profile` advances once first name, hometown and city are
+  all set; `about` advances when about is set at that step. A field of a step not yet reached is
+  `ONBOARDING_INCOMPLETE`.
+- A username can change until onboarding is `done`; after that it is `IMMUTABLE_FIELD` until T-9.6
+  designs changes. Usernames are stored in lowercase.
+- Usernames never take a bare top-level path: the public page is D-001's `/@username`, and no
+  route segment may ever begin with `@`. The `@` is the namespace, so the reserved list holds names
+  that impersonate staff or the product, not route segments.
+- Consequence: interests and the PIN come after photos, so a real user can't reach them before
+  T-4.3; tests set the step directly.
+
+**Why one rule:** every step works the same way, and later screens (settings) edit through the
+same endpoints. **Why the username locks:** it is a link people share (D-001); changing it breaks
+links and invites impersonation, and designing changes properly is T-9.6's. **Why never a bare
+`/<username>`:** the reserved list would have to hold every present and future route segment, and
+it would never be complete. Cheap to settle now, expensive once people own usernames (the
+advisor).
+
+**Rejected:** "only at your own step", which leaves no way to edit; `/u/<username>`, which the
+advisor recommended in answer 27, because D-001's `/@username` already does the same job (the
+founder, 3 October 2026).
+
+Recommended by Claude in the joint plan for T-3.2 to T-3.10; answered by the advisor directing
+that plan (Claude, in a separate chat); approved by the founder on 3 October 2026. **Open** until T-3.7 lands, its last part; that task's
+`/done` marks it Locked.
+
+### D-069 · PIN: its rules, its reset, and what the lock doesn't do — Open
+**The decision (T-3.9):**
+- A PIN is 4 digits (D-012). Refused: one digit four times; straight runs either way (0123…,
+  9876…); alternating pairs (1212); the 20 most common PINs in DataGenetics' published study. The
+  seed's `TEST_WOMAN_PIN`, 4829, passes, and a test holds it so (T-1.15).
+- Changing a PIN needs the current one, except within 10 minutes of a fresh sign-in, read from the
+  token's `auth_time` (D-071). That is also "forgot PIN": sign out, sign in by OTP, set a new one.
+- Each wrong PIN adds one to `pin_failed`, in one atomic update; a correct PIN or a fresh sign-in
+  resets it. **At 5, every session of the user is revoked** and the answer is `SESSION_REVOKED`.
+  Read with D-067: each revoked session's access token still works for up to 15 minutes.
+- A stored hash `verify_pin` refuses (other parameters, or unreadable) doesn't count: the answer
+  is `PIN_INVALID` with `details.reset_required`, and the way out is the fresh sign-in above.
+- Skipping the PIN at onboarding is `POST /me/pin/skip`, which moves `pin` to `selfie`; setting
+  one at that step does the same.
+- The PIN endpoints allow 10 a minute per user: each check holds 19 MiB for about 18 ms, two at
+  once per process (D-062).
+
+**What the lock doesn't do.** It deters whoever picks up an unlocked phone; it protects nothing.
+The web keeps a working access token behind the lock screen, so the browser's devtools get past
+it. Five wrong PINs revoke the sessions, but each one's access token keeps working for up to 15
+minutes (D-067), and there is no server-side lock state. Together: **the PIN lockout locks nothing
+for fifteen minutes.** Never build on the PIN as a security boundary; it's the `/admin` web gate's
+lesson again (P-30). Recording what a feature does not do is what stops someone treating it as
+security later (the advisor).
+
+**Rejected:** server-side lock state (a check on every request, for an app lock D-012 never asked
+to be more); counting a refused hash as a wrong PIN (it would lock out someone whose hash format
+changed, with no way back).
+
+Recommended by Claude in the joint plan for T-3.2 to T-3.10; answered by the advisor directing
+that plan (Claude, in a separate chat); approved by the founder on 3 October 2026. **Open** until T-3.9 lands; its `/done` marks it Locked.
+
+### D-070 · Sign-in numbers are Indian mobiles only — Open
+**Supersedes** D-061's "a number is normalised to E.164, +91 only (D-035)", and T-3.1's text for
+`normalize_phone`. From T-3.2, `normalize_phone` also refuses a valid Indian number that isn't a
+mobile: landlines, toll-free 1800 numbers and the 140 series (P-45), as `VALIDATION_ERROR` on
+`phone` ("isn't a mobile number"). The rest of D-061 stands.
+
+**Why:** signing in sends an SMS, which these numbers can't receive, so T-3.2 would pay for it and
+spend the sender's rate-limit slots. In the one function every path calls, every path gets it. The
+seed's and `make_user`'s numbers are mobiles.
+
+**How it lands:** T-3.1's tests of `normalize_phone` are updated to the new rule, still asserting
+the exact error for each case, with the non-mobile cases added; never loosened. A locked decision
+quietly widened is worse than one openly replaced (the advisor). Until T-3.2 lands, D-061's
+sentence governs.
+
+Recommended by Claude in the joint plan for T-3.2 to T-3.10; answered by the advisor directing
+that plan (Claude, in a separate chat); approved by the founder on 3 October 2026. **Open** until T-3.2 lands; its `/done` marks it Locked.
+
+### D-071 · Access tokens carry the sign-in time, `auth_time` — Open
+**Supersedes** D-060's "exactly `sub`, `role`, `aud`, `iat` and `exp`". From T-3.3, access tokens
+carry exactly those and `auth_time`: when this device's session family signed in, by OTP or
+Firebase, carried unchanged through every refresh (T-3.4).
+
+**Why:** D-069's PIN reset has to know a sign-in is fresh, without a database read on every
+request. `auth_time` is OpenID Connect's claim for exactly that.
+
+**How it lands:** T-3.1's test that asserts the claim set is updated to the new exact set, never
+loosened to "at least these", and `decode_access_token` requires `auth_time` like the rest. Until
+T-3.3 lands, D-060's claim set governs.
+
+Recommended by Claude in the joint plan for T-3.2 to T-3.10; answered by the advisor directing
+that plan (Claude, in a separate chat); approved by the founder on 3 October 2026. **Open** until T-3.3 lands; its `/done` marks it Locked.
+
+### D-072 · An under-18 refusal deletes the account and keeps only the number's hash — Open
+**The decision (T-3.6):** `UNDERAGE` deletes, in the transaction that refuses the date, the user
+and everything attached: the user row with its encrypted number, the profile, wallet,
+notification preferences and sessions. It keeps only what D-009 has always required, the number's
+hash in `banned_identities` (`reason` `underage`), so the number can't sign up again.
+
+**Why the deletion** (the advisor's answer 42): a user exists from the moment they sign in by OTP,
+before the dob step, so when the date is refused the row already holds a minor's encrypted phone
+number. T-3.6's first text kept it indefinitely, with status `banned`: more than `/privacy`
+promises ("we refuse the sign-up and keep a hashed copy of the phone number"), and exactly the
+data Velora shouldn't hold.
+
+**Why the hash stays** (the founder, 3 October 2026): answer 42 dropped the hash too, on the
+premise that a soft age gate had been chosen. No record says so. D-009 is a "Hard 18+ gate"; D-051
+and D-061 rely on the hash; `/terms` promises to "bar that phone number from signing up again",
+and `/privacy` to keep a hashed copy.
+
+**An exception to 03-SCHEMA's "we don't hard-delete users":** at the dob step a user has nothing
+moderation may need (no messages, reports, ledger or payments, rule 12), so nothing is lost.
+
+**Test (🔒 7):** after `UNDERAGE` there is no user row, no session, no profile, wallet or
+preferences row, and exactly one `banned_identities` row for the number. `/privacy` adds that
+everything else is deleted at once (T-3.6).
+
+**Rejected:** keeping the row with status `banned` (T-3.6's first text); dropping the hash too, a
+soft gate, which would supersede D-009 and the published pages.
+
+The deletion is the advisor's answer 42, approved by the founder; keeping the hash is the founder's
+own decision, both on 3 October 2026. **Open** until T-3.6 lands; its `/done` marks it Locked.
+
 ---
 
 ## Adding a decision

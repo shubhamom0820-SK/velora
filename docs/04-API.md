@@ -9,25 +9,26 @@ the source for `web/src/types/api.ts`.
 | Method | Path | Auth | Body → Response | Task |
 |---|---|---|---|---|
 | POST | /auth/firebase | 🔓 | `{id_token}` → `{access_token, user}` + refresh cookie | T-3.14 |
-| POST | /auth/otp/send | 🔓 | `{phone}` → `{resend_after_s}` (Path B, MSG91) | T-3.2 |
-| POST | /auth/otp/verify | 🔓 | `{phone, otp}` → `{access_token, user}` + refresh cookie | T-3.3 |
-| POST | /auth/refresh | 🔓 cookie + X-CSRF | → `{access_token}` + rotated cookie | T-3.4 |
-| POST | /auth/logout | 🔐 | → 204, revokes session | T-3.4 |
-| POST | /auth/pin/set | 🔐 | `{pin}` → 204 | T-3.9 |
-| POST | /auth/pin/verify | 🔐 | `{pin}` → 204 or `PIN_INVALID` (5 → session revoked) | T-3.9 |
+| POST | /auth/otp/send | 🔓 | `{phone}` → `{resend_after_s}`. Path B, MSG91; served only where `AUTH_PHONE_PROVIDER` is `msg91` or `fake`, else 404 (D-066) | T-3.2 |
+| POST | /auth/otp/verify | 🔓 | `{phone, otp}` (6 digits, D-066) → `{access_token, user: Me}` + refresh and CSRF cookies | T-3.3 |
+| POST | /auth/refresh | 🔓 cookie + X-CSRF | → `{access_token}` + rotated cookies | T-3.4 |
+| POST | /auth/logout | 🔓 cookie + X-CSRF | → 204, revokes the session's family and clears both cookies; works after the access token expires (D-067) | T-3.4 |
+| POST | /auth/pin/set | 🔐 | `{pin, current_pin?}` → 204. `current_pin` is needed to change a PIN, except within 10 minutes of a fresh sign-in (D-069) | T-3.9 |
+| POST | /auth/pin/verify | 🔐 | `{pin}` → 204 or `PIN_INVALID` (5 → every session revoked; D-069 says what that doesn't protect) | T-3.9 |
 | POST | /ws/ticket | ✅ | → `{ticket}` | T-7.4 |
 
 ## Me & onboarding
 | Method | Path | Auth | Body → Response | Task |
 |---|---|---|---|---|
-| GET | /me | 🔐 | → `Me` (user + profile + wallet balance + onboarding_step) | T-3.5 |
-| POST | /me/dob | 🔐 | `{dob}` → `Me` or `UNDERAGE` | T-3.6 |
+| GET | /me | 🔐 | → `Me` (below) | T-3.5 |
+| POST | /me/dob | 🔐 | `{dob}` → `Me`, or `UNDERAGE`: the account is deleted and only the number's hash kept (D-072) | T-3.6 |
 | POST | /me/gender | 🔐 | `{gender}` → `Me` (once) | T-3.6 |
 | POST | /me/seeking | 🔐 | `{seeking, intent_ids[1–3]}` → `Me` | T-3.6 |
 | PATCH | /me/profile | 🔐 | `{first_name?, hometown?, city?, about?}` → `Me` | T-3.7 |
 | GET | /usernames/{u}/available | 🔐 | → `{available, suggestion?}` | T-3.7 |
 | PUT | /me/username | 🔐 | `{username}` → `Me` or `USERNAME_TAKEN` | T-3.7 |
 | PUT | /me/interests | 🔐 | `{interest_ids[5]}` → `Me` | T-3.8 |
+| POST | /me/pin/skip | 🔐 | → `Me`, moving `pin` → `selfie` (D-069) | T-3.9 |
 | PUT | /me/location | 🔐 | `{lat, lng}` or `{area_id}` → 204 | T-4.10 |
 | PATCH | /me/settings | ✅ | `{is_hidden?, hide_age?, hide_distance?, show_kudos?}` → `Me` | T-9.6 |
 | POST | /me/pause | ✅ | → 204 | T-9.6 |
@@ -36,6 +37,14 @@ the source for `web/src/types/api.ts`.
 | GET | /interests | 🔓 | → `Interest[]` | T-3.8 |
 | GET | /intents | 🔐 | → `Intent[]` | T-3.6 |
 | GET | /areas?city= | 🔓 | → `Area[]` | T-4.10 |
+
+Onboarding endpoints work at their step and after it, never before (D-068).
+
+`Me` (T-3.5): `id`, `role`, `status`, `onboarding_step`, `gender`, `age`, `is_verified`,
+`has_pin`, `referral_code`, `balance`, and `profile`: `first_name`, `username`, `about`,
+`hometown`, `city`, `seeking`, `intent_ids`, `interest_ids`, `is_hidden`, `hide_age`,
+`hide_distance`, `show_kudos`, `show_gifts`. The age, never the date of birth, and no phone
+number: no screen shows either, so neither leaves the server (D-067's discipline).
 
 ## Photos & verification
 | Method | Path | Auth | Body → Response | Task |
@@ -159,27 +168,27 @@ Five tries a minute per client IP, invalid ones included → `RATE_LIMITED` (D-0
 | `VALIDATION_ERROR` | 400 | body failed schema |
 | `AUTH_REQUIRED` / `TOKEN_EXPIRED` / `SESSION_REVOKED` | 401 | |
 | `INSUFFICIENT_CREDITS` | 402 | `details.required`, `details.balance` |
-| `FORBIDDEN` | 403 | wrong role |
+| `FORBIDDEN` | 403 | wrong role; a `deleted` account until T-9.6 (D-067) |
 | `ACCOUNT_FROZEN` / `ACCOUNT_BANNED` | 403 | |
 | `BLOCKED` | 403 | either side blocked |
-| `ONBOARDING_INCOMPLETE` | 403 | `details.step` |
+| `ONBOARDING_INCOMPLETE` | 403 | `details.step`, the user's current step (D-068) |
 | `VERIFICATION_REQUIRED` | 403 | woman without approved selfie |
 | `NOT_FOUND` | 404 | also used when a blocked user is looked up |
 | `USERNAME_TAKEN` | 409 | |
 | `ALREADY_EXISTS` | 409 | duplicate swipe/report/etc. |
 | `THREAD_EXPIRED` | 410 | send on an expired thread |
-| `UNDERAGE` | 422 | |
-| `IMMUTABLE_FIELD` | 422 | gender/dob change |
+| `UNDERAGE` | 422 | the account is deleted, only the number's hash kept (D-072) |
+| `IMMUTABLE_FIELD` | 422 | gender/dob change; a username after onboarding (D-068) |
 | `MESSAGE_REJECTED` | 422 | abuse or payment-solicitation filter; `details.rule` |
 | `NOT_ALLOWED` | 422 | man sending voice note, kudos too early, woman sending a gift |
 | `GIFT_LIMIT_REACHED` | 429 | free gifts used up today; `details.resets_at` |
 | `GIFT_COOLDOWN` | 429 | same gift to same person too soon; `details.retry_after_s` |
 | `SWIPE_LIMIT_REACHED` | 429 | daily cap |
 | `RATE_LIMITED` | 429 | `details.retry_after_s` |
-| `OTP_INVALID` / `OTP_EXPIRED` / `OTP_TOO_MANY` | 400/400/429 | |
+| `OTP_INVALID` / `OTP_EXPIRED` / `OTP_TOO_MANY` | 400/400/429 | `OTP_INVALID`: `details.attempts_left`. `OTP_TOO_MANY`: 5 wrong for one code, or 10 for one phone in 24 h (D-066) |
 | `FIREBASE_TOKEN_INVALID` | 401 | bad signature, expired, wrong audience, or already used |
 | `PHONE_NOT_SUPPORTED` | 422 | non-`+91` number |
-| `PIN_INVALID` | 401 | `details.attempts_left` |
+| `PIN_INVALID` | 401 | `details.attempts_left`; `details.reset_required` when the stored PIN can't be checked (D-069) |
 | `INTERNAL` | 500 | unexpected server error; the message never contains internals |
-| `PROVIDER_UNAVAILABLE` | 503 | SMS/payment provider down |
+| `PROVIDER_UNAVAILABLE` | 503 | SMS/payment provider down; the daily SMS cap reached (D-066); locally, a number not in `SMS_LOCAL_ALLOWED_TO` (D-064) |
 | `NOT_READY` | 503 | a dependency of ours is not ready (`/readyz` only); `details` = `{"database": "ok"\|"fail", "redis": "ok"\|"fail"}` |
