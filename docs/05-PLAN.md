@@ -126,6 +126,9 @@ never done silently.
   price behind D-066's figures before Path B is switched on, and build P-46, the MSG91 client.
 - [ ] **P-0.12** Firebase: project, Phone provider on, App Check + reCAPTCHA Enterprise enforced, authorised domains, daily SMS quota cap, billing alert. Confirm the **real per-SMS price for IN** in the billing console and write it into D-035.
   **Never add a test phone number to a project production uses (D-065):** its fixed code signs anyone in as that number wherever the project's tokens are accepted, production included, and in India the number may be a real person's (D-064).
+- [ ] **P-0.13** Create the Google Cloud billing account and complete India's identity verification. **Owner: the founder, Shubham Kumar. Start: 3 October 2026. Due: 30 days after the account is created, when Google suspends an unverified Indian account; by 2 November 2026 if it's created on the start date.** Blocks T-3.14 (Firebase's Blaze plan bills to this account) and P-49's move (the Compute Engine VM does too). Started late, the 30-day clock is what stalls T-3.14.
+  **How:** an Indian billing address means Google's mandatory identity verification. As an individual: PAN or e-Aadhaar through DigiLocker, and proof of address. As a business: a GST or Udyam certificate. **GST:** the advisor directing T-3.2 to T-3.10 says Velora has none, deliberately, below the threshold; P-0.2 still lists GST as unconfirmed, so the founder confirms it there. Without GST or a Udyam registration, it goes through as an individual.
+  **If the payment method is refused** (AWS's was, P-0.6), write down exactly what Google said, as P-36 did for Fly, before trying anything else.
 - [x] **P-0.6** Create accounts: GitHub, Supabase (Mumbai), Upstash, Cloudflare (R2 on), Fly.io (paid plan for `bom`), Vercel, Sentry, Sightengine, AWS (Rekognition, `ap-south-1`).
   **Ticked with three still to set up**, none needed before Sprint 4: Sightengine (T-4.4), AWS for
   Rekognition (T-4.5 — signed up, but its payment method failed verification) and Sentry (T-9.12).
@@ -664,7 +667,7 @@ One migration per task, each with a working `downgrade()`. Build exactly `03-SCH
 - [ ] **Commit:** `feat(web): onboarding about, interests, pin [T-3.12]`
 
 ### T-3.14 · Firebase phone sign-in (launch path)
-- [ ] **Needs:** T-3.3, T-3.10 (it restores the session on reload, which the Done-when checks), and T-3.11 (its phone and OTP screens, which this task's web step puts Firebase on)
+- [ ] **Needs:** T-3.3, T-3.10 (it restores the session on reload, which the Done-when checks), T-3.11 (its phone and OTP screens, which this task's web step puts Firebase on), and **P-0.13** (the Google billing account, verified: Firebase's Blaze plan bills to it)
 - [ ] **New dependencies (approved, recorded in D-035):** api `firebase-admin`; web `firebase`.
 - [ ] Firebase console: project created, Phone provider enabled, **App Check with reCAPTCHA
   Enterprise enforced on Authentication**, authorised domains = `veloraapp.co.in` + `staging.veloraapp.co.in`
@@ -1820,9 +1823,30 @@ Claude Code adds items here instead of doing unplanned work. Format:
        certificate (P-0.2's PAN and GST are still unconfirmed). Firebase's Blaze plan (P-0.12) needs
        the same billing account, so it is owed anyway. Until a billing account exists and is
        verified, no plan should rest on Google either.
+  - **Host, directed 3 October 2026: a Compute Engine VM in Mumbai, not Cloud Run** (the advisor
+    directing T-3.2 to T-3.10, Claude in a separate chat; the founder decides). Threads and Knots
+    are the product, so "busy whenever anyone is connected" is close to always: Cloud Run's roughly
+    $100 to $115 a month against the VM's roughly $15 is a different budget, pre-revenue, not a
+    trade-off (about ₹1 lakh a year against ₹15,000, the advisor's figures).
+    **What the VM costs, accepted, not overlooked:**
+    - OS updates, TLS renewal, deploys and restarts become ours. Caddy terminates TLS and renews
+      its certificates itself; Docker Compose runs the API, the worker and Caddy, as Compose already
+      runs the stack locally.
+    - One VM is one point of failure, and a deploy is a restart unless built around: open WebSockets
+      drop and clients reconnect (T-7.12). At launch, in one city, with no users yet, survivable.
+    - **Revisit when** revenue exists, or when a restart during a live Thread becomes a real
+      complaint.
+    **Considered and not chosen: DigitalOcean in Bangalore.** Droplets from $6 a month and App
+    Platform from $5 a container, with workers, both in Bangalore: managed deploys and TLS would cut
+    the ops above. But Bangalore isn't Mumbai, so it is another split: an estimated 15 to 20 ms per
+    round trip to Supabase and Upstash (unmeasured: no machine there), paid about 13 times per `/me`
+    (11 round trips to Postgres, 2 to Redis), so about 200 to 260 ms of server time, where a VM in
+    Mumbai pays about 15 to 25 ms. It doesn't beat Compute Engine clearly, and one Google account
+    for hosting and Firebase is worth something on its own. Colocating in Bangalore would mean
+    leaving Supabase for DigitalOcean's own Postgres: a bigger move, not this one.
   - **Not decided here.** The founder decides the city and the host; this is the measurement, the
-    reading and the advisor's direction. The move is a task of its own and a decision superseding
-    D-048 (and D-023's region).
+    reading and the advisor's direction. The move is a task of its own and writes the decision
+    superseding D-048 (and D-023's region); no D- number is taken before then.
 
   Found reviewing T-3.2 to T-3.5, at the direction of the advisor directing them (Claude, in a
   separate chat), who added option B and the residency question.
