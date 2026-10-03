@@ -293,8 +293,9 @@ secret is left empty. Real secret values are never committed.
   API>; object-src 'none'; base-uri 'none'; form-action 'self'; frame-ancestors 'none'`;
   `X-Frame-Options: DENY`; `X-Content-Type-Options: nosniff`; `Referrer-Policy:
   strict-origin-when-cross-origin`; and `Permissions-Policy: camera=(), microphone=(),
-  geolocation=(), browsing-topics=()`. HSTS is Vercel's (`max-age=63072000`). **This is what is
-  served, not a target.** Each task that needs more widens it there, deliberately: Firebase
+  geolocation=(), browsing-topics=()`; and `Strict-Transport-Security: max-age=63072000;
+  includeSubDomains`, never preloaded before launch (D-074). **This is what is served, not a
+  target.** Each task that needs more widens it there, deliberately: Firebase
   (T-3.14), R2 and the CDN (T-4.6), the camera (T-4.7), location (T-4.10), the microphone
   (T-7.11), WebSockets (T-7.12), Razorpay (T-8.7), Sentry (T-9.12) and analytics (T-10.2). This
   line changes with each.
@@ -323,10 +324,12 @@ secret is left empty. Real secret values are never committed.
 
 | | local | staging | production |
 |---|---|---|---|
-| Web | `pnpm dev` :3000 | Vercel project `velora-staging` at `staging.veloraapp.co.in` | Vercel prod `veloraapp.co.in` |
-| API | uvicorn :8000 | Fly `velora-api-staging` at `api.staging.veloraapp.co.in` | Fly `velora-api` at `api.veloraapp.co.in` |
-| DB | docker postgis | Supabase project `velora-staging` | Supabase `velora-prod` |
+| Web | `pnpm dev` :3000 | Vercel project `velora-staging` at `staging.veloraapp.co.in` | Vercel project `velora-production` at `veloraapp.co.in` |
+| API | uvicorn :8000 | Fly `velora-api-staging` at `api.staging.veloraapp.co.in` | Fly `velora-api` at `api.veloraapp.co.in`, until P-49 |
+| DB | docker postgis | Supabase project `velora-staging` | Supabase project `velora-prod`, in its own organisation |
 | Providers | fake | real (test keys) | real (live keys) |
 
 Deploy: merge to `main` → CI → staging automatically, for that commit only once its CI passed
-(`deploy.yml`, D-046; set up by `infra/STAGING.md`). Git tag `v*` → production.
+(`deploy.yml`, D-046; set up by `infra/STAGING.md`). A tag `v*` on a commit of `main` → production
+(`deploy-production.yml`, D-075; set up by `infra/PRODUCTION.md`), and only once `scripts/release-gate`
+finds CI passed for that commit and staging deployed it.

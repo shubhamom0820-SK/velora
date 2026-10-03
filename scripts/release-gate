@@ -1,0 +1,152 @@
+#!/usr/bin/env bash
+# The production release gate (T-2.6, D-075): the /done gate (D-044) extended to
+# the live site. Exits 0 only when production may take this commit:
+#
+#   1. it is on main: production takes nothing that hasn't merged;
+#   2. CI passed for this exact commit;
+#   3. staging deployed this exact commit, smoke check and all: production only
+#      gets what staging proved;
+#   4. Vercel accepts the production token. It warns when the token expires
+#      within 30 days, here, where the person releasing is already looking,
+#      rather than on the day a deploy stops working.
+#
+#   scripts/release-gate COMMIT
+#
+# Unlike ci-gate it never waits: a release is deliberate and comes after staging
+# has deployed the commit, so anything unfinished is a refusal, with a message.
+# Everything fails closed.
+#
+# Exit codes:
+#   0  production may take this commit
+#   1  refused: not on main, CI or staging not green for it, or the token refused
+#   4  couldn't reach or authenticate with GitHub, or couldn't reach Vercel
+#   5  GitHub or Vercel answered with an error
+set -euo pipefail
+
+sha="$(git rev-parse --verify "${1:?usage: scripts/release-gate COMMIT}^{commit}")"
+short="${sha:0:7}"
+main_ref="${RELEASE_GATE_MAIN_REF:-origin/main}"
+warn_days="${RELEASE_GATE_TOKEN_WARN_DAYS:-30}"
+vercel_api="${RELEASE_GATE_VERCEL_API:-https://api.vercel.com}"
+now="${RELEASE_GATE_NOW:-$(date +%s)}" # seconds; tests pin it
+work="$(mktemp -d)"
+trap 'rm -rf "$work"' EXIT
+
+say() { printf 'release-gate: %s\n' "$*" >&2; }
+refuse() {
+  say "Not releasing $short. $*"
+  exit 1
+}
+# Shown in the run's log and, on GitHub, as an annotation on the run's page.
+warn() {
+  say "WARNING: $*"
+  if [[ "${GITHUB_ACTIONS:-}" == true ]]; then
+    printf '::warning title=Production Vercel token::%s\n' "$*"
+    if [[ -n "${GITHUB_STEP_SUMMARY:-}" ]]; then
+      printf '> **Warning:** %s\n' "$*" >>"$GITHUB_STEP_SUMMARY"
+    fi
+  fi
+}
+
+# gh failed: "couldn't reach or authenticate" (4) is told apart from "GitHub
+# answered with an error" (5), as in ci-gate.
+gh_failed() {
+  if ! gh api rate_limit >/dev/null 2>&1; then
+    say "Not releasing $short. Couldn't reach or authenticate with GitHub while $1."
+    say "Check the token first: 'gh auth status'."
+    exit 4
+  fi
+  say "Not releasing $short. GitHub answered with an error while $1:"
+  sed 's/^/release-gate:   /' "$work/errors" >&2
+  exit 5
+}
+
+# 1. On main.
+if ! git rev-parse --verify --quiet "$main_ref^{commit}" >/dev/null; then
+  refuse "Can't see $main_ref to check the commit is on main: fetch it first."
+fi
+if ! git merge-base --is-ancestor "$sha" "$main_ref"; then
+  refuse "It isn't on main: production takes only commits that merged (D-075)."
+fi
+say "ok   $short is on main."
+
+# 2. CI, for this exact commit. A push run records the commit it ran, so it is
+# matched by headSha, and the newest one counts.
+ci="$(gh run list --commit "$sha" --event push --limit 50 \
+  --json databaseId,headSha,workflowName,status,conclusion,createdAt \
+  --jq "[.[] | select(.headSha == \"$sha\" and .workflowName == \"CI\")] | sort_by(.createdAt) | last | if . == null then \"\" else \"\(.databaseId)|\(.status)|\(.conclusion)\" end" \
+  2>"$work/errors")" || gh_failed "listing CI runs for $short"
+if [[ -z "$ci" ]]; then
+  refuse "CI never ran for it."
+fi
+IFS='|' read -r ci_run ci_status ci_conclusion <<<"$ci"
+if [[ "$ci_status" != completed ]]; then
+  refuse "CI run $ci_run hasn't finished ($ci_status). Release once it has passed."
+fi
+if [[ "$ci_conclusion" != success ]]; then
+  refuse "CI concluded '${ci_conclusion:-none}' for it (run $ci_run)."
+fi
+say "ok   CI passed for $short (run $ci_run)."
+
+# 3. Staging deployed this exact commit. Matched by the run's name, which
+# deploy.yml sets to the commit it deploys: a workflow_run's own headSha is
+# main's newest commit when it started, which isn't always the commit deployed.
+staging="$(gh run list --workflow deploy.yml --limit 200 \
+  --json databaseId,displayTitle,status,conclusion,createdAt \
+  --jq "[.[] | select(.displayTitle == \"Deploy staging $sha\")] | sort_by(.createdAt) | last | if . == null then \"\" else \"\(.databaseId)|\(.status)|\(.conclusion)\" end" \
+  2>"$work/errors")" || gh_failed "listing staging deploys"
+if [[ -z "$staging" ]]; then
+  refuse "Staging never deployed it: production only gets what staging proved (D-075)."
+fi
+IFS='|' read -r staging_run staging_status staging_conclusion <<<"$staging"
+if [[ "$staging_status" != completed ]]; then
+  refuse "Staging's deploy of it (run $staging_run) hasn't finished ($staging_status)."
+fi
+if [[ "$staging_conclusion" != success ]]; then
+  refuse "Staging's deploy of it concluded '${staging_conclusion:-none}' (run $staging_run): production only gets what staging proved (D-075)."
+fi
+say "ok   staging deployed $short and its smoke check passed (run $staging_run)."
+
+# 4. The production Vercel token. Without it the web can't deploy, so in the
+# workflow a missing one is a refusal; run by hand, there's nothing to read.
+if [[ -z "${VERCEL_TOKEN:-}" ]]; then
+  if [[ "${GITHUB_ACTIONS:-}" == true ]]; then
+    refuse "The production environment has no VERCEL_TOKEN, so the web can't deploy (infra/PRODUCTION.md)."
+  fi
+  say "no VERCEL_TOKEN here, so its expiry isn't read; the release workflow reads it."
+  say "Production may take $short."
+  exit 0
+fi
+# The token reaches curl on stdin, never as an argument: ps shows arguments.
+if ! http="$(printf 'header = "Authorization: Bearer %s"\n' "$VERCEL_TOKEN" |
+  curl -sS --max-time 20 --config - -o "$work/token.json" -w '%{http_code}' \
+    "$vercel_api/v5/user/tokens/current" 2>"$work/errors")"; then
+  say "Not releasing $short. Couldn't reach Vercel to read the production token:"
+  sed 's/^/release-gate:   /' "$work/errors" >&2
+  exit 4
+fi
+case "$http" in
+  200) ;;
+  401 | 403)
+    refuse "Vercel refuses the production token (HTTP $http): it has expired or been revoked. Create a new one, expiring in a year, and replace VERCEL_TOKEN in the production environment (infra/PRODUCTION.md)."
+    ;;
+  *)
+    say "Not releasing $short. Vercel answered HTTP $http while reading the production token."
+    exit 5
+    ;;
+esac
+expires_ms="$(jq -r '.token.expiresAt // empty' "$work/token.json")"
+if [[ -z "$expires_ms" ]]; then
+  warn "The production Vercel token never expires. D-075 gives it a year, so a leaked one can't serve forever: replace it with one that expires (infra/PRODUCTION.md)."
+else
+  expires_on="$(jq -r '.token.expiresAt / 1000 | floor | strftime("%Y-%m-%d")' "$work/token.json")"
+  days=$(((expires_ms / 1000 - now) / 86400))
+  if ((expires_ms / 1000 <= now)); then
+    refuse "The production Vercel token expired on $expires_on. Create a new one, expiring in a year, and replace VERCEL_TOKEN in the production environment (infra/PRODUCTION.md)."
+  elif ((days < warn_days)); then
+    warn "The production Vercel token expires on $expires_on, in $days days. After that, releases stop until it's replaced: create a new one, expiring in a year, and replace VERCEL_TOKEN in the production environment (infra/PRODUCTION.md)."
+  else
+    say "ok   the production Vercel token expires on $expires_on, in $days days."
+  fi
+fi
+say "Production may take $short."

@@ -10,6 +10,11 @@
 # GitHub only triggers workflows that exist on the default branch, so this one
 # can't run until it's on main (06-TESTING).
 name: Deploy staging
+# Named for the exact commit it deploys, which production's release gate matches
+# (scripts/release-gate, D-075): a workflow_run's own head SHA is main's newest
+# commit when the run started, not always the commit it deploys. A run started
+# by hand counts for a release only when given the commit's full SHA.
+run-name: Deploy staging ${{ github.event.workflow_run.head_sha || inputs.ref }}
 
 on:
   workflow_run:
@@ -148,13 +153,15 @@ jobs:
       # The staging project deploys only from here (web/vercel.json turns off its
       # Git deploys), so the web can't go live around the CI gate. --prod puts it on
       # the project's production domain, staging.veloraapp.co.in, which the API's
-      # CORS_ORIGINS names (P-33).
+      # CORS_ORIGINS names (P-33). The CLI reads VERCEL_TOKEN from the job's
+      # environment, never from --token: arguments show in ps to every process
+      # on the machine (T-2.6; staging proves it before production relies on it).
       - name: vercel pull
-        run: pnpm dlx "vercel@$VERCEL_CLI_VERSION" pull --yes --environment=production --token="$VERCEL_TOKEN"
+        run: pnpm dlx "vercel@$VERCEL_CLI_VERSION" pull --yes --environment=production
       - name: vercel build
-        run: pnpm dlx "vercel@$VERCEL_CLI_VERSION" build --prod --token="$VERCEL_TOKEN"
+        run: pnpm dlx "vercel@$VERCEL_CLI_VERSION" build --prod
       - name: vercel deploy
-        run: pnpm dlx "vercel@$VERCEL_CLI_VERSION" deploy --prebuilt --prod --token="$VERCEL_TOKEN"
+        run: pnpm dlx "vercel@$VERCEL_CLI_VERSION" deploy --prebuilt --prod
 
   smoke:
     name: smoke — staging, from the outside

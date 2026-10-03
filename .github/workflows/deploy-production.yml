@@ -1,0 +1,173 @@
+# Production release (T-2.6, D-075). A deliberate act: pushing a tag `v*` on a
+# commit of main releases that commit, and nothing else does.
+#
+#   gate → migrate (as the owner, from here) → api (Fly) → web (Vercel) → smoke
+#
+# The gate (scripts/release-gate) is the /done gate extended to the live site:
+# the commit is on main, CI passed for it, and staging deployed it with its
+# smoke check passing, so production only gets what staging proved. It also
+# reads the Vercel token's expiry, and warns on this run's page inside 30 days.
+#
+# Secrets and variables live in the `production` GitHub environment, which only
+# `v*` tags may deploy to, so no branch's workflow can read them
+# (infra/PRODUCTION.md). Third-party actions are pinned to a commit SHA, as in
+# deploy.yml. A push event runs the workflow file at the tagged commit.
+#
+# TEMPORARY, the api and migrate jobs: P-49 moves the API off Fly to a VM in
+# Mumbai before Sprint 4 and rewrites both, with the API's app, secrets and DNS
+# record. The gate, web and smoke jobs stay.
+name: Deploy production
+run-name: Release ${{ github.ref_name }}
+
+on:
+  push:
+    tags: ["v*"]
+
+# One release at a time, and never cancel one halfway through.
+concurrency:
+  group: deploy-production
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+  actions: read # scripts/release-gate reads CI's and staging's runs
+
+env:
+  UV_VERSION: "0.12.13"
+  NODE_VERSION: "24"
+  FLYCTL_VERSION: "0.4.110"
+  VERCEL_CLI_VERSION: "61.1.0"
+
+jobs:
+  gate:
+    name: gate — on main, CI passed, staging proved it
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    # For the Vercel token's expiry: the gate reads it before anything changes.
+    environment: production
+    outputs:
+      sha: ${{ steps.commit.outputs.sha }}
+    steps:
+      # Full history, so the gate can see whether the commit is on main.
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: The commit to release
+        id: commit
+        run: echo "sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+
+      - name: On main, CI passed, staging deployed it; the Vercel token
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+          SHA: ${{ steps.commit.outputs.sha }}
+        run: scripts/release-gate "$SHA"
+
+  migrate:
+    name: migrate — as the owner, from CI
+    needs: gate
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    environment: production
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ needs.gate.outputs.sha }}
+          persist-credentials: false
+
+      - uses: astral-sh/setup-uv@c18668ad3cf93ea998bef934396af7bb5c839dc7 # v10.2.0
+        with:
+          version: ${{ env.UV_VERSION }}
+          enable-cache: true
+          cache-dependency-glob: api/uv.lock
+
+      # Supabase's session pooler, IPv4, as staging. The owner's credentials
+      # exist only here, never beside the app (D-046). Rewritten by P-49.
+      - name: alembic upgrade head
+        env:
+          MIGRATION_DATABASE_URL: ${{ secrets.PRODUCTION_MIGRATION_DATABASE_URL }}
+        run: scripts/migrate-with-url
+
+  api:
+    name: api — Fly (until P-49)
+    needs: [gate, migrate]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    environment: production
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ needs.gate.outputs.sha }}
+          persist-credentials: false
+
+      - uses: superfly/flyctl-actions/setup-flyctl@fc53c09e1bc3be6f54706524e3b82c4f462f77be # v1.5
+        with:
+          version: ${{ env.FLYCTL_VERSION }}
+
+      # One machine, which the connection budget assumes (infra/PRODUCTION.md).
+      # Rewritten by P-49.
+      - name: flyctl deploy
+        env:
+          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
+        run: flyctl deploy api --config "$GITHUB_WORKSPACE/infra/fly.api.production.toml" --remote-only --ha=false
+
+  web:
+    name: web — Vercel
+    needs: [gate, api]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    environment: production
+    defaults:
+      run:
+        working-directory: web
+    env:
+      VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+      VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
+      VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ needs.gate.outputs.sha }}
+          persist-credentials: false
+
+      - uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
+        with:
+          package_json_file: web/package.json
+
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: pnpm
+          cache-dependency-path: web/pnpm-lock.yaml
+
+      # The velora-production project has no Git connection (web/vercel.json),
+      # so the web goes live only through here. `next build` refuses an APP_ENV
+      # it doesn't know (T-2.6), and the smoke check below catches a valid but
+      # wrong one. The CLI reads VERCEL_TOKEN from the environment above, never
+      # from --token: arguments show in ps to every process on the machine.
+      - name: vercel pull
+        run: pnpm dlx "vercel@$VERCEL_CLI_VERSION" pull --yes --environment=production
+      - name: vercel build
+        run: pnpm dlx "vercel@$VERCEL_CLI_VERSION" build --prod
+      - name: vercel deploy
+        run: pnpm dlx "vercel@$VERCEL_CLI_VERSION" deploy --prebuilt --prod
+
+  smoke:
+    name: smoke — production, from the outside
+    needs: [gate, web]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    environment: production
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ needs.gate.outputs.sha }}
+          persist-credentials: false
+
+      - name: Production answers, bodies included, built for its own address
+        env:
+          API_URL: ${{ vars.PRODUCTION_API_URL }}
+          WEB_URL: ${{ vars.PRODUCTION_WEB_URL }}
+        run: scripts/staging-smoke "$API_URL" "$WEB_URL"

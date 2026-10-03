@@ -4,8 +4,8 @@
 > Redis stay in **Mumbai**, so Indian users' data stays in India — and every query crosses Singapore
 > to Mumbai and back, the latency D-048 accepts for now.
 
-How staging is built, deployed and checked (T-1.22, D-046). Production (T-2.6) follows the same
-shape; copy these steps and change the names.
+How staging is built, deployed and checked (T-1.22, D-046). Production follows the same shape, on
+a page of its own that names its pieces and says what differs: `infra/PRODUCTION.md` (T-2.6).
 
 ## What runs where
 
@@ -205,13 +205,14 @@ public bucket's CDN domain are set with T-4.1, when storage is built.
    empty (the workflow deploys from `web/`), Node 24.
 2. **Environment Variables → Production:** `NEXT_PUBLIC_API_URL` = `https://api.staging.veloraapp.co.in`
    (exactly, with no trailing slash: the smoke check looks for that string in the web's scripts),
-   and `APP_ENV` = `staging`. The legal pages still have facts missing (D-053), and a build without
-   `APP_ENV=staging` refuses them, so the staging deploy fails until it's set. From the CLI, in
-   `web/`: `printf staging | pnpm dlx vercel env add APP_ENV production --no-sensitive`. Production
-   (T-2.6) sets `production`. **Both must be Config, not Secret.** The CLI stores a value as a
-   Secret by default, and `vercel pull` can't read a Secret back: it writes the literal
-   `[SENSITIVE]`, so the build sees `APP_ENV=[SENSITIVE]` and the gate refuses it. That happened
-   on the first T-2.2 deploy (run 36903641112). `APP_ENV` isn't secret, so Config is right.
+   and `APP_ENV` = `staging`. `next build` refuses an `APP_ENV` it doesn't know (T-2.6), so the
+   staging deploy fails until it's set. From the CLI, in `web/`:
+   `printf staging | pnpm dlx vercel env add APP_ENV production --no-sensitive`. Production sets
+   `production` (`infra/PRODUCTION.md`). **Both must be Config, not Secret.** The CLI stores a value
+   as a Secret by default, and `vercel pull` can't read a Secret back: it writes the literal
+   `[SENSITIVE]`, so the build sees `APP_ENV=[SENSITIVE]` and refuses it. That happened on the
+   first T-2.2 deploy (run 36903641112), when D-053's legal-facts gate caught it; with every fact
+   known that gate no longer can, which is why the build checks `APP_ENV` itself.
 3. **The web's address is `staging.veloraapp.co.in`** (Settings → Domains, for Production; its DNS
    is in §6). Vercel also gives every project a `<name>.vercel.app` address, adding a suffix when
    the name is taken: `velora-staging.vercel.app` belongs to another company's project, so ours is
@@ -266,9 +267,10 @@ Settings → Environments → **new environment `staging`**.
 **`VERCEL_TOKEN`'s tradeoff, chosen on purpose:** it reaches only the `velora-staging` project, so a
 leak can't touch anything else, but it never expires, so nothing retires it on its own. Revoke it at
 any suspicion and create a fresh one, as was done on 2026-10-01 after two earlier tokens were
-pasted into a terminal by mistake (both revoked). Production (T-2.6) gets its own token; decide its
-expiry then. The Vercel CLI's own login token won't do: it's a short-lived OAuth token, expiring
-within the hour and refreshed only on your machine, so CI would break as soon as it lapsed.
+pasted into a terminal by mistake (both revoked). Production's token expires after a year instead,
+and its release gate warns 30 days ahead (`infra/PRODUCTION.md`, D-075). The Vercel CLI's own login
+token won't do: it's a short-lived OAuth token, expiring within the hour and refreshed only on your
+machine, so CI would break as soon as it lapsed.
 
 ## After a deploy
 

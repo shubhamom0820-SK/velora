@@ -242,6 +242,31 @@ jobs:
           test "$status" = 1
           grep -q 'ENV=staging needs CLIENT_IP_HEADER' <<<"$output"
 
+      # T-2.6: production's settings, read from its own Fly config rather than
+      # copied here by hand, so a setting production lacks fails here, before a
+      # release, instead of in Fly's logs on release day. Throwaway keys, as above.
+      - name: Starts as production, with fly.api.production.toml's settings
+        run: |
+          python3 - > production.env <<'PY'
+          import tomllib
+          with open("infra/fly.api.production.toml", "rb") as f:
+              for key, value in tomllib.load(f)["env"].items():
+                  print(f"{key}={value}")
+          PY
+          grep -qx 'ENV=production' production.env
+          docker run -d --name api-production -p 127.0.0.1:8001:8000 --env-file production.env \
+            -e DATABASE_URL -e REDIS_URL=rediss://ci:ci@127.0.0.1:6379/1 \
+            -e JWT_SECRET -e PHONE_PEPPER -e PHONE_ENC_KEY -e CODE_PEPPER "$IMAGE"
+          for _ in $(seq 1 30); do curl -sf -o /dev/null http://127.0.0.1:8001/healthz && break; sleep 1; done
+          if ! curl -sf -o /dev/null http://127.0.0.1:8001/healthz; then
+            echo "::error::The image never answered /healthz as production. Its log:"
+            docker logs api-production 2>&1 | tail -n 40
+            exit 1
+          fi
+          body="$(curl -s -w '\n%{http_code}' http://127.0.0.1:8001/openapi.json)"
+          test "$(tail -n 1 <<<"$body")" = 404
+          if grep -q '"paths"' <<<"$body"; then echo "::error::The 404 carries the schema."; exit 1; fi
+
   repo:
     name: repo — types, hooks, gate
     runs-on: ubuntu-24.04
@@ -291,3 +316,6 @@ jobs:
 
       - name: The /done gate's own tests
         run: scripts/ci-gate-test
+
+      - name: The release gate's own tests (D-075)
+        run: scripts/release-gate-test

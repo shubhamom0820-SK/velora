@@ -25,10 +25,10 @@
  *   P-41    Avatar's inline size style: give it classes rather than widening
  *           style-src for every page.
  *
- * HSTS is Vercel's (max-age two years), not set here. includeSubDomains and
- * preload are T-2.6's decision, with their own record: preload is close to
- * irreversible. upgrade-insecure-requests is left out: never measured, and by
- * its definition it would break `next start` and the E2E over local http.
+ * HSTS is set here, not left to Vercel's default (D-074): two years, every
+ * subdomain, and never preloaded. upgrade-insecure-requests is left out: never
+ * measured, and by its definition it would break `next start` and the E2E over
+ * local http.
  */
 
 /** `process.env` at build time, or a stand-in in tests. */
@@ -97,6 +97,16 @@ export function securityHeaders(env: BuildEnv = process.env): Header[] {
       // Denied until the task that needs each allows it (see above);
       // browsing-topics opts users out of Chrome's ad-topics API.
       value: "camera=(), microphone=(), geolocation=(), browsing-topics=()",
+    },
+    {
+      key: "Strict-Transport-Security",
+      // D-074. includeSubDomains because production's csrf cookie is scoped to
+      // the whole domain (D-055): a plain-HTTP response on any subdomain could
+      // overwrite it. So every subdomain must serve HTTPS, for two years after
+      // a browser last saw this. Never `preload`: browsers hardcode that list,
+      // removal takes months, so it is never done before launch. Browsers
+      // ignore the header over plain http, so local http is unaffected.
+      value: "max-age=63072000; includeSubDomains",
     },
   ];
 }

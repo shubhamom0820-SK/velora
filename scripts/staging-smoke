@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 # Checks a deployed environment from the outside (T-1.22): run by deploy.yml
-# after every staging deploy, and reusable for production (T-2.6).
+# after every staging deploy, and by deploy-production.yml after every release
+# (T-2.6). The name predates production; the checks are the same.
 #
 #   scripts/staging-smoke API_URL WEB_URL
 #
@@ -77,6 +78,17 @@ if [[ "$status" == 200 ]]; then
   else
     fail "web: no script on $web calls $api — another site at that URL, or NEXT_PUBLIC_API_URL unset"
   fi
+fi
+# ...and it must be built for this environment (T-2.6). APP_ENV decides the site's own address,
+# which every page states as its canonical URL. A build refuses an APP_ENV it doesn't know
+# (web/src/lib/build-env.ts), but an allowlist can't catch a valid, wrong one: staging's value on
+# the production project would build an unindexed copy pointing at staging. This catches both.
+fetch "$web/"
+canonical="$(grep -o '<link rel="canonical" href="[^"]*"' <<<"$body" | head -n 1 | cut -d'"' -f4 || true)"
+if [[ "${canonical%/}" == "$web" ]]; then
+  say "ok   web is built for $web (its canonical address)"
+else
+  fail "web: the home page's canonical address is '${canonical:-missing}', not $web — built for another environment, or with APP_ENV unset"
 fi
 expect "web /admin hidden (P-30)" "$web/admin" 404 '' 'Coming soon.'
 expect "web /dev/ui hidden" "$web/dev/ui" 404 '' 'UI primitives'

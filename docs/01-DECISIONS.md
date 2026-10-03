@@ -644,6 +644,14 @@ gates going live (T-9.15), not the build.
 and a check that lives in a future file can be forgotten; a build that fails closed can't.
 Decided by the founder on 1 October 2026.
 
+**Amended 3 October 2026 (T-2.6): "forgetting to set it fails the same way" stopped being true at
+P-0.3.** The gate fires only while a fact is missing, so it caught a missing `APP_ENV` only until
+the last fact arrived (`72ef3a2`). Proved the same day: a build with `APP_ENV` unset passed, and
+served every page `noindex`, an empty sitemap, and its canonical and share-image addresses on
+`http://127.0.0.1:3000`. `next build` now checks `APP_ENV` itself, whatever the facts
+(`web/src/lib/build-env.ts`, D-075). Likewise "until P-0.2 and P-0.3 are done" meant their facts:
+P-0.2 stays open for PAN, GST and the current account, none of which a page shows.
+
 ### D-054 · The refresh cookie is host-only on the API — Locked
 Supersedes D-024's cookie scope. The refresh cookie carries no `Domain` attribute, so the browser
 keeps it for the API's own host and sends it nowhere else: `api.veloraapp.co.in` in production,
@@ -1333,6 +1341,62 @@ told. That is P-51's, for T-9.5 or T-9.6, not T-3.x's.
 The behaviour is Claude's, built in T-3.2; the advisor directing T-3.2 to T-3.10 (Claude, in a
 separate chat) named its consequence and asked for this record, 3 October 2026. **Open** until
 P-51 decides.
+
+### D-074 · HSTS covers every subdomain, and is never preloaded before launch — Locked
+Settles what D-059 left to T-2.6. The web sends `Strict-Transport-Security: max-age=63072000;
+includeSubDomains`, set in `web/src/lib/security-headers.ts` rather than left to Vercel's default,
+which was the same two years without the subdomains: a platform default nobody chose.
+
+**Why `includeSubDomains`:** production's readable CSRF cookie is scoped to the whole of
+`veloraapp.co.in` (D-055). A plain-HTTP response from any subdomain could set or overwrite a cookie
+for the parent domain; once a browser has seen the header, it never makes a plain-HTTP request to
+any subdomain, so that path is closed. Every subdomain serves HTTPS today (`staging.`, `api.`,
+`api.staging.`, `www.`).
+
+**What it costs:** every future subdomain must serve HTTPS, for two years after a browser last saw
+the header. The one foreseeable exception is a bulk-mail service's click-tracking subdomain, so
+T-9.15 carries a line: certificate first.
+
+**Why never preload before launch:** preloading submits the domain to a list browsers hardcode.
+Removal takes months and reaches people only through browser updates, so it is effectively
+irreversible, and it forces HTTPS on every subdomain for every user from their very first visit.
+It is never done before launch; doing it after launch is a decision of its own, with its own record.
+
+**Rejected:** leaving HSTS to Vercel, where the header would change whenever Vercel's default did;
+two years without `includeSubDomains`, which leaves the cookie path open; preload now. Decided by
+the founder on 3 October 2026 (T-2.6).
+
+### D-075 · Production releases from a tag, and only what staging proved — Locked
+Production deploys only from `.github/workflows/deploy-production.yml`, when a tag `v*` is pushed
+on a commit of `main`. Its gate, `scripts/release-gate`, is the `/done` gate (D-044) extended to
+the live site, and refuses unless:
+- the commit is on `main`;
+- CI passed for that exact commit;
+- staging deployed that exact commit, with its smoke check passing. Production only gets what
+  staging proved.
+
+**Staging's deploys are matched by name, not by the commit GitHub records.** A `workflow_run`'s
+own head SHA is `main`'s newest commit when the run started, not always the commit it deployed,
+and with several sessions pushing to `main` the two can differ. `deploy.yml` names each run
+`Deploy staging <commit>`, and the gate matches that. On 3 October 2026 the twelve newest staging
+deploys all matched: that shows the race hadn't happened yet, not that it can't.
+
+**Only `v*` tags may deploy to the `production` environment,** so no branch's workflow can read
+its secrets.
+
+**The production Vercel token expires after a year.** The gate reads its expiry from Vercel on every
+release, refuses a token Vercel won't accept, and warns on the run's page when it expires within 30
+days: a date in a runbook is a date nobody reads (the founder). When it lapses, releases stop and
+the site keeps serving.
+
+**Every build says which environment it's for.** `next build` refuses an `APP_ENV` outside local,
+ci, staging and production, and the smoke check compares the home page's canonical address with
+the site it checks. An allowlist can catch an invalid value but never a valid, wrong one, such as
+staging's value on the production project. D-053's amendment says why this became necessary.
+
+**Rejected:** deploying production on every merge, as staging does; deploying it from a laptop,
+which would skip the gate and put the owner's credentials outside CI (D-046); and trusting
+GitHub's recorded commit for a staging run. Decided by the founder on 3 October 2026 (T-2.6).
 
 ---
 

@@ -1,0 +1,256 @@
+#!/usr/bin/env bash
+# Tests scripts/release-gate (T-2.6, D-075) against a fake `gh` and a fake
+# `curl`, in a throwaway git repo, so "on main" is under test without depending
+# on how deep a checkout is. The fake gh applies the gate's real --jq
+# expressions with jq, as gh does. Every case checks the message as well as the
+# exit code. Runs locally and in CI.
+set -euo pipefail
+
+here="$(cd "$(dirname "$0")" && pwd)"
+gate="$here/release-gate"
+work="$(mktemp -d)"
+trap 'rm -rf "$work"' EXIT
+
+now=1790000000 # 2026-09-21, pinned through RELEASE_GATE_NOW
+day=86400
+token="vercel-test-token-0123456789abcdef"
+
+# A repo with main two commits long, and a side commit that never merged.
+repo="$work/repo"
+git init -q -b main "$repo"
+commit() { git -C "$repo" -c user.name=test -c user.email=test@example.com commit -q --allow-empty -m "$1"; }
+commit first
+commit second
+sha="$(git -C "$repo" rev-parse HEAD)"
+git -C "$repo" checkout -q -b side HEAD~1
+commit side
+side="$(git -C "$repo" rev-parse HEAD)"
+git -C "$repo" checkout -q main
+other="0000000000000000000000000000000000000000"
+
+mkdir "$work/bin"
+cat >"$work/bin/gh" <<'FAKE'
+#!/usr/bin/env bash
+set -euo pipefail
+expr="" prev="" source=""
+for arg in "$@"; do
+  if [[ "$prev" == --jq ]]; then expr="$arg"; fi
+  if [[ "$prev" == --commit ]]; then source=ci; fi
+  if [[ "$prev" == --workflow ]]; then source=staging; fi
+  prev="$arg"
+done
+if [[ -f "$FAKE_DIR/github-unreachable" ]]; then
+  echo "error connecting to api.github.com" >&2
+  exit 1
+fi
+case "$1 $2" in
+  "api rate_limit") echo '{}'; exit 0 ;;
+  "run list")
+    if [[ -f "$FAKE_DIR/github-error" ]]; then cat "$FAKE_DIR/github-error" >&2; exit 1; fi
+    json="$(cat "$FAKE_DIR/$source.json")"
+    ;;
+  *) echo "fake gh: unexpected call: $*" >&2; exit 64 ;;
+esac
+jq -r "$expr" <<<"$json"
+FAKE
+cat >"$work/bin/curl" <<'FAKE'
+#!/usr/bin/env bash
+# Vercel's API, faked. The token must arrive on stdin, never in the arguments.
+set -euo pipefail
+config="$(cat)"
+for arg in "$@"; do
+  if [[ "$arg" == *"$FAKE_TOKEN"* ]]; then echo "TOKEN IN CURL'S ARGUMENTS" >&2; exit 99; fi
+done
+if [[ "$config" != *"Authorization: Bearer $FAKE_TOKEN"* ]]; then
+  echo "NO TOKEN ON STDIN" >&2
+  exit 98
+fi
+echo "the token came on stdin" >"$FAKE_DIR/token-on-stdin"
+if [[ -f "$FAKE_DIR/vercel-unreachable" ]]; then
+  echo "curl: (6) Could not resolve host: vercel.test" >&2
+  exit 6
+fi
+out="" prev=""
+for arg in "$@"; do
+  if [[ "$prev" == -o ]]; then out="$arg"; fi
+  prev="$arg"
+done
+cp "$FAKE_DIR/token.json" "$out"
+cat "$FAKE_DIR/http"
+FAKE
+chmod +x "$work/bin/gh" "$work/bin/curl"
+
+# ci_run ID SHA STATUS CONCLUSION CREATED_AT
+ci_run() {
+  printf '{"databaseId":%s,"headSha":"%s","workflowName":"CI","status":"%s","conclusion":"%s","createdAt":"%s"}' \
+    "$1" "$2" "$3" "$4" "$5"
+}
+# staging_run ID DEPLOYED_SHA STATUS CONCLUSION CREATED_AT [RECORDED_HEAD_SHA]
+staging_run() {
+  printf '{"databaseId":%s,"displayTitle":"Deploy staging %s","headSha":"%s","status":"%s","conclusion":"%s","createdAt":"%s"}' \
+    "$1" "$2" "${6:-$2}" "$3" "$4" "$5"
+}
+# A token answer expiring DAYS from now, or never with "null".
+token_json() {
+  if [[ "$1" == null ]]; then
+    printf '{"token":{"id":"t1","expiresAt":null}}'
+  else
+    printf '{"token":{"id":"t1","expiresAt":%s}}' "$(((now + $1 * day) * 1000))"
+  fi
+}
+
+# scenario NAME CI_JSON STAGING_JSON TOKEN_JSON HTTP
+scenario() {
+  local dir="$work/$1"
+  mkdir -p "$dir"
+  printf '%s' "$2" >"$dir/ci.json"
+  printf '%s' "$3" >"$dir/staging.json"
+  printf '%s' "$4" >"$dir/token.json"
+  printf '%s' "$5" >"$dir/http"
+}
+green() { scenario "$1" "[$(ci_run 11 "$sha" completed success 2026-09-20T00:00:00Z)]" \
+  "[$(staging_run 21 "$sha" completed success 2026-09-20T01:00:00Z)]" "$(token_json 200)" 200; }
+
+passed=0 failed=0
+# expect NAME EXIT MESSAGE [ENV=VALUE]... — the default is a commit on main, a
+# token, and not running on GitHub; a case overrides what it needs.
+expect() {
+  local name="$1" want="$2" message="$3" got=0
+  shift 3
+  (cd "$repo" && env PATH="$work/bin:$PATH" FAKE_DIR="$work/$name" FAKE_TOKEN="$token" \
+    RELEASE_GATE_MAIN_REF=main RELEASE_GATE_NOW="$now" RELEASE_GATE_VERCEL_API=https://vercel.test \
+    VERCEL_TOKEN="$token" GITHUB_ACTIONS=false GITHUB_STEP_SUMMARY="$work/$name/summary.md" \
+    COMMIT="$sha" "$@" bash -c '"$0" "$COMMIT"' "$gate") >"$work/$name.out" 2>&1 || got=$?
+  if [[ "$got" == "$want" ]] && grep -qF -- "$message" "$work/$name.out"; then
+    passed=$((passed + 1))
+    printf 'ok    %-44s exit %s\n' "$name" "$got"
+  else
+    failed=$((failed + 1))
+    printf 'FAIL  %-44s exit %s, want %s saying "%s"\n' "$name" "$got" "$want" "$message"
+    sed 's/^/        /' "$work/$name.out"
+  fi
+}
+# also NAME FILE TEXT: a second thing a case must have produced.
+also() {
+  if grep -qF -- "$3" "$work/$1/$2" 2>/dev/null || grep -qF -- "$3" "$work/$1.$2" 2>/dev/null; then
+    passed=$((passed + 1))
+    printf 'ok    %-44s %s\n' "$1" "$2 has it"
+  else
+    failed=$((failed + 1))
+    printf 'FAIL  %-44s %s lacks "%s"\n' "$1" "$2" "$3"
+  fi
+}
+
+# --- all three checks pass, and the token has a long while left
+green all-green
+expect all-green 0 "Production may take ${sha:0:7}."
+also all-green out "ok   staging deployed ${sha:0:7} and its smoke check passed (run 21)."
+also all-green out "expires on 2027-04-09, in 200 days."
+also all-green token-on-stdin "the token came on stdin"
+
+# --- 1. on main
+green not-on-main
+expect not-on-main 1 "Not releasing ${side:0:7}. It isn't on main: production takes only commits that merged (D-075)." \
+  COMMIT="$side"
+
+green main-not-fetched
+expect main-not-fetched 1 "Can't see origin/main to check the commit is on main: fetch it first." \
+  RELEASE_GATE_MAIN_REF=origin/main
+
+# --- 2. CI for this exact commit
+scenario ci-never-ran "[]" "[$(staging_run 21 "$sha" completed success 2026-09-20T01:00:00Z)]" "$(token_json 200)" 200
+expect ci-never-ran 1 "Not releasing ${sha:0:7}. CI never ran for it."
+
+scenario ci-failed "[$(ci_run 11 "$sha" completed failure 2026-09-20T00:00:00Z)]" \
+  "[$(staging_run 21 "$sha" completed success 2026-09-20T01:00:00Z)]" "$(token_json 200)" 200
+expect ci-failed 1 "CI concluded 'failure' for it (run 11)."
+
+scenario ci-unfinished "[$(ci_run 11 "$sha" in_progress "" 2026-09-20T00:00:00Z)]" \
+  "[$(staging_run 21 "$sha" completed success 2026-09-20T01:00:00Z)]" "$(token_json 200)" 200
+expect ci-unfinished 1 "CI run 11 hasn't finished (in_progress). Release once it has passed."
+
+# A newer, failing run for another commit sits beside ours: ours is the one.
+scenario ci-picks-this-commit "[$(ci_run 12 "$other" completed failure 2026-09-20T05:00:00Z),$(ci_run 11 "$sha" completed success 2026-09-20T00:00:00Z)]" \
+  "[$(staging_run 21 "$sha" completed success 2026-09-20T01:00:00Z)]" "$(token_json 200)" 200
+expect ci-picks-this-commit 0 "ok   CI passed for ${sha:0:7} (run 11)."
+
+# Two runs for this commit: the newest counts, as in ci-gate.
+scenario ci-newest-counts "[$(ci_run 11 "$sha" completed success 2026-09-20T00:00:00Z),$(ci_run 12 "$sha" completed failure 2026-09-20T05:00:00Z)]" \
+  "[$(staging_run 21 "$sha" completed success 2026-09-20T06:00:00Z)]" "$(token_json 200)" 200
+expect ci-newest-counts 1 "CI concluded 'failure' for it (run 12)."
+
+# --- 3. staging deployed this exact commit
+scenario staging-never-deployed "[$(ci_run 11 "$sha" completed success 2026-09-20T00:00:00Z)]" \
+  "[$(staging_run 21 "$other" completed success 2026-09-20T01:00:00Z)]" "$(token_json 200)" 200
+expect staging-never-deployed 1 "Staging never deployed it: production only gets what staging proved (D-075)."
+
+# The trap: GitHub recorded our commit on a deploy run that deployed another one
+# (a workflow_run's headSha is main's head when it started). It must not count.
+scenario staging-recorded-not-deployed "[$(ci_run 11 "$sha" completed success 2026-09-20T00:00:00Z)]" \
+  "[$(staging_run 21 "$other" completed success 2026-09-20T01:00:00Z "$sha")]" "$(token_json 200)" 200
+expect staging-recorded-not-deployed 1 "Staging never deployed it"
+
+scenario staging-failed "[$(ci_run 11 "$sha" completed success 2026-09-20T00:00:00Z)]" \
+  "[$(staging_run 21 "$sha" completed failure 2026-09-20T01:00:00Z)]" "$(token_json 200)" 200
+expect staging-failed 1 "Staging's deploy of it concluded 'failure' (run 21)"
+
+scenario staging-unfinished "[$(ci_run 11 "$sha" completed success 2026-09-20T00:00:00Z)]" \
+  "[$(staging_run 21 "$sha" in_progress "" 2026-09-20T01:00:00Z)]" "$(token_json 200)" 200
+expect staging-unfinished 1 "Staging's deploy of it (run 21) hasn't finished (in_progress)."
+
+# --- 4. the production Vercel token
+green token-30-days
+printf '%s' "$(token_json 30)" >"$work/token-30-days/token.json"
+expect token-30-days 0 "ok   the production Vercel token expires on 2026-10-21, in 30 days."
+
+green token-29-days
+printf '%s' "$(token_json 29)" >"$work/token-29-days/token.json"
+expect token-29-days 0 "WARNING: The production Vercel token expires on 2026-10-20, in 29 days."
+also token-29-days out "Production may take ${sha:0:7}."
+
+# On GitHub, the warning is an annotation and a line in the run's summary.
+green token-warns-on-github
+printf '%s' "$(token_json 10)" >"$work/token-warns-on-github/token.json"
+expect token-warns-on-github 0 "::warning title=Production Vercel token::The production Vercel token expires on 2026-10-01, in 10 days." \
+  GITHUB_ACTIONS=true
+also token-warns-on-github summary.md "> **Warning:** The production Vercel token expires on 2026-10-01, in 10 days."
+
+green token-expired
+printf '%s' "$(token_json -1)" >"$work/token-expired/token.json"
+expect token-expired 1 "The production Vercel token expired on 2026-09-20."
+
+green token-refused
+printf '403' >"$work/token-refused/http"
+expect token-refused 1 "Vercel refuses the production token (HTTP 403): it has expired or been revoked."
+
+green token-never-expires
+printf '%s' "$(token_json null)" >"$work/token-never-expires/token.json"
+expect token-never-expires 0 "WARNING: The production Vercel token never expires."
+
+green token-missing-on-github
+expect token-missing-on-github 1 "The production environment has no VERCEL_TOKEN, so the web can't deploy" \
+  VERCEL_TOKEN= GITHUB_ACTIONS=true
+
+green token-missing-by-hand
+expect token-missing-by-hand 0 "no VERCEL_TOKEN here, so its expiry isn't read" VERCEL_TOKEN=
+
+green vercel-unreachable
+touch "$work/vercel-unreachable/vercel-unreachable"
+expect vercel-unreachable 4 "Couldn't reach Vercel to read the production token"
+
+green vercel-error
+printf '500' >"$work/vercel-error/http"
+expect vercel-error 5 "Vercel answered HTTP 500 while reading the production token."
+
+# --- GitHub itself
+green github-unreachable
+touch "$work/github-unreachable/github-unreachable"
+expect github-unreachable 4 "Couldn't reach or authenticate with GitHub while listing CI runs"
+
+green github-error
+echo "HTTP 404: Not Found (https://api.github.com/repos/o/r/actions/runs)" >"$work/github-error/github-error"
+expect github-error 5 "GitHub answered with an error while listing CI runs"
+also github-error out "HTTP 404: Not Found"
+
+echo "release-gate-test: $passed passed, $failed failed"
+((failed == 0))

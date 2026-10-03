@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import nextConfig from "../../next.config";
+import { nextConfig } from "../../next.config";
 
 import { apiBaseUrl } from "./api";
 import {
@@ -95,6 +95,7 @@ describe("the other headers", () => {
       "X-Content-Type-Options",
       "Referrer-Policy",
       "Permissions-Policy",
+      "Strict-Transport-Security",
     ]);
     expect(header(STAGING, "X-Content-Type-Options")).toBe("nosniff");
     expect(header(STAGING, "Referrer-Policy")).toBe(
@@ -108,15 +109,14 @@ describe("the other headers", () => {
     );
   });
 
-  it("never set HSTS, let alone preload it", () => {
-    const all = securityHeaders(STAGING);
+  it("set HSTS as D-074 decided: two years, every subdomain", () => {
+    expect(header(STAGING, "Strict-Transport-Security")).toBe(
+      "max-age=63072000; includeSubDomains",
+    );
+  });
 
-    expect(
-      all.map((h) => h.key),
-      "HSTS is Vercel's; includeSubDomains and preload are T-2.6's decision, " +
-        "with their own record (D-059). Preload is close to irreversible.",
-    ).not.toContain("Strict-Transport-Security");
-    expect(JSON.stringify(all)).not.toMatch(/preload/i);
+  it("never preload HSTS: effectively irreversible, so never before launch (D-074)", () => {
+    expect(JSON.stringify(securityHeaders(STAGING))).not.toMatch(/preload/i);
   });
 });
 

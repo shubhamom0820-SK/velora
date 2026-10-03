@@ -1,0 +1,75 @@
+# Production API on Fly (T-2.6). Released by .github/workflows/deploy-production.yml
+# as
+#   flyctl deploy api --config "$GITHUB_WORKSPACE/infra/fly.api.production.toml"
+# so api/ is the build context. Secrets are set in Fly, never here
+# (infra/PRODUCTION.md). There is no release command: migrations run from CI as
+# the database owner, so the owner's credentials are never on Fly (D-046).
+#
+# TEMPORARY: P-49 moves the API off Fly to a VM in Mumbai before Sprint 4. This
+# file, the app, its machine, its secrets and api.veloraapp.co.in's DNS record
+# go then. Until that move api.veloraapp.co.in carries no traffic, so nothing
+# is lost by building here first.
+
+# Singapore, as staging: Fly has no region in India (P-49). Postgres and Redis
+# are in Mumbai, so every query crosses Singapore to Mumbai and back.
+app = "velora-api"
+primary_region = "sin"
+
+[build]
+  # Both relative to this file.
+  dockerfile = "../api/Dockerfile"
+  ignorefile = "../api/.dockerignore" # P-32: no .env in any layer
+
+[env]
+  ENV = "production"
+  # D-045: outside local, every provider is a real one. None is built yet, so
+  # each raises if called; nothing calls them before its task.
+  AUTH_PHONE_PROVIDER = "firebase"
+  SMS_PROVIDER = "msg91"
+  PAYMENTS_PROVIDER = "razorpay"
+  MODERATION_PROVIDER = "sightengine"
+  FACEMATCH_PROVIDER = "rekognition"
+  STORAGE_PROVIDER = "s3"
+  PUSH_PROVIDER = "webpush"
+  # The production web's one address. www and the project's vercel.app address
+  # both redirect to it (infra/PRODUCTION.md), so this is the one origin.
+  CORS_ORIGINS = "https://veloraapp.co.in"
+  # The readable CSRF cookie's Domain (D-055): the whole site, so the web at the
+  # apex can read it. It reaches staging's hosts too; their own cookie is named
+  # csrf_staging, so the two never collide. The refresh cookie has no Domain:
+  # host-only on this API (D-054).
+  COOKIE_DOMAIN = "veloraapp.co.in"
+  # Per-IP rate limits read the client's address from the header Fly's proxy
+  # sets, never X-Forwarded-For, which the client writes (D-056).
+  CLIENT_IP_HEADER = "Fly-Client-IP"
+  # Per process, and the image runs 2 uvicorn workers: at most
+  # 2 x (5 + 2) = 14 connections to Postgres, staging's budget
+  # (infra/PRODUCTION.md).
+  DB_POOL_SIZE = "5"
+  DB_MAX_OVERFLOW = "2"
+  # Created with T-4.1, when R2 is enabled; nothing reads them before then.
+  R2_BUCKET_PUBLIC = "velora-prod-public"
+  R2_BUCKET_PRIVATE = "velora-prod-private"
+
+[http_service]
+  internal_port = 8000
+  force_https = true
+  auto_stop_machines = "off"
+  auto_start_machines = true
+  min_machines_running = 1
+
+  # Readiness, not liveness: a release only goes live once the new machine
+  # reaches Postgres and Redis. A failing check takes the machine out of the
+  # load balancer; it doesn't restart it.
+  [[http_service.checks]]
+    method = "GET"
+    path = "/readyz"
+    interval = "15s"
+    # Above /readyz's own 8 s limit: its first check opens a connection to
+    # Mumbai from Singapore (P-49 measured 2.9 s).
+    timeout = "10s"
+    grace_period = "30s"
+
+[[vm]]
+  size = "shared-cpu-1x"
+  memory = "512mb"
