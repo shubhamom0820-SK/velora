@@ -129,12 +129,12 @@ never done silently.
 - [ ] **P-0.13** Create the Google Cloud billing account and complete India's identity verification. **Owner: the founder, Shubham Kumar. Start: 3 October 2026. Due: 30 days after the account is created, when Google suspends an unverified Indian account; by 2 November 2026 if it's created on the start date.** Blocks T-3.14 (Firebase's Blaze plan bills to this account) and P-49's move (the Compute Engine VM does too). Started late, the 30-day clock is what stalls T-3.14.
   **How:** an Indian billing address means Google's mandatory identity verification. As an individual: PAN or e-Aadhaar through DigiLocker, and proof of address. As a business: a GST or Udyam certificate. **GST:** the advisor directing T-3.2 to T-3.10 says Velora has none, deliberately, below the threshold; P-0.2 still lists GST as unconfirmed, so the founder confirms it there. Without GST or a Udyam registration, it goes through as an individual.
   **If the payment method is refused** (AWS's was, P-0.6), write down exactly what Google said, as P-36 did for Fly, before trying anything else.
-- [ ] **P-0.14** Decide where the registered office is, before `v0.1.0`, production's first release (T-2.6). **Blocks that release, not the build.** `/contact` publishes D-058's registered office, the founder's home in Hajipur, and from `v0.1.0` it is public, crawled and archived: once Google and archive.org hold the address, no later change removes it.
+- [ ] **P-0.14** Decide where the registered office is, before `v0.1.0`, production's first release (REL-1). **Blocks that release, not the build:** on REL-1's Needs line, since a registered office is a judgement no check can make. `/contact` publishes D-058's registered office, the founder's home in Hajipur, and from `v0.1.0` it is public, crawled and archived: once Google and archive.org hold the address, no later change removes it.
   **Why it's a decision** (the founder, 3 October 2026): a sole proprietorship must publish a registered address, but it needn't be where the founder sleeps. A virtual-office or registered-address service in India, roughly ₹1,000 to ₹2,000 a month, meets the same requirement with a commercial address. For a dating app, where some users will be angry at whoever banned them, the difference matters.
   **If it changes:** a new decision supersedes D-058's office, `REGISTERED_OFFICE` in `web/src/lib/legal.ts` changes (its guard test names D-058), and the court follows the office (D-058), so a new city means a new court line too.
-- [ ] **P-0.15** Move the Vercel team `knot11` to Pro before `v0.1.0` (T-2.6). **Blocks that release, not the build.** Vercel's own terms: "Hobby teams are restricted to non-commercial personal use only", with "advertising the sale of a product or service" among their examples of commercial use (its fair use guidelines, updated 14 September 2026). A public dating app is plainly commercial. Until the release, staging is `noindex` with no traffic, so the risk is close to zero and it waits (the founder, 3 October 2026). Pro is $20 a month with one deploying seat, covering both projects.
+- [ ] **P-0.15** Move the Vercel team `knot11` to Pro before `v0.1.0` (REL-1). **Blocks that release, not the build,** and the release gate refuses while the team is on Hobby (D-075). Vercel's own terms: "Hobby teams are restricted to non-commercial personal use only", with "advertising the sale of a product or service" among their examples of commercial use (its fair use guidelines, updated 14 September 2026). A public dating app is plainly commercial. Until the release, staging is `noindex` with no traffic, so the risk is close to zero and it waits (the founder, 3 October 2026). Pro is $20 a month with one deploying seat, covering both projects.
   **The trial doesn't fit** (Vercel's own page, read 3 October 2026): 14 days or until its usage limits, whichever comes first; one per user account; started only by creating a new team, not by upgrading `knot11`; without a payment method it falls back to Hobby. So it is worth at most one month's $20, and only if started the day `v0.1.0` goes public, in a new team production would then live in. Upgrade `knot11` itself on release day.
-- [ ] **P-0.16** Move `velora-prod`'s Supabase organisation to Pro before `v0.1.0` (T-2.6). **Blocks that release, not the build.** The Free plan keeps no automatic backups, and the first real sign-up is the first thing worth losing (the founder, 3 October 2026). Pro is $25 a month per organisation with 7 days of daily backups; its $10 of included compute covers one project, which is why `velora-prod` has an organisation of its own (`infra/PRODUCTION.md`). Point-in-time recovery, a further add-on, is T-9.14's.
+- [ ] **P-0.16** Move `velora-prod`'s Supabase organisation to Pro before `v0.1.0` (REL-1). **Blocks that release, not the build,** and the release gate refuses while it is on Free (D-075). The Free plan keeps no automatic backups, and the first real sign-up is the first thing worth losing (the founder, 3 October 2026). Pro is $25 a month per organisation with 7 days of daily backups; its $10 of included compute covers one project, which is why `velora-prod` has an organisation of its own (`infra/PRODUCTION.md`). Point-in-time recovery, a further add-on, is T-9.14's.
 - [x] **P-0.6** Create accounts: GitHub, Supabase (Mumbai), Upstash, Cloudflare (R2 on), Fly.io (paid plan for `bom`), Vercel, Sentry, Sightengine, AWS (Rekognition, `ap-south-1`).
   **Ticked with three still to set up**, none needed before Sprint 4: Sightengine (T-4.4), AWS for
   Rekognition (T-4.5 — signed up, but its payment method failed verification) and Sentry (T-9.12).
@@ -494,16 +494,18 @@ One migration per task, each with a working `downgrade()`. Build exactly `03-SCH
 - [x] **Commit:** `feat(web): security headers [T-2.5]`
 
 ### T-2.6 · Production domains
+**Re-scoped by the founder, 3 October 2026: Sprint 2 closes on the build.** "The production
+environment exists and is proved" is an engineering boundary, and it is met. "We told the
+public" is a business act that waits on a home-address decision and two paid plans. So the three
+production-live Done-whens, the `v0.1.0` tag and the setup that's left moved to REL-1, and T-2.6
+is ticked on what it proved: the environment built, the gate working, staging green.
 - [x] **Needs:** P-0.3, T-1.22, and the **legal facts final** (P-0.2, P-0.3) — production can't build the legal pages while any is missing (D-053)
   **Ticked 3 October 2026 by what each Need protects,** as the approved plan proposed: all six legal
   facts are known and a production build passes (P-0.3); P-0.2 stays open only for PAN, GST and the
   current account, none of which a page shows; T-1.22's one open box, the R2 staging buckets, moved
   to T-4.1.
-- [ ] `veloraapp.co.in` → Vercel prod; `api.veloraapp.co.in` → Fly prod app; SSL issued. Prod DB/Redis/R2 created but empty.
-  **R2's production buckets move to T-4.1,** as staging's did: R2 isn't enabled on the account.
-  **The Fly half is temporary:** P-49 moves the API to Mumbai before Sprint 4 and redoes it
-  (`infra/PRODUCTION.md` lists what). Set up from `infra/PRODUCTION.md`.
-  **Set up by Claude, 3 October 2026, each read back:**
+- [x] **Production's pieces, set up on each platform and read back by Claude, 3 October 2026**
+  (T-2.6's share of the box now on REL-1):
   - the GitHub environment `production`, whose only allowed source is the tag rule `v*`;
   - the Fly app `velora-api`, with no machine yet, its free addresses, and a certificate for
     `api.veloraapp.co.in` waiting on the DNS record;
@@ -512,10 +514,9 @@ One migration per task, each with a working `downgrade()`. Build exactly `03-SCH
     `velora-production-one.vercel.app` → apex (308);
   - in the `production` environment: both Vercel IDs, a deploy token for `velora-api` only, and
     both URL variables.
-
-  **Waiting on the founder:** Supabase `velora-prod` and its two connection strings, Upstash
-  `velora-prod`, the one-year Vercel token, the `api` record at Cloudflare, and production's four
-  keys, once their second copy is decided.
+  **R2's production buckets are T-4.1's,** as staging's are: R2 isn't enabled on the account.
+  **The Fly half is temporary:** P-49 moves the API to Mumbai before Sprint 4 and redoes it
+  (`infra/PRODUCTION.md` lists what).
 - [x] **Releases from a tag, and only what staging proved (D-075):** `deploy-production.yml` runs
   on a `v*` tag; `scripts/release-gate` refuses unless the commit is on `main`, CI passed for it,
   and staging deployed it, matched by the run's name, which `deploy.yml` now sets; it reads the
@@ -536,16 +537,54 @@ One migration per task, each with a working `downgrade()`. Build exactly `03-SCH
   - **The gate's tests:** 30 checks, passing in CI (run 37114146650). Four bugs planted in copies
     of the gate each failed them: matching staging by its recorded commit, the token as an
     argument, the 30-day boundary off by one, and no check for `main`.
+  **Extended the same day (the founder):** it refuses while the Vercel team is on Hobby (P-0.15)
+  or velora-prod's Supabase organisation, read through the project, is on Free (P-0.16), with a
+  scoped, read-only Supabase token (D-075's amendment). `release-gate-test` grew to 49 checks;
+  three more planted bugs each failed them: Hobby let through, a missing Supabase plan let
+  through, and the token as an argument.
 - [x] **Every build says which environment it's for (D-053's amendment):** `next build` refuses an
   `APP_ENV` outside local, ci, staging and production, and the smoke check compares the home page's
   canonical address with the site it checks. Proved 3 October 2026, before and after: with
   `APP_ENV` unset the build had passed and served `noindex` and `127.0.0.1` addresses, and now
   refuses; a build for staging, smoked as another site, fails the canonical check by name.
-- [ ] **`v0.1.0`, the first release, waits on the founder:** P-0.14 (the registered office), P-0.15
-  (Vercel Pro), P-0.16 (Supabase Pro), and where production's keys keep their second copy (below).
-  They block the release, and so the Done-whens below, not the build (the founder, 3 October 2026).
+- [x] **HSTS, decided here with its own record (D-059).** Vercel sends `max-age=63072000` today. Whether to add `includeSubDomains` (every subdomain, staging included, HTTPS-only for two years) and whether to submit to the preload list is this task's decision, written down. Preload is close to irreversible: browsers hardcode it, and removal takes months. Never set in passing.
+  **Decided: D-074.** `max-age=63072000; includeSubDomains`, set in `security-headers.ts`; never
+  preloaded before launch, because preload is effectively irreversible. **Served on staging**
+  (deploy run 37114304214, read by Claude on 3 October 2026): exactly one such header on every
+  response checked (three pages, a 404 under the scripts' path, the share image and `robots.txt`),
+  with no second one from Vercel; the home page's security headers are exactly the six, plus
+  P-43's known wildcard.
+- [x] **Commit:** `chore(infra): production domains [T-2.6]`
+
+
+---
+
+# Release — production goes public (not a sprint)
+
+Production was built and proved in Sprint 2 (T-2.6). Telling the public is a business act that
+waits on the founder's decisions, so it is a task of its own, outside the sprints (the founder,
+3 October 2026). Not `T-2.7`: inside Sprint 2 it would hold the sprint open.
+
+### REL-1 · First public release, `v0.1.0`
+- [ ] **Needs:** T-2.6; **P-0.14**, the registered office, a judgement no check can make; and
+  **P-0.15** (Vercel Pro) and **P-0.16** (Supabase Pro), which the release gate also refuses
+  without (D-075). From the tag on, the site is public, crawled and takes real sign-ups.
+- [ ] `veloraapp.co.in` → Vercel prod; `api.veloraapp.co.in` → Fly prod app; SSL issued. Prod DB/Redis/R2 created but empty.
+  **Moved from T-2.6** (the founder's re-scope, 3 October 2026). T-2.6 set up the GitHub
+  environment, the Fly app and the Vercel project and its domains; what's left is the founder's,
+  from `infra/PRODUCTION.md`: Supabase `velora-prod` in its own organisation, with its two
+  connection strings and a scoped, read-only token for the gate; Upstash `velora-prod`; the
+  one-year Vercel token; the `api` record at Cloudflare, which issues its certificate; and, on
+  release day, the apex and `www` records.
 - [ ] The prod app's four keys (`JWT_SECRET`, `PHONE_PEPPER`, `PHONE_ENC_KEY`, `CODE_PEPPER`) freshly generated, never staging's: startup refuses the repo's test keys (D-060) but can't know a copy of staging's. Read their shapes on the machine, lengths only, and compare each with its stored copy by SHA-256 prefix, as T-3.1 did for staging.
 - [ ] **And the only copy of production's keys must not be one Mac's Keychain** (the founder, 3 October 2026). Losing `PHONE_ENC_KEY` makes every stored phone number unreadable; losing `CODE_PEPPER` makes every PIN unverifiable; losing `PHONE_PEPPER` silently unbans every banned number, and login can't find any account until every number is re-hashed from its encrypted copy (D-061, D-062). Today that costs nothing, since no data depends on them. Decide here, where production's keys are born, where the second copy lives.
+  **Decided (the founder, 3 October 2026): a password manager that syncs,** so the copy survives
+  the machine; never only the Mac's Keychain, where `CODE_PEPPER` already sits, one laptop away
+  from every production key being unrecoverable. The founder names which; nobody asks for or reads
+  its contents. `infra/PRODUCTION.md` ("The keys") lists what each key protects and what losing
+  it costs: consequences, never values.
+- [ ] **Tag `v0.1.0`** on a commit of `main` that staging deployed: `git tag v0.1.0 <commit> &&
+  git push origin v0.1.0` (`infra/PRODUCTION.md`). The gate checks the rest.
 - [ ] **Done when:** `https://veloraapp.co.in` shows the landing page; `https://api.veloraapp.co.in/healthz` is 200. → **Unblocks P-0.8.**
 - [ ] **Done when, T-2.4's production side, which only production can prove:** `robots.txt` names
   `https://veloraapp.co.in/sitemap.xml`; the sitemap lists the five public pages on that address;
@@ -559,15 +598,8 @@ One migration per task, each with a working `downgrade()`. Build exactly `03-SCH
   unchanged at our nameservers after the apex record; Supabase's SQL checks all true, with no seed
   data; Lighthouse performance and accessibility from the SEO runs; and the gate refusing, live, a
   throwaway tag on a commit that isn't on `main`. That last one is done already, on 3 October 2026
-  (run 37114027309, above).
-- [x] **HSTS, decided here with its own record (D-059).** Vercel sends `max-age=63072000` today. Whether to add `includeSubDomains` (every subdomain, staging included, HTTPS-only for two years) and whether to submit to the preload list is this task's decision, written down. Preload is close to irreversible: browsers hardcode it, and removal takes months. Never set in passing.
-  **Decided: D-074.** `max-age=63072000; includeSubDomains`, set in `security-headers.ts`; never
-  preloaded before launch, because preload is effectively irreversible. **Served on staging**
-  (deploy run 37114304214, read by Claude on 3 October 2026): exactly one such header on every
-  response checked (three pages, a 404 under the scripts' path, the share image and `robots.txt`),
-  with no second one from Vercel; the home page's security headers are exactly the six, plus
-  P-43's known wildcard.
-- [x] **Commit:** `chore(infra): production domains [T-2.6]`
+  (run 37114027309, in T-2.6).
+- [ ] **Commit:** `docs: first public release, v0.1.0 [REL-1]`
 
 ---
 
@@ -1297,7 +1329,7 @@ Built before discovery and chat because swipes, threads and unlocks all spend Ve
 - [ ] **Commit:** `fix(security): review findings [T-9.13]`
 
 ### T-9.14 · Backups and restore drill
-- [ ] **Needs:** T-2.6
+- [ ] **Needs:** REL-1, which creates production's database (moved from T-2.6 on 3 October 2026)
 - [ ] Confirm Supabase PITR on production; restore last night's backup into a scratch project and run the reconciliation query against it. Document the steps in `docs/runbook.md`.
 - [ ] **Commit:** `docs(ops): backup and restore runbook [T-9.14]`
 

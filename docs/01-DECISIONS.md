@@ -1398,6 +1398,28 @@ staging's value on the production project. D-053's amendment says why this becam
 which would skip the gate and put the owner's credentials outside CI (D-046); and trusting
 GitHub's recorded commit for a staging run. Decided by the founder on 3 October 2026 (T-2.6).
 
+**Amended 3 October 2026: the gate refuses until both paid plans are in place** (the founder).
+P-0.15 and P-0.16 stop being notes someone must remember and become checks standing where the
+release happens:
+- **Vercel:** the team's plan, from `GET /v2/teams/{id}` with the production token, must be Pro
+  or Enterprise. Hobby is non-commercial only, and a public dating app is commercial.
+- **Supabase:** the gate reads the production project (`GET /v1/projects/{ref}`), takes its
+  organisation from that answer, and requires that organisation's plan to be Pro, Team or
+  Enterprise. Free keeps no backups, and the first real sign-up is the first thing worth losing.
+  Read through the project, so the check can't be pointed at some other organisation.
+- **Both are allowlists:** a plan the gate doesn't know, or an answer without one, is refused.
+  Supabase's schema doesn't require the `plan` field, so its absence must fail closed.
+- **The Supabase token is scoped:** read-only, to the production project and its organisation.
+  Never a classic token, which carries the account's full power over every project, in a CI
+  secret, for a read the gate needs once per release.
+
+P-0.14, the registered office, is a judgement, not something an API can answer, so it stays a
+Needs line on the release (REL-1).
+
+**What the gate guards against:** mistakes, such as a tag on the wrong commit, an unpaid plan or
+an expired token. A `v*` tag runs the workflow and the scripts at its own commit, so anyone who
+can push tags could change them. Only the founder and his sessions can.
+
 ---
 
 ## Adding a decision

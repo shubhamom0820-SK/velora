@@ -6,7 +6,9 @@
 # The gate (scripts/release-gate) is the /done gate extended to the live site:
 # the commit is on main, CI passed for it, and staging deployed it with its
 # smoke check passing, so production only gets what staging proved. It also
-# reads the Vercel token's expiry, and warns on this run's page inside 30 days.
+# reads the Vercel token's expiry, and warns on this run's page inside 30 days,
+# and refuses while either paid plan is missing: Vercel Pro (P-0.15) and
+# Supabase Pro for velora-prod (P-0.16).
 #
 # Secrets and variables live in the `production` GitHub environment, which only
 # `v*` tags may deploy to, so no branch's workflow can read them
@@ -58,10 +60,16 @@ jobs:
         id: commit
         run: echo "sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
 
-      - name: On main, CI passed, staging deployed it; the Vercel token
+      # Also refuses while the Vercel team is on Hobby (P-0.15) or velora-prod's
+      # Supabase organisation is on Free (P-0.16). The Supabase token is scoped:
+      # read-only, to velora-prod and its organisation, never a classic token.
+      - name: On main, CI passed, staging deployed it; the token and both paid plans
         env:
           GH_TOKEN: ${{ github.token }}
           VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+          VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+          SUPABASE_PROJECT_REF: ${{ vars.SUPABASE_PROJECT_REF }}
           SHA: ${{ steps.commit.outputs.sha }}
         run: scripts/release-gate "$SHA"
 

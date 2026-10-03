@@ -1,9 +1,9 @@
 #!/usr/bin/env bash
 # Tests scripts/release-gate (T-2.6, D-075) against a fake `gh` and a fake
-# `curl`, in a throwaway git repo, so "on main" is under test without depending
-# on how deep a checkout is. The fake gh applies the gate's real --jq
-# expressions with jq, as gh does. Every case checks the message as well as the
-# exit code. Runs locally and in CI.
+# `curl` (Vercel's and Supabase's APIs), in a throwaway git repo, so "on main"
+# is under test without depending on how deep a checkout is. The fake gh applies
+# the gate's real --jq expressions with jq, as gh does. Every case checks the
+# message as well as the exit code. Runs locally and in CI.
 set -euo pipefail
 
 here="$(cd "$(dirname "$0")" && pwd)"
@@ -14,6 +14,7 @@ trap 'rm -rf "$work"' EXIT
 now=1790000000 # 2026-09-21, pinned through RELEASE_GATE_NOW
 day=86400
 token="vercel-test-token-0123456789abcdef"
+sbtoken="sbp_supabase-test-token-fedcba9876543210"
 
 # A repo with main two commits long, and a side commit that never merged.
 repo="$work/repo"
@@ -55,28 +56,40 @@ jq -r "$expr" <<<"$json"
 FAKE
 cat >"$work/bin/curl" <<'FAKE'
 #!/usr/bin/env bash
-# Vercel's API, faked. The token must arrive on stdin, never in the arguments.
+# Vercel's and Supabase's APIs, faked. Each service's token must arrive on
+# stdin, and neither token may ever be in the arguments.
 set -euo pipefail
 config="$(cat)"
 for arg in "$@"; do
-  if [[ "$arg" == *"$FAKE_TOKEN"* ]]; then echo "TOKEN IN CURL'S ARGUMENTS" >&2; exit 99; fi
+  if [[ "$arg" == *"$FAKE_TOKEN"* || "$arg" == *"$FAKE_SUPABASE_TOKEN"* ]]; then
+    echo "A TOKEN IN CURL'S ARGUMENTS" >&2
+    exit 99
+  fi
 done
-if [[ "$config" != *"Authorization: Bearer $FAKE_TOKEN"* ]]; then
-  echo "NO TOKEN ON STDIN" >&2
-  exit 98
-fi
-echo "the token came on stdin" >"$FAKE_DIR/token-on-stdin"
-if [[ -f "$FAKE_DIR/vercel-unreachable" ]]; then
-  echo "curl: (6) Could not resolve host: vercel.test" >&2
-  exit 6
-fi
-out="" prev=""
+out="" prev="" url=""
 for arg in "$@"; do
   if [[ "$prev" == -o ]]; then out="$arg"; fi
   prev="$arg"
+  url="$arg"
 done
-cp "$FAKE_DIR/token.json" "$out"
-cat "$FAKE_DIR/http"
+case "$url" in
+  https://vercel.test/v5/user/tokens/current) service=vercel fixture=token want="$FAKE_TOKEN" ;;
+  https://vercel.test/v2/teams/team_test) service=vercel fixture=team want="$FAKE_TOKEN" ;;
+  https://supabase.test/v1/projects/prodref) service=supabase fixture=project want="$FAKE_SUPABASE_TOKEN" ;;
+  https://supabase.test/v1/organizations/velora-prod-org) service=supabase fixture=org want="$FAKE_SUPABASE_TOKEN" ;;
+  *) echo "fake curl: unexpected URL: $url" >&2; exit 64 ;;
+esac
+if [[ "$config" != *"Authorization: Bearer $want"* ]]; then
+  echo "NOT $service's TOKEN ON STDIN" >&2
+  exit 98
+fi
+echo "the token came on stdin" >"$FAKE_DIR/$service-token-on-stdin"
+if [[ -f "$FAKE_DIR/$service-unreachable" ]]; then
+  echo "curl: (6) Could not resolve host: $service.test" >&2
+  exit 6
+fi
+cp "$FAKE_DIR/$fixture.json" "$out"
+cat "$FAKE_DIR/$fixture-http"
 FAKE
 chmod +x "$work/bin/gh" "$work/bin/curl"
 
@@ -99,27 +112,39 @@ token_json() {
   fi
 }
 
-# scenario NAME CI_JSON STAGING_JSON TOKEN_JSON HTTP
+# scenario NAME CI_JSON STAGING_JSON TOKEN_JSON HTTP — and every account answer
+# green: a Pro team, velora-prod in its own organisation, on Pro. A case
+# overrides a file with set_answer.
 scenario() {
   local dir="$work/$1"
   mkdir -p "$dir"
   printf '%s' "$2" >"$dir/ci.json"
   printf '%s' "$3" >"$dir/staging.json"
   printf '%s' "$4" >"$dir/token.json"
-  printf '%s' "$5" >"$dir/http"
+  printf '%s' "$5" >"$dir/token-http"
+  printf '%s' '{"id":"team_test","slug":"knot11","billing":{"plan":"pro"}}' >"$dir/team.json"
+  printf '200' >"$dir/team-http"
+  printf '%s' '{"ref":"prodref","organization_slug":"velora-prod-org"}' >"$dir/project.json"
+  printf '200' >"$dir/project-http"
+  printf '%s' '{"id":"o1","name":"Velora production","plan":"pro"}' >"$dir/org.json"
+  printf '200' >"$dir/org-http"
 }
+# set_answer NAME FILE CONTENT
+set_answer() { printf '%s' "$3" >"$work/$1/$2"; }
 green() { scenario "$1" "[$(ci_run 11 "$sha" completed success 2026-09-20T00:00:00Z)]" \
   "[$(staging_run 21 "$sha" completed success 2026-09-20T01:00:00Z)]" "$(token_json 200)" 200; }
 
 passed=0 failed=0
-# expect NAME EXIT MESSAGE [ENV=VALUE]... — the default is a commit on main, a
-# token, and not running on GitHub; a case overrides what it needs.
+# expect NAME EXIT MESSAGE [ENV=VALUE]... — the default is a commit on main,
+# every credential, and not running on GitHub; a case overrides what it needs.
 expect() {
   local name="$1" want="$2" message="$3" got=0
   shift 3
   (cd "$repo" && env PATH="$work/bin:$PATH" FAKE_DIR="$work/$name" FAKE_TOKEN="$token" \
-    RELEASE_GATE_MAIN_REF=main RELEASE_GATE_NOW="$now" RELEASE_GATE_VERCEL_API=https://vercel.test \
-    VERCEL_TOKEN="$token" GITHUB_ACTIONS=false GITHUB_STEP_SUMMARY="$work/$name/summary.md" \
+    FAKE_SUPABASE_TOKEN="$sbtoken" RELEASE_GATE_MAIN_REF=main RELEASE_GATE_NOW="$now" \
+    RELEASE_GATE_VERCEL_API=https://vercel.test RELEASE_GATE_SUPABASE_API=https://supabase.test \
+    VERCEL_TOKEN="$token" VERCEL_ORG_ID=team_test SUPABASE_ACCESS_TOKEN="$sbtoken" \
+    SUPABASE_PROJECT_REF=prodref GITHUB_ACTIONS=false GITHUB_STEP_SUMMARY="$work/$name/summary.md" \
     COMMIT="$sha" "$@" bash -c '"$0" "$COMMIT"' "$gate") >"$work/$name.out" 2>&1 || got=$?
   if [[ "$got" == "$want" ]] && grep -qF -- "$message" "$work/$name.out"; then
     passed=$((passed + 1))
@@ -146,7 +171,10 @@ green all-green
 expect all-green 0 "Production may take ${sha:0:7}."
 also all-green out "ok   staging deployed ${sha:0:7} and its smoke check passed (run 21)."
 also all-green out "expires on 2027-04-09, in 200 days."
-also all-green token-on-stdin "the token came on stdin"
+also all-green vercel-token-on-stdin "the token came on stdin"
+also all-green supabase-token-on-stdin "the token came on stdin"
+also all-green out "ok   the Vercel team is on pro."
+also all-green out "ok   velora-prod's organisation (velora-prod-org) is on pro, with daily backups."
 
 # --- 1. on main
 green not-on-main
@@ -220,7 +248,7 @@ printf '%s' "$(token_json -1)" >"$work/token-expired/token.json"
 expect token-expired 1 "The production Vercel token expired on 2026-09-20."
 
 green token-refused
-printf '403' >"$work/token-refused/http"
+printf '403' >"$work/token-refused/token-http"
 expect token-refused 1 "Vercel refuses the production token (HTTP 403): it has expired or been revoked."
 
 green token-never-expires
@@ -232,15 +260,83 @@ expect token-missing-on-github 1 "The production environment has no VERCEL_TOKEN
   VERCEL_TOKEN= GITHUB_ACTIONS=true
 
 green token-missing-by-hand
-expect token-missing-by-hand 0 "no VERCEL_TOKEN here, so its expiry isn't read" VERCEL_TOKEN=
+expect token-missing-by-hand 0 "no production credentials here, so the token and the paid plans aren't read" VERCEL_TOKEN=
 
 green vercel-unreachable
 touch "$work/vercel-unreachable/vercel-unreachable"
 expect vercel-unreachable 4 "Couldn't reach Vercel to read the production token"
 
 green vercel-error
-printf '500' >"$work/vercel-error/http"
+printf '500' >"$work/vercel-error/token-http"
 expect vercel-error 5 "Vercel answered HTTP 500 while reading the production token."
+
+# --- 5. the Vercel team's plan (P-0.15): an allowlist of paid plans
+green vercel-hobby
+set_answer vercel-hobby team.json '{"id":"team_test","billing":{"plan":"hobby"}}'
+expect vercel-hobby 1 "The Vercel team is on Hobby, which Vercel's terms limit to non-commercial use, and a public dating app is commercial. Upgrade it to Pro first (P-0.15)."
+
+green vercel-enterprise
+set_answer vercel-enterprise team.json '{"id":"team_test","billing":{"plan":"enterprise"}}'
+expect vercel-enterprise 0 "ok   the Vercel team is on enterprise."
+
+green vercel-unknown-plan
+set_answer vercel-unknown-plan team.json '{"id":"team_test","billing":{"plan":"startup"}}'
+expect vercel-unknown-plan 1 "The Vercel team is on 'startup', a plan this gate doesn't know: it allows pro and enterprise (P-0.15)."
+
+green vercel-no-plan
+set_answer vercel-no-plan team.json '{"id":"team_test"}'
+expect vercel-no-plan 1 "Vercel's answer for the team says no plan, so it can't be checked (P-0.15)."
+
+green vercel-team-error
+set_answer vercel-team-error team-http 404
+expect vercel-team-error 5 "Vercel answered HTTP 404 while reading the team's plan."
+
+green org-id-missing-on-github
+expect org-id-missing-on-github 1 "The production environment has no VERCEL_ORG_ID, so the Vercel team's plan can't be read" \
+  VERCEL_ORG_ID= GITHUB_ACTIONS=true
+
+# --- 6. velora-prod's Supabase plan (P-0.16), through the project
+green supabase-free
+set_answer supabase-free org.json '{"id":"o1","plan":"free"}'
+expect supabase-free 1 "velora-prod's Supabase organisation (velora-prod-org) is on Free, which keeps no backups, and the first real sign-up is the first thing worth losing. Upgrade it to Pro first (P-0.16)."
+
+green supabase-team
+set_answer supabase-team org.json '{"id":"o1","plan":"team"}'
+expect supabase-team 0 "ok   velora-prod's organisation (velora-prod-org) is on team, with daily backups."
+
+# A plan this gate doesn't know is refused, never assumed to keep backups.
+green supabase-unknown-plan
+set_answer supabase-unknown-plan org.json '{"id":"o1","plan":"platform"}'
+expect supabase-unknown-plan 1 "is on 'platform', a plan this gate doesn't know: it allows pro, team and enterprise (P-0.16)."
+
+# The schema doesn't require the field: its absence is a refusal, not a pass.
+green supabase-no-plan
+set_answer supabase-no-plan org.json '{"id":"o1","name":"Velora production"}'
+expect supabase-no-plan 1 "Supabase didn't say which plan velora-prod's organisation (velora-prod-org) is on, so its backups can't be confirmed (P-0.16)."
+
+green supabase-no-org
+set_answer supabase-no-org project.json '{"ref":"prodref"}'
+expect supabase-no-org 1 "Supabase's answer for project prodref names no organisation, so its plan can't be checked (P-0.16)."
+
+green supabase-token-refused
+set_answer supabase-token-refused project-http 401
+expect supabase-token-refused 1 "Supabase refuses the production token (HTTP 401): it has expired or been revoked, or it can't read velora-prod and its organisation. Create a scoped, read-only token for them, never a classic one"
+
+green supabase-unreachable
+touch "$work/supabase-unreachable/supabase-unreachable"
+expect supabase-unreachable 4 "Couldn't reach Supabase to read velora-prod"
+
+green supabase-error
+set_answer supabase-error org-http 500
+expect supabase-error 5 "Supabase answered HTTP 500 while reading the organisation's plan."
+
+green supabase-token-missing-on-github
+expect supabase-token-missing-on-github 1 "The production environment has no SUPABASE_ACCESS_TOKEN, so velora-prod's plan can't be read" \
+  SUPABASE_ACCESS_TOKEN= GITHUB_ACTIONS=true
+
+green project-ref-missing-on-github
+expect project-ref-missing-on-github 1 "The production environment has no SUPABASE_PROJECT_REF, so velora-prod can't be found" \
+  SUPABASE_PROJECT_REF= GITHUB_ACTIONS=true
 
 # --- GitHub itself
 green github-unreachable

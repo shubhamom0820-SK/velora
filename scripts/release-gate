@@ -9,18 +9,28 @@
 #   4. Vercel accepts the production token. It warns when the token expires
 #      within 30 days, here, where the person releasing is already looking,
 #      rather than on the day a deploy stops working.
+#   5. The Vercel team is on Pro (P-0.15): Hobby is non-commercial only, and a
+#      public dating app is commercial.
+#   6. velora-prod's Supabase organisation is on a paid plan (P-0.16): Free
+#      keeps no backups, and the first real sign-up is the first thing worth
+#      losing. The organisation is read from the project itself, so the check
+#      can't be pointed at some other organisation.
 #
 #   scripts/release-gate COMMIT
 #
 # Unlike ci-gate it never waits: a release is deliberate and comes after staging
 # has deployed the commit, so anything unfinished is a refusal, with a message.
-# Everything fails closed.
+# Everything fails closed. Checks 4 to 6 need the release workflow's
+# credentials; run by hand without them, they're skipped, and the workflow
+# always runs them.
 #
 # Exit codes:
 #   0  production may take this commit
-#   1  refused: not on main, CI or staging not green for it, or the token refused
-#   4  couldn't reach or authenticate with GitHub, or couldn't reach Vercel
-#   5  GitHub or Vercel answered with an error
+#   1  refused: not on main, CI or staging not green for it, a token refused,
+#      or a plan that isn't paid
+#   4  couldn't reach or authenticate with GitHub, or couldn't reach Vercel or
+#      Supabase
+#   5  GitHub, Vercel or Supabase answered with an error
 set -euo pipefail
 
 sha="$(git rev-parse --verify "${1:?usage: scripts/release-gate COMMIT}^{commit}")"
@@ -28,6 +38,7 @@ short="${sha:0:7}"
 main_ref="${RELEASE_GATE_MAIN_REF:-origin/main}"
 warn_days="${RELEASE_GATE_TOKEN_WARN_DAYS:-30}"
 vercel_api="${RELEASE_GATE_VERCEL_API:-https://api.vercel.com}"
+supabase_api="${RELEASE_GATE_SUPABASE_API:-https://api.supabase.com}"
 now="${RELEASE_GATE_NOW:-$(date +%s)}" # seconds; tests pin it
 work="$(mktemp -d)"
 trap 'rm -rf "$work"' EXIT
@@ -107,34 +118,50 @@ if [[ "$staging_conclusion" != success ]]; then
 fi
 say "ok   staging deployed $short and its smoke check passed (run $staging_run)."
 
-# 4. The production Vercel token. Without it the web can't deploy, so in the
-# workflow a missing one is a refusal; run by hand, there's nothing to read.
-if [[ -z "${VERCEL_TOKEN:-}" ]]; then
-  if [[ "${GITHUB_ACTIONS:-}" == true ]]; then
-    refuse "The production environment has no VERCEL_TOKEN, so the web can't deploy (infra/PRODUCTION.md)."
-  fi
-  say "no VERCEL_TOKEN here, so its expiry isn't read; the release workflow reads it."
-  say "Production may take $short."
+# 4 to 6 read the production accounts. Run by hand without the workflow's
+# credentials there's nothing to read; in the workflow every one is required.
+if [[ "${GITHUB_ACTIONS:-}" != true && -z "${VERCEL_TOKEN:-}" ]]; then
+  say "no production credentials here, so the token and the paid plans aren't read; the release workflow reads them."
+  say "Production may take $short, if those pass."
   exit 0
 fi
-# The token reaches curl on stdin, never as an argument: ps shows arguments.
-if ! http="$(printf 'header = "Authorization: Bearer %s"\n' "$VERCEL_TOKEN" |
-  curl -sS --max-time 20 --config - -o "$work/token.json" -w '%{http_code}' \
-    "$vercel_api/v5/user/tokens/current" 2>"$work/errors")"; then
-  say "Not releasing $short. Couldn't reach Vercel to read the production token:"
-  sed 's/^/release-gate:   /' "$work/errors" >&2
-  exit 4
-fi
-case "$http" in
-  200) ;;
-  401 | 403)
-    refuse "Vercel refuses the production token (HTTP $http): it has expired or been revoked. Create a new one, expiring in a year, and replace VERCEL_TOKEN in the production environment (infra/PRODUCTION.md)."
-    ;;
-  *)
-    say "Not releasing $short. Vercel answered HTTP $http while reading the production token."
-    exit 5
-    ;;
-esac
+need() {
+  if [[ -z "${!1:-}" ]]; then
+    refuse "The production environment has no $1, $2 (infra/PRODUCTION.md)."
+  fi
+}
+need VERCEL_TOKEN "so the web can't deploy"
+need VERCEL_ORG_ID "so the Vercel team's plan can't be read"
+need SUPABASE_ACCESS_TOKEN "so velora-prod's plan can't be read"
+need SUPABASE_PROJECT_REF "so velora-prod can't be found"
+
+vercel_refused="it has expired or been revoked. Create a new one, expiring in a year, and replace VERCEL_TOKEN in the production environment (infra/PRODUCTION.md)."
+supabase_refused="it has expired or been revoked, or it can't read velora-prod and its organisation. Create a scoped, read-only token for them, never a classic one (infra/PRODUCTION.md)."
+
+# api SERVICE WHAT URL TOKEN REFUSED → the answer in $work/body.json. The token
+# reaches curl on stdin, never as an argument: ps shows arguments.
+api() {
+  local service="$1" what="$2" url="$3" token="$4" refused="$5" http
+  if ! http="$(printf 'header = "Authorization: Bearer %s"\n' "$token" |
+    curl -sS --max-time 20 --config - -o "$work/body.json" -w '%{http_code}' \
+      "$url" 2>"$work/errors")"; then
+    say "Not releasing $short. Couldn't reach $service to read $what:"
+    sed 's/^/release-gate:   /' "$work/errors" >&2
+    exit 4
+  fi
+  case "$http" in
+    200) ;;
+    401 | 403) refuse "$service refuses the production token (HTTP $http): $refused" ;;
+    *)
+      say "Not releasing $short. $service answered HTTP $http while reading $what."
+      exit 5
+      ;;
+  esac
+}
+
+# 4. The production Vercel token's expiry.
+api Vercel "the production token" "$vercel_api/v5/user/tokens/current" "$VERCEL_TOKEN" "$vercel_refused"
+cp "$work/body.json" "$work/token.json"
 expires_ms="$(jq -r '.token.expiresAt // empty' "$work/token.json")"
 if [[ -z "$expires_ms" ]]; then
   warn "The production Vercel token never expires. D-075 gives it a year, so a leaked one can't serve forever: replace it with one that expires (infra/PRODUCTION.md)."
@@ -149,4 +176,31 @@ else
     say "ok   the production Vercel token expires on $expires_on, in $days days."
   fi
 fi
+
+# 5. The Vercel team's plan (P-0.15). An allowlist: a plan this gate doesn't
+# know is refused, never assumed paid.
+api Vercel "the team's plan" "$vercel_api/v2/teams/$VERCEL_ORG_ID" "$VERCEL_TOKEN" "$vercel_refused"
+vercel_plan="$(jq -r '.billing.plan // empty' "$work/body.json")"
+case "$vercel_plan" in
+  pro | enterprise) say "ok   the Vercel team is on $vercel_plan." ;;
+  hobby) refuse "The Vercel team is on Hobby, which Vercel's terms limit to non-commercial use, and a public dating app is commercial. Upgrade it to Pro first (P-0.15)." ;;
+  "") refuse "Vercel's answer for the team says no plan, so it can't be checked (P-0.15)." ;;
+  *) refuse "The Vercel team is on '$vercel_plan', a plan this gate doesn't know: it allows pro and enterprise (P-0.15)." ;;
+esac
+
+# 6. velora-prod's Supabase plan (P-0.16), read through the project, so the
+# organisation is velora-prod's own.
+api Supabase "velora-prod" "$supabase_api/v1/projects/$SUPABASE_PROJECT_REF" "$SUPABASE_ACCESS_TOKEN" "$supabase_refused"
+org="$(jq -r '.organization_slug // empty' "$work/body.json")"
+if [[ -z "$org" ]]; then
+  refuse "Supabase's answer for project $SUPABASE_PROJECT_REF names no organisation, so its plan can't be checked (P-0.16)."
+fi
+api Supabase "the organisation's plan" "$supabase_api/v1/organizations/$org" "$SUPABASE_ACCESS_TOKEN" "$supabase_refused"
+supabase_plan="$(jq -r '.plan // empty' "$work/body.json")"
+case "$supabase_plan" in
+  pro | team | enterprise) say "ok   velora-prod's organisation ($org) is on $supabase_plan, with daily backups." ;;
+  free) refuse "velora-prod's Supabase organisation ($org) is on Free, which keeps no backups, and the first real sign-up is the first thing worth losing. Upgrade it to Pro first (P-0.16)." ;;
+  "") refuse "Supabase didn't say which plan velora-prod's organisation ($org) is on, so its backups can't be confirmed (P-0.16)." ;;
+  *) refuse "velora-prod's Supabase organisation ($org) is on '$supabase_plan', a plan this gate doesn't know: it allows pro, team and enterprise (P-0.16)." ;;
+esac
 say "Production may take $short."

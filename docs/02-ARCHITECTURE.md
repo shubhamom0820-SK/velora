@@ -332,4 +332,5 @@ secret is left empty. Real secret values are never committed.
 Deploy: merge to `main` → CI → staging automatically, for that commit only once its CI passed
 (`deploy.yml`, D-046; set up by `infra/STAGING.md`). A tag `v*` on a commit of `main` → production
 (`deploy-production.yml`, D-075; set up by `infra/PRODUCTION.md`), and only once `scripts/release-gate`
-finds CI passed for that commit and staging deployed it.
+finds CI passed for that commit and staging deployed it, with Vercel and velora-prod's Supabase
+organisation both on paid plans. The first release is REL-1.

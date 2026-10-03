@@ -1,8 +1,9 @@
 # Production
 
-> **Not released yet.** The first release is `v0.1.0`, and it waits on three founder items
-> (P-0.14, P-0.15, P-0.16, below): from that moment the site is public and crawled, takes real
-> sign-ups, and is plainly commercial. Everything else can be set up ahead of it.
+> **Not released yet.** The first release, `v0.1.0`, is its own task, REL-1 in `docs/05-PLAN.md`,
+> and it waits on three founder items (P-0.14, P-0.15, P-0.16, below). From that moment the site
+> is public and crawled, takes real sign-ups, and is plainly commercial. Production itself was
+> built and proved in T-2.6; everything else can be set up ahead of the release.
 >
 > **The API's half is temporary.** Fly has no region in India, so the API runs in Singapore
 > while Postgres and Redis are in Mumbai. P-49 moves it to a Compute Engine VM in Mumbai before
@@ -51,7 +52,9 @@ A release is deliberate: a tag `v*` on a commit of `main`. Nothing else deploys 
      CI passed for that exact commit, and staging deployed that exact commit with its smoke check
      passing. Production only gets what staging proved. It then reads the production Vercel
      token's expiry: it refuses a token Vercel won't accept, and **warns on the run's page when
-     the token expires within 30 days**.
+     the token expires within 30 days**. And it **refuses while either paid plan is missing**:
+     the Vercel team must be on Pro (P-0.15), and velora-prod's Supabase organisation, read
+     through the project itself, on a paid plan with backups (P-0.16).
    - **migrate**, **api**, **web**: as staging, with production's secrets.
    - **smoke** runs `scripts/staging-smoke` against production, bodies included. Its canonical
      check fails if the web was built for any other address: a valid but wrong `APP_ENV`
@@ -64,14 +67,16 @@ token it skips only the expiry.
 commit it deployed, which is what the gate matches. A staging deploy started by hand counts only
 when started with the commit's full SHA.
 
-## Before the first release (`v0.1.0`)
+## Before the first release (`v0.1.0`, REL-1)
 
 Each blocks the release, not the build:
 
 - **P-0.14:** where the registered office is. `/contact` publishes it, and from `v0.1.0` it is
-  crawled and archived, past any later change.
-- **P-0.15:** Vercel Pro. **P-0.16:** Supabase Pro.
-- **Production's keys:** where their second copy lives (T-2.6); generate them after that's decided.
+  crawled and archived, past any later change. A judgement, so no check can enforce it: it is on
+  REL-1's Needs line.
+- **P-0.15:** Vercel Pro. **P-0.16:** Supabase Pro. The gate refuses without them.
+- **Production's keys,** generated with their second copy in the founder's password manager (see
+  "The keys" below).
 - **DNS for the apex and `www`** (§6), added on release day: before then nothing should answer
   at `veloraapp.co.in`.
 
@@ -91,10 +96,37 @@ repo's public test keys, but it can't know a copy of staging's.
   `db-owner`, `velora-api-db`, `jwt-secret`, `phone-pepper`, `phone-enc-key`, `code-pepper`.
 - **After setting the four keys,** read their shapes on the machine (lengths only) and compare
   each with its stored copy by SHA-256, first 8 hex characters, as T-3.1 did for staging.
-- **The Keychain must not be the only copy** (T-2.6). Losing `PHONE_ENC_KEY` makes every stored
-  phone number unreadable; losing `CODE_PEPPER` makes every PIN unverifiable; losing
-  `PHONE_PEPPER` silently unbans every banned number. Where the second copy lives is the
-  founder's decision, made before the keys are generated.
+- **The second copy lives in a password manager that syncs,** never only on this Mac (the
+  founder, 3 October 2026). A Keychain on one laptop is one laptop away from every production
+  key being unrecoverable. Which password manager is the founder's to name; nobody else ever
+  asks for or reads its contents.
+
+## The keys: what exists, what each protects, what losing one costs
+
+Read this before touching any key during an incident. It lists consequences, never values. The
+values live in three places: Fly's secrets for `velora-api` (they move, unchanged, with P-49), the
+Keychain service `velora-production` on the founder's Mac, and the founder's password manager.
+
+**The four that cannot be replaced** without losing something:
+
+| Key | Protects | If it leaks | If it's lost | Changing it |
+|---|---|---|---|---|
+| `PHONE_PEPPER` | The lookup key of every phone number (`users.phone_hash`, `banned_identities`, D-061) | With a database dump, numbers can be recovered from their hashes: India's mobile range is small enough to try every one | Sign-in can't find any account until every number is re-hashed from its encrypted copy, which needs `PHONE_ENC_KEY`. **Every ban is gone for good**: a ban keeps only the hash, so nothing can rebuild it, and every banned person can sign up again | Never, once any number is banned (D-061). Treat it as permanent |
+| `PHONE_ENC_KEY` | The stored copy of every phone number (`users.phone_enc`, Fernet, D-061) | With a database dump, every number is readable | **Every stored number is unreadable forever**: no admin view (T-9.5), no export (T-9.6), and no way back if `PHONE_PEPPER` is ever lost too | Put a new key first, `new,old`, and keep the old one until every row is re-encrypted (D-061) |
+| `CODE_PEPPER` | Every PIN (argon2id over an HMAC under it, D-062), and sign-in codes in flight | With a database dump, a 4-digit PIN falls in minutes, and people reuse their UPI and ATM PINs | **Every PIN fails** until its owner sets it again, everyone at once; codes in flight fail too | Only with a migration plan: a new one fails every stored PIN (D-062) |
+| `JWT_SECRET` | Every access token (D-060) | Anyone can sign a valid access token for anyone, **an admin included**: replace it at once | Nothing is lost: every access token (15 minutes) stops working, and clients refresh with their refresh tokens, which don't depend on it | Any time; signed-in people just refresh |
+
+**The rest can be replaced** without losing data. Each grants access while it's valid, so revoke
+a leaked one first, then make a new one:
+
+| Secret | What it opens | Replace by |
+|---|---|---|
+| `DATABASE_URL` (`velora_api`'s password) | Rows, as the app | A new password on the role in Supabase, then Fly's secret |
+| `PRODUCTION_MIGRATION_DATABASE_URL` (the owner) | The whole database, including switching off the ledger's guards (D-046) | A new database password in Supabase, then GitHub's secret |
+| `REDIS_URL` | Rate limits and sign-in codes | Upstash's credential reset, then Fly's secret |
+| `VERCEL_TOKEN` | Deploying anything to the production site | A new one-year token, then GitHub's secret |
+| `FLY_API_TOKEN` | Deploying anything to `velora-api` | `fly tokens create deploy -a velora-api`, piped into GitHub's secret |
+| `SUPABASE_ACCESS_TOKEN` | Reading velora-prod and its organisation, nothing else (scoped) | A new scoped token, then GitHub's secret |
 
 ## First-time setup
 
@@ -105,6 +137,14 @@ alone, and in it the project `velora-prod`, region Mumbai, on Free until the rel
 steps 2 to 7 exactly: the extensions, the Data API off, the two connection strings, the roles
 (`velora_api` with a fresh password, `connection limit 20`), and both SQL checks after the first
 release.
+
+Then, for the release gate (D-075), a **scoped access token** (Account → Access Tokens), never a
+classic one, which carries the account's full power over every project. It needs read access to
+exactly two things: the project `velora-prod` (the gate reads its organisation from it) and that
+organisation (the gate reads its plan). Supabase's API names these `project_admin_read` and
+`organization_admin_read`; choose the read-only permissions that match, and nothing else. If it's
+short of either, the gate says so and refuses. The project's ref, from its URL, goes in GitHub as
+a variable (§7).
 
 ### 2. Upstash
 
@@ -169,8 +209,10 @@ an environment that doesn't exist creates it, without the rule.
 | Secret | `FLY_API_TOKEN` | Fly's deploy token for `velora-api` |
 | Secret | `VERCEL_TOKEN` | the one-year token above |
 | Secret | `VERCEL_ORG_ID`, `VERCEL_PROJECT_ID` | from the Vercel project |
+| Secret | `SUPABASE_ACCESS_TOKEN` | the scoped, read-only token (§1), for the gate's plan check |
 | Variable | `PRODUCTION_API_URL` | `https://api.veloraapp.co.in` |
 | Variable | `PRODUCTION_WEB_URL` | `https://veloraapp.co.in` |
+| Variable | `SUPABASE_PROJECT_REF` | `velora-prod`'s ref, from its URL |
 
 ## After a release
 
