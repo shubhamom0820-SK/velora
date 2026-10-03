@@ -86,9 +86,10 @@ beside them, so neither blocks a release that doesn't need it:
 - **P-66, if the tag includes T-3.14.** That tag opens sign-in, and until P-66 staging signs in
   through production's Firebase project, `velora-ic`, into the same user pool: acceptable only
   while there are no real users (the founder, 3 October 2026).
-- **P-0.18, if the tag falls on or after 2 December 2026:** the Google Cloud billing account
-  converted from its free trial to paid. The trial ends on 2 January 2027, or sooner if its credit
-  runs out, and Firebase Auth stops with it.
+- **P-0.18, if the tag includes T-3.14, or falls on or after 2 December 2026:** the Google Cloud
+  billing account converted from its free trial to paid, after the daily SMS cap is set. The trial
+  ends on 2 January 2027, or sooner if its credit runs out, and Firebase Auth stops with it: after
+  launch, an outage with no warning (the founder, 3 October 2026).
 
 ## Database connections: the budget
 

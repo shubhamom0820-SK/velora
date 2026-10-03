@@ -126,14 +126,20 @@ never done silently.
   price behind D-066's figures before Path B is switched on, and build P-46, the MSG91 client.
 - [ ] **P-0.12** Firebase: project, Phone provider on, App Check + reCAPTCHA Enterprise enforced, authorised domains, daily SMS quota cap, billing alert. Confirm the **real per-SMS price for IN** in the billing console and write it into D-035.
   **Never add a test phone number to a project production uses (D-065):** its fixed code signs anyone in as that number wherever the project's tokens are accepted, production included, and in India the number may be a real person's (D-064).
+  **The daily SMS cap: Google's docs don't show it can be set** (P-0.18, read 3 October 2026). Find where the console sets it before relying on it; it comes before the conversion (P-0.18, step 1).
 - [x] **P-0.13** Create the Google Cloud billing account and complete India's identity verification. **Owner: the founder, Shubham Kumar. Start: 3 October 2026. Due: 30 days after the account is created, when Google suspends an unverified Indian account; by 2 November 2026 if it's created on the start date.** Blocks T-3.14 (Firebase's Blaze plan bills to this account) and P-49's move (the Compute Engine VM does too). Started late, the 30-day clock is what stalls T-3.14.
   **How:** an Indian billing address means Google's mandatory identity verification. As an individual: PAN or e-Aadhaar through DigiLocker, and proof of address. As a business: a GST or Udyam certificate. **GST:** the advisor directing T-3.2 to T-3.10 says Velora has none, deliberately, below the threshold; P-0.2 still lists GST as unconfirmed, so the founder confirms it there. Without GST or a Udyam registration, it goes through as an individual.
   **If the payment method is refused** (AWS's was, P-0.6), write down exactly what Google said, as P-36 did for Fly, before trying anything else.
   **Closed 3 October 2026 (the founder):** Blaze is active, not just linked: the project shows "Blaze via Google Cloud free-of-charge trial", with ₹28,796.63 of credit valid until 2 January 2027. The ₹1,000 one-off payment is made, and India's tax info is submitted as an unregistered individual with PAN. The 30-day suspension clock is moot. **It leaves a worse-shaped risk in its place, dated: P-0.18,** the trial's end.
-- [ ] **P-0.18** Convert the Google Cloud billing account from its free trial to a paid billing account. **Owner: the founder, Shubham Kumar. Due: before 2 January 2027, or before the trial's ₹28,796.63 of credit runs out, if that comes first.** Recorded 3 October 2026, when P-0.13 closed.
-  **Why** (the founder): on that date the trial ends, and unless the account has been converted by then, Firebase Auth stops and nobody can sign in, staging or production (they share `velora-ic`, D-065), with nothing wrong in the code and no deploy to blame. "This is exactly the kind of thing that is obvious in January and invisible in October." **Worse if P-49 puts the API on Google first** (a Compute Engine VM, the host the advisor directed and the founder still decides; T-4.4 waits for P-49): the VM bills to the same account, so the trial's end would stop the API itself, every request and not only sign-in.
-  **Google's terms** (its Free Trial page, read by Claude on 3 October 2026): the trial account closes when 90 days pass or the credit is spent, whichever is first; "All resources you created during the trial are stopped"; and without an upgrade within a 30-day grace period they "are permanently deleted". Upgrading early keeps the remaining credit, usable within the original 90 days, but ends the trial's other guarantee: "You will not be billed for any Google Cloud usage during your Free Trial." After that, a budget alert never caps spending (Google's budgets page), so only the daily SMS quota (T-3.14) limits what an SMS flood costs. On the trial, a flood that spends the credit ends the trial early: an outage, not a bill. When to convert inside the deadline is the founder's call.
-  **Where it is read:** dated, in 07-CHECKLISTS §F; on REL-1's Needs line if the tag falls on or after 2 December 2026; and beside P-49, whose VM it would stop.
+- [ ] **P-0.18** Convert the Google Cloud billing account from its free trial to a paid billing account, **after the daily SMS cap is set, and before launch.** **Owner: the founder, Shubham Kumar. Due: before launch (REL-1 if its tag includes T-3.14, T-9.15 at the latest), and in any case before 2 January 2027, or before the trial's ₹28,796.63 of credit runs out if that comes first.** Recorded 3 October 2026, when P-0.13 closed.
+  **Why** (the founder): on that date the trial ends, and unless the account has been converted by then, Firebase Auth stops and nobody can sign in, staging or production (they share `velora-ic`, D-065), with nothing wrong in the code and no deploy to blame. "This is exactly the kind of thing that is obvious in January and invisible in October." And the API must not move onto this account while it is a trial (P-49), since the trial's end would then stop the whole API, not just sign-in.
+  **In this order** (the founder, 3 October 2026). On the trial an SMS flood ends the trial: an outage, no bill. Converted, a flood costs money, bounded only by the daily SMS cap. Neither is acceptable on its own, so this isn't a choice between them: the cap is what makes either safe.
+  1. **Set the daily SMS cap first.** It is a prerequisite of the conversion, not a sibling: until it exists, converting hands an unbounded bill to one person's card, and staying on the trial lets a stranger take sign-in down for everyone.
+     **Unverified, and step 1 rests on it:** Google documents no daily SMS cap an owner can set (read by Claude on 3 October 2026). Firebase's limits page gives a fixed 3,000 verification SMS a day for Firebase Authentication without Identity Platform; Identity Platform's quotas page says a project with a billing instrument has "No SMS/day limit", and mentions changing a quota only by asking support, for a higher one. Find where the console sets the cap before relying on it. If nothing does, what serves as the cap is the founder's decision, made before converting.
+  2. **Then convert, before launch, not at the deadline:** after launch, the trial's end is an outage with no warning and no deploy to blame.
+  **What a budget is:** budgets alert; they never cap (Google's budgets page). The cap is the SMS quota. A budget also counts cost after credits unless told otherwise, so on the trial it sees ₹0 (T-3.14's budget alert counts cost before credits).
+  **Google's terms** (its Free Trial page, read by Claude on 3 October 2026): the trial account closes when 90 days pass or the credit is spent, whichever is first; "All resources you created during the trial are stopped"; and without an upgrade within a 30-day grace period they "are permanently deleted". Upgrading early keeps the remaining credit, usable within the original 90 days, and ends the trial's guarantee: "You will not be billed for any Google Cloud usage during your Free Trial."
+  **Where it is read:** dated, in 07-CHECKLISTS §F; on REL-1's Needs line if REL-1's tag includes T-3.14 or falls on or after 2 December 2026; on T-9.15's Needs line; and on P-49, which may not land on this account while it is a trial.
 - [ ] **P-0.14** Decide where the registered office is, before `v0.1.0`, production's first release (REL-1). **Blocks that release, not the build:** on REL-1's Needs line, since a registered office is a judgement no check can make. `/contact` publishes D-058's registered office, the founder's home in Hajipur, and from `v0.1.0` it is public, crawled and archived: once Google and archive.org hold the address, no later change removes it.
   **Why it's a decision** (the founder, 3 October 2026): a sole proprietorship must publish a registered address, but it needn't be where the founder sleeps. A virtual-office or registered-address service in India, roughly ₹1,000 to ₹2,000 a month, meets the same requirement with a commercial address. For a dating app, where some users will be angry at whoever banned them, the difference matters.
   **If it changes:** a new decision supersedes D-058's office, `REGISTERED_OFFICE` in `web/src/lib/legal.ts` changes (its guard test names D-058), and the court follows the office (D-058), so a new city means a new court line too.
@@ -599,9 +605,11 @@ waits on the founder's decisions, so it is a task of its own, outside the sprint
   - **P-66, if REL-1's tag includes T-3.14.** That tag opens sign-in, into the Firebase user pool
     staging shares (T-3.14), which is acceptable only while there are no real users: REL-1 is what
     makes real users possible, not T-9.15. A tag without T-3.14 opens no sign-in and doesn't wait.
-  - **P-0.18, if the tag falls on or after 2 December 2026,** a month or less before the Google
-    Cloud trial ends on 2 January 2027, when Firebase Auth stops unless the billing account is paid
-    ("a month" is Claude's reading of the founder's "anywhere near it").
+  - **P-0.18, if REL-1's tag includes T-3.14, or falls on or after 2 December 2026.** The
+    trial's end on 2 January 2027 stops Firebase Auth unless the billing account is paid, and
+    after launch that is an outage with no warning (the founder, 3 October 2026): a tag with
+    T-3.14 is launch in that sense, as for P-66. The date covers the rest: a month or less before
+    the trial ends ("a month" is Claude's reading of the founder's "anywhere near it", approved).
 - [ ] `veloraapp.co.in` → Vercel prod; `api.veloraapp.co.in` → Fly prod app; SSL issued. Prod DB/Redis/R2 created but empty.
   **Moved from T-2.6** (the founder's re-scope, 3 October 2026). T-2.6 set up the GitHub
   environment, the Fly app and the Vercel project and its domains; what's left is the founder's,
@@ -1000,10 +1008,12 @@ exist yet. The batch is a chain, T-3.10 → T-3.11 → T-3.12 → T-3.13, each n
   Settings, Authorised domains) for project `velora-ic`: `staging.veloraapp.co.in` and
   `veloraapp.co.in`. Nothing else: no Vercel preview domain, since neither Vercel project is
   connected to Git (T-1.22, `infra/PRODUCTION.md`); not `www`, which 308s to the apex; not
-  `127.0.0.1`, since local builds sign in by Path B (D-081). Today the list holds only `localhost`
-  and the two `firebaseapp` defaults, so sign-in fails everywhere real until these are in.
-  **And the web app registered in `velora-ic`, with its config sent by the founder:** the build
-  starts then (the founder, 3 October 2026).
+  `127.0.0.1`, since local builds sign in by Path B (D-081). The list held only `localhost` and
+  the two `firebaseapp` defaults. **Done, 3 October 2026 (the founder):** both are in.
+  **And the web app registered in `velora-ic`, with its config:** the build starts then.
+  **Done, 3 October 2026 (the founder):** registered, and the config is in. It isn't in the repo
+  (checked on `main` at `e28b3dc`), so the build session's first question is where it is; it goes
+  in the repo's env for the web, public by design (Keys, below).
 - [ ] **Not in T-3.10 to T-3.13's batch** (planned 3 October 2026): P-0.13's account didn't exist yet. When this task starts, switch D-081's Firebase builds from "sign-in isn't open yet" to the Firebase flow: make `signInOpen()` (`web/src/lib/sign-in-path.ts`) true for `firebase`, which moves `/login` and the landing page's waitlist heading together.
 - [ ] **New dependencies (approved, recorded in D-035):** api `firebase-admin`; web `firebase`.
 - [ ] **Keys (the founder, 3 October 2026):** "the Firebase web config is public by design and
@@ -1021,9 +1031,14 @@ exist yet. The batch is a chain, T-3.10 → T-3.11 → T-3.12 → T-3.13, each n
   (the Done-when signs in there; on the Needs line), daily SMS quota capped, billing alert set at a fixed rupee amount.
   **Done by the founder, 3 October 2026:** project `velora-ic` (no Google Analytics, no Gemini in
   Firebase); Phone sign-in enabled; SMS region policy "Allow", India (IN) only; Blaze linked to a
-  billing account. **Not yet:** App Check enforced, the authorised domains, the daily SMS quota,
-  the budget alert. The first plan text also listed a Vercel preview and `localhost`: neither is
-  needed (Needs line).
+  billing account; later the same day, the two authorised domains. **Not yet:** App Check
+  enforced, the daily SMS cap, the budget alert. The first plan text also listed a Vercel preview
+  and `localhost`: neither is needed (Needs line).
+  **The daily SMS cap comes first, before the first real SMS** (P-0.18's step 1: the cap, not the
+  budget, is what bounds an SMS flood). **Google's docs don't show it can be set** (P-0.18,
+  read 3 October 2026): with a billing instrument, Identity Platform documents "No SMS/day
+  limit". Find where the console sets it before relying on it; if nothing does, stop and ask the
+  founder, since what serves as the cap is the founder's decision.
 - [ ] **A number outside India is refused by Firebase itself,** under that region policy, before any
   of our code runs. What the person sees then is a case this task handles and tests, not an
   accident. (The phone screen fixes +91, so it takes a pasted or edited number to get there.)
@@ -1039,9 +1054,10 @@ exist yet. The batch is a chain, T-3.10 → T-3.11 → T-3.12 → T-3.13, each n
   after launch. Sharing one project means: a real person can sign in to staging with their own
   number, since staging texts whoever production texts, and their number then sits in staging's
   database; a token minted on either site's page is accepted by both APIs, each checking reuse
-  only in its own Redis; and staging's sign-ins spend the daily SMS quota that real people's
-  sign-ins need. P-66 ends it. It is on REL-1's Needs line if REL-1's tag includes this task,
-  since that tag is what makes real users possible, and on T-9.15's regardless.
+  only in its own Redis; and staging's sign-ins draw on the same SMS credit and project limits
+  that real people's sign-ins need. P-66 ends it. It is on REL-1's Needs line if REL-1's tag
+  includes this task, since that tag is what makes real users possible, and on T-9.15's
+  regardless.
 - [ ] `POST /v1/auth/firebase {id_token}`: verify signature and `aud`/`iss`/`exp` against Google's
   public keys (cached); require `phone_number` and `firebase.sign_in_provider == "phone"`;
   reject non-`+91` → `PHONE_NOT_SUPPORTED`; reject a reused `jti` (Redis until expiry) →
@@ -1818,7 +1834,7 @@ committed rows.
 - [ ] **Commit:** `docs(ops): backup and restore runbook [T-9.14]`
 
 ### T-9.15 · Go live
-- [ ] **Needs:** T-9.13, T-9.14, P-0.5, P-0.7, P-0.8, and **P-66**: until staging has a Firebase project of its own, its sign-ins land in production's user pool, which is not acceptable after launch (the founder, 3 October 2026, on T-3.14)
+- [ ] **Needs:** T-9.13, T-9.14, P-0.5, P-0.7, P-0.8, and **P-66**: until staging has a Firebase project of its own, its sign-ins land in production's user pool, which is not acceptable after launch (the founder, 3 October 2026, on T-3.14); and **P-0.18**: the billing account converted from its free trial, after the daily SMS cap is set, since after launch the trial's end is an outage with no warning (the founder, 3 October 2026)
 - [ ] Production env: real SMS, real Razorpay live keys + webhook URL, real moderation and face match, VAPID keys. Run the pre-launch checklist in `07-CHECKLISTS.md`. Do one real ₹ purchase yourself and refund it, under D-076's rule 3: the refund reverses that purchase's Velas in the ledger in the same step (T-8.2), so money never goes back while its Velas stand.
 - [ ] **Write to the waitlist** (T-2.3): its copy promises to tell people when Velora opens near them. Nothing can send bulk email yet, so choose how before launch day, or the list is one we can't write to. A sending service is a new dependency and another processor `/privacy` must name, and its From address needs SPF and DKIM, like the mailboxes (P-0.3). B-14, a second city, writes to it again, by city.
   **DKIM before the first send, or the launch email goes to spam:** our DMARC record says
@@ -2477,9 +2493,9 @@ Claude Code adds items here instead of doing unplanned work. Format:
        the same billing account, so it is owed anyway. Until a billing account exists and is
        verified, no plan should rest on Google either.
        **Answered 3 October 2026 (P-0.13, closed by the founder):** the account is active, on
-       Google Cloud's free trial until 2 January 2027. A VM on it stops when the trial does unless
-       P-0.18 converts the account first, and with the API on that VM, every request stops, not
-       only sign-in.
+       Google Cloud's free trial until 2 January 2027. **So the API must not move onto this
+       billing account while it is a trial** (the founder): the trial's end would stop the whole
+       API, not just sign-in. On Google, P-49 lands only after P-0.18 converts the account.
   - **Host, directed 3 October 2026: a Compute Engine VM in Mumbai, not Cloud Run** (the advisor
     directing T-3.2 to T-3.10, Claude in a separate chat; the founder decides). Threads and Knots
     are the product, so "busy whenever anyone is connected" is close to always: Cloud Run's roughly
@@ -2832,10 +2848,11 @@ Claude Code adds items here instead of doing unplanned work. Format:
   unattended after every deploy but signs nobody in (it reads `/healthz`, `/readyz` and the home
   page), so it isn't the trigger. Worst case: launch with staging still signing in through
   production's project, where a real person can sign in to staging, each site's tokens are
-  accepted by both APIs, and staging spends the SMS quota real sign-ins need (T-3.14). **Why the
-  first unattended check is the trigger** (the founder, 3 October 2026): until then the founder's
-  own phone is enough; after it, it isn't, because a check that needs a human holding a phone is a
-  check that stops being run. **Its first use has a name, not just a condition** (the founder):
+  accepted by both APIs, and staging draws on the SMS credit and limits real sign-ins need
+  (T-3.14). **Why the first unattended check is the trigger** (the founder, 3 October 2026):
+  until then the founder's own phone is enough; after it, it isn't, because a check that needs a
+  human holding a phone is a check that stops being run. **Its first use has a name, not just a
+  condition** (the founder):
   P-67, the Playwright run moved out of T-3.14, with 06-TESTING's nightly run. A later task that
   wants a signed-in staging run unattended takes P-66 onto its own Needs line too.
   Test numbers go in this project and nowhere else, never in `velora-ic`, which production uses
@@ -2850,6 +2867,8 @@ Claude Code adds items here instead of doing unplanned work. Format:
   in, and a check that needs a human holding a phone stops being run (the founder, P-66). The one
   run moved here from T-3.14, which had it from T-3.13 (decision 18 of T-3.10 to T-3.13's plan):
   T-3.13's journeys on the real path, Firebase sign-in included. Then the same journeys nightly,
-  as 06-TESTING describes. Nothing is kept from a run, as in T-3.13: no traces, videos or
-  screenshots. At the founder's direction, 3 October 2026, so that P-66's first use "has a name,
-  not just a condition".
+  as 06-TESTING describes. **Both runs stay in this one item** (the founder, 3 October 2026): they
+  need the same thing, an unattended staging sign-in, so splitting them would make two items with
+  one dependency and no separate decision between them. Nothing is kept from a run, as in T-3.13:
+  no traces, videos or screenshots. At the founder's direction, 3 October 2026, so that P-66's
+  first use "has a name, not just a condition".
