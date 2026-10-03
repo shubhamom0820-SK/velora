@@ -2685,6 +2685,16 @@ Claude Code adds items here instead of doing unplanned work. Format:
   migrate job ("Running upgrade …"): the migrator reporting on itself. T-5.1's Done-when rested
   on exactly that (deploy run 37131243030). Fix: `scripts/migrate-with-url`, which both deploys
   run, reads `select version_num from alembic_version` on the same connection after the upgrade,
-  prints it, and fails unless it is the repo's single head (`alembic heads`). Test it in the
-  script's own test, a wrong database refused. At the direction of the advisor directing Sprint 5,
-  3 October 2026, after T-5.1.
+  prints it, and fails unless it is the repo's single head (`alembic heads`). Then, with the head
+  matching, it checks three objects by name in the script: the triggers `ledger_entries_only_men`
+  and `wallets_only_men` (D-076), each present and enabled (`pg_trigger.tgenabled`, since a
+  disabled trigger exists and refuses nothing), and the index `uq_ledger_entries_one_per_event`
+  (D-077), present, unique and valid. **Why these three and no others:** Alembic's schema
+  comparison never sees a trigger or a function, nor a partial index's condition, so these are
+  what a matching head can't vouch for; and they carry the regulatory position (D-076) and one
+  entry per event (D-077). A head that matches while `ledger_entries_only_men` is missing is the
+  false green at its most expensive. Every migration's objects listed by hand would rot; a later
+  guard of the same weight is added here by the task that builds it. Test it in the script's own
+  test: a wrong database refused, and a database at head with each of the three dropped, then
+  disabled, refused, naming the object. At the direction of the advisor directing Sprint 5,
+  3 October 2026, after T-5.1; the three objects added at the advisor's direction the same day.
