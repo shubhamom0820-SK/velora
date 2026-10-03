@@ -1700,6 +1700,13 @@ Claude Code adds items here instead of doing unplanned work. Format:
     refresh about 9, `GET /me` about 17. At 165 ms that is 2.3 s, 4.1 s, 1.5 s and 2.8 s of server
     time. `current_user` alone is about 8 round trips, 1.3 s. P-52 and P-53 take `/me` to about 11
     round trips, still about 1.8 s split as it is.
+  - **Unexplained, measured after P-53 deployed (3 October 2026):** from the staging machine,
+    staging's own Redis host now answers a TCP connect in 55.5 ms over IPv4 (its PING took 56 ms,
+    against 165 that morning), while its Postgres host still takes 164.6 ms over IPv6. Mumbai to
+    Singapore can cost about 56 ms; our Postgres path costs three times that, over both of
+    Supabase's paths (D-048). Worth one traceroute or a question to Supabase before deciding: at
+    56 ms a round trip, the split would cost about 0.6 s per `/me`, not 1.8 s, still far above
+    either colocation.
   - **The same city, measured:** from the staging machine in Singapore, a TCP connect to Supabase's
     Singapore endpoint takes 6.9 ms (AWS Singapore 4.0 ms); to its Mumbai endpoint, the control, 171
     ms, which matches the query round trip above. **The user's hop,** from the founder's machine:
@@ -1832,5 +1839,9 @@ Claude Code adds items here instead of doing unplanned work. Format:
   verify's drop is LIFO, not the check: with only LIFO off it is about 21, because a pool handing
   out its oldest connection first kept moving verify to connections that hadn't prepared its
   statements yet. That part is a cold-pool effect; in a long-warm pool the gap closes.
+  **Proved on staging, 3 October 2026,** after deploy run 37109881416 (commit `c228739`), read on
+  the machine and from outside: a pooled request with one select fell from 993 ms to 497 ms, six
+  round trips to three, as the wire count predicted; `/readyz` now answers 535 ms after `/healthz`,
+  against 1,097 ms that morning.
 
   Split from P-50, at the direction of the advisor directing T-3.2 to T-3.10.
