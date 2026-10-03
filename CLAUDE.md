@@ -95,10 +95,14 @@ git tag vX.Y.Z <commit> && git push origin vX.Y.Z   # release to production: onl
                  # (D-075, infra/PRODUCTION.md)
 ```
 
-**Local sign-in needs Chrome or Firefox, at `http://127.0.0.1`.** Both auth cookies are `Secure`
-everywhere, locally too (D-067), and Safari keeps no `Secure` cookie over plain
-`http://127.0.0.1`, so it signs in and then loses the session at the next refresh or reload.
-That's Safari, not a bug. Test Safari on staging, which has HTTPS.
+**Local sign-in: Chrome, at `http://127.0.0.1`. Expected, not yet observed** (3 October 2026).
+Both auth cookies are `Secure` everywhere, locally too (D-067). Chrome is expected to keep a
+`Secure` cookie over plain `http://127.0.0.1` and Safari not to, so Safari would sign in and then
+lose the session at the next refresh or reload: Safari, not a bug, and tested on staging, which has
+HTTPS. None of this has been seen: no browser has signed in to the web yet. From T-3.3 until 3
+October 2026 this line said "Chrome or Firefox" as fact, written from documentation, and Firefox
+isn't even installed on this Mac. T-3.10 rewrites it from what Chrome and Safari actually do, dated;
+T-3.13 adds Firefox, through Playwright.
 
 **Never run `make infra-reset` without telling the founder first, and never while another session
 is testing.** Every worktree on this machine shares one Docker stack, so a reset drops every
@@ -170,6 +174,9 @@ touches no other session.
 - [ ] Checkbox ticked in `docs/05-PLAN.md`
 - [ ] One commit (or a small, clean series) referencing the task ID
 - [ ] CI green for that exact commit — `/done` fast-forwards `main` only then (D-044)
+- [ ] Every check a claim rests on is in the repo: the script, plugin or test. **A fix whose
+      mechanism isn't in the repo is not a fix.** P-48 was reported done with its shuffle plugin
+      never committed, so "survives a shuffled order" was a claim no later report could re-check.
 
 ## Do not build (unless a task says so)
 

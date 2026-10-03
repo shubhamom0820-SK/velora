@@ -831,34 +831,70 @@ waits on the founder's decisions, so it is a task of its own, outside the sprint
 - [x] **At `/done`:** D-069 becomes Locked.
 - [x] **Commit:** `feat(auth): pin lock [T-3.9]`
 
+**T-3.10 to T-3.13 were planned together on 3 October 2026**, the app's first real screens.
+Recommended by Claude in a joint plan of 23 decisions, answered by the advisor directing it (Claude,
+in a separate chat) and relayed by the founder. Four became D-079 to D-082, one amended D-059, and the
+rest are written on the tasks below as "decision N". **T-3.14 isn't in that batch:** it needs
+Firebase's Blaze plan, which bills to the Google account P-0.13 creates, and that account doesn't
+exist yet. The batch is a chain, T-3.10 → T-3.11 → T-3.12 → T-3.13, each needing the last.
+
 ### T-3.10 · Web auth client
 - [ ] **Needs:** T-1.18, T-3.4, T-3.5 (`useMe()` reads `Me`), T-3.9 (the lock reads `has_pin` and calls `/auth/pin/verify`), and **P-55**: until it lands, a local gate run beside another session proves nothing (raised by the advisor, 3 October 2026)
 - [ ] Access token in Zustand (memory only). On load, in the `(auth)` and `(app)` layouts only, call `/auth/refresh` once to restore a session, sending `X-CSRF` from this environment's CSRF cookie (D-055). Marketing pages never call the API: they stay static (Lighthouse, P-37).
-- [ ] Cookie names at build time: `next.config` maps `APP_ENV` to the suffix (production → `prod`, staging → `staging`, anything else under `next dev` → `local`); no new Vercel variable. The api client sends `credentials: "include"` on `/v1/auth/*` only, the refresh cookie's path. Until now it sends no credentials at all, so no cookie would arrive.
-- [ ] On any 401 `TOKEN_EXPIRED`: single-flight refresh, then retry the request once. Refreshes are serialised across tabs with the Web Locks API, so two tabs never rotate one token (D-067's 10-second grace covers what's left).
-- [ ] `useMe()` query; `<OnboardingGate>` redirects to `/onboarding/<step>`, named by `onboarding_t`, placeholders until T-3.11 and T-3.12 build the screens; `(app)` routes require `done`; a failed refresh goes to `/login`.
-- [ ] PIN lock screen (the prototype's PinPad): shown on load and after 5 min hidden if `has_pin`. A deterrent, not protection (D-069).
-- [ ] Local development at `127.0.0.1` only: `localhost:3000` → `127.0.0.1:8000` is cross-site, so the `Lax` refresh cookie silently isn't sent. Remove `localhost` from the local `CORS_ORIGINS` (`api/.env.example`, the test settings), so that mistake fails loudly.
+- [ ] Cookie names at build time: `next.config` maps `APP_ENV` to the suffix, an allowlist (rule 16): `production` → `prod`, `staging` → `staging`, `local` and `ci` → `local` (T-3.13's E2E runs a production build against an API whose `ENV` is `local`), and `local` under `next dev` with `APP_ENV` unset. No new Vercel variable. The api client sends `credentials: "include"` on `/v1/auth/*` only, the refresh cookie's path. Until now it sends no credentials at all, so no cookie would arrive.
+- [ ] On any 401 `TOKEN_EXPIRED`: single-flight refresh, then retry the request once. Refreshes are serialised across tabs with the Web Locks API, so two tabs never rotate one token (D-067's 10-second grace covers what's left). Read the CSRF cookie inside the lock, after any refresh ahead of it has set new values.
+- [ ] `useMe()` query; `<OnboardingGate>` redirects to the user's step at its D-080 URL. This task builds D-080's slug map, with a placeholder page per step until T-3.11 and T-3.12 build the screens. `(app)` routes require `done`.
+- [ ] **When restoring the session fails** (decision 8): only a 401 sends you to `/login`. A network failure or a 5xx shows an error with Retry, because a phone losing signal mustn't look like being signed out.
+- [ ] **Who owns the frame** (decision 5; T-3.11 and T-5.6 carry the same line). This task owns what the `(auth)` and `(app)` layouts do: restore the session once per page load, apply the gates, and show the PIN lock. They draw nothing else but a full-screen loading or error state and the lock screen. T-3.11 owns the onboarding frame. T-5.6 adds the header and bottom nav inside the `(app)` layout, never replacing what this task put there. The root layout keeps `QueryProvider`, so P-37's smoke marker is untouched.
+- [ ] **PIN lock screen:** `PinPad` is a `ui/` primitive with a test and a `/dev/ui` entry (08-DESIGN §4); T-3.12 reuses it. The lock shows on load, and after 5 minutes hidden, if `has_pin`, wherever a session exists: onboarding and the app, never `/login`. A wrong PIN shows `attempts_left`; `SESSION_REVOKED` goes to `/login`; `reset_required` offers the way out below. A deterrent, not protection (D-069).
+- [ ] **Durations kept in the browser** (decision 9): the 5 minutes, and T-3.11's 400 ms before a username check, are named constants. That's a Checklist A exception, recorded here as T-2.1 recorded its copy: a deterrent the browser runs is not a limit the server enforces, and reading `app_config` would need a new public endpoint.
+- [ ] **A sign-out before T-9.8** (decision 7): `logout()` in the session layer, and two controls. "Forgot your PIN? Sign out" goes on the lock screen, D-069's way out. A quiet "Sign out" goes in the onboarding frame's top bar, which T-3.11 places. T-3.14's item 5 needs the second: its tester can't reach the PIN step before Sprint 4, because it comes after photos (D-068).
+- [ ] Local development at `127.0.0.1` only: `localhost:3000` → `127.0.0.1:8000` is cross-site, so the `Lax` refresh cookie silently isn't sent. Remove `localhost` from the local `CORS_ORIGINS` (`api/.env.example`, the test settings), so that mistake fails loudly. In CLAUDE.md's local sign-in paragraph, add that reason, and replace "expected, not yet observed" with what the Done-when below sees, dated.
+- [ ] **Done when, locally, in Chrome against `make dev`** (decision 10). This task has no phone screen, so sign in from the browser console, with the two requests T-3.11's screens will make. Then observe, on the wire (devtools' network and cookie panes), never inferred from a test:
+  - a reload restores the session;
+  - both cookies rotate, and the next refresh carries the new values;
+  - two tabs reloaded together both stay signed in;
+  - `test_woman`'s lock appears, and a wrong PIN shows the attempts left;
+  - sign-out clears both cookies;
+  - Safari, going through the same steps, loses the session at reload.
+
+  This proves T-3.14's items 4 and 6, and parts of 1, 3 and 5, as mechanism. Nothing comes off T-3.14's list, which only staging can prove.
+- [ ] **Done when, on staging, after deploy, with nobody signed in:** `/login` at `https://staging.veloraapp.co.in` calls refresh with credentials and gets `401 AUTH_REQUIRED`, not a CORS error. It is the first credentialed request staging has served: the leg T-3.14 would otherwise have to debug at the same time as Firebase.
 - [ ] **Commit:** `feat(web): auth session, refresh, route gates, pin lock [T-3.10]`
 
 ### T-3.11 · Web onboarding 1–7
 - [ ] **Needs:** T-3.10, T-3.7
-- [ ] **New dependencies, the first forms to use them:** web `react-hook-form` and `zod`, with `@hookform/resolvers` to join them. CLAUDE.md pins them, but nothing has installed them: T-2.3's waitlist form uses plain React state on purpose, because two form libraries for one email field would spend the landing page's performance score (98–100, T-2.1). Ask before installing, and record them in `01-DECISIONS.md` (rule 4).
-- [ ] **Re-examine the CSP's `'unsafe-inline'` for scripts here (D-059).** It was justified while no user-supplied text rendered, and this is the first task that renders some: the user's own name and `@username`. Decide again, nonces or keep it, and write the reason down (a new decision if it changes). React's escaping is the real defence; the CSP is the second line. T-6.5 re-examines it again.
-- [ ] Screens from the prototype: phone, OTP (6 boxes, not the prototype's 4: D-066 and 08-DESIGN's `OtpInput`; paste support, resend timer from `resend_after_s`), DOB (native date input; under-18 message), gender (with lock warning), seeking + intents (pick 1–3), name/hometown/city, username (debounced availability 400 ms, shows `veloraapp.co.in/@name`).
-- [ ] Each screen: submit disabled until valid; server errors shown inline from `ApiError.code` via `en.ts`.
-- [ ] Decide whether onboarding URLs carry the step's enum value, as T-3.10's placeholders do, or a stable slug of their own, so renaming a step never breaks a link.
-- [ ] Phone step: a consent line naming Google before the code is sent — Google's Firebase sends it, processes the number in the United States and keeps it for abuse prevention (D-048, `/privacy`). Firebase asks apps to get this consent.
+- [ ] **New dependencies, the first forms to use them, approved** (decision 1): web `react-hook-form` and `zod`, with `@hookform/resolvers` to join them, pinned exactly. Record them in `01-DECISIONS.md` under the next free number at install (rule 4). CLAUDE.md pins them, but nothing has installed them: T-2.3's waitlist form uses plain React state on purpose, because two form libraries for one email field would spend the landing page's performance score (98–100, T-2.1).
+- [ ] **The CSP's `'unsafe-inline'` stays** (D-059's amendment of 3 October 2026): write its reason in `security-headers.ts`'s comment. Its trigger, a screen first rendering another user's text, is D-059's to watch.
+- [ ] **Screens**, at D-080's URLs, built only from what 08-DESIGN's list of the prototype's errors leaves trusted:
+  - phone and code at `/login`: the code in 6 boxes, from the new `OtpInput` primitive (08-DESIGN §4), with paste, `autocomplete="one-time-code"`, and a resend timer from `resend_after_s`;
+  - birthday (D-079): a native date input, a confirm step, no age check in the browser, and a final screen after `UNDERAGE`;
+  - gender, with the lock warning;
+  - looking-for: seeking plus 1–3 intents, labelled from `en.ts` by id (P-26);
+  - name, hometown and city;
+  - username: a check 400 ms after typing stops, showing `<site>/@name` with the host from `site.ts`, never a hard-coded domain.
+- [ ] **The onboarding frame** (decision 5; T-3.10 and T-5.6 carry the same line): `src/components/onboarding/StepFrame`, from the prototype's `Step`: back arrow, 12-segment progress, title, body, footer, 520 px. It's for onboarding only; T-4.6 and T-4.7 reuse it. It holds T-3.10's quiet "Sign out". Back arrows follow D-080.
+- [ ] **Which path signs in** (D-081): Path B where `APP_ENV` is `local` or `ci`. On a Firebase build, until T-3.14, `/login` says sign-in isn't open yet and links to the waitlist. Remove "web" from `AUTH_PHONE_PROVIDER`'s row in 02-ARCHITECTURE §11.
+- [ ] **Each screen:**
+  - submit is disabled until the input has the schema's shape, and nothing more (D-082);
+  - server errors show inline, from `ApiError.code` via `en.ts`;
+  - loading and error states (rule 14);
+  - `ACCOUNT_BANNED`, `ACCOUNT_FROZEN` and `FORBIDDEN` at sign-in get one neutral line, "This account can't sign in.", with a link to `/contact`, which lists grievance@ (decision 16). P-51 may change it.
+- [ ] **Copy** (decision 4): every new string is drafted from wording already in `en.ts` (/terms, /privacy) and the decisions, and listed in this task's plan for the founder's approval.
+- [ ] **No inline `style=`.** Production's CSP has no `style-src 'unsafe-inline'`, so a progress width or a counter set inline works under `next dev` and is blocked everywhere else (P-41's lesson). Use classes only.
+- [ ] The consent line naming Google moved to T-3.14 (D-081): on Path B, Google sends nothing.
 - [ ] **Commit:** `feat(web): onboarding steps 1-7 [T-3.11]`
 
 ### T-3.12 · Web onboarding 8, 10, 11
 - [ ] **Needs:** T-3.11, T-3.8, T-3.9
-- [ ] About (40–300 counter), interests (exactly 5), PIN (set + confirm, skip). Photos (9) and selfie (12) come in Sprint 4 — route placeholder that says "coming next".
-- [ ] Interests and PIN come after photos in the step order (D-068), so until T-4.3 a real user can't reach these two screens: test them by setting the step. Their URLs follow T-3.11's enum-or-slug decision.
+- [ ] About (40–300 counter), interests (exactly 5, labelled from `en.ts` by id, P-26), PIN (set + confirm, skip, on T-3.10's `PinPad`). Photos (9) and selfie (12) come in Sprint 4: a placeholder in the onboarding frame that says "coming next", with its "Sign out".
+- [ ] **The PIN** (D-082): set, confirm, send. A refusal (D-069's weak PINs) returns to "set" with the server's reason; the web holds no copy of D-069's list. `/auth/pin/set` answers 204, so refetch `Me` after it.
+- [ ] Interests and PIN come after photos in the step order (D-068), so until T-4.3 a real user can't reach these two screens: test them by setting the step. Their URLs are D-080's.
 - [ ] **Commit:** `feat(web): onboarding about, interests, pin [T-3.12]`
 
 ### T-3.14 · Firebase phone sign-in (launch path)
 - [ ] **Needs:** T-3.3, T-3.10 (it restores the session on reload, which the Done-when checks), T-3.11 (its phone and OTP screens, which this task's web step puts Firebase on), and **P-0.13** (the Google billing account, verified: Firebase's Blaze plan bills to it)
+- [ ] **Not in T-3.10 to T-3.13's batch** (planned 3 October 2026): P-0.13's account doesn't exist yet. When this task starts, switch D-081's Firebase builds from "sign-in isn't open yet" to the Firebase flow.
 - [ ] **New dependencies (approved, recorded in D-035):** api `firebase-admin`; web `firebase`.
 - [ ] Firebase console: project created, Phone provider enabled, **App Check with reCAPTCHA
   Enterprise enforced on Authentication**, authorised domains = `veloraapp.co.in` + `staging.veloraapp.co.in`
@@ -869,8 +905,11 @@ waits on the founder's decisions, so it is a task of its own, outside the sprint
   `FIREBASE_TOKEN_INVALID`; throttle 10/IP/hour and 5/phone/hour.
 - [ ] Then reuse the exact same service as T-3.3: banned check → find-or-create user + profile +
   wallet + prefs → session + cookies → `{access_token, user}`.
-- [ ] The phone screen shows T-3.11's consent line naming Google before `signInWithPhoneNumber`
-  runs (D-048, `/privacy`). Deleting the Firebase user after sign-in is P-39, not this task.
+- [ ] The phone screen shows a consent line naming Google before `signInWithPhoneNumber` runs:
+  Google's Firebase sends the code, processes the number in the United States and keeps it for abuse
+  prevention (D-048, `/privacy`). Firebase asks apps to get this consent. It moved here from T-3.11
+  (D-081): on Path B it would be false. Deleting the Firebase user after sign-in is P-39, not this
+  task.
 - [ ] Web: Firebase JS SDK on the phone screen (invisible reCAPTCHA), `signInWithPhoneNumber`,
   6-digit code box (Path B's codes are 6 digits too since D-066, so the OTP screen is the same
   on both paths), resend cooldown, friendly copy for `auth/too-many-requests`,
@@ -918,12 +957,36 @@ waits on the founder's decisions, so it is a task of its own, outside the sprint
   And expect it slow while the API is in Singapore: about 4 s for a first sign-in, about 3 s per
   `/me`, measured as round trips (P-49, P-50). Slow is not failed; record the times beside the
   result.
+  **Already proved locally, as mechanism:** T-3.10 and T-3.13 prove items 4 and 6, and parts of 1,
+  3 and 5, against the local stack. That takes nothing off this list, whose proof is staging's, but
+  if staging fails, the platform is the suspect, not the code.
+- [ ] **One Playwright run against staging** with the test number, T-3.13's journeys on the real
+  path. It moved here from T-3.13 (decision 18 of T-3.10 to T-3.13's plan): it needs this task.
 - [ ] **Commit:** `feat(auth): firebase phone sign-in [T-3.14]`
 
 ### T-3.13 · E2E signup
-- [ ] **Needs:** T-3.12
-- [ ] Playwright against local stack with `AUTH_PHONE_PROVIDER=fake` (OTP read from a test-only endpoint enabled only when `ENV=local`): new man reaches the photos step; under-18 is refused and can't retry with the same number (D-072: the account is deleted and only the number's hash kept).
-- [ ] One staging run against the real Firebase path using a Firebase **test phone number** (fixed code, no SMS sent, no cost), only from a Firebase project production doesn't use (D-065), as T-3.14 settles.
+- [ ] **Needs:** T-3.12. **Not T-3.14:** the one run on staging's Firebase path moved there (decision 18), so this task closes without P-0.13.
+- [ ] **New dependency, approved** (decision 1): web `@playwright/test`, a devDependency pinned exactly, with Playwright's Chromium. Record it in `01-DECISIONS.md` under the next free number at install.
+- [ ] **Journeys,** Chromium at 390 × 844 and 1280 × 800 (06-TESTING), against the local stack with `AUTH_PHONE_PROVIDER=fake`:
+  - a new man reaches the photos step;
+  - under 18 is refused, and the same number tried again gets a normal answer and no code (D-072, D-073: on Path B a ban is silent);
+  - T-3.10's mechanism, so it runs on every push: a reload restores the session, a refresh rotates both cookies, two pages reloaded together both stay signed in, and sign-out clears both cookies.
+- [ ] **Where it runs** (decision 19):
+  - its own database and Redis database, taken as a P-55 slot, so an E2E run and any number of pytest runs never meet (the plan first said a `velora_e2e` made by `make infra-up`; the slot does the same and frees itself);
+  - a production build (`next build && next start`, `APP_ENV=local`), so the strict CSP is the one tested;
+  - ports apart from `make dev`'s;
+  - any CSP violation in the browser console fails the run.
+- [ ] **The test-only OTP endpoint** (decision 20) answers with the last code the fake SMS provider sent to a number, which is what the phone would have received. It is:
+  - served only where `ENV` is `local` and `AUTH_PHONE_PROVIDER` is `fake`, an allowlist;
+  - a POST with the number in the body, because the request logger binds the path and uvicorn logs path and query;
+  - `include_in_schema=False`, so `make types` is the same everywhere;
+  - listed in 04-API under a local-only heading;
+  - covered by a rule-15 test through `captured_logs`.
+- [ ] **CI** (decision 21): a new job on every push. `/done`'s gate (D-044) and the release gate (D-075) then wait on it.
+- [ ] **Nothing kept from CI** (decision 22): no traces, videos or screenshots. A trace records request and response bodies (numbers, codes, access tokens), and a screenshot of the phone screen shows the number. Failures report through their assertion messages.
+- [ ] **The shuffle plugin** (decision 23): commit P-48's seeded shuffle option to `api/tests/conftest.py`, opt-in, with no new dependency, unless T-5.1 already has. Run the whole API suite in 8 seeded orders before `/done`, with the seeds in this task's record. CI stays in file order. A fix whose mechanism isn't in the repo is not a fix (CLAUDE.md).
+- [ ] **Firefox** (decision 2): run T-3.10's local browser checks once in Playwright's Firefox, locally, not in CI, and put what it shows into CLAUDE.md's local sign-in paragraph, dated.
+- [ ] **06-TESTING's E2E section** says what runs: every push, not "every PR touching `web/`" (D-044 has no pull requests); the nightly staging run waits for T-3.14; J1's "→ discover" is T-4.9's, since photos is as far as this task gets.
 - [ ] **Commit:** `test(e2e): signup flow [T-3.13]`
 
 ---
@@ -992,6 +1055,7 @@ waits on the founder's decisions, so it is a task of its own, outside the sprint
 - [ ] **Needs:** T-4.3, T-3.12
 - [ ] 6-slot grid; tap empty slot → file picker (`accept="image/*"`, `capture` not forced); client resize to ≤ 2000 px before upload (canvas) to save data; PUT to presigned URL with progress; states per slot: uploading %, checking, approved, rejected (with reason + retry). Drag to reorder (or up/down buttons on mobile).
 - [ ] Women see the private-album note.
+- [ ] Built in T-3.11's `StepFrame`, at D-080's `/onboarding/photos`, replacing T-3.12's placeholder.
 - [ ] **Widen the CSP here (D-059):** `connect-src` for R2's upload endpoint (the presigned PUT), and `img-src` for `PUBLIC_CDN_URL` and `blob:` previews. Uploads and previews fail with a CSP error until then.
 - [ ] **Commit:** `feat(web): photo upload step [T-4.6]`
 
@@ -999,6 +1063,7 @@ waits on the founder's decisions, so it is a task of its own, outside the sprint
 - [ ] **Needs:** T-4.5, T-4.6
 - [ ] Request challenge → show pose instruction → `getUserMedia({video:{facingMode:"user"}})` → live mirrored preview → capture to canvas → upload as `kind=selfie` → submit → poll `GET /verification/latest` every 2 s (max 60 s) → result. Handles permission denied with instructions per browser.
 - [ ] Men: "Skip for now". Women: cannot skip.
+- [ ] Built in T-3.11's `StepFrame`, at D-080's `/onboarding/selfie`, replacing T-3.12's placeholder.
 - [ ] **Allow the camera here (D-059):** T-2.5's Permissions-Policy has `camera=()`, so `getUserMedia` is refused until this task makes it `camera=(self)`; add `blob:` wherever the captured frame shows. T-4.9's fake-camera E2E fails until then.
 - [ ] **Commit:** `feat(web): selfie verification step [T-4.7]`
 
@@ -1016,7 +1081,7 @@ waits on the founder's decisions, so it is a task of its own, outside the sprint
 ### T-4.10 · Location
 - [ ] **Needs:** T-3.5, and **P-38** (the seeded areas are still Bengaluru's; D-013 is Phagwara)
 - [ ] `PUT /me/location` accepts `{lat,lng}` (must be inside India bounding box) or `{area_id}` (uses centroid). `GET /areas?city=`.
-- [ ] Web: onboarding asks permission once with a clear reason; on deny → area picker. Location refreshed on app open if > 6 h old.
+- [ ] Web: onboarding asks permission once with a clear reason; on deny → area picker. Location refreshed on app open if > 6 h old. The question has no `onboarding_t` step: give it a slug in D-080's map and a place in the flow, in T-3.11's `StepFrame`.
 - [ ] The seed (T-1.15) gives each profile both its `area_id` and a location scattered near that area's centroid, as if it had shared its position. If `{lat,lng}` here leaves `area_id` empty, or sets it some other way, make the seed match.
 - [ ] **Allow location here (D-059):** T-2.5's Permissions-Policy has `geolocation=()`, so the browser refuses the position without ever asking until this task makes it `geolocation=(self)`. Until then everyone silently lands on the area picker.
 - [ ] **Commit:** `feat(profiles): location [T-4.10]`
@@ -1039,7 +1104,7 @@ before merging (rule 11 untouched).
 
 **From T-5.1, `make infra-reset` is the only reset.** The first ledger row makes its user
 permanent: the ledger refuses DELETE and TRUNCATE, and foreign keys into `users` are RESTRICT.
-Starting over means `make infra-reset` (every volume: `velora`, `velora_test`, MinIO, Redis), then
+Starting over means `make infra-reset` (every volume: `velora`, every test run's, MinIO, Redis), then
 `make infra-up migrate seed`. That stack serves every worktree on the machine (`CLAUDE.md`). No
 migration ever writes a ledger row (rule 5), so no downgrade needs to delete one. Per-test rollback
 still works, since a rollback isn't a DELETE. Tests that commit rows follow 06-TESTING's rules for
@@ -1108,7 +1173,10 @@ committed rows.
   - **The app role:** debit and credit as `velora_app`.
   - **The seed and `make_user`.**
   - **Rule 15:** no key, hash, PIN, token or phone number in a log or response, with the log tests
-    also run in shuffled order.
+    also run in shuffled order. P-48's shuffle plugin isn't in the repo (found planning T-3.10 to
+    T-3.13): commit it here, an opt-in option in `api/tests/conftest.py` with no new dependency,
+    unless T-3.13 already has. Never a throwaway copy: a fix whose mechanism isn't in the repo is
+    not a fix (CLAUDE.md).
 - [ ] **Break every guard once, on a database of the task's own.** That is `velora_t51_test`, made
   with `createdb` in the shared Postgres (never `infra-reset`), with `TEST_DATABASE_URL` pointed at
   it. Breaking a constraint in the shared `velora_test` would hit every session using it, however
@@ -1120,7 +1188,9 @@ committed rows.
   - the seed's key.
 
   Restore each byte for byte, proved by SHA-256. The report lists every weakening and its result.
-  The full `make test` still runs on `velora_test`.
+  **Since P-55** every run has a database of its own, created empty when it starts, so
+  `TEST_DATABASE_URL` is optional here. It still works, and the run still takes a slot for its Redis
+  database. The full `make test` runs on its own slot's database.
 - [ ] **Done when:** the docs commit after `/done` names the staging deploy run that applied both
   migrations.
 - [ ] **Commit:** `feat(wallet): row-locked debit and credit [T-5.1]`
@@ -1131,8 +1201,8 @@ committed rows.
 - [ ] **Committed rows, never deleted** (the ledger refuses DELETE and TRUNCATE):
   - fresh men each run, never onboarded, on numbers `make_user` never generates (T-5.1's helper);
   - every assertion scoped to their ids;
-  - local `velora_test` keeps them until `make infra-reset`; CI starts empty;
-  - never the owner's trigger bypass. A database per run is P-55.
+  - each run's database is its own, recreated when its slot is next taken (P-55); CI starts empty;
+  - never the owner's trigger bypass.
 - [ ] **A dedicated 50-connection engine,** asserting 50 distinct backends. If Postgres runs out of
   connections, fail loudly; never skip.
 - [ ] **Prove the overlap by what the lock decides** (`f543b0d`): all 50 are inside open transactions
@@ -1180,6 +1250,11 @@ committed rows.
 - [ ] The `(app)` layout's header and bottom nav: Discover, Chats, Wallet and You, each a placeholder
   route until its task. No Vibe (after beta, D-010). The wordmark comes from `APP_NAME`, never the
   prototype's "Knot" (rule 17).
+- [ ] **Who owns the frame** (decided planning T-3.10 to T-3.13; T-3.10 and T-3.11 carry the same
+  line). T-3.10's `(app)` layout restores the session, gates on `done` and shows the PIN lock. This
+  task adds the header and nav inside that layout, in `src/components/shell/`, never replacing what
+  T-3.10 put there, and never on `(auth)` routes. Onboarding has its own frame, T-3.11's
+  `StepFrame`, with no header or nav, as in the prototype.
 - [ ] **Provisional (08-DESIGN):** no visual design exists for the app's screens, and the prototype
   was wrong four times in Sprint 5's plan alone: the refund button, gift's direction, the price list
   and "credits" for Velas. Build only what this task names; anything more waits on P-57.
@@ -1240,7 +1315,7 @@ committed rows.
 - [ ] Match celebration sheet → "Open thread · 5 Velas" / "Keep swiping".
 - [ ] Empty states: no one nearby / filters too narrow (clear button).
 - [ ] 60 fps on the test phone (check Chrome performance panel).
-- [ ] **Re-examine the CSP's `'unsafe-inline'` again here (D-059):** the first task that renders other people's text, their names and bios. If T-3.11 kept the allowance, the threat is now someone else's input on your page.
+- [ ] **Re-examine the CSP's `'unsafe-inline'` here (D-059's trigger, amended 3 October 2026):** the first screen planned to render another user's text, their names and about. If any screen gets there sooner, the re-examination moves to it. T-3.11 kept the allowance for the user's own text; here the threat is someone else's input on your page. Nonces scoped to the signed-in routes by Next's proxy leave the marketing pages static (the amendment).
 - [ ] **Commit:** `feat(web): discover deck [T-6.5]`
 
 ### T-6.6 · Search and @username
@@ -2066,6 +2141,10 @@ Claude Code adds items here instead of doing unplanned work. Format:
   email check via `capfd`, which can miss a logger bound to an earlier stream); both now use a new
   `captured_logs` fixture whose probes, through structlog and the stdlib, must arrive, and each goes
   red when a leak is planted.
+  **Its shuffle plugin was never committed** (found planning T-3.10 to T-3.13, 3 October 2026). So
+  "proved by shuffling" above, and "survives a shuffled order" in every report since, can't be
+  re-checked from the repo. The fix itself, `configure_logging()`'s one processor list, is in. T-3.13
+  commits the plugin, or T-5.1 if it gets there first.
 - [ ] P-49 · Colocate the API and the database, and decide which city. **Before Sprint 6**, whose
   discovery pays the split below several times per request. Worst case if it stays: every
   authenticated request costs seconds before any work, in an app whose complaint driver is lag

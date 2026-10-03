@@ -837,6 +837,23 @@ never find a sixth header we didn't want. Where we care about what is served, th
 Done-whens: we had read the headers, watched Chrome refuse the frame and run Lighthouse, and the
 outsider still saw the thing we hadn't thought to look for.
 
+**Amended 3 October 2026 (planning T-3.10 to T-3.13): `'unsafe-inline'` stays for the user's own
+text, and is re-examined when a screen first renders another user's.** T-3.11 and T-3.12 are the
+first screens to render text a user typed, but only the user's own, shown back to them: the first
+name (letters only, T-3.7), the `@username` (`[a-z0-9._]`), hometown, city and about. The worst a
+script there could do is self-XSS, behind React's escaping, which is the real defence. So the
+allowance stays, and T-3.11 writes the reason in `security-headers.ts`.
+**The trigger is a fact, not a task number: re-examine it when a screen first renders another
+user's text.** Today that is T-6.5's discovery deck, with other people's names and about text. If
+any screen gets there sooner (a profile, a chat preview, a notification), the re-examination moves
+to it.
+**Nonces are cheaper than this decision first priced them.** They were rejected because they make
+every page dynamic. Scoped by Next's proxy to the signed-in routes, `(auth)` and `(app)`, they leave
+the marketing pages static with their Lighthouse margin; the signed-in pages carry no performance
+target and are never cached for anyone else. That is the option to weigh at the trigger.
+Recommended by Claude in the joint plan for T-3.10 to T-3.13; answered by the advisor directing
+that plan (Claude, in a separate chat), relayed by the founder, 3 October 2026.
+
 ### D-060 · Security primitives come from vetted libraries — Locked
 **The libraries (rule 4):** PyJWT for access tokens, argon2-cffi for PINs, cryptography for phone
 encryption (Fernet) and key derivation (HKDF), phonenumberslite for parsing numbers, and `hmac`,
@@ -1162,6 +1179,12 @@ Recommended by Claude in the joint plan for T-3.2 to T-3.10; answered by the adv
 that plan (Claude, in a separate chat); approved by the founder on 3 October 2026. Locked at T-3.5's
 `/done`, 3 October 2026.
 
+
+**Amended 3 October 2026 (planning T-3.10 to T-3.13): "Chrome or Firefox" above is expected, not
+observed.** It came from how browsers are documented to treat `http://127.0.0.1`. No browser had
+signed in to the web when it was written, and Firefox isn't installed on the development Mac.
+CLAUDE.md now says so. T-3.10 records what Chrome and Safari do, and T-3.13 what Firefox does,
+each dated; the decision itself, `Secure` everywhere, stands.
 ### D-068 · Onboarding: a step's endpoint works at the step or after it, never before — Locked
 **The decision (T-3.6, T-3.7):**
 - Each onboarding step's endpoint works at that step, advancing it, and after it, as an edit that
@@ -1630,6 +1653,92 @@ its selfies. Both inherit the rule: any file they store behind a user row joins 
 The options were Claude's (P-54). (a) was chosen, with the condition on files, by the advisor
 directing T-3.2 to T-3.10 (Claude, in a separate chat), relayed by the founder, 3 October 2026.
 Locked at P-54's `/done`, 3 October 2026, with the row half built; the file half is T-4.2's.
+
+### D-079 · The browser never judges the date of birth — Open
+**The decision (T-3.11):** the birthday screen sends the date as typed, and the server alone works
+out the age, in IST (rule 6, D-009). The browser has no under-18 check and computes no age ("you'll
+appear as 25"). Before the date is sent, a confirm step shows it in words and says it can't be
+changed. After `UNDERAGE` comes a final screen, and the session is cleared: D-072 has deleted the
+account.
+
+**Why no check in the browser:** it would make D-009's hard gate soft. A minor shown "you must be
+18" changes the year, the server never sees the attempt, and the number is never barred. The usual
+instinct, validate early, is wrong here: the refusal has to happen where it is recorded.
+
+**Why the confirm step:** once sent, the date can't change (`IMMUTABLE_FIELD`, T-1.9's trigger), and
+a date under 18 deletes the account and bars the number for good (D-072). A slipped year has to be
+caught by the person before that, because nothing can undo it after.
+
+**The prototype differs** (08-DESIGN lists it): it checks the age in the browser, and says "This
+device can't be registered" when it is the number that is barred (`/terms`).
+
+**Rejected:** the prototype's check in the browser; sending without a confirm step.
+
+Recommended by Claude in the joint plan for T-3.10 to T-3.13; answered by the advisor directing
+that plan (Claude, in a separate chat), relayed by the founder, 3 October 2026.
+**Open** until T-3.11 builds it; its `/done` marks it Locked on the founder's word.
+
+### D-080 · Onboarding URLs are stable slugs, and a phone number never goes in a URL — Open
+**The decision (T-3.10, T-3.11):**
+- Each `onboarding_t` step has a URL under `/onboarding/`, from one typed map in the web that stops
+  compiling when the enum gains a value, with a test that the slugs are unique: `birthday`,
+  `gender`, `looking-for`, `name`, `username`, `about`, `photos`, `interests`, `pin`, `selfie`.
+  Renaming a step changes a key in the map, never a URL. T-4.10's location question, which has no
+  step of its own, takes a slug in the same map.
+- Phone and code are one page, `/login`, in two stages. The code screen needs the number, and a
+  phone number never goes in a URL, where browser history and every log along the way keep it
+  (rule 15).
+- A URL for a step after the user's redirects to theirs; theirs or an earlier one loads, as an edit
+  (D-068). There is no back arrow on the birthday, gender and looking-for screens: behind each is
+  sign-in or an answer that can't change. Birthday or gender opened by URL after it's answered shows
+  the answer read-only (the age only: `Me` carries no date of birth).
+
+**Why slugs:** the enum is the database's name for a step, and a rename there shouldn't break a link
+or show an internal name. **Why no back arrow there:** the prototype puts one on every screen,
+including onto answers the server will refuse to change.
+
+**Rejected:** the enum in the URL, as T-3.10's first text had it; the code screen at its own URL.
+
+Recommended by Claude in the joint plan for T-3.10 to T-3.13; answered by the advisor directing
+that plan (Claude, in a separate chat), relayed by the founder, 3 October 2026.
+**Open** until T-3.11 builds it; its `/done` marks it Locked on the founder's word.
+
+### D-081 · The web signs in by the path `APP_ENV` names — Open
+**The decision (T-3.11):** builds where `APP_ENV` is `local` or `ci` sign in by Path B
+(`/v1/auth/otp/*`, the fake provider locally); `staging` and `production` sign in by Firebase. It is
+an allowlist (rule 16), like T-3.10's cookie suffixes, with no new Vercel variable, and the web
+never reads `AUTH_PHONE_PROVIDER` (02-ARCHITECTURE §11 is corrected in T-3.11). Until T-3.14, a
+Firebase build's `/login` says sign-in isn't open yet and links to the waitlist.
+
+**Why:** staging and production run Firebase, where Path B answers 404 (D-066), and the landing
+page's "Get started" goes to `/login`. Production's first release doesn't wait on T-3.14, so without
+this it could show the public a sign-in form that can't work.
+
+**The consent line naming Google moves to T-3.14.** It says Google's Firebase sends the code, and on
+Path B nothing of Google's does: on T-3.11's screens it would be false.
+
+**Rejected:** a `NEXT_PUBLIC_` variable the build refuses without (one more value on two projects,
+when `APP_ENV` already says which environment it is); leaving `/login` broken until T-3.14.
+
+Recommended by Claude in the joint plan for T-3.10 to T-3.13; answered by the advisor directing
+that plan (Claude, in a separate chat), relayed by the founder, 3 October 2026.
+**Open** until T-3.11 builds it; its `/done` marks it Locked on the founder's word.
+
+### D-082 · Business rules are checked on the server only — Open
+**The decision (T-3.11, T-3.12, and every form after):** the browser checks only what the API's
+schema states: lengths, the username's format, a 6-digit code, a 4-digit PIN. Every rule beyond the
+schema is the server's alone and comes back inline from `ApiError`: no links or phone numbers in
+about (T-3.7), reserved usernames (D-068), weak PINs (D-069). For the PIN that means set, confirm,
+send; a refusal returns to "set" with the server's reason.
+
+**Why:** one copy of each rule. Two copies drift, and a validation bug then lives for a year in
+whichever copy nobody tests.
+
+**Rejected:** copying the rules into the browser for instant feedback.
+
+Recommended by Claude in the joint plan for T-3.10 to T-3.13; answered by the advisor directing
+that plan (Claude, in a separate chat), relayed by the founder, 3 October 2026.
+**Open** until T-3.11 builds it; its `/done` marks it Locked on the founder's word.
 
 ---
 

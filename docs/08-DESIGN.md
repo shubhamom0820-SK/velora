@@ -13,6 +13,33 @@ is the live spec and the prototype is historical for that screen.** The prototyp
 to match (P-22). The OTP screen is one such screen: its four boxes and "Any four digits work
 here" predate D-066's six-digit codes, and `OtpInput` below is the spec.
 
+**Read this before trusting the prototype for any screen.** Planning T-3.10 to T-3.13, the first
+real app screens, found it wrong 13 times on the onboarding and lock screens alone, each overridden
+by a decision or a rule. With Sprint 5's four (§5), it is the evidence for P-57's open question:
+the app has no visual design, only a prototype that shows which screens exist.
+1. **Code:** four boxes and "Any four digits work here". Six digits (D-066, `OtpInput`).
+2. **Phone:** "Continue with Google / Apple", which no plan or decision includes. Dropped.
+3. **Birthday:** works out the age in the browser, blocks under 18 before the server sees the date,
+   and says "This device can't be registered". The server decides, and it bars the number (D-079,
+   D-072).
+4. **Gender:** "buy credits". Velas (D-049).
+5. **Looking for:** one intent, labelled in code. One to three (D-041), labelled from `en.ts` by id
+   (P-26).
+6. **Username:** "taken" checked against a local list, only a 4-character minimum, and
+   `knot.app/@`. The server's check and suggestion, `[a-z0-9._]{4,20}`, the host from `site.ts`.
+7. **Interests:** free strings. Catalogue ids (P-26).
+8. **Lock screen:** compares the PIN in the browser, has no way out of a forgotten PIN, and says
+   "Knot is locked". `/auth/pin/verify` with attempts left, a sign-out (D-069), `APP_NAME` (rule 17).
+9. **Progress kept in `localStorage`.** The server's `onboarding_step` is the only state.
+10. **"Bengaluru" as the city placeholder.** The launch city is Phagwara (D-013).
+11. **Its sizes:** 17 px fields, 26 px code digits, 15.5 px labels. The scale in §2 and §3.
+12. **A back arrow on every screen,** including onto answers that can't change (D-080).
+13. **No loading, empty or error state anywhere.** Rule 14 needs all three.
+
+What it is still trusted for there: the screen order (§5, D-068), the `Step` frame (back arrow,
+12-segment progress, title, body, footer, 520 px), each screen's composition, the PIN pad's layout
+and the lock screen's (black, ✦).
+
 ## 1. Tokens — the only place colours live
 
 `web/src/styles/tokens.css`. Components use **semantic** names only (`--surface`, never `#FFFFFF`).
@@ -100,6 +127,7 @@ Checked value by value against the prototype in T-1.19, and corrected where the 
 | Chip | default · active · removable |
 | Field / TextArea | label, helper, error, counter |
 | OtpInput | 6 boxes (D-066; the prototype's 4 are historical), paste, auto-advance, backspace-back |
+| PinPad | 4 dots, 3 × 4 keys, delete; the lock screen (T-3.10) and the PIN step (T-3.12) |
 | Toggle | on · off · disabled |
 | Sheet | bottom (mobile) / centred (desktop); title; scroll body; sticky footer |
 | Toast | info (ink) · error (accent) · with action (Undo) |
@@ -115,7 +143,7 @@ Checked value by value against the prototype in T-1.19, and corrected where the 
 
 T-1.19 built Button, Chip, Field, TextArea, Toggle, Sheet, Toast, Avatar, Skeleton, Spinner, Icon,
 EmptyState and ErrorState; `/dev/ui` (under `next dev` only) shows each in every state. The rest
-arrive with the first task that needs them: OtpInput with T-3.11, IconButton and PriceTag with
+arrive with the first task that needs them: PinPad with T-3.10, OtpInput with T-3.11, IconButton and PriceTag with
 T-6.5's action row, Badge with T-6.7 and T-6.9, Countdown with T-7.10, GiftGrid with T-8.10.
 
 Feature components live in `src/components/<feature>/` (discover, chat, wallet, profile, admin).
