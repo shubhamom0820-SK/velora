@@ -1161,7 +1161,7 @@ exist yet. The batch is a chain, T-3.10 → T-3.11 → T-3.12 → T-3.13, each n
 
 
 ### T-4.10 · Location
-- [ ] **Needs:** T-3.5, and **P-38** (the seeded areas are still Bengaluru's; D-013 is Phagwara)
+- [ ] **Needs:** T-3.5, and **P-38** (the seeded areas are still Bengaluru's; D-013 is Phagwara), and **P-65** before P-38: P-38's data migration is the next migration in the plan, and its deploy must read back the database's own head and D-076/D-077's guards
 - [ ] `PUT /me/location` accepts `{lat,lng}` (must be inside India bounding box) or `{area_id}` (uses centroid). `GET /areas?city=`.
 - [ ] Web: onboarding asks permission once with a clear reason; on deny → area picker. Location refreshed on app open if > 6 h old. The question has no `onboarding_t` step: give it a slug in D-080's map and a place in the flow, in T-3.11's `StepFrame`.
 - [ ] The seed (T-1.15) gives each profile both its `area_id` and a location scattered near that area's centroid, as if it had shared its position. If `{lat,lng}` here leaves `area_id` empty, or sets it some other way, make the seed match.
@@ -1357,6 +1357,13 @@ committed rows.
 - [ ] **Provisional (08-DESIGN):** no visual design exists for the app's screens, and the prototype
   was wrong four times in Sprint 5's plan alone: the refund button, gift's direction, the price list
   and "credits" for Velas. Build only what this task names; anything more waits on P-57.
+- [ ] **The shell's look lives in two places only:** colour, type scale and spacing as tokens in
+  `src/styles/tokens.css`, and the header's and nav's shape in one layout component in
+  `src/components/shell/`, never spread through the components inside. **Why:** this shell is
+  what every later screen sits inside, built before any visual design exists (P-57). When T-6.5's
+  design pass comes, it should change values, not structure. Reopening the shell's structure after
+  five screens sit on it would be the most expensive rework in the sprint; this is the cheapest
+  insurance against it. At the direction of the advisor directing Sprint 5, 3 October 2026.
 - [ ] **Commit:** `feat(web): app shell [T-5.6]`
 
 ### T-5.5 · Web wallet
@@ -2108,7 +2115,8 @@ Claude Code adds items here instead of doing unplanned work. Format:
 
   Found while planning T-2.1.
 - [ ] P-38 · Seed Phagwara's areas, replacing Bengaluru's. **Due before T-4.10** (on its Needs
-  line). Worst case: someone in Phagwara who denies location access is offered a list of
+  line). **Needs P-65 first:** this is the next migration in the plan, and its deploy reads back
+  what it did. Worst case: someone in Phagwara who denies location access is offered a list of
   Bengaluru neighbourhoods, so their area, and every distance shown to them, is wrong. D-013 is
   now Phagwara, but the reference-data migration seeded 40 Bengaluru neighbourhoods as the
   decision's old default, and `make seed`'s profiles sit in Bengaluru localities. A new data
@@ -2664,7 +2672,7 @@ Claude Code adds items here instead of doing unplanned work. Format:
   `/login`), so this is about seeing errors, not losing sessions. Add the CORS headers to the 500
   for an allowed origin only, with a test that a disallowed origin still gets none. Found in T-3.10.
 - [ ] P-62 · Give T-1.9's identity trigger a constraint name. **Before the next migration that
-  touches `users`.** Worst case: a refusal reported as the wrong one. `users_identity_immutable()`
+  touches `users`; needs P-65 first,** since this fix is a migration itself. Worst case: a refusal reported as the wrong one. `users_identity_immutable()`
   raises `check_violation` (23514) and names no constraint, so its tests can only match its message,
   and T-3.6's `_flush_identity` maps any 23514 at that flush to `IMMUTABLE_FIELD`. Its comment says
   only that trigger can raise it, since `users` has no CHECK. From T-5.1, D-076's two triggers raise
@@ -2695,8 +2703,11 @@ Claude Code adds items here instead of doing unplanned work. Format:
   side (T-5.1's text). Found in T-5.1, at the direction of the advisor directing Sprint 5.
   **T-5.4 adds a tripwire first:** reading published events through `client` raises, naming this
   item, so the gap fails loudly until T-7.4 closes it.
-- [ ] P-65 · Make the deploy read `alembic_version` back after migrating. **Before the next task
-  whose commit carries a migration** (not settled where it goes; asked of the founder). Worst
+- [ ] P-65 · Make the deploy read `alembic_version` back after migrating. **Before P-38 or P-62,
+  whichever lands first:** the plan's next migrations (P-38's areas, due before T-4.10, on whose
+  Needs line this sits; P-62's trigger fix). No task from T-3.12 to T-6.4 carries one: checked
+  task by task on 3 October 2026 (discovery's GIST index already exists, T-1.9). A task that
+  later grows a migration before these takes P-65 onto its own Needs line. Worst
   case: a deploy reports a migration applied when the database is somewhere else, and the next
   task builds on a schema staging doesn't have. Today the only witness is Alembic's own log in the
   migrate job ("Running upgrade …"): the migrator reporting on itself. T-5.1's Done-when rested
