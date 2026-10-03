@@ -129,6 +129,7 @@ never done silently.
 - [ ] **P-0.13** Create the Google Cloud billing account and complete India's identity verification. **Owner: the founder, Shubham Kumar. Start: 3 October 2026. Due: 30 days after the account is created, when Google suspends an unverified Indian account; by 2 November 2026 if it's created on the start date.** Blocks T-3.14 (Firebase's Blaze plan bills to this account) and P-49's move (the Compute Engine VM does too). Started late, the 30-day clock is what stalls T-3.14.
   **How:** an Indian billing address means Google's mandatory identity verification. As an individual: PAN or e-Aadhaar through DigiLocker, and proof of address. As a business: a GST or Udyam certificate. **GST:** the advisor directing T-3.2 to T-3.10 says Velora has none, deliberately, below the threshold; P-0.2 still lists GST as unconfirmed, so the founder confirms it there. Without GST or a Udyam registration, it goes through as an individual.
   **If the payment method is refused** (AWS's was, P-0.6), write down exactly what Google said, as P-36 did for Fly, before trying anything else.
+  **3 October 2026 (the founder):** Blaze is linked to the billing account, without complaint, and the founder is checking whether the identity verification has gone through. Linked is not verified, so this box stays open, and T-3.14's Needs line with it.
 - [ ] **P-0.14** Decide where the registered office is, before `v0.1.0`, production's first release (REL-1). **Blocks that release, not the build:** on REL-1's Needs line, since a registered office is a judgement no check can make. `/contact` publishes D-058's registered office, the founder's home in Hajipur, and from `v0.1.0` it is public, crawled and archived: once Google and archive.org hold the address, no later change removes it.
   **Why it's a decision** (the founder, 3 October 2026): a sole proprietorship must publish a registered address, but it needn't be where the founder sleeps. A virtual-office or registered-address service in India, roughly ₹1,000 to ₹2,000 a month, meets the same requirement with a commercial address. For a dating app, where some users will be angry at whoever banned them, the difference matters.
   **If it changes:** a new decision supersedes D-058's office, `REGISTERED_OFFICE` in `web/src/lib/legal.ts` changes (its guard test names D-058), and the court follows the office (D-058), so a new city means a new court line too.
@@ -588,6 +589,9 @@ waits on the founder's decisions, so it is a task of its own, outside the sprint
 - [ ] **Needs:** T-2.6; **P-0.14**, the registered office, a judgement no check can make; and
   **P-0.15** (Vercel Pro) and **P-0.16** (Supabase Pro), which the release gate also refuses
   without (D-075). From the tag on, the site is public, crawled and takes real sign-ups.
+  **If the tagged commit includes T-3.14, sign-in opens with the tag,** into the Firebase user
+  pool staging shares (T-3.14): acceptable while there are no real users, not after launch (the
+  founder, 3 October 2026). P-66 ends it, and is on T-9.15's Needs line, not this one.
 - [ ] `veloraapp.co.in` → Vercel prod; `api.veloraapp.co.in` → Fly prod app; SSL issued. Prod DB/Redis/R2 created but empty.
   **Moved from T-2.6** (the founder's re-scope, 3 October 2026). T-2.6 set up the GitHub
   environment, the Fly app and the Vercel project and its domains; what's left is the founder's,
@@ -988,8 +992,18 @@ exist yet. The batch is a chain, T-3.10 → T-3.11 → T-3.12 → T-3.13, each n
   connected to Git (T-1.22, `infra/PRODUCTION.md`); not `www`, which 308s to the apex; not
   `127.0.0.1`, since local builds sign in by Path B (D-081). Today the list holds only `localhost`
   and the two `firebaseapp` defaults, so sign-in fails everywhere real until these are in.
+  **And the web app registered in `velora-ic`, with its config sent by the founder:** the build
+  starts then (the founder, 3 October 2026).
 - [ ] **Not in T-3.10 to T-3.13's batch** (planned 3 October 2026): P-0.13's account doesn't exist yet. When this task starts, switch D-081's Firebase builds from "sign-in isn't open yet" to the Firebase flow: make `signInOpen()` (`web/src/lib/sign-in-path.ts`) true for `firebase`, which moves `/login` and the landing page's waitlist heading together.
 - [ ] **New dependencies (approved, recorded in D-035):** api `firebase-admin`; web `firebase`.
+- [ ] **Keys (the founder, 3 October 2026):** "the Firebase web config is public by design and
+  belongs in the repo's env for the web. Any service account JSON is a secret and goes in the
+  password manager and the host's secrets, never in the repo. Say which of the two you need and
+  I'll handle it; don't ask me to paste either into chat." This task expects to need no service
+  account: verifying an ID token takes only the project ID and Google's public keys, and it is
+  P-39's deletes that would need admin rights. 02-ARCHITECTURE §11 lists
+  `FIREBASE_SERVICE_ACCOUNT_JSON` for "token verification": confirm it isn't needed before asking
+  for it, and correct the table.
 - [ ] Firebase console: project created, Phone provider enabled, **App Check with reCAPTCHA
   Enterprise enforced on Authentication**, authorised domains = `veloraapp.co.in` + `staging.veloraapp.co.in`
   (the Done-when signs in there; on the Needs line), daily SMS quota capped, billing alert set at a fixed rupee amount.
@@ -1001,9 +1015,21 @@ exist yet. The batch is a chain, T-3.10 → T-3.11 → T-3.12 → T-3.13, each n
 - [ ] **A number outside India is refused by Firebase itself,** under that region policy, before any
   of our code runs. What the person sees then is a case this task handles and tests, not an
   accident. (The phone screen fixes +91, so it takes a pasted or edited number to get there.)
-- [ ] **One project, `velora-ic`, so far.** If staging and production share it, no Firebase test
-  number may go in it (D-065): the Done-when's sign-in uses a second project for staging, or the
-  founder's own phone. This task decides which, before anything is configured.
+- [ ] **One project, `velora-ic`, for staging and production, and never a Firebase test number in
+  it** (D-065, decided by the founder on 3 October 2026): "Not one, not temporarily." A test
+  number is a fixed phone and a fixed code that sign in without an SMS. In a project production
+  uses, that is a permanent sign-in bypass for anyone who learns the pair. It has the shape of
+  T-3.13's `/v1/test/sms/last-code`, proved gated in code; a test number would rebuild it by hand
+  in the console, with no gate. So the Done-when signs in with the founder's own phone. A Firebase
+  project of staging's own, with its own test numbers, is P-66.
+- [ ] **Staging sign-ins land in the same Firebase user pool as production** (the founder,
+  3 October 2026). That's acceptable while there are no real users, and it is not acceptable
+  after launch. Sharing one project means: a real person can sign in to staging with their own
+  number, since staging texts whoever production texts, and their number then sits in staging's
+  database; a token minted on either site's page is accepted by both APIs, each checking reuse
+  only in its own Redis; and staging's sign-ins spend the daily SMS quota that real people's
+  sign-ins need. P-66 ends it, and is on T-9.15's Needs line. REL-1 carries the warning too: a
+  release with this task in it opens sign-in from its tag.
 - [ ] `POST /v1/auth/firebase {id_token}`: verify signature and `aud`/`iss`/`exp` against Google's
   public keys (cached); require `phone_number` and `firebase.sign_in_provider == "phone"`;
   reject non-`+91` → `PHONE_NOT_SUPPORTED`; reject a reused `jti` (Redis until expiry) →
@@ -1032,14 +1058,14 @@ exist yet. The batch is a chain, T-3.10 → T-3.11 → T-3.12 → T-3.13, each n
 - [ ] **Done when, before any real SMS path ships: a budget alert is set** on the billing account
   Blaze bills to, at a fixed rupee amount (the founder, 3 October 2026). No real SMS path ships
   without one: an SMS sent from the browser is outside our server's limits (D-035).
-- [ ] **Done when:** on staging, sign in at `https://staging.veloraapp.co.in` with a Firebase
-  test phone number (fixed code, no SMS, no cost) in a Firebase project production doesn't use
-  (D-065). As first written, the number lived in the one project P-0.12 sets up, which would let
-  its code sign anyone into production too. This task picks the way out: a Firebase project for
-  staging alone, or the founder's own phone. Then reload, and the session is still there,
-  restored by `/auth/refresh`. This is the first real sign-in staging can do (D-045 allows only
-  real providers there), so it is the first proof that P-33's subdomains carry the refresh cookie.
-  Until it passes, P-33 is believed, not proven.
+- [ ] **Done when:** on staging, sign in at `https://staging.veloraapp.co.in` with the founder's
+  own phone, by real SMS (D-065: no test number, as decided on 3 October 2026), once the budget
+  alert above is set. Then reload, and the session is still there, restored by `/auth/refresh`.
+  This is the first real sign-in staging can do (D-045 allows only real providers there), so it is
+  the first proof that P-33's subdomains carry the refresh cookie. Until it passes, P-33 is
+  believed, not proven. **One sign-in per browser:** item 3 below needs Chrome, Firefox and
+  Safari, so the check sends three real SMS to one phone, inside this task's own limit of 5 an
+  hour per phone. Log out last in each browser, so no step needs another sign-in.
 - [ ] **This is the first time any of Sprint 3's session machinery runs outside a test process.**
   T-3.3's cookies, T-3.4's rotation and logout, T-3.5's `current_user` and P-42's headers have been
   proved only in-process against the local stack: staging runs `firebase`, so Path B answers 404
@@ -1072,8 +1098,10 @@ exist yet. The batch is a chain, T-3.10 → T-3.11 → T-3.12 → T-3.13, each n
   **Already proved locally, as mechanism:** T-3.10 and T-3.13 prove items 4 and 6, and parts of 1,
   3 and 5, against the local stack. That takes nothing off this list, whose proof is staging's, but
   if staging fails, the platform is the suspect, not the code.
-- [ ] **One Playwright run against staging** with the test number, T-3.13's journeys on the real
-  path. It moved here from T-3.13 (decision 18 of T-3.10 to T-3.13's plan): it needs this task.
+- [x] ~~**One Playwright run against staging** with the test number, T-3.13's journeys on the real
+  path. It moved here from T-3.13 (decision 18 of T-3.10 to T-3.13's plan): it needs this task.~~
+  **Moved to P-66, 3 October 2026:** it needs a test number, and none goes in `velora-ic` (D-065,
+  as the founder decided).
 - [ ] **Commit:** `feat(auth): firebase phone sign-in [T-3.14]`
 
 ### T-3.13 · E2E signup
@@ -1776,7 +1804,7 @@ committed rows.
 - [ ] **Commit:** `docs(ops): backup and restore runbook [T-9.14]`
 
 ### T-9.15 · Go live
-- [ ] **Needs:** T-9.13, T-9.14, P-0.5, P-0.7, P-0.8
+- [ ] **Needs:** T-9.13, T-9.14, P-0.5, P-0.7, P-0.8, and **P-66**: until staging has a Firebase project of its own, its sign-ins land in production's user pool, which is not acceptable after launch (the founder, 3 October 2026, on T-3.14)
 - [ ] Production env: real SMS, real Razorpay live keys + webhook URL, real moderation and face match, VAPID keys. Run the pre-launch checklist in `07-CHECKLISTS.md`. Do one real ₹ purchase yourself and refund it, under D-076's rule 3: the refund reverses that purchase's Velas in the ledger in the same step (T-8.2), so money never goes back while its Velas stand.
 - [ ] **Write to the waitlist** (T-2.3): its copy promises to tell people when Velora opens near them. Nothing can send bulk email yet, so choose how before launch day, or the list is one we can't write to. A sending service is a new dependency and another processor `/privacy` must name, and its From address needs SPF and DKIM, like the mailboxes (P-0.3). B-14, a second city, writes to it again, by city.
   **DKIM before the first send, or the launch email goes to spam:** our DMARC record says
@@ -2778,3 +2806,22 @@ Claude Code adds items here instead of doing unplanned work. Format:
   test: a wrong database refused, and a database at head with each of the three dropped, then
   disabled, refused, naming the object. At the direction of the advisor directing Sprint 5,
   3 October 2026, after T-5.1; the three objects added at the advisor's direction the same day.
+- [ ] P-66 · Give staging a Firebase project of its own, with its own test numbers, its own
+  authorised domains and its own region policy. **Before the first staging check that signs in
+  and runs unattended** (an E2E against staging, or anything in CI that signs in), **and before
+  launch at the latest,** on T-9.15's Needs line. `scripts/staging-smoke` already runs unattended
+  after every deploy but signs nobody in (it reads `/healthz`, `/readyz` and the home page), so it
+  isn't the trigger. Worst case: launch with staging still signing in through production's
+  project, where a real person can sign in to staging, each site's tokens are accepted by both
+  APIs, and staging spends the SMS quota real sign-ins need (T-3.14). **Why the first unattended
+  check is the trigger** (the founder, 3 October 2026): until then the founder's own phone is
+  enough; after it, it isn't, because a check that needs a human holding a phone is a check that
+  stops being run. The task that first wants one takes P-66 onto its Needs line. None does yet. On
+  3 October 2026 the docs named two such runs: the Playwright run against staging moved here from
+  T-3.14 (T-3.13's journeys on the real path, with a test number), this item's first use; and
+  06-TESTING's nightly staging run, which waits for this.
+  Test numbers go in this project and nowhere else, never in `velora-ic`, which production uses
+  (D-065: "Not one, not temporarily."). Staging's API takes this project's ID as
+  `FIREBASE_PROJECT_ID`, so production's API refuses staging's tokens as an audience; staging's
+  build takes this project's web config; and `staging.veloraapp.co.in` comes off `velora-ic`'s
+  authorised domains. At the founder's direction, 3 October 2026, after T-3.13.

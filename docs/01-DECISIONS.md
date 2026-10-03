@@ -1086,6 +1086,20 @@ The finding is Claude's, from Firebase's documentation. An advisor directing T-1
 a separate chat, not the founder) had it recorded as a decision on 3 October 2026, and the
 founder approved it the same day.
 
+**Amended 3 October 2026 (the founder, before T-3.14): staging shares `velora-ic`, so the way
+out is the founder's own phone.** In the founder's words: "staging and production share
+velora-ic, and no Firebase test number ever goes in it. Not one, not temporarily. A test number is
+a fixed phone plus a fixed code that signs you in without an SMS. In a project that serves
+production, that is a permanent sign-in bypass for anyone who learns the pair — the same shape as
+/v1/test/sms/last-code, which we spent this evening proving was correctly gated. We are not going
+to build that hole by hand in the console right after closing it in code." T-3.14's staging check
+signs in with the founder's own phone. A Firebase project for staging alone, with its own test
+numbers, is P-66, due when a staging check that signs in first has to run unattended, "because a
+check that needs a human holding a phone is a check that stops being run" (the founder). Sharing
+the project puts staging's sign-ins in production's user pool: "acceptable while there are no
+real users, and it is not acceptable after launch" (the founder). Claude put P-66 on the Needs
+line of T-9.15, Go live, to hold that line.
+
 ### D-066 · Path B codes: six digits, served only where chosen, with a ceiling in rupees — Locked
 **The decision (T-3.2, T-3.3):**
 - `/v1/auth/otp/send` and `/v1/auth/otp/verify` are served only where `AUTH_PHONE_PROVIDER` is
