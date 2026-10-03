@@ -11,7 +11,7 @@ from __future__ import annotations
 import math
 import uuid
 from dataclasses import dataclass
-from datetime import timedelta
+from datetime import datetime, timedelta
 
 import structlog
 from redis.asyncio import Redis
@@ -24,6 +24,7 @@ from app.core.errors import AppError
 from app.core.providers.sms import SmsProvider, SmsRecipientNotAllowed
 from app.core.security import (
     E164,
+    csrf_matches,
     hash_otp,
     hash_phone,
     hash_token,
@@ -36,6 +37,7 @@ from app.core.security import (
 )
 from app.modules.admin import service as admin_service
 from app.modules.auth import otp_store, repository
+from app.modules.auth.models import Session as SessionRow
 from app.modules.users import service as users_service
 from app.modules.users.models import User
 from app.modules.users.schemas import Me
@@ -65,6 +67,10 @@ CODE_TRIES = 5
 # A session is good for 30 days from its own rotation, with no absolute cap:
 # someone active never pays for another sign-in SMS (D-067).
 SESSION_TTL = timedelta(days=30)
+# A token rotated this recently is refused without its family being revoked:
+# two tabs refreshing at once present the same token, and the second must not
+# sign both out (D-067). Older than this, it's a stolen token being replayed.
+REUSE_GRACE = timedelta(seconds=10)
 
 
 async def send_code(
@@ -313,3 +319,123 @@ def _refuse_who_may_not_sign_in(user: User) -> None:
 
 def _account_banned() -> AppError:
     return AppError("ACCOUNT_BANNED", "This account has been banned.", status=403)
+
+
+# --- Refresh and logout (T-3.4) ---------------------------------------------------
+
+
+@dataclass(frozen=True)
+class Rotated:
+    access_token: str
+    refresh_token: str
+    csrf: str
+
+
+async def refresh(
+    session: AsyncSession,
+    settings: Settings,
+    *,
+    refresh_token: str | None,
+    csrf_cookie: str | None,
+    csrf_header: str | None,
+) -> Rotated:
+    """Swap a refresh token for a new one and a fresh access token.
+
+    Authenticated by the refresh cookie and `X-CSRF` matching the CSRF cookie
+    (D-024, D-055). A token already rotated is refused: within 10 seconds,
+    leaving its family alone (two tabs); after that, revoking the family, since
+    only a copy of the token can still be presenting it (D-067). The new
+    session carries the family's `auth_time` unchanged (D-071).
+    """
+    now = clock.now()
+    async with session.begin():
+        current = await _authenticated_session(
+            session, refresh_token, csrf_cookie, csrf_header
+        )
+        if current.revoked_at is None:
+            return await _rotate(session, settings, current, now)
+        if now - current.revoked_at >= REUSE_GRACE:
+            await repository.revoke_family(
+                session, user_id=current.user_id, family_id=current.family_id, at=now
+            )
+    # After the transaction commits, so a family revoked above stays revoked.
+    raise _session_revoked()
+
+
+async def _rotate(
+    session: AsyncSession, settings: Settings, current: SessionRow, now: datetime
+) -> Rotated:
+    """Replace `current` with a new session of the same family."""
+    if current.expires_at <= now:
+        raise _auth_required()
+    user = await users_service.get_user(session, current.user_id)
+    _refuse_who_may_not_sign_in(user)
+    new_token = new_refresh_token()
+    successor = await repository.insert_session(
+        session,
+        user_id=current.user_id,
+        family_id=current.family_id,
+        token_hash=hash_token(new_token),
+        expires_at=now + SESSION_TTL,
+        auth_time=current.auth_time,
+    )
+    current.revoked_at = now
+    current.replaced_by = successor.id
+    return Rotated(
+        access_token=make_access_token(
+            user.id, user.role, settings, auth_time=current.auth_time
+        ),
+        refresh_token=new_token,
+        csrf=new_csrf(),
+    )
+
+
+async def logout(
+    session: AsyncSession,
+    settings: Settings,
+    *,
+    refresh_token: str | None,
+    csrf_cookie: str | None,
+    csrf_header: str | None,
+) -> None:
+    """End this device's session family: authenticated like refresh, never by
+    the access token, so it works once that has expired (D-067). Each revoked
+    session's access token still works for up to 15 minutes."""
+    async with session.begin():
+        current = await _authenticated_session(
+            session, refresh_token, csrf_cookie, csrf_header
+        )
+        await repository.revoke_family(
+            session,
+            user_id=current.user_id,
+            family_id=current.family_id,
+            at=clock.now(),
+        )
+
+
+async def _authenticated_session(
+    session: AsyncSession,
+    refresh_token: str | None,
+    csrf_cookie: str | None,
+    csrf_header: str | None,
+) -> SessionRow:
+    """The session the refresh cookie names, locked, once `X-CSRF` matches the
+    CSRF cookie. Anything missing or wrong is `AUTH_REQUIRED`, saying no more."""
+    if not csrf_matches(csrf_header, csrf_cookie) or not refresh_token:
+        raise _auth_required()
+    current = await repository.session_by_token_hash_for_update(
+        session, hash_token(refresh_token)
+    )
+    if current is None:
+        raise _auth_required()
+    return current
+
+
+def _auth_required() -> AppError:
+    return AppError("AUTH_REQUIRED", "Sign in to continue.", status=401)
+
+
+def _session_revoked() -> AppError:
+    return AppError(
+        "SESSION_REVOKED", "You've been signed out. Sign in again.", status=401
+    )

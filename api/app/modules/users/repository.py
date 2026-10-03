@@ -20,6 +20,10 @@ async def user_by_phone_hash(session: AsyncSession, phone_hash: str) -> User | N
     return user
 
 
+async def user_by_id(session: AsyncSession, user_id: UUID) -> User | None:
+    return await session.get(User, user_id)
+
+
 async def referral_code_taken(session: AsyncSession, code: str) -> bool:
     """Whether any user has `code`, in any case: the column is citext."""
     taken = await session.scalar(select(exists().where(User.referral_code == code)))

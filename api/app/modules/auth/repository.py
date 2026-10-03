@@ -5,7 +5,7 @@ from __future__ import annotations
 from datetime import datetime
 from uuid import UUID
 
-from sqlalchemy import select
+from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.enums import BanKind
@@ -46,3 +46,31 @@ async def insert_session(
     session.add(row)
     await session.flush()
     return row
+
+
+async def session_by_token_hash_for_update(
+    session: AsyncSession, token_hash: str
+) -> Session | None:
+    """The session a refresh token belongs to, its row locked until the
+    transaction ends: two refreshes presenting one token take turns, so only
+    one can rotate it."""
+    row: Session | None = await session.scalar(
+        select(Session).where(Session.token_hash == token_hash).with_for_update()
+    )
+    return row
+
+
+async def revoke_family(
+    session: AsyncSession, *, user_id: UUID, family_id: UUID, at: datetime
+) -> None:
+    """Revoke every live session of a family. Filtered by user as well as
+    family, so the partial index on live sessions per user serves it."""
+    await session.execute(
+        update(Session)
+        .where(
+            Session.user_id == user_id,
+            Session.family_id == family_id,
+            Session.revoked_at.is_(None),
+        )
+        .values(revoked_at=at)
+    )

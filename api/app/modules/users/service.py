@@ -5,6 +5,7 @@ from __future__ import annotations
 import secrets
 from dataclasses import dataclass
 from datetime import date
+from uuid import UUID
 
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -31,6 +32,15 @@ _REFERRAL_TRIES = 10
 class Account:
     user: User
     profile: Profile
+
+
+async def get_user(session: AsyncSession, user_id: UUID) -> User:
+    """The user a session or token names. Users are never hard-deleted, but
+    for D-072's under-18 refusal, which leaves no session behind."""
+    user = await repository.user_by_id(session, user_id)
+    if user is None:
+        raise LookupError("no such user")
+    return user
 
 
 def new_referral_code() -> str:

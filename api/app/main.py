@@ -21,6 +21,7 @@ from app.core.logging import RequestIDMiddleware, configure_logging
 from app.core.providers import build_providers
 from app.core.redis import build_redis
 from app.modules.auth.router import otp_router
+from app.modules.auth.router import router as auth_router
 from app.modules.health.router import router as health_router
 from app.modules.waitlist.router import router as waitlist_router
 
@@ -106,6 +107,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     # Probes at the root, unversioned; product routers go under /v1.
     app.include_router(health_router)
     app.include_router(waitlist_router, prefix="/v1")
+    app.include_router(auth_router, prefix="/v1")
     if settings.AUTH_PHONE_PROVIDER in OTP_SERVED_FOR:
         app.include_router(otp_router, prefix="/v1")
 

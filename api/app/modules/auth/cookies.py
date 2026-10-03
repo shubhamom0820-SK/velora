@@ -67,3 +67,23 @@ def set_session_cookies(
         httponly=False,
         samesite=_SAME_SITE,
     )
+
+
+def clear_session_cookies(response: Response, settings: Settings) -> None:
+    """Expire both cookies, matching the name, path and domain each was set
+    with, or the browser keeps the original."""
+    response.delete_cookie(
+        refresh_cookie_name(settings),
+        path=REFRESH_COOKIE_PATH,
+        secure=True,
+        httponly=True,
+        samesite=_SAME_SITE,
+    )
+    response.delete_cookie(
+        csrf_cookie_name(settings),
+        path=CSRF_COOKIE_PATH,
+        domain=settings.COOKIE_DOMAIN or None,
+        secure=True,
+        httponly=False,
+        samesite=_SAME_SITE,
+    )

@@ -37,3 +37,10 @@ class SignedIn(BaseModel):
 
     access_token: str
     user: Me
+
+
+class AccessToken(BaseModel):
+    """A refresh's body: the new access token. The rotated refresh token and
+    CSRF value arrive as cookies."""
+
+    access_token: str

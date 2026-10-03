@@ -564,11 +564,16 @@ One migration per task, each with a working `downgrade()`. Build exactly `03-SCH
 - [x] **Commit:** `feat(auth): verify otp and create account [T-3.3]`
 
 ### T-3.4 · Refresh and logout
-- [ ] **Needs:** T-3.3, and **P-33** (staging's web and API on one site, or the refresh cookie can't flow there)
-- [ ] `POST /v1/auth/refresh`: require `X-CSRF` equal to this environment's CSRF cookie (D-055); look up the `token_hash` of this environment's refresh cookie. If it was revoked less than 10 seconds ago → `SESSION_REVOKED`, leaving its family alone: two tabs refreshing at once cause it (D-067). If longer ago → revoke the whole family (reuse attack) → `SESSION_REVOKED`. Else rotate: a new session valid 30 days, old `revoked_at` + `replaced_by`, a new CSRF value, `auth_time` carried unchanged (D-071).
-- [ ] `POST /v1/auth/logout`: authenticated like refresh, by the refresh cookie and `X-CSRF`, not the access token, so it still works once that has expired (D-067). Revokes the session's family and clears both cookies → 204.
-- [ ] Tests: rotation works; reuse after 10 seconds kills the family (🔒 15); reuse within 10 seconds is refused and doesn't; missing CSRF → 401; logout works with an expired access token and clears both cookies; `auth_time` survives rotation.
-- [ ] **Commit:** `feat(auth): refresh rotation and logout [T-3.4]`
+- [x] **Needs:** T-3.3, and **P-33** (staging's web and API on one site, or the refresh cookie can't flow there)
+- [x] `POST /v1/auth/refresh`: require `X-CSRF` equal to this environment's CSRF cookie (D-055); look up the `token_hash` of this environment's refresh cookie. If it was revoked less than 10 seconds ago → `SESSION_REVOKED`, leaving its family alone: two tabs refreshing at once cause it (D-067). If longer ago → revoke the whole family (reuse attack) → `SESSION_REVOKED`. Else rotate: a new session valid 30 days, old `revoked_at` + `replaced_by`, a new CSRF value, `auth_time` carried unchanged (D-071).
+  **Built:** the presented session is read `FOR UPDATE`, so two refreshes at once rotate it once
+  and the second lands in the grace; a test on two connections proves it, and failed without the
+  lock. A missing or mismatched `X-CSRF`, a missing cookie, another environment's cookie, an unknown
+  token or a session past its 30 days is `AUTH_REQUIRED`. An account that can't sign in (D-067)
+  can't refresh either: the new token needs the user's role, so the row is read anyway.
+- [x] `POST /v1/auth/logout`: authenticated like refresh, by the refresh cookie and `X-CSRF`, not the access token, so it still works once that has expired (D-067). Revokes the session's family and clears both cookies → 204.
+- [x] Tests: rotation works; reuse after 10 seconds kills the family (🔒 15); reuse within 10 seconds is refused and doesn't; missing CSRF → 401; logout works with an expired access token and clears both cookies; `auth_time` survives rotation.
+- [x] **Commit:** `feat(auth): refresh rotation and logout [T-3.4]`
 
 ### T-3.5 · Current user
 - [ ] **Needs:** T-3.4
