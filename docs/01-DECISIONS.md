@@ -1744,7 +1744,7 @@ that plan (Claude, in a separate chat), relayed by the founder, 3 October 2026.
 Approved by the founder in his own words, 3 October 2026: "approved as built and tested in T-3.10
 and T-3.11." **Locked** 3 October 2026.
 
-### D-083 · Web forms: React Hook Form and zod — Open
+### D-083 · Web forms: React Hook Form and zod — Locked
 T-3.11 added the web app's form tooling, the first forms to need it. Versions are pinned exactly.
 - **react-hook-form** 7.89.0, **zod** 4.6.5 and **@hookform/resolvers** 5.9.1, all runtime
   `dependencies`: CLAUDE.md's stack pins the first two, and the resolvers join them (its peer ranges
@@ -1765,10 +1765,13 @@ T-3.11 added the web app's form tooling, the first forms to need it. Versions ar
 validation, dirty tracking and submit state by hand.
 
 Approved in the joint plan for T-3.10 to T-3.13 (decision 1), answered by the advisor directing it
-(Claude, in a separate chat), relayed by the founder, 3 October 2026. **Open** until the founder
-approves it in his own words, with D-079 to D-082.
+(Claude, in a separate chat), relayed by the founder, 3 October 2026.
+**Approved by the founder, 3 October 2026, without having read this text**, and recorded so: he
+approved it on T-3.11's 31 broken guards, its agreement with D-082, and the cost of holding the batch
+another round against a bounded risk, since a Locked decision is superseded, never edited. If
+anything here surprises him on reading, he supersedes it. **Locked** 3 October 2026.
 
-### D-084 · The E2E: Playwright, Chromium in CI, nothing kept — Open
+### D-084 · The E2E: Playwright, Chromium in CI, nothing kept — Locked
 T-3.13 added the end-to-end tests 06-TESTING has named since Sprint 1. Pinned exactly.
 - **@playwright/test** 1.63.0, a `devDependency`: CLAUDE.md's stack pins Playwright. Its browsers
   are downloads, not packages: Chromium in CI (`playwright install --with-deps chromium`), and
@@ -1789,15 +1792,26 @@ T-3.13 added the end-to-end tests 06-TESTING has named since Sprint 1. Pinned ex
   is in `{"local"}` and `SMS_PROVIDER` in `{"fake"}`, and Settings refuses any fake provider outside
   local anyway (D-045). Broken into a blacklist of today's names, "not staging or production", the
   cases written with today's names passed, and only `preview` and `env-nobody-has-named-2031`, a
-  name listed nowhere else, went red; broken into "not production", staging went red too.
+  name listed nowhere else, went red; broken into "not production", staging went red too. Read
+  from pytest's own result for each case (`tests/modules/e2e/test_last_code.py`):
+
+  | The gate broken into | staging | production | preview | never named | msg91 |
+  |---|---|---|---|---|---|
+  | "not staging or production" (today's names) | passed | passed | **failed** | **failed** | passed |
+  | "not production" | **failed** | passed | **failed** | **failed** | passed |
+
+  **A blacklist can't be tested with the names you already know:** every case written with them
+  passes. Only a name nobody has listed catches it. Keep that case in the test.
 
 **Rejected:** running against `next dev` (its CSP allowances hide what production blocks); keeping
 traces on failure (they would hold the very data rule 15 keeps out of logs); reading codes from the
 fake's terminal echo (masked numbers, parsing, and codes in CI's log).
 
 Approved in the joint plan for T-3.10 to T-3.13 (decisions 1, 19, 21 and 22), answered by the advisor
-directing it (Claude, in a separate chat), relayed by the founder, 3 October 2026. **Open** until the
-founder approves it in his own words.
+directing it (Claude, in a separate chat), relayed by the founder, 3 October 2026.
+**Approved by the founder, 3 October 2026,** once the gate's table was in: the three layers, `ENV`,
+`SMS_PROVIDER` and Settings refusing to start, are the depth an endpoint handing out sign-in codes
+needs. **Locked** 3 October 2026.
 
 ---
 
