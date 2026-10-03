@@ -117,6 +117,33 @@ export const en = {
       taken: "That one's taken.",
       suggestion: "Try {name}",
     },
+    about: {
+      title: "Introduce yourself",
+      sub: "A few honest lines beat a clever one-liner.",
+      label: "About you",
+      placeholder: "What you do, what you're into, who you'd like to meet…",
+      moreNeeded: "{count} more characters",
+    },
+    // Photos and the selfie arrive in Sprint 4 (T-4.6, T-4.7).
+    photos: {
+      title: "Add your photos",
+    },
+    interests: {
+      title: "What are you into?",
+      sub: "Pick 5. {count}/5 chosen.",
+    },
+    pin: {
+      setTitle: "Set a 4-digit PIN",
+      setSub: "You'll enter it each time you open {app}.",
+      confirmTitle: "Confirm your PIN",
+      confirmSub: "Type it once more so we know it stuck.",
+      mismatch: "Those PINs didn't match. Try again.",
+      skip: "Skip, I'll set it later",
+      answered: "Your PIN is set.",
+    },
+    selfie: {
+      title: "Quick selfie check",
+    },
   },
   // What the API's error codes say on screen (T-3.11). A code the screen
   // doesn't expect falls back to `unknown`.
@@ -146,6 +173,10 @@ export const en = {
       city: "Use up to 40 characters.",
       username: "Use 4 to 20 of a–z, 0–9, dots and underscores.",
       intent_ids: "Pick 1 to 3.",
+      about: "Leave out links and phone numbers.",
+      interest_ids: "Pick exactly 5.",
+      // D-069's refusals: one digit four times, runs, pairs, the common ones.
+      pin: "That PIN is too easy to guess. Pick another.",
     },
   },
   // The intents catalogue, by id (P-25, D-041). The screen shows these, never the
@@ -161,6 +192,33 @@ export const en = {
     "8": "Discreet",
     "9": "Friendship",
     "10": "Go with the flow",
+  },
+  // The interests catalogue, by id (T-1.14), shown like the intents (P-26).
+  interests: {
+    "1": "Filter coffee",
+    "2": "Trekking",
+    "3": "Indie music",
+    "4": "Pottery",
+    "5": "Dogs",
+    "6": "Cats",
+    "7": "Old Hindi cinema",
+    "8": "Badminton",
+    "9": "Street food",
+    "10": "Sketching",
+    "11": "Reading",
+    "12": "Yoga",
+    "13": "Baking",
+    "14": "Gaming",
+    "15": "Anime",
+    "16": "Running",
+    "17": "Photography",
+    "18": "Cricket",
+    "19": "Travel",
+    "20": "Startups",
+    "21": "Cooking",
+    "22": "Hopeless romantic",
+    "23": "Yapper",
+    "24": "Yearner",
   },
   // The PIN lock (T-3.10, D-069): a deterrent, so its words don't promise more.
   lock: {

@@ -1,14 +1,16 @@
 "use client";
 
-import { SignOutButton } from "@/components/session/SignOutButton";
-import { t } from "@/i18n/t";
 import { stepForSlug } from "@/lib/onboarding";
 import { useMe } from "@/lib/queries/me";
 
+import { AboutStep } from "./AboutStep";
 import { BirthdayStep } from "./BirthdayStep";
+import { ComingNextStep } from "./ComingNextStep";
 import { GenderStep } from "./GenderStep";
+import { InterestsStep } from "./InterestsStep";
 import { LookingForStep } from "./LookingForStep";
 import { NameStep } from "./NameStep";
+import { PinStep } from "./PinStep";
 import { UsernameStep } from "./UsernameStep";
 
 /**
@@ -35,13 +37,17 @@ export function OnboardingScreen({
       return <NameStep me={me} />;
     case "username":
       return <UsernameStep me={me} host={host} />;
-    default:
-      // T-3.12 builds about, interests and the PIN; Sprint 4 photos and the selfie.
-      return (
-        <main className="bg-bg text-ink flex min-h-dvh flex-col items-center justify-center gap-6 p-6">
-          <h1 className="text-title-1">{t("placeholder.onboardingStep")}</h1>
-          <SignOutButton />
-        </main>
-      );
+    case "about":
+      return <AboutStep me={me} />;
+    case "photos":
+      return <ComingNextStep step="photos" />;
+    case "interests":
+      return <InterestsStep me={me} />;
+    case "pin":
+      return <PinStep me={me} />;
+    case "selfie":
+      return <ComingNextStep step="selfie" />;
+    case null:
+      return null;
   }
 }

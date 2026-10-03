@@ -18,6 +18,9 @@ const FIELDS = [
   "city",
   "username",
   "intent_ids",
+  "about",
+  "interest_ids",
+  "pin",
 ] as const;
 export type FieldName = (typeof FIELDS)[number];
 

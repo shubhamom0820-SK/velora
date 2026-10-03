@@ -947,11 +947,28 @@ exist yet. The batch is a chain, T-3.10 → T-3.11 → T-3.12 → T-3.13, each n
 - [x] **Commit:** `feat(web): onboarding steps 1-7 [T-3.11]`
 
 ### T-3.12 · Web onboarding 8, 10, 11
-- [ ] **Needs:** T-3.11, T-3.8, T-3.9
-- [ ] About (40–300 counter), interests (exactly 5, labelled from `en.ts` by id, P-26), PIN (set + confirm, skip, on T-3.10's `PinPad`). Photos (9) and selfie (12) come in Sprint 4: a placeholder in the onboarding frame that says "coming next", with its "Sign out".
-- [ ] **The PIN** (D-082): set, confirm, send. A refusal (D-069's weak PINs) returns to "set" with the server's reason; the web holds no copy of D-069's list. `/auth/pin/set` answers 204, so refetch `Me` after it.
-- [ ] Interests and PIN come after photos in the step order (D-068), so until T-4.3 a real user can't reach these two screens: test them by setting the step. Their URLs are D-080's.
-- [ ] **Commit:** `feat(web): onboarding about, interests, pin [T-3.12]`
+- [x] **Needs:** T-3.11, T-3.8, T-3.9
+- [x] About (40–300 counter), interests (exactly 5, labelled from `en.ts` by id, P-26), PIN (set + confirm, skip, on T-3.10's `PinPad`). Photos (9) and selfie (12) come in Sprint 4: a placeholder in the onboarding frame that says "coming next", with its "Sign out".
+- [x] **The PIN** (D-082): set, confirm, send. A refusal (D-069's weak PINs) returns to "set" with the server's reason; the web holds no copy of D-069's list. `/auth/pin/set` answers 204, so refetch `Me` after it.
+- [x] Interests and PIN come after photos in the step order (D-068), so until T-4.3 a real user can't reach these two screens: test them by setting the step. Their URLs are D-080's.
+- [x] **Proved, 3 October 2026:**
+  - **Tests:** 13 more vitest tests (about, interests, the PIN, the coming-next frames), and the
+    no-inline-style check over the new screens.
+  - **13 guards broken one at a time, each red, each restored by SHA-256:** an easy-PIN list in the
+    browser (D-082), no confirm, a mismatch sent anyway, `Me` not read afresh after the PIN, a sixth
+    interest, the database's labels shown, a phone-number rule for about in the browser (D-082),
+    about untrimmed, about sent under 40, no way out on the coming-next frames, the wrong back
+    arrow, an inline style, a set PIN offered for change without the current one. **One escaped at
+    first:** the PIN test began with no `Me` cached, unlike the app, so skipping the fresh read
+    changed nothing; it now seeds the cache as the gate does, and goes red.
+  - **In Chrome 154 against a production build (`next start`, the strict CSP),** all twelve
+    screens: phone to username, then about, the photos frame (coming next, with "Sign out");
+    then, with the local test account's step set to `interests` directly in the dev database
+    (nobody passes photos before T-4.3), interests and the PIN: 1234 sent and refused by the
+    server, shown as "That PIN is too easy to guess", then 4829, arriving at the selfie frame.
+    No URL held the number; no CSP violation; a planted inline style was caught, so the detector
+    was live.
+- [x] **Commit:** `feat(web): onboarding about, interests, pin [T-3.12]`
 
 ### T-3.14 · Firebase phone sign-in (launch path)
 - [ ] **Needs:** T-3.3, T-3.10 (it restores the session on reload, which the Done-when checks), T-3.11 (its phone and OTP screens, which this task's web step puts Firebase on), and **P-0.13** (the Google billing account, verified: Firebase's Blaze plan bills to it)

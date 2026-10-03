@@ -17,10 +17,14 @@ import { resetSession, useSession } from "@/store/session";
 
 import { WaitlistBox } from "@/components/marketing/WaitlistBox";
 
+import { AboutStep } from "./AboutStep";
 import { BirthdayStep } from "./BirthdayStep";
+import { ComingNextStep } from "./ComingNextStep";
 import { GenderStep } from "./GenderStep";
+import { InterestsStep } from "./InterestsStep";
 import { LookingForStep } from "./LookingForStep";
 import { NameStep } from "./NameStep";
+import { PinStep } from "./PinStep";
 import { SignIn } from "./SignIn";
 import { USERNAME_CHECK_DELAY_MS, UsernameStep } from "./UsernameStep";
 
@@ -600,6 +604,223 @@ describe("the username (T-3.7)", () => {
   });
 });
 
+describe("about (T-3.12, T-3.7)", () => {
+  const LONG = "  Weekend trekker, filter coffee loyalist, and slow reader.  ";
+
+  it("counts down to 40 characters, then sends the text trimmed", async () => {
+    const api_ = fakeApi({
+      "PATCH /v1/me/profile": () =>
+        json(200, me({ onboarding_step: "photos" })),
+    });
+    renderUi(<AboutStep me={me({ onboarding_step: "about" })} />);
+
+    await userEvent.type(screen.getByLabelText("About you"), "Short one.");
+    expect(
+      screen.getByRole("button", { name: "30 more characters" }),
+    ).toBeDisabled();
+
+    await userEvent.clear(screen.getByLabelText("About you"));
+    await userEvent.type(screen.getByLabelText("About you"), LONG);
+    await userEvent.click(screen.getByRole("button", { name: "Continue" }));
+
+    await waitFor(() =>
+      expect(nav.push).toHaveBeenCalledWith("/onboarding/photos"),
+    );
+    expect(api_.calls[0]?.body).toEqual({ about: LONG.trim() });
+  });
+
+  it("leaves links and phone numbers to the server, and shows its refusal (D-082)", async () => {
+    const api_ = fakeApi({
+      "PATCH /v1/me/profile": () =>
+        envelope(400, "VALIDATION_ERROR", {
+          fields: [{ field: "about", problem: "can't hold a phone number" }],
+        }),
+    });
+    renderUi(<AboutStep me={me({ onboarding_step: "about" })} />);
+    const about = "Call me on 98765 43210 any evening after work, I promise.";
+
+    await userEvent.type(screen.getByLabelText("About you"), about);
+    await userEvent.click(screen.getByRole("button", { name: "Continue" }));
+
+    expect(
+      await screen.findByText("Leave out links and phone numbers."),
+    ).toBeInTheDocument();
+    expect(api_.calls[0]?.body).toEqual({ about });
+  });
+
+  it("goes back to the username", () => {
+    renderUi(<AboutStep me={me({ onboarding_step: "about" })} />);
+    expect(screen.getByRole("link", { name: "Back" })).toHaveAttribute(
+      "href",
+      "/onboarding/username",
+    );
+  });
+});
+
+describe("interests (T-3.12, T-3.8)", () => {
+  const INTERESTS = Array.from({ length: 24 }, (_, i) => ({
+    id: i + 1,
+    slug: `i${i + 1}`,
+    label: `database label ${i + 1}`,
+  }));
+
+  it("takes exactly five, in en.ts's words", async () => {
+    const api_ = fakeApi({
+      "GET /v1/interests": () => json(200, INTERESTS),
+      "PUT /v1/me/interests": () => json(200, me({ onboarding_step: "pin" })),
+    });
+    renderUi(<InterestsStep me={me({ onboarding_step: "interests" })} />);
+
+    for (const label of [
+      "Filter coffee",
+      "Trekking",
+      "Indie music",
+      "Pottery",
+    ]) {
+      await userEvent.click(await screen.findByRole("button", { name: label }));
+    }
+    expect(screen.getByRole("button", { name: "Continue" })).toBeDisabled();
+    await userEvent.click(screen.getByRole("button", { name: "Dogs" }));
+    await userEvent.click(screen.getByRole("button", { name: "Cats" }));
+    expect(screen.getByRole("button", { name: "Cats" })).toHaveAttribute(
+      "aria-pressed",
+      "false",
+    );
+    expect(screen.getByText("Pick 5. 5/5 chosen.")).toBeInTheDocument();
+    expect(screen.queryByText(/database label/)).toBeNull();
+    await userEvent.click(screen.getByRole("button", { name: "Continue" }));
+
+    await waitFor(() =>
+      expect(nav.push).toHaveBeenCalledWith("/onboarding/pin"),
+    );
+    expect(api_.calls.find((c) => c.method === "PUT")?.body).toEqual({
+      interest_ids: [1, 2, 3, 4, 5],
+    });
+  });
+
+  it("goes back to photos", () => {
+    fakeApi({ "GET /v1/interests": () => json(200, INTERESTS) });
+    renderUi(<InterestsStep me={me({ onboarding_step: "interests" })} />);
+    expect(screen.getByRole("link", { name: "Back" })).toHaveAttribute(
+      "href",
+      "/onboarding/photos",
+    );
+  });
+});
+
+describe("the PIN (T-3.12, D-069)", () => {
+  async function enter(pin: string) {
+    for (const digit of pin) {
+      await userEvent.click(screen.getByRole("button", { name: digit }));
+    }
+  }
+
+  it("asks twice, and starts again when the two don't match, sending nothing", async () => {
+    const api_ = fakeApi({});
+    renderUi(<PinStep me={me({ onboarding_step: "pin" })} />);
+
+    await enter("4829");
+    expect(
+      screen.getByRole("heading", { name: "Confirm your PIN" }),
+    ).toBeInTheDocument();
+    await enter("4828");
+
+    expect(screen.getByRole("alert")).toHaveTextContent(
+      "Those PINs didn't match. Try again.",
+    );
+    expect(
+      screen.getByRole("heading", { name: "Set a 4-digit PIN" }),
+    ).toBeInTheDocument();
+    expect(api_.calls).toHaveLength(0);
+  });
+
+  it("sends a confirmed PIN, then reads Me afresh to move on", async () => {
+    const api_ = fakeApi({
+      "POST /v1/auth/pin/set": () => json(204),
+      "GET /v1/me": () =>
+        json(200, me({ onboarding_step: "selfie", has_pin: true })),
+    });
+    renderUi(<PinStep me={me({ onboarding_step: "pin" })} />);
+    // As in the app: the gate has the pre-PIN Me cached, still at `pin`.
+    client.setQueryData(queryKeys.me(), me({ onboarding_step: "pin" }));
+
+    await enter("4829");
+    await enter("4829");
+
+    await waitFor(() =>
+      expect(nav.push).toHaveBeenCalledWith("/onboarding/selfie"),
+    );
+    expect(api_.sent()).toEqual(["POST /v1/auth/pin/set", "GET /v1/me"]);
+    expect(api_.calls[0]?.body).toEqual({ pin: "4829" });
+  });
+
+  it("sends even an easy PIN: the list is the server's, and its refusal comes back (D-082)", async () => {
+    const api_ = fakeApi({
+      "POST /v1/auth/pin/set": () =>
+        envelope(400, "VALIDATION_ERROR", {
+          fields: [{ field: "pin", problem: "is too common" }],
+        }),
+    });
+    renderUi(<PinStep me={me({ onboarding_step: "pin" })} />);
+
+    await enter("1234");
+    await enter("1234");
+
+    expect(await screen.findByRole("alert")).toHaveTextContent(
+      "That PIN is too easy to guess. Pick another.",
+    );
+    expect(
+      screen.getByRole("heading", { name: "Set a 4-digit PIN" }),
+    ).toBeInTheDocument();
+    expect(api_.calls[0]?.body).toEqual({ pin: "1234" });
+  });
+
+  it("can be skipped", async () => {
+    const api_ = fakeApi({
+      "POST /v1/me/pin/skip": () =>
+        json(200, me({ onboarding_step: "selfie" })),
+    });
+    renderUi(<PinStep me={me({ onboarding_step: "pin" })} />);
+
+    await userEvent.click(
+      screen.getByRole("button", { name: "Skip, I'll set it later" }),
+    );
+
+    await waitFor(() =>
+      expect(nav.push).toHaveBeenCalledWith("/onboarding/selfie"),
+    );
+    expect(api_.sent()).toEqual(["POST /v1/me/pin/skip"]);
+  });
+
+  it("doesn't change a PIN already set: that needs the current one", () => {
+    renderUi(<PinStep me={me({ onboarding_step: "selfie", has_pin: true })} />);
+    expect(screen.getByText("Your PIN is set.")).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "1" })).toBeNull();
+  });
+});
+
+describe("photos and the selfie, until Sprint 4", () => {
+  it.each([
+    ["photos", "Add your photos", "/onboarding/about"],
+    ["selfie", "Quick selfie check", "/onboarding/pin"],
+  ] as const)(
+    "%s says it's next, with a way back and a way out",
+    (step, title, back) => {
+      renderUi(<ComingNextStep step={step} />);
+
+      expect(screen.getByRole("heading", { name: title })).toBeInTheDocument();
+      expect(screen.getByText("This step is coming next.")).toBeInTheDocument();
+      expect(screen.getByRole("link", { name: "Back" })).toHaveAttribute(
+        "href",
+        back,
+      );
+      expect(
+        screen.getByRole("button", { name: "Sign out" }),
+      ).toBeInTheDocument();
+    },
+  );
+});
+
 describe("production's CSP allows no inline style (P-41)", () => {
   it("no screen renders a style attribute", () => {
     fakeApi({});
@@ -614,6 +835,11 @@ describe("production's CSP allows no inline style (P-41)", () => {
         me={me({ onboarding_step: "username" })}
         host="h"
       />,
+      <AboutStep key="a" me={me({ onboarding_step: "about" })} />,
+      <ComingNextStep key="p" step="photos" />,
+      <InterestsStep key="i" me={me({ onboarding_step: "interests" })} />,
+      <PinStep key="pin" me={me({ onboarding_step: "pin" })} />,
+      <ComingNextStep key="s" step="selfie" />,
     ];
     for (const ui of screens) {
       const { container, unmount } = renderUi(ui);

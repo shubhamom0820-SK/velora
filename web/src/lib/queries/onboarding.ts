@@ -96,3 +96,40 @@ export function useUsernameAvailability(username: string | null) {
     staleTime: 30_000,
   });
 }
+
+export function useSetInterests() {
+  return useMeMutation((interest_ids: number[]) =>
+    api.put("/v1/me/interests", { body: { interest_ids } }),
+  );
+}
+
+/** The interests catalogue (T-1.14): 24 rows that change by migration only. */
+export function useInterests() {
+  return useQuery({
+    queryKey: queryKeys.interests(),
+    queryFn: ({ signal }) => api.get("/v1/interests", { signal }),
+    staleTime: Infinity,
+  });
+}
+
+/**
+ * Set the PIN at the `pin` step (D-069). The API answers 204, so `Me`, whose
+ * step has moved on to `selfie`, is fetched afresh and handed back.
+ */
+export function useSetPin() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (pin: string): Promise<Me> => {
+      await api.post("/v1/auth/pin/set", { body: { pin } });
+      return queryClient.fetchQuery({
+        queryKey: queryKeys.me(),
+        queryFn: ({ signal }) => api.get("/v1/me", { signal }),
+        staleTime: 0,
+      });
+    },
+  });
+}
+
+export function useSkipPin() {
+  return useMeMutation(() => api.post("/v1/me/pin/skip"));
+}
