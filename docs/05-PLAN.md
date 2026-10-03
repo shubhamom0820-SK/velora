@@ -1131,9 +1131,9 @@ still works, since a rollback isn't a DELETE. Tests that commit rows follow 06-T
 committed rows.
 
 ### T-5.1 · Wallet service
-- [ ] **Needs:** T-1.12, T-1.5, T-1.15
-- [ ] Settles P-19: tick it at `/done`.
-- [ ] Two migrations, one change each (rule 11), with models to match:
+- [x] **Needs:** T-1.12, T-1.5, T-1.15
+- [x] Settles P-19: tick it at `/done`.
+- [x] Two migrations, one change each (rule 11), with models to match:
   1. **The ledger's shape (D-077).** Each reason has one direction: `(delta > 0) = (reason is a
      credit)`, with `gift` a debit. Every reason except `admin_grant` needs a ref. Each reason has
      exactly one `ref_type` (`admin_grant`'s ref is optional). A partial unique index on
@@ -1142,11 +1142,11 @@ committed rows.
   2. **Only men hold Velas (D-076).** One trigger function and two triggers refuse any
      `ledger_entries` row, and any `wallets.balance` other than 0, for a user whose gender isn't
      `male`. That is an allowlist, so a user with no gender is refused too.
-- [ ] `wallet/rules.py`: each reason's direction and `ref_type`. Bare `refund` is refused, in the
+- [x] `wallet/rules.py`: each reason's direction and `ref_type`. Bare `refund` is refused, in the
   service only (D-077 says why the level differs from D-076's). The key is
   `{user_id}:{reason}:{event}`, built here and never by callers. The event is the ref id, or an
   event the caller names for `admin_grant` and `thread_reopen`.
-- [ ] `wallet.service.debit(...)` and `credit(...)`, in this order:
+- [x] `wallet.service.debit(...)` and `credit(...)`, in this order:
   - refuse anything outside a transaction;
   - the amount must be an `int`, not a `bool`, above 0;
   - the reason must be used in its direction, and the ref must match the reason;
@@ -1159,25 +1159,25 @@ committed rows.
 
   Both return `LedgerResult(entry, applied)`. They never catch a unique violation and carry on, and
   nothing external runs under the lock.
-- [ ] `core/events.py`: events are queued on the session, kept on commit and dropped on rollback.
+- [x] `core/events.py`: events are queued on the session, kept on commit and dropped on rollback.
   When the request ends, `get_session` publishes the request's committed events to Redis `user:{id}`
   in 02-ARCHITECTURE §6's envelope. The publish is awaited, never fire-and-forget: a publish that
   outlives its request fails where nobody is looking. A failed publish is logged and never fails the
   request. The event here is `wallet.updated {balance}`. Callers outside a request (the seed)
   publish nothing. T-7.4 builds the socket side.
-- [ ] **Seed (T-1.15):** credit the test man 60 through `credit(reason='admin_grant')` with a named
+- [x] **Seed (T-1.15):** credit the test man 60 through `credit(reason='admin_grant')` with a named
   event, even if he already exists. That is the one exception to insert-only, written in the seed's
   docstring and summary. A re-run changes nothing.
-- [ ] **`make_user(credits=N)` (T-3.1)** credits men through `credit(reason='admin_grant')`; anyone
+- [x] **`make_user(credits=N)` (T-3.1)** credits men through `credit(reason='admin_grant')`; anyone
   else with credits raises. Rule 5: nothing writes a balance directly.
-- [ ] **Changes the guards force on existing tests:**
+- [x] **Changes the guards force on existing tests:**
   - `tests/test_schema.py`'s T-1.12 ledger tests get men and refs, and every CHECK test asserts its
     constraint name, not just SQLSTATE 23514. Otherwise a new guard could make one pass for the
     wrong reason (P-48's lesson, caught before it bit).
   - `tests/seed/test_seed.py`'s ledger count, which counts every row in the database, is scoped to
     the seeded people.
   - `tests/test_harness.py`'s credits test.
-- [ ] **Tests:**
+- [x] **Tests:**
   - **The gender guard both ways:** every `Gender` value and no gender, so only `male` may have rows
     or a non-zero balance. Includes the case that motivated the allowlist: a user with no gender is
     refused a credit, then chooses female, and holds nothing.
@@ -1197,7 +1197,7 @@ committed rows.
     T-3.13): commit it here, an opt-in option in `api/tests/conftest.py` with no new dependency,
     unless T-3.13 already has. Never a throwaway copy: a fix whose mechanism isn't in the repo is
     not a fix (CLAUDE.md).
-- [ ] **Break every guard once, on a database of the task's own.** That is `velora_t51_test`, made
+- [x] **Break every guard once, on a database of the task's own.** That is `velora_t51_test`, made
   with `createdb` in the shared Postgres (never `infra-reset`), with `TEST_DATABASE_URL` pointed at
   it. Breaking a constraint in the shared `velora_test` would hit every session using it, however
   well its assertions are scoped. Break:
@@ -1213,7 +1213,7 @@ committed rows.
   database. The full `make test` runs on its own slot's database.
 - [ ] **Done when:** the docs commit after `/done` names the staging deploy run that applied both
   migrations.
-- [ ] **Commit:** `feat(wallet): row-locked debit and credit [T-5.1]`
+- [x] **Commit:** `feat(wallet): row-locked debit and credit [T-5.1]`
 
 ### T-5.4 · The concurrency test 🔒
 - [ ] **Needs:** T-5.1
@@ -1387,7 +1387,7 @@ committed rows.
 - [ ] **Commit:** `feat(messages): list and send with safety filters [T-7.3]`
 
 ### T-7.4 · Real-time server
-- [ ] **Needs:** T-7.3
+- [ ] **Needs:** T-7.3, and **P-64**: in tests `session_for_the_app` replaces `get_session`, which is what publishes, so no endpoint test sees an event; and services queue events through `core/events.py` (T-5.1), never a publish of their own
 - [ ] `POST /ws/ticket` (Redis, 30 s, single use). `/ws` endpoint: validate ticket, register connection, subscribe `user:{id}`, heartbeat, close on logout/freeze. Publishing helper `realtime.publish(user_id, type, data)` used by services.
 - [ ] Load test: 1,000 concurrent sockets on one instance stay under 256 MB.
 - [ ] **Commit:** `feat(realtime): websocket gateway [T-7.4]`
@@ -1561,7 +1561,7 @@ committed rows.
 - [ ] **Commit:** `feat(safety): fraud scoring and auto-freeze [T-9.2]`
 
 ### T-9.3 · Refund when a partner is banned
-- [ ] **Needs:** T-9.2, T-5.1
+- [ ] **Needs:** T-9.2, T-5.1, and **P-63**: one ban credits several men in one transaction, and nothing yet makes their wallets lock in `user_id` order (D-077)
 - [ ] On ban: find Velas other users spent on this person in the last 7 days (threads opened with them, voice unlocks, album requests) → `wallet.credit(refund_banned_partner)` each, idempotent per ref, notify. The 7 days is also stated on `/refunds` (D-050): change both together.
 - [ ] **Commit:** `feat(safety): refunds for banned partners [T-9.3]`
 
@@ -1575,7 +1575,7 @@ committed rows.
 ### T-9.5 · Admin panel
 - [ ] **Needs:** T-9.2
 - [ ] API: all `/admin/*` routes in `04-API.md`, `require_role(moderator)`; Vela grants and bans `admin` only; every call writes `audit_log`; viewing messages of a thread logs who looked and why (reason required).
-- [ ] **Vela grants (`/admin/users/{id}/credits`):** a grant can't reach a woman, because the database refuses it (D-076). A negative `delta`, an admin correction, has no ledger reason today, since `admin_grant` is a credit (D-077). Add a debit reason for it here, an enum addition.
+- [ ] **Vela grants (`/admin/users/{id}/credits`):** a grant can't reach a woman, because the database refuses it (D-076). A negative `delta`, an admin correction, has no ledger reason today, since `admin_grant` is a credit (D-077). Add a debit reason for it here, an enum addition. **Make `admin_grant`'s ref required here:** it is optional (T-5.1) only while its callers are the seed and `make_user`; an admin's grant names the `audit_log` row its call writes, or it is a grant nobody can trace. That is a migration on `ck_ledger_entries_ref_required` and a change to `wallet/rules.py`, which the seed and `make_user` must then follow (at the direction of the advisor directing Sprint 5, 3 October 2026).
 - [ ] Web `/admin`: metrics tiles, report queue with SLA timer (24 h), user search + detail (photos, reports, fraud signals, ledger, threads), moderation queue (approve/reject), actions with confirmation dialogs, audit log.
 - [ ] Web `/admin` renders only for `role in (moderator, admin)`, read through `useMe()`; anyone else
   gets the 404 page — replacing T-1.22's `next dev`-only gate (from P-30). **This gate is UX, not
@@ -1819,7 +1819,7 @@ Claude Code adds items here instead of doing unplanned work. Format:
   and can't `ALTER` them or set `session_replication_role`; migrations run as the owner. Its tests
   cover every guarded table. **Before T-1.22.** Found in review of T-1.12.
   **Moved:** now two steps in T-1.22 — tick this with T-1.22.
-- [ ] P-19 · Namespace ledger idempotency keys per user — `ledger_entries.idempotency_key` is unique
+- [x] P-19 · Namespace ledger idempotency keys per user — `ledger_entries.idempotency_key` is unique
   across all users, and money routes accept a client `Idempotency-Key` header (02-ARCHITECTURE §3).
   Stored raw, two users sending the same key collide: the second user's genuine debit is refused —
   or, if the service reads a unique violation as "already applied", reported as paid when it wasn't.
@@ -1827,6 +1827,8 @@ Claude Code adds items here instead of doing unplanned work. Format:
   **Design into T-5.x.** Found in review of T-1.12.
   **Folded into T-5.1, 3 October 2026; tick it there:** the key is `{user_id}:{reason}:{event}`,
   built by the wallet module (D-077).
+  **Settled by T-5.1, 3 October 2026:** `wallet/rules.py`'s `key_for()`; two men with one event both
+  apply (`test_two_people_with_one_event_both_apply`), red when the key drops the user.
 - [ ] P-20 · Audit automated actions as a system user — ruled in T-1.13: `audit_log.actor_id` is
   NOT NULL, because null could not tell "the system did it" from "a bug forgot to set it", and the
   system user is created when auto-freeze first needs it, by T-9.2. T-9.2's text says neither that
@@ -2574,3 +2576,33 @@ Claude Code adds items here instead of doing unplanned work. Format:
   `otp_sms_daily_cap` made OTP send fail. The web copes today (a failed restore offers a retry, never
   `/login`), so this is about seeing errors, not losing sessions. Add the CORS headers to the 500
   for an allowed origin only, with a test that a disallowed origin still gets none. Found in T-3.10.
+- [ ] P-62 · Give T-1.9's identity trigger a constraint name. **Before the next migration that
+  touches `users`.** Worst case: a refusal reported as the wrong one. `users_identity_immutable()`
+  raises `check_violation` (23514) and names no constraint, so its tests can only match its message,
+  and T-3.6's `_flush_identity` maps any 23514 at that flush to `IMMUTABLE_FIELD`. Its comment says
+  only that trigger can raise it, since `users` has no CHECK. From T-5.1, D-076's two triggers raise
+  23514 too (on `ledger_entries` and `wallets`), so a flush there that carried a wallet write a
+  trigger refused would answer "This can't be changed once it's set." Fix: a migration replacing
+  the function to raise `using constraint = tg_name`, T-3.6 mapping by that name, and the
+  `test_schema.py` tests asserting it. Not in T-5.1, at the advisor's direction. Found in T-5.1,
+  which made every other CHECK test in `test_schema.py` name its constraint.
+- [ ] P-63 · Make the wallet refuse locking several wallets out of `user_id` order. **Before
+  T-9.3,** on its Needs line, the first task that locks more than one. Worst case: two
+  transactions each holding one man's wallet and waiting for the other's, a deadlock Postgres
+  breaks by failing one, so a ban's refunds fail at random under load. D-077 says a transaction
+  locks one wallet, or several in `user_id` order, but nothing enforces it: `debit()` and
+  `credit()` lock whatever they're given. Fix: the wallet module records on the session which
+  wallets it holds, and refuses (`WalletMisuse`) a lock below the highest held; or a
+  `lock_wallets(ids)` that sorts them first. Test it with two transactions crediting the same two
+  men in opposite orders. Found in T-5.1.
+- [ ] P-64 · Let endpoint tests see the events a request publishes. **Before T-7.4,** on its Needs
+  line. Worst case: T-7.4 ships with every socket event untested end to end, or a service publishes
+  on its own to make one visible, which would publish before commit and under a lock. In tests the
+  `app` fixture replaces `get_session` with `session_for_the_app` (the test's rolled-back session),
+  and `get_session` is what publishes a request's committed events (`core/events.py`, T-5.1). So
+  through `client` no event is ever published; only `tests/core/test_events.py`'s app, built
+  without the override and committing for real, sees one. Fix: `session_for_the_app` takes the
+  session's committed events when the request ends and publishes them as `get_session` does, or
+  hands them to a fixture to read. Also: T-7.4's "publishing helper `realtime.publish()` used by
+  services" predates `core/events.py`; services queue events, and T-7.4 builds only the socket
+  side (T-5.1's text). Found in T-5.1, at the direction of the advisor directing Sprint 5.

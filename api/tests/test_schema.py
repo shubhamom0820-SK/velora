@@ -18,11 +18,16 @@ T-1.13: notifications and ops — an append-only audit log with a real actor, th
 and a case-insensitive waitlist.
 P-25: intent as a catalogue (D-041) — each intent picked once, picks reference a
 real user and intent, catalogue rows need a unique slug and a label.
+T-5.1: every CHECK test names the constraint that refused, never only 23514,
+since the gender guard (D-076) refuses with that code too; the ledger's tests
+are a man's, with refs. The ledger's new shape is tested in
+tests/modules/wallet/test_guards.py.
 """
 
 from __future__ import annotations
 
 import uuid
+from dataclasses import dataclass
 from datetime import date
 
 import pytest
@@ -122,6 +127,40 @@ async def _rejected(
     return _sqlstate(excinfo.value)
 
 
+@dataclass(frozen=True)
+class CheckRefusal:
+    constraint: str | None
+    message: str
+
+
+async def _check_refused(
+    db: AsyncSession, sql: str, params: dict[str, object] | None = None
+) -> CheckRefusal:
+    """Run `sql` in its own savepoint, expect a CHECK refusal (23514), and say
+    which constraint refused it.
+
+    The code alone proves nothing: from T-5.1 the gender guard refuses with
+    23514 too, and a test asserting only the code passes whichever guard said
+    no. Three of T-1.12's did, the day the guard arrived (P-48's lesson)."""
+    with pytest.raises(IntegrityError) as excinfo:
+        async with db.begin_nested():
+            await db.execute(text(sql), params or {})
+    return _check_refusal(excinfo.value)
+
+
+def _check_refusal(error: IntegrityError) -> CheckRefusal:
+    assert _sqlstate(error) == CHECK_VIOLATION, str(error.orig)
+    return CheckRefusal(_constraint(error), str(error.orig))
+
+
+def _constraint(error: IntegrityError) -> str | None:
+    """The constraint that refused, from asyncpg's own exception, behind
+    SQLAlchemy's."""
+    cause = error.orig.__cause__ if error.orig is not None else None
+    name = getattr(cause, "constraint_name", None)
+    return name if isinstance(name, str) else None
+
+
 async def _user(db: AsyncSession, **fields: object) -> User:
     tag = uuid.uuid4().hex[:12]
     user = User(
@@ -172,14 +211,16 @@ async def test_identity_cannot_change_once_set(
         {"v": first, "id": user.id},
     )
 
-    state = await _rejected(
+    refusal = await _check_refused(
         db,
         f"update users set {column} = :v where id = :id",
         {"v": second, "id": user.id},
     )
 
     # check_violation -> IntegrityError, which T-3.6 maps to IMMUTABLE_FIELD.
-    assert state == CHECK_VIOLATION
+    # T-1.9's trigger names no constraint, so its message says which (P-62).
+    assert refusal.constraint is None
+    assert f"users.{column} is immutable once set" in refusal.message
 
 
 @pytest.mark.critical  # 06-TESTING.md #8
@@ -189,11 +230,12 @@ async def test_identity_cannot_be_cleared_once_set(
 ) -> None:
     user = await _user(db, gender=Gender.MALE, dob=date(2000, 1, 1))
 
-    state = await _rejected(
+    refusal = await _check_refused(
         db, f"update users set {column} = null where id = :id", {"id": user.id}
     )
 
-    assert state == CHECK_VIOLATION
+    assert refusal.constraint is None
+    assert f"users.{column} is immutable once set" in refusal.message
 
 
 async def test_saving_the_same_values_is_allowed(db: AsyncSession) -> None:
@@ -229,13 +271,13 @@ async def test_enum_columns_store_values_not_member_names(db: AsyncSession) -> N
 async def test_bad_usernames_are_rejected(db: AsyncSession, username: str) -> None:
     user = await _user(db)
 
-    state = await _rejected(
+    refusal = await _check_refused(
         db,
         "insert into profiles (user_id, username) values (:id, :u)",
         {"id": user.id, "u": username},
     )
 
-    assert state == CHECK_VIOLATION
+    assert refusal.constraint == "ck_profiles_username_format"
 
 
 @pytest.mark.parametrize("username", ["priya", "priya_k.99", "a" * 20, "abcd"])
@@ -330,27 +372,27 @@ async def test_a_rejected_photo_frees_its_slot(db: AsyncSession) -> None:
 async def test_public_photo_position_is_0_to_5(db: AsyncSession) -> None:
     user = await _user(db)
 
-    state = await _rejected(
+    refusal = await _check_refused(
         db,
         "insert into photos (user_id, kind, position, raw_key) values (:u, 'public', 6, 'k')",
         {"u": user.id},
     )
 
-    assert state == CHECK_VIOLATION
+    assert refusal.constraint == "ck_photos_public_position_range"
 
 
 async def test_a_public_photo_must_have_a_position(db: AsyncSession) -> None:
     """P-13: NULL passed the old `position BETWEEN 0 AND 5` check (unknown)."""
     user = await _user(db)
 
-    state = await _rejected(
+    refusal = await _check_refused(
         db,
         "insert into photos (user_id, kind, position, raw_key) "
         "values (:u, 'public', null, 'k')",
         {"u": user.id},
     )
 
-    assert state == CHECK_VIOLATION
+    assert refusal.constraint == "ck_photos_public_position_range"
 
 
 async def test_other_photo_kinds_need_no_position(db: AsyncSession) -> None:
@@ -456,15 +498,15 @@ async def test_pair_must_be_ordered(db: AsyncSession, table: str) -> None:
         else ") values (:a, :b)"
     )
 
-    reversed_state = await _rejected(
+    reversed_order = await _check_refused(
         db, f"insert into {table} (user_low, user_high{extra}", {"a": high, "b": low}
     )
-    equal_state = await _rejected(
+    equal = await _check_refused(
         db, f"insert into {table} (user_low, user_high{extra}", {"a": low, "b": low}
     )
 
-    assert reversed_state == CHECK_VIOLATION
-    assert equal_state == CHECK_VIOLATION
+    assert reversed_order.constraint == f"ck_{table}_pair_ordered"
+    assert equal.constraint == f"ck_{table}_pair_ordered"
 
 
 async def test_one_thread_per_pair(db: AsyncSession) -> None:
@@ -506,26 +548,26 @@ async def test_a_knotted_thread_cannot_carry_an_expiry(db: AsyncSession) -> None
     low, high = await _pair(db)
     thread_id = await _thread(db, low, high)
 
-    state = await _rejected(
+    refusal = await _check_refused(
         db,
         "update threads set status = 'knotted', knotted_at = now() where id = :t",
         {"t": thread_id},
     )
 
-    assert state == CHECK_VIOLATION
+    assert refusal.constraint == "ck_threads_knotted_is_permanent"
 
 
 async def test_a_knotted_thread_needs_knotted_at(db: AsyncSession) -> None:
     low, high = await _pair(db)
     thread_id = await _thread(db, low, high)
 
-    state = await _rejected(
+    refusal = await _check_refused(
         db,
         "update threads set status = 'knotted', expires_at = null where id = :t",
         {"t": thread_id},
     )
 
-    assert state == CHECK_VIOLATION
+    assert refusal.constraint == "ck_threads_knotted_is_permanent"
 
 
 async def test_knotting_properly_is_allowed(db: AsyncSession) -> None:
@@ -545,14 +587,14 @@ async def test_an_active_thread_must_expire(db: AsyncSession) -> None:
     """Otherwise it would sit active forever and break the 24-hour promise."""
     low, high = await _pair(db)
 
-    state = await _rejected(
+    refusal = await _check_refused(
         db,
         "insert into threads (user_low, user_high, origin, opened_by) "
         "values (:low, :high, 'match', :low)",
         {"low": low, "high": high},
     )
 
-    assert state == CHECK_VIOLATION
+    assert refusal.constraint == "ck_threads_active_expires"
 
 
 async def test_untying_back_to_active_needs_a_fresh_expiry(db: AsyncSession) -> None:
@@ -567,7 +609,7 @@ async def test_untying_back_to_active_needs_a_fresh_expiry(db: AsyncSession) -> 
         {"t": thread_id},
     )
 
-    no_expiry = await _rejected(
+    no_expiry = await _check_refused(
         db, "update threads set status = 'active' where id = :t", {"t": thread_id}
     )
     await db.execute(
@@ -578,7 +620,7 @@ async def test_untying_back_to_active_needs_a_fresh_expiry(db: AsyncSession) -> 
         {"t": thread_id},
     )
 
-    assert no_expiry == CHECK_VIOLATION
+    assert no_expiry.constraint == "ck_threads_active_expires"
 
 
 # Messages.
@@ -631,14 +673,14 @@ async def test_message_body_is_at_most_2000_characters(db: AsyncSession) -> None
     thread_id = await _thread(db, low, high)
     await _message(db, thread_id, low, uuid.uuid4(), body="x" * 2000)
 
-    state = await _rejected(
+    refusal = await _check_refused(
         db,
         "insert into messages (thread_id, sender_id, kind, body, client_msg_id) "
         "values (:t, :s, 'text', :b, :c)",
         {"t": thread_id, "s": low, "b": "x" * 2001, "c": uuid.uuid4()},
     )
 
-    assert state == CHECK_VIOLATION
+    assert refusal.constraint == "ck_messages_body_length"
 
 
 # Swipes, and the FKs added to the doc's shorthand tables (T-1.10 Q2).
@@ -763,11 +805,11 @@ async def test_nobody_can_act_on_themselves(
     thread_id = await _thread(db, low, high)
     gift_id = await _gift(db)
 
-    state = await _rejected(
+    refusal = await _check_refused(
         db, f"insert into {table} {sql}", {"u": low, "t": thread_id, "g": gift_id}
     )
 
-    assert state == CHECK_VIOLATION
+    assert refusal.constraint == f"ck_{table}_not_self"
 
 
 # Charges are never negative (T-1.11 Q4).
@@ -776,28 +818,28 @@ async def test_nobody_can_act_on_themselves(
 async def test_album_request_charge_is_never_negative(db: AsyncSession) -> None:
     low, high = await _pair(db)
 
-    state = await _rejected(
+    refusal = await _check_refused(
         db,
         "insert into album_requests (requester_id, owner_id, credits_charged) "
         "values (:r, :o, -1)",
         {"r": low, "o": high},
     )
 
-    assert state == CHECK_VIOLATION
+    assert refusal.constraint == "ck_album_requests_credits_charged_non_negative"
 
 
 async def test_gift_send_charge_is_never_negative(db: AsyncSession) -> None:
     low, high = await _pair(db)
     gift_id = await _gift(db)
 
-    state = await _rejected(
+    refusal = await _check_refused(
         db,
         "insert into gift_sends (sender_id, recipient_id, gift_id, credits_charged) "
         "values (:s, :r, :g, -2)",
         {"s": low, "r": high, "g": gift_id},
     )
 
-    assert state == CHECK_VIOLATION
+    assert refusal.constraint == "ck_gift_sends_credits_charged_non_negative"
 
 
 # Kudos.
@@ -822,12 +864,12 @@ async def test_one_kudos_per_pair(db: AsyncSession) -> None:
 
 
 async def test_gift_price_is_never_negative(db: AsyncSession) -> None:
-    state = await _rejected(
+    refusal = await _check_refused(
         db,
         "insert into gifts (id, label, asset, credits) values ('bad', 'Bad', 'x', -1)",
     )
 
-    assert state == CHECK_VIOLATION
+    assert refusal.constraint == "ck_gifts_credits_non_negative"
 
 
 async def test_a_gift_needs_a_label_and_an_asset(db: AsyncSession) -> None:
@@ -874,14 +916,14 @@ async def test_a_gift_send_needs_a_real_gift(db: AsyncSession) -> None:
 async def test_report_details_at_most_500(db: AsyncSession) -> None:
     low, high = await _pair(db)
 
-    state = await _rejected(
+    refusal = await _check_refused(
         db,
         "insert into reports (reporter_id, reported_id, reason, details) "
         "values (:a, :b, 'scam', :d)",
         {"a": low, "b": high, "d": "x" * 501},
     )
 
-    assert state == CHECK_VIOLATION
+    assert refusal.constraint == "ck_reports_details_length"
 
 
 async def test_report_action_is_one_of_four(db: AsyncSession) -> None:
@@ -894,9 +936,9 @@ async def test_report_action_is_one_of_four(db: AsyncSession) -> None:
     for action in ("freeze", "ban", "warn", "none"):
         async with db.begin_nested():
             await db.execute(text(sql), {"a": low, "b": high, "act": action})
-    state = await _rejected(db, sql, {"a": low, "b": high, "act": "delete"})
+    refusal = await _check_refused(db, sql, {"a": low, "b": high, "act": "delete"})
 
-    assert state == CHECK_VIOLATION
+    assert refusal.constraint == "ck_reports_action_values"
 
 
 # Fraud (D-031): the score is 0-100; bands are policy, not a CHECK.
@@ -906,13 +948,13 @@ async def test_report_action_is_one_of_four(db: AsyncSession) -> None:
 async def test_fraud_score_is_0_to_100(db: AsyncSession, score: int) -> None:
     user = await _user(db)
 
-    state = await _rejected(
+    refusal = await _check_refused(
         db,
         "insert into fraud_scores (user_id, score) values (:u, :s)",
         {"u": user.id, "s": score},
     )
 
-    assert state == CHECK_VIOLATION
+    assert refusal.constraint == "ck_fraud_scores_score_range"
 
 
 # FKs spelled out on the shorthand tables (T-1.10's ruling, applied again).
@@ -947,21 +989,31 @@ async def test_shorthand_references_are_real(
 RESTRICT_VIOLATION = "23001"
 
 
+async def _man(db: AsyncSession) -> User:
+    """From T-5.1 only a man may hold credits (D-076), so every ledger row and
+    non-zero balance here is a man's: the test then fails on its own guard."""
+    return await _user(db, gender=Gender.MALE)
+
+
 async def _ledger_entry(
     db: AsyncSession, user_id: uuid.UUID, **fields: object
 ) -> uuid.UUID:
+    """A purchase as D-077 shapes one: a credit, naming its payment. The
+    payment needn't exist: `ref_id` is polymorphic, so it has no foreign key."""
     values: dict[str, object] = {
         "u": user_id,
         "delta": 5,
         "after": 5,
+        "ref": uuid.uuid4(),
         "key": f"test-{uuid.uuid4()}",
     }
     values.update(fields)
     entry_id = await db.scalar(
         text(
-            "insert into ledger_entries "
-            "(user_id, delta, balance_after, reason, idempotency_key) "
-            "values (:u, :delta, :after, 'purchase', :key) returning id"
+            "insert into ledger_entries (user_id, delta, balance_after, reason, "
+            "ref_type, ref_id, idempotency_key) "
+            "values (:u, :delta, :after, 'purchase', 'payment', :ref, :key) "
+            "returning id"
         ),
         values,
     )
@@ -997,14 +1049,14 @@ async def _payment(db: AsyncSession, user_id: uuid.UUID) -> uuid.UUID:
 
 
 async def test_wallet_balance_cannot_go_negative(db: AsyncSession) -> None:
-    user = await _user(db)
+    user = await _man(db)
     await db.execute(text("insert into wallets (user_id) values (:u)"), {"u": user.id})
 
-    state = await _rejected(
+    refusal = await _check_refused(
         db, "update wallets set balance = -1 where user_id = :u", {"u": user.id}
     )
 
-    assert state == CHECK_VIOLATION
+    assert refusal.constraint == "ck_wallets_balance_non_negative"
 
 
 # Ledger: append-only, enforced (T-1.16's item, covered here).
@@ -1012,7 +1064,7 @@ async def test_wallet_balance_cannot_go_negative(db: AsyncSession) -> None:
 
 async def test_ledger_accepts_inserts(db: AsyncSession) -> None:
     """Append-only is not read-only."""
-    user = await _user(db)
+    user = await _man(db)
 
     await _ledger_entry(db, user.id)
 
@@ -1028,7 +1080,7 @@ async def test_ledger_accepts_inserts(db: AsyncSession) -> None:
 async def test_ledger_rows_cannot_change_or_disappear(
     db: AsyncSession, statement: str
 ) -> None:
-    user = await _user(db)
+    user = await _man(db)
     entry_id = await _ledger_entry(db, user.id)
 
     state = await _rejected(db, statement, {"id": entry_id})
@@ -1038,7 +1090,7 @@ async def test_ledger_rows_cannot_change_or_disappear(
 
 async def test_ledger_cannot_be_truncated(db: AsyncSession) -> None:
     """TRUNCATE skips row triggers; the statement-level guard catches it."""
-    user = await _user(db)
+    user = await _man(db)
     await _ledger_entry(db, user.id)
 
     state = await _rejected(db, "truncate ledger_entries")
@@ -1047,39 +1099,59 @@ async def test_ledger_cannot_be_truncated(db: AsyncSession) -> None:
 
 
 @pytest.mark.parametrize(
-    ("fields", "why"),
+    ("fields", "refused_by"),
     [
-        ({"delta": 0, "after": 0}, "a zero delta records nothing"),
-        ({"delta": -5, "after": -5}, "balance_after never negative"),
+        # A zero delta records nothing. It breaks D-077's direction too, which
+        # needs a sign, so either refusal is the right reason.
+        (
+            {"delta": 0, "after": 0},
+            {"ck_ledger_entries_delta_non_zero", "ck_ledger_entries_reason_direction"},
+        ),
+        ({"delta": 5, "after": -5}, {"ck_ledger_entries_balance_after_non_negative"}),
     ],
+    ids=["zero delta", "negative balance_after"],
 )
 async def test_ledger_entry_values(
-    db: AsyncSession, fields: dict[str, object], why: str
+    db: AsyncSession, fields: dict[str, object], refused_by: set[str]
 ) -> None:
-    user = await _user(db)
+    user = await _man(db)
 
     with pytest.raises(IntegrityError) as excinfo:
         async with db.begin_nested():
             await _ledger_entry(db, user.id, **fields)
 
-    assert _sqlstate(excinfo.value) == CHECK_VIOLATION, why
+    assert _check_refusal(excinfo.value).constraint in refused_by
 
 
-async def test_ledger_reference_is_complete_or_absent(db: AsyncSession) -> None:
-    user = await _user(db)
+@pytest.mark.parametrize(
+    "half",
+    [
+        "ref_type) values (:u, 5, 5, 'admin_grant', 'k1', 'audit_log')",
+        "ref_id) values (:u, 5, 5, 'admin_grant', 'k1', gen_random_uuid())",
+    ],
+    ids=["type without id", "id without type"],
+)
+async def test_ledger_reference_is_complete_or_absent(
+    db: AsyncSession, half: str
+) -> None:
+    """On `admin_grant`, the one reason whose ref is optional (D-077), so the
+    half-written ref is the only thing wrong."""
+    user = await _man(db)
 
-    state = await _rejected(
+    refusal = await _check_refused(
         db,
         "insert into ledger_entries (user_id, delta, balance_after, reason, "
-        "idempotency_key, ref_type) values (:u, 5, 5, 'purchase', 'k1', 'thread')",
+        f"idempotency_key, {half}",
         {"u": user.id},
     )
 
-    assert state == CHECK_VIOLATION
+    assert refusal.constraint == "ck_ledger_entries_ref_complete"
 
 
 async def test_idempotency_key_applies_once(db: AsyncSession) -> None:
-    user = await _user(db)
+    """Two payments, one key: only the key is shared, so only its constraint
+    can refuse (D-077's per-event index would refuse one payment twice)."""
+    user = await _man(db)
     await _ledger_entry(db, user.id, key="same-key")
 
     with pytest.raises(IntegrityError) as excinfo:
@@ -1087,6 +1159,7 @@ async def test_idempotency_key_applies_once(db: AsyncSession) -> None:
             await _ledger_entry(db, user.id, key="same-key")
 
     assert _sqlstate(excinfo.value) == UNIQUE_VIOLATION
+    assert _constraint(excinfo.value) == "uq_ledger_entries_idempotency_key"
 
 
 # Payments: never hard-deleted (rule 12), anchored once paid (D-026).
@@ -1133,20 +1206,20 @@ async def test_money_moved_means_an_anchor_exists(
     user = await _user(db)
     payment_id = await _payment(db, user.id)
 
-    no_anchor = await _rejected(
+    no_anchor = await _check_refused(
         db,
         f"update payments set status = '{status}', paid_at = now() where id = :p",
         {"p": payment_id},
     )
-    no_paid_at = await _rejected(
+    no_paid_at = await _check_refused(
         db,
         f"update payments set status = '{status}', provider_payment_id = 'pay_x' "
         "where id = :p",
         {"p": payment_id},
     )
 
-    assert no_anchor == CHECK_VIOLATION
-    assert no_paid_at == CHECK_VIOLATION
+    assert no_anchor.constraint == "ck_payments_paid_has_anchor"
+    assert no_paid_at.constraint == "ck_payments_paid_has_anchor"
 
 
 @pytest.mark.parametrize("column", ["provider_order_id", "provider_payment_id"])
@@ -1165,38 +1238,47 @@ async def test_provider_ids_are_unique(db: AsyncSession, column: str) -> None:
 
 
 @pytest.mark.parametrize(
-    "assignment", ["amount_paise = 0", "credits = 0", "bonus_credits = -1"]
+    ("assignment", "constraint"),
+    [
+        ("amount_paise = 0", "ck_payments_amount_positive"),
+        ("credits = 0", "ck_payments_credits_positive"),
+        ("bonus_credits = -1", "ck_payments_bonus_non_negative"),
+    ],
 )
-async def test_payment_amounts_are_sane(db: AsyncSession, assignment: str) -> None:
+async def test_payment_amounts_are_sane(
+    db: AsyncSession, assignment: str, constraint: str
+) -> None:
     user = await _user(db)
     payment_id = await _payment(db, user.id)
 
-    state = await _rejected(
+    refusal = await _check_refused(
         db, f"update payments set {assignment} where id = :p", {"p": payment_id}
     )
 
-    assert state == CHECK_VIOLATION
+    assert refusal.constraint == constraint
 
 
 # Catalogues: invariants, not policy.
 
 
 @pytest.mark.parametrize(
-    "values",
+    ("values", "constraint"),
     [
-        "('p0', 0, 150000, 20)",
-        "('p1', 25, 0, 20)",
-        "('p2', 25, 150000, 101)",
-        "('p3', 25, 150000, -1)",
+        ("('p0', 0, 150000, 20)", "ck_credit_packs_credits_positive"),
+        ("('p1', 25, 0, 20)", "ck_credit_packs_price_positive"),
+        ("('p2', 25, 150000, 101)", "ck_credit_packs_bonus_first_pct_range"),
+        ("('p3', 25, 150000, -1)", "ck_credit_packs_bonus_first_pct_range"),
     ],
 )
-async def test_credit_pack_invariants(db: AsyncSession, values: str) -> None:
-    state = await _rejected(
+async def test_credit_pack_invariants(
+    db: AsyncSession, values: str, constraint: str
+) -> None:
+    refusal = await _check_refused(
         db,
         f"insert into credit_packs (id, credits, price_paise, bonus_first_pct) values {values}",
     )
 
-    assert state == CHECK_VIOLATION
+    assert refusal.constraint == constraint
 
 
 async def test_credit_pack_defaults(db: AsyncSession) -> None:
@@ -1215,11 +1297,11 @@ async def test_credit_pack_defaults(db: AsyncSession) -> None:
 
 
 async def test_action_price_never_negative(db: AsyncSession) -> None:
-    state = await _rejected(
+    refusal = await _check_refused(
         db, "insert into action_prices (action, credits) values ('thread_open', -5)"
     )
 
-    assert state == CHECK_VIOLATION
+    assert refusal.constraint == "ck_action_prices_credits_non_negative"
 
 
 # Foreign keys on the shorthand tables (the T-1.10 ruling, applied again).
@@ -1406,14 +1488,14 @@ async def test_audit_target_is_complete_or_absent(
 ) -> None:
     user = await _user(db)
 
-    state = await _rejected(
+    refusal = await _check_refused(
         db,
         "insert into audit_log (actor_id, action, target_type, target_id) "
         f"values (:a, 'user.freeze', {target})",
         {"a": user.id},
     )
 
-    assert state == CHECK_VIOLATION
+    assert refusal.constraint == "ck_audit_log_target_complete"
 
 
 async def test_every_audit_entry_has_a_real_actor(db: AsyncSession) -> None:

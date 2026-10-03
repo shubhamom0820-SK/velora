@@ -8,6 +8,7 @@ and prove the triggers' bypasses and the guarded writes are all refused.
 from __future__ import annotations
 
 import importlib.util
+import uuid
 from collections.abc import AsyncIterator
 from pathlib import Path
 from types import ModuleType
@@ -19,9 +20,12 @@ from sqlalchemy.exc import DBAPIError
 from sqlalchemy.ext.asyncio import AsyncConnection, AsyncEngine, AsyncSession
 
 from app.core.db import build_engine
+from app.core.enums import Gender, LedgerReason
 from app.core.security import normalize_phone
 from app.modules.users import repository as users_repository
 from app.modules.users import service as users_service
+from app.modules.wallet import service as wallet_service
+from app.modules.wallet.rules import Ref, RefType
 from tests.conftest import make_test_settings
 from tests.infra import TEST_DATABASE_URL
 
@@ -156,6 +160,38 @@ async def test_the_app_role_can_delete_an_under_18_account(
     assert kept == "underage"
 
 
+async def test_the_app_role_credits_and_debits_through_the_wallet(
+    as_app: AsyncConnection,
+) -> None:
+    """Staging and production move money as the app role (T-5.1): the locked
+    read, the balance, the ledger row and D-076's trigger all work under its
+    privileges."""
+    session = AsyncSession(bind=as_app, join_transaction_mode="create_savepoint")
+    account = await users_service.create_account(
+        session, normalize_phone("+919812345698"), make_test_settings()
+    )
+    account.user.gender = Gender.MALE
+    await session.flush()
+    man = account.user.id
+
+    credited = await wallet_service.credit(
+        session, man, 10, LedgerReason.ADMIN_GRANT, event="app-role"
+    )
+    debited = await wallet_service.debit(
+        session, man, 4, LedgerReason.THREAD_OPEN, ref=Ref(RefType.THREAD, uuid.uuid4())
+    )
+
+    assert (credited.applied, debited.applied) == (True, True)
+    assert debited.entry.balance_after == 6
+    balance = await as_app.scalar(
+        text("select balance from wallets where user_id = :u"), {"u": man}
+    )
+    rows = await as_app.scalar(
+        text("select count(*) from ledger_entries where user_id = :u"), {"u": man}
+    )
+    assert (balance, rows) == (6, 2)
+
+
 @pytest.mark.parametrize(
     ("statement", "message"),
     [
@@ -166,6 +202,15 @@ async def test_the_app_role_can_delete_an_under_18_account(
         (
             "alter table ledger_entries disable trigger all",
             "must be owner of table ledger_entries",
+        ),
+        # D-076's guard, the one with legal weight, can't be switched off either.
+        (
+            "alter table wallets disable trigger wallets_only_men",
+            "must be owner of table wallets",
+        ),
+        (
+            "drop trigger ledger_entries_only_men on ledger_entries",
+            "must be owner of relation ledger_entries",
         ),
         ("alter table users add column sneaky int", "must be owner of table users"),
         ("create table app_role_probe (id int)", "permission denied for schema public"),

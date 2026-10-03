@@ -5,7 +5,7 @@ from __future__ import annotations
 
 from datetime import UTC, datetime, timedelta
 from types import ModuleType
-from typing import Annotated
+from typing import Annotated, Any
 
 import pytest
 from fastapi import Depends, FastAPI
@@ -16,7 +16,7 @@ from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession
 
 from app.core import clock as clock_module
 from app.core.db import get_session
-from app.core.enums import Gender, OnboardingStep, Role, Seeking
+from app.core.enums import Gender, LedgerReason, OnboardingStep, Role, Seeking
 from app.core.security import (
     decode_access_token,
     decrypt_phone,
@@ -25,7 +25,10 @@ from app.core.security import (
 )
 from app.modules.profiles.models import Profile
 from app.modules.users.models import User
-from tests.conftest import MakeUser
+from app.modules.wallet import service as wallet_service
+from app.modules.wallet.models import LedgerEntry, Wallet
+from app.modules.wallet.service import WalletMisuse
+from tests.conftest import MakeUser, shuffled
 from tests.infra import (
     TEST_DATABASE_URL,
     ensure_test_database,
@@ -292,9 +295,54 @@ async def test_an_onboarded_woman_who_isnt_verified_cant_be_made(
         await make_user(gender="female", verified=False)
 
 
-async def test_velas_wait_for_the_wallet_service(make_user: MakeUser) -> None:
-    with pytest.raises(NotImplementedError, match=r"T-5.1 .*\(rule 5\)"):
-        await make_user(credits=5)
+async def test_credits_arrive_as_an_admin_grant(
+    db: AsyncSession, make_user: MakeUser
+) -> None:
+    user, _ = await make_user(credits=5)
+
+    wallet = await db.get(Wallet, user.id)
+    entries = (
+        await db.scalars(select(LedgerEntry).where(LedgerEntry.user_id == user.id))
+    ).all()
+    assert wallet is not None and wallet.balance == 5
+    assert [
+        (e.reason, e.delta, e.balance_after, e.ref_type, e.idempotency_key)
+        for e in entries
+    ] == [(LedgerReason.ADMIN_GRANT, 5, 5, None, f"{user.id}:admin_grant:make_user")]
+
+
+async def test_make_user_never_writes_a_balance_itself(
+    db: AsyncSession, make_user: MakeUser, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Rule 5: with the wallet's credit() doing nothing, nothing is credited, so
+    make_user has no other way in."""
+    calls: list[tuple[object, ...]] = []
+
+    async def credit_that_does_nothing(*args: object, **kwargs: object) -> None:
+        calls.append((*args[1:], *kwargs.items()))
+
+    monkeypatch.setattr(wallet_service, "credit", credit_that_does_nothing)
+
+    user, _ = await make_user(credits=5)
+
+    wallet = await db.get(Wallet, user.id)
+    assert wallet is not None and wallet.balance == 0
+    assert calls == [(user.id, 5, LedgerReason.ADMIN_GRANT, ("event", "make_user"))]
+
+
+@pytest.mark.parametrize(
+    ("fields", "refusal"),
+    [
+        ({"gender": "female", "credits": 5}, r"only a man may hold credits \(D-076\)"),
+        ({"credits": -5}, "the amount must be a whole number above 0"),
+    ],
+    ids=["a woman", "negative"],
+)
+async def test_credits_the_wallet_refuses_are_refused(
+    make_user: MakeUser, fields: dict[str, Any], refusal: str
+) -> None:
+    with pytest.raises(WalletMisuse, match=refusal):
+        await make_user(**fields)
 
 
 async def test_two_made_users_never_collide(make_user: MakeUser) -> None:
@@ -303,3 +351,18 @@ async def test_two_made_users_never_collide(make_user: MakeUser) -> None:
 
     assert first.phone_hash != second.phone_hash
     assert first.referral_code != second.referral_code
+
+
+# --- --shuffle-seed (P-48) ---------------------------------------------------------
+
+
+def test_a_seed_shuffles_into_one_order_and_keeps_every_test() -> None:
+    tests = list(range(50))
+
+    first, again, other = shuffled(tests, 7), shuffled(tests, 7), shuffled(tests, 8)
+
+    assert first == again
+    assert first != tests
+    assert first != other
+    assert sorted(first) == tests
+    assert tests == list(range(50))  # the list given is left as it was

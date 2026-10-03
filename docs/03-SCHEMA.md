@@ -349,6 +349,10 @@ Users see Velas (D-049). Every column, table and constraint here keeps the neutr
 | balance | int not null default 0 | **CHECK (balance >= 0)** |
 | updated_at | timestamptz | |
 
+Trigger `wallets_only_men` (T-5.1, D-076): before any insert or update that leaves a balance other
+than 0, refuses unless the owner's gender is `male`, so moving a wallet's `user_id` can't hand a
+balance to anyone else either. Written only by `wallet.service` (rule 5).
+
 ### ledger_entries  (append-only)
 | column | type | notes |
 |---|---|---|
@@ -365,6 +369,41 @@ Index `(user_id, created_at desc)`. Check `(ref_type IS NULL) = (ref_id IS NULL)
 Trigger `ledger_no_update_delete`: raises on UPDATE or DELETE. Trigger `ledger_no_truncate`
 (statement-level): raises on TRUNCATE, which skips row triggers — without it one command could
 wipe the money record. Both raise `restrict_violation` (23001) (T-1.12).
+
+**The ledger's shape (T-5.1, D-077).** Each reason has one direction and exactly one `ref_type`:
+
+| reason | direction | `ref_type` | the event in the key |
+|---|---|---|---|
+| `purchase`, `purchase_bonus` | credit | `payment` | the payment's id |
+| `referral_reward` | credit | `referral` | the referee's id (`referrals`' key) |
+| `admin_grant` | credit | `audit_log`, **optional** | named by the caller |
+| `refund` | credit | `ledger_entry` | refused by the service until a task gives it a meaning |
+| `refund_banned_partner` | credit | `ledger_entry` | the original debit's id |
+| `refund_album_declined` | credit | `album_request` | the request's id |
+| `gift` | debit | `gift_send` | the send's id |
+| `thread_open`, `dm_open` | debit | `thread` | the thread's id |
+| `thread_reopen` | debit | `thread` | named by the caller |
+| `voice_unlock` | debit | `message` | the message's id |
+| `album_request` | debit | `album_request` | the request's id |
+| `super_like`, `liked_you_reveal` | debit | `user` | the other person: once per pair, ever, as a swipe is (the founder, 3 October 2026) |
+
+- `ck_ledger_entries_reason_direction`: credits positive, debits negative. Both lists are
+  allowlists, so a reason added to `ledger_reason_t` can't be written until a migration names it.
+- `ck_ledger_entries_ref_required`: every reason but `admin_grant` names its ref.
+- `ck_ledger_entries_reason_ref_type`: the pinned `ref_type` or none, so a credit naming a payment
+  can only be `purchase` or `purchase_bonus`.
+- `uq_ledger_entries_one_per_event`: partial unique index on `(user_id, reason, ref_type, ref_id)`
+  where the reason is not `admin_grant` or `thread_reopen`, the two that repeat for one ref: one
+  entry per event, even if a key is built wrong.
+- `idempotency_key` is `{user_id}:{reason}:{event}`, built by the wallet module, never by a caller;
+  a client's `Idempotency-Key` only ever fills the event part.
+- Trigger `ledger_entries_only_men` (D-076): before every insert, refuses unless the user's gender
+  is `male`. With `wallets_only_men`, one function, `refuse_credits_unless_male()`; an allowlist,
+  so a user with no gender yet is refused too. Both raise `check_violation` (23514) naming the
+  trigger as the constraint.
+
+`wallet/rules.py` holds the same table, and `tests/modules/wallet/test_guards.py` proves the
+database agrees with it, reason by reason. Change one, change both.
 
 ### action_prices
 `action text pk, credits int not null check (credits >= 0), active boolean not null default true, updated_at`.

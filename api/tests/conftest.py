@@ -9,6 +9,9 @@ Every external service is its in-memory fake (`fake_providers`, D-028): the
 
 `make_user` builds a signed-up user and the access token the app accepts for
 them.
+
+`--shuffle-seed N` runs the tests in an order shuffled by N (P-48), to prove no
+test leans on another's leftovers. Opt-in: CI runs them in file order.
 """
 
 from __future__ import annotations
@@ -17,6 +20,7 @@ import itertools
 import json
 import logging
 import os
+import random
 from collections.abc import AsyncIterator, Iterator, MutableMapping
 from dataclasses import dataclass
 from datetime import date
@@ -68,7 +72,14 @@ from app.core import clock as core_clock
 from app.core.clock import today_ist
 from app.core.config import Settings
 from app.core.db import build_engine, get_session
-from app.core.enums import Gender, OnboardingStep, Role, Seeking, UserStatus
+from app.core.enums import (
+    Gender,
+    LedgerReason,
+    OnboardingStep,
+    Role,
+    Seeking,
+    UserStatus,
+)
 from app.core.providers import FakeProviders
 from app.core.ratelimit import KEY_PREFIX as RATE_LIMIT_KEY_PREFIX
 from app.core.redis import build_redis
@@ -77,6 +88,7 @@ from app.main import close_resources, create_app
 from app.modules.auth.otp_store import KEY_PREFIX as OTP_KEY_PREFIX
 from app.modules.users import service as users_service
 from app.modules.users.models import User
+from app.modules.wallet import service as wallet_service
 
 
 def pytest_configure(config: pytest.Config) -> None:
@@ -88,14 +100,52 @@ def pytest_configure(config: pytest.Config) -> None:
         )
 
 
-def pytest_report_header(config: pytest.Config) -> str:
-    """Which slot this run holds (P-55), so a report says where it ran."""
+def pytest_report_header(config: pytest.Config) -> list[str]:
+    """Which slot this run holds (P-55), and the order it runs in, so a report
+    says where and how it ran."""
     if RUN_SLOT is None:
-        return f"test slot: none ({INFRA_DOWN_REASON})"
-    return (
-        f"test slot {RUN_SLOT.number}: database {make_url(TEST_DATABASE_URL).database}, "
-        f"Redis database {RUN_SLOT.number}"
+        lines = [f"test slot: none ({INFRA_DOWN_REASON})"]
+    else:
+        database = make_url(TEST_DATABASE_URL).database
+        slot = RUN_SLOT.number
+        lines = [f"test slot {slot}: database {database}, Redis database {slot}"]
+    seed = config.getoption("--shuffle-seed")
+    lines.append(
+        "order: file order" if seed is None else f"order: shuffled by seed {seed}"
     )
+    return lines
+
+
+# --- Shuffled order (P-48) ------------------------------------------------------
+
+
+def pytest_addoption(parser: pytest.Parser) -> None:
+    parser.addoption(
+        "--shuffle-seed",
+        type=int,
+        default=None,
+        metavar="N",
+        help=(
+            "Run the tests in an order shuffled by seed N (P-48). A test that "
+            "passes only in file order leans on something an earlier test left "
+            "behind, such as a logger cached before its capture began."
+        ),
+    )
+
+
+def shuffled[T](items: list[T], seed: int) -> list[T]:
+    """`items` in the order seed `seed` gives: the same seed, the same order."""
+    order = list(items)
+    random.Random(seed).shuffle(order)
+    return order
+
+
+def pytest_collection_modifyitems(
+    config: pytest.Config, items: list[pytest.Item]
+) -> None:
+    seed = config.getoption("--shuffle-seed")
+    if seed is not None:
+        items[:] = shuffled(items, seed)
 
 
 def make_test_settings() -> Settings:
@@ -202,8 +252,9 @@ def make_user(db: AsyncSession) -> MakeUser:
     - `onboarded=False`: step `seeking`, the one after gender; profile empty.
     - `verified` follows D-008 unless given: an onboarded woman is verified, and
       asking for one who isn't raises, since the app can't produce her.
-    - `credits` other than 0 raises until T-5.1: Velas only ever arrive through
-      `wallet.service.credit()` (rule 5).
+    - `credits` are granted through `wallet.service.credit()`, an `admin_grant`
+      under the event `make_user`, as anything is (rule 5); nothing writes a
+      balance directly. Anyone but a man is refused by the wallet (D-076).
     """
     settings = make_test_settings()
 
@@ -215,11 +266,6 @@ def make_user(db: AsyncSession) -> MakeUser:
         verified: bool | None = None,
     ) -> tuple[User, str]:
         gender = Gender(gender)
-        if credits != 0:
-            raise NotImplementedError(
-                "make_user(credits=…) needs wallet.service.credit(), which T-5.1 "
-                "builds: Velas never arrive any other way (rule 5)."
-            )
         woman_onboarded = onboarded and gender is Gender.FEMALE
         if verified is None:
             verified = woman_onboarded
@@ -250,6 +296,10 @@ def make_user(db: AsyncSession) -> MakeUser:
             profile.seeking = Seeking.WOMEN if gender is Gender.MALE else Seeking.MEN
         await db.flush()
         await db.refresh(user)
+        if credits:
+            await wallet_service.credit(
+                db, user.id, credits, LedgerReason.ADMIN_GRANT, event="make_user"
+            )
         token = make_access_token(
             user.id, user.role, settings, auth_time=core_clock.now()
         )

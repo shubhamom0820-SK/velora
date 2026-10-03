@@ -195,7 +195,7 @@ async def test_under_eighteen_deletes_the_account_and_keeps_only_the_hash(
     everything: tuple[type[Any], ...] = (*attached, ProfileIntent, ProfileInterest)
     for model in everything:
         assert await _count(db, model, user_id=user_id) == 0, model.__tablename__
-    assert await _count(db, User) == 0
+    assert await _count(db, User, phone_hash=_phone_hash()) == 0
     bans = (await db.scalars(select(BannedIdentity))).all()
     assert [(b.kind, b.value, b.reason) for b in bans] == [
         (BanKind.PHONE_HASH, _phone_hash(), "underage")
@@ -229,7 +229,7 @@ async def test_after_underage_the_token_refresh_and_number_all_fail(
     with pytest.raises(AppError) as refused:
         await auth_service.sign_in(db, SETTINGS, PHONE)
     assert refused.value.code == "ACCOUNT_BANNED"
-    assert await _count(db, User) == 0
+    assert await _count(db, User, phone_hash=_phone_hash()) == 0
 
 
 async def test_age_is_counted_in_ist_not_utc(
@@ -810,7 +810,7 @@ async def test_a_number_already_banned_keeps_its_one_row(
     assert _error(response)["code"] == "UNDERAGE"
     bans = (await db.scalars(select(BannedIdentity))).all()
     assert [(b.value, b.reason) for b in bans] == [(_phone_hash(), "ban")]
-    assert await _count(db, User) == 0
+    assert await _count(db, User, phone_hash=_phone_hash()) == 0
 
 
 # --- Rule 15 --------------------------------------------------------------------------

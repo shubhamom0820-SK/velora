@@ -14,6 +14,7 @@ from collections.abc import Sequence
 from dataclasses import replace
 from datetime import UTC, date, datetime, timedelta
 from typing import Any
+from uuid import UUID
 
 import pytest
 from sqlalchemy import func, select, text
@@ -22,7 +23,14 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.clock import today_ist
 from app.core.config import Settings
-from app.core.enums import Gender, OnboardingStep, Role, Seeking, SwipeDirection
+from app.core.enums import (
+    Gender,
+    LedgerReason,
+    OnboardingStep,
+    Role,
+    Seeking,
+    SwipeDirection,
+)
 from app.core.security import decrypt_phone, hash_phone, normalize_phone, verify_pin
 from app.modules.matches.models import Match
 from app.modules.notifications.models import NotificationPrefs
@@ -317,6 +325,22 @@ TODAY = date(2026, 10, 3)
             "moderator: onboarding not started, so nothing it would ask for",
         ),
         (
+            _with("test_woman", credits=5),
+            SWIPES,
+            "test_woman: only a man may hold credits (D-076)",
+        ),
+        (
+            # No gender yet: the allowlist refuses her too (D-076).
+            _with("moderator", credits=5),
+            SWIPES,
+            "moderator: only a man may hold credits (D-076)",
+        ),
+        (
+            _with("test_man", credits=-60),
+            SWIPES,
+            "test_man: credits are granted, never taken: 0 or more",
+        ),
+        (
             PEOPLE,
             (*SWIPES, SeedSwipe("test_man", "ananya", LIKE)),
             "swipe test_man -> ananya: liked back, which would make a match",
@@ -380,6 +404,31 @@ async def _user(db: AsyncSession, phone: str) -> User:
     return user
 
 
+async def _wallet(db: AsyncSession, person: Person) -> Wallet:
+    wallet = await db.get(Wallet, (await _user(db, person.phone)).id)
+    assert wallet is not None
+    await db.refresh(wallet)
+    return wallet
+
+
+async def _seeded_ids(db: AsyncSession) -> list[UUID]:
+    settings = make_test_settings()
+    hashes = [hash_phone(normalize_phone(p.phone), settings) for p in PEOPLE]
+    return list(await db.scalars(select(User.id).where(User.phone_hash.in_(hashes))))
+
+
+async def _seeded_entries(db: AsyncSession) -> list[LedgerEntry]:
+    """The seeded people's ledger rows, never the whole table's."""
+    ids = await _seeded_ids(db)
+    return list(
+        await db.scalars(
+            select(LedgerEntry)
+            .where(LedgerEntry.user_id.in_(ids))
+            .order_by(LedgerEntry.created_at)
+        )
+    )
+
+
 async def test_everyone_is_written_with_the_rows_signup_creates(
     db: AsyncSession, seeded: run.SeedReport
 ) -> None:
@@ -390,9 +439,32 @@ async def test_everyone_is_written_with_the_rows_signup_creates(
         user = await _user(db, person.phone)
         assert await db.get(Profile, user.id) is not None
         assert await db.get(NotificationPrefs, user.id) is not None
-        wallet = await db.get(Wallet, user.id)
-        assert wallet is not None and wallet.balance == 0  # rule 5: T-5.1
-    assert await db.scalar(select(func.count()).select_from(LedgerEntry)) == 0
+        assert await db.get(Wallet, user.id) is not None
+
+
+async def test_only_the_test_man_holds_credits_granted_once(
+    db: AsyncSession, seeded: run.SeedReport
+) -> None:
+    """His 60, through the wallet (rule 5), under the seed's own key. Scoped to
+    the seeded people: other tests in the run commit ledger rows of their own."""
+    test_man = await _user(db, BY_KEY["test_man"].phone)
+    balances = {person.key: (await _wallet(db, person)).balance for person in PEOPLE}
+    assert seeded.credited == ["test_man"]
+    assert balances == {p.key: 60 if p.key == "test_man" else 0 for p in PEOPLE}
+    assert [
+        (e.user_id, e.reason, e.delta, e.balance_after, e.ref_type, e.idempotency_key)
+        for e in await _seeded_entries(db)
+    ] == [
+        (
+            test_man.id,
+            LedgerReason.ADMIN_GRANT,
+            60,
+            60,
+            None,
+            f"{test_man.id}:admin_grant:dev-seed",
+        )
+    ]
+    assert "Credits granted to test_man." in summary(seeded)
 
 
 async def test_the_test_man_is_found_as_login_will_find_him(
@@ -570,9 +642,21 @@ _COUNTED = (User, Profile, Wallet, NotificationPrefs, ProfileInterest, ProfileIn
 
 
 async def _counts(db: AsyncSession) -> list[int | None]:
+    ids = await _seeded_ids(db)
     return [
-        await db.scalar(select(func.count()).select_from(model))
-        for model in (*_COUNTED, Swipe, LedgerEntry)
+        *[
+            await db.scalar(select(func.count()).select_from(model))
+            for model in (*_COUNTED, Swipe)
+        ],
+        # The ledger, and the balances, scoped to the seeded people.
+        await db.scalar(
+            select(func.count())
+            .select_from(LedgerEntry)
+            .where(LedgerEntry.user_id.in_(ids))
+        ),
+        await db.scalar(
+            select(func.sum(Wallet.balance)).where(Wallet.user_id.in_(ids))
+        ),
     ]
 
 
@@ -585,7 +669,38 @@ async def test_a_second_run_changes_nothing(
     assert again.created == []
     assert again.existing == [p.key for p in PEOPLE]
     assert again.swipes_added == 0
+    assert (again.credited, again.already_credited) == ([], ["test_man"])
     assert "Anyone already there was left as they are" in summary(again)
+    assert "(test_man had them already)" in summary(again)
+
+
+async def test_credits_reach_a_test_man_already_there(db: AsyncSession) -> None:
+    """The one exception to insert-only: a test man written before credits
+    existed still gets his 60, once."""
+    before_credits = _with("test_man", credits=0)
+    first = await write_seed(db, make_test_settings(), people=before_credits)
+    assert first.credited == []
+    assert (await _wallet(db, BY_KEY["test_man"])).balance == 0
+
+    second = await write_seed(db, make_test_settings())
+
+    assert second.created == [] and "test_man" in second.existing
+    assert second.credited == ["test_man"]
+    assert (await _wallet(db, BY_KEY["test_man"])).balance == 60
+    assert len(await _seeded_entries(db)) == 1
+
+
+async def test_a_grant_is_never_changed_by_a_later_seed(
+    db: AsyncSession, seeded: run.SeedReport
+) -> None:
+    with pytest.raises(SeedRefused) as refused:
+        await write_seed(db, make_test_settings(), people=_with("test_man", credits=70))
+
+    assert str(refused.value).startswith(
+        "test_man's credits were refused: admin_grant: this event is in the "
+        "ledger already, with other details"
+    )
+    assert "make infra-reset" in str(refused.value)
 
 
 async def test_a_username_someone_else_holds_is_refused(

@@ -42,7 +42,7 @@ from sqlalchemy.orm import (
 )
 from sqlalchemy.pool import ConnectionPoolEntry, PoolProxiedConnection
 
-from app.core import clock
+from app.core import clock, events
 from app.core.enums import PG_ENUMS
 
 # Constraint names are deterministic, so migrations can drop and alter them by
@@ -264,10 +264,21 @@ def build_sessionmaker(engine: AsyncEngine) -> async_sessionmaker[AsyncSession]:
 
 
 async def get_session(request: Request) -> AsyncIterator[AsyncSession]:
-    """FastAPI dependency: one session per request, on this app's database."""
+    """FastAPI dependency: one session per request, on this app's database.
+
+    When the request ends, the events its committed transactions queued are
+    published, after the session has closed and handed its connection back
+    (`core/events.py`)."""
     sessionmaker: async_sessionmaker[AsyncSession] = request.app.state.sessionmaker
-    async with sessionmaker() as session:
-        yield session
+    committed: list[events.Event] = []
+    try:
+        async with sessionmaker() as session:
+            try:
+                yield session
+            finally:
+                committed = events.take_committed(session)
+    finally:
+        await events.publish(committed, request.app.state.redis)
 
 
 async def check_database(engine: AsyncEngine) -> None:

@@ -94,6 +94,17 @@ async def _count(db: AsyncSession, model: type[Any]) -> int:
     return int(await db.scalar(select(func.count()).select_from(model)) or 0)
 
 
+async def _accounts(db: AsyncSession, phone: str = PHONE) -> int:
+    """Accounts on this number: never every user in the table, since other
+    tests in the run commit users of their own (06-TESTING)."""
+    return int(
+        await db.scalar(
+            select(func.count()).where(User.phone_hash == _phone_hash(phone))
+        )
+        or 0
+    )
+
+
 # --- The right code signs in, creating the account the first time ---------------
 
 
@@ -337,7 +348,7 @@ async def test_the_fifth_wrong_code_uses_the_code_up(
     assert await otp_store.read_code(test_redis, _phone_hash()) is None
     # The right code is no use now either.
     assert _error(await _verify(client, code))["code"] == "OTP_EXPIRED"
-    assert await _count(db, User) == 0
+    assert await _accounts(db) == 0
 
 
 async def test_a_code_past_five_minutes_has_expired(
@@ -440,7 +451,7 @@ async def test_ten_wrong_codes_in_a_day_lock_the_number(
     assert _error(await _verify(client, third))["code"] == "OTP_TOO_MANY"
     send = await client.post("/v1/auth/otp/send", json={"phone": TYPED})
     assert send.status_code == 429
-    assert await _count(db, User) == 0
+    assert await _accounts(db) == 0
 
     clock.advance(timedelta(hours=24))
     fourth = await _code_for(client, fake_providers)
@@ -466,7 +477,7 @@ async def test_a_number_already_at_ten_wrong_codes_is_refused(
 
     assert response.status_code == 429
     assert _error(response)["code"] == "OTP_TOO_MANY"
-    assert await _count(db, User) == 0
+    assert await _accounts(db) == 0
 
 
 @pytest.mark.parametrize("otp", ["12345", "1234567", "12345a", "", "١٢٣٤٥٦"])
@@ -630,7 +641,7 @@ async def test_a_banned_number_with_the_right_code_gets_no_account(
         "message": "This account has been banned.",
     }
     assert "set-cookie" not in response.headers
-    assert await _count(db, User) == 0
+    assert await _accounts(db) == 0
     assert await _count(db, Session) == 0
 
 
@@ -849,7 +860,7 @@ async def test_find_or_create_finds_an_account_created_meanwhile(
     found, created = await users_service.find_or_create_account(db, phone, SETTINGS)
 
     assert (found.id, created) == (user.id, False)
-    assert await _count(db, User) == 1
+    assert await _accounts(db, phone) == 1
 
 
 # --- Rule 15 -----------------------------------------------------------------------------------

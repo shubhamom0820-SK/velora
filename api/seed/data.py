@@ -27,6 +27,8 @@ Where each piece comes from:
   Pooja's Startups with Anime.
 - **The founder read all twenty and signed off on the set, with no changes,**
   on 3 October 2026.
+- **The test man's 60 credits:** T-1.15's plan, granted from T-5.1, when
+  `wallet.service.credit()` exists to grant them (rule 5).
 
 The phone numbers sit in one block, `+91 90000 00xxx`: `00001`-`00003` for the
 test accounts, `001NN` for the prototype's profile NN. India reserves no
@@ -74,6 +76,9 @@ class Person:
     # Only the three test accounts keep one of their own, readable and fixed;
     # everyone else gets signup's generated code (T-3.3).
     referral_code: str | None = None
+    # Granted once through `wallet.service.credit()` (T-5.1), even to someone
+    # already there. Only a man may hold any (D-076).
+    credits: int = 0
 
 
 @dataclass(frozen=True)
@@ -107,6 +112,7 @@ TEST_ACCOUNTS: tuple[Person, ...] = (
         seeking=WOMEN,
         interests=("Cricket", "Cooking", "Travel", "Gaming", "Filter coffee"),
         intents=("Something serious",),
+        credits=60,
     ),
     Person(
         key="test_woman",

@@ -31,6 +31,7 @@ api/app/
     config.py             pydantic-settings; every env var declared here
     db.py                 async engine, session dependency, transaction helper
     redis.py              client, pub/sub helpers
+    events.py             socket events: queued on the session, published after commit (T-5.1)
     security.py           phone numbers, access and refresh tokens, PINs, CSRF (D-060)
     errors.py             AppError + handlers → error envelope
     enums.py              the 20 Postgres enum types as Python enums (shared across modules)
@@ -172,7 +173,9 @@ Envelope, both directions: `{ "type": "…", "id": "<uuid>", "data": { … } }`
 Sending messages is **REST** (`POST /v1/threads/{id}/messages`) so it goes through validation,
 masking and persistence; the socket only pushes. Client dedupes by `client_msg_id`.
 Fan-out: API publishes to Redis channel `user:{id}`; every API instance subscribes for its
-connected users.
+connected users. A service queues an event in the transaction that makes it true; `get_session`
+publishes the request's committed events when the request ends, after its session has closed, and
+a failed or hung publish (1 s) is logged without failing the request (`core/events.py`, T-5.1).
 
 ## 7. Background jobs (ARQ)
 
@@ -215,8 +218,11 @@ Indexes that make this fast are listed in `03-SCHEMA.md`. Target: p95 < 80 ms at
 **Spend (e.g. open a thread):**
 1. Service reads the price from `action_prices` inside the same transaction, with no cache, so it
    charges the price as it is now (T-5.2).
-2. `async with db.begin():` → `wallet.debit(user, amount, reason, ref, idempotency_key)`
-   locks the wallet row, checks balance, updates balance, inserts ledger entry.
+2. `async with db.begin():` → `wallet.debit(session, user_id, amount, reason, ref=Ref(...))`
+   locks the wallet row, checks balance, updates balance, inserts ledger entry. The caller never
+   builds the key: the wallet does, from the reason and the ref, or from an event the caller names
+   for the two reasons that repeat (`thread_reopen`, `admin_grant`). A retry returns the first
+   entry with `applied=False` (D-077, T-5.1).
 3. The thing being bought (thread row) is created **in the same transaction**. Either both happen
    or neither does.
 

@@ -43,7 +43,7 @@ velora/
   .claude/commands/     /task /review /done
   .github/workflows/    CI pipelines
   api/                  FastAPI app
-    app/core/           config, db, redis, security, errors, deps, providers (fakes local-only)
+    app/core/           config, db, redis, events, security, errors, deps, providers (fakes local-only)
     app/modules/<name>/ router.py service.py repository.py schemas.py models.py
     app/workers/        ARQ tasks + cron
     alembic/            migrations

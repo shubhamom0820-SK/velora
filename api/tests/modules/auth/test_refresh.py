@@ -26,6 +26,7 @@ from app.core.security import (
     make_access_token,
     new_csrf,
     new_refresh_token,
+    normalize_phone,
 )
 from app.modules.auth import service
 from app.modules.auth.models import Session
@@ -83,6 +84,16 @@ async def _sign_in(client: AsyncClient, fake_providers: FakeProviders) -> Device
     )
     assert response.status_code == 200
     return Device(response)
+
+
+async def _signed_in_user(db: AsyncSession) -> User | None:
+    """The account `_sign_in` made, by its number: never just any user, since
+    other tests in the run commit users of their own (06-TESTING)."""
+    phone_hash = hash_phone(normalize_phone(TYPED), SETTINGS)
+    user: User | None = await db.scalar(
+        select(User).where(User.phone_hash == phone_hash)
+    )
+    return user
 
 
 async def _refresh(client: AsyncClient, device: Device, **kwargs: Any) -> Response:
@@ -464,7 +475,7 @@ async def test_an_account_that_cant_sign_in_cant_refresh_either(
     code: str,
 ) -> None:
     device = await _sign_in(client, fake_providers)
-    user = await db.scalar(select(User))
+    user = await _signed_in_user(db)
     assert user is not None
     user.status = status
     await db.flush()
@@ -487,7 +498,7 @@ async def test_logout_works_with_an_expired_access_token_and_clears_both_cookies
 ) -> None:
     clock.freeze(START)
     device = await _sign_in(client, fake_providers)
-    user = await db.scalar(select(User))
+    user = await _signed_in_user(db)
     assert user is not None
     expired = make_access_token(user.id, user.role, SETTINGS, auth_time=START)
     clock.advance(timedelta(minutes=16))

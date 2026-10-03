@@ -7,6 +7,12 @@ first statement on the connection. The whole seed is one transaction.
 Every account is created by signup's own service (`users.service`, T-3.3),
 with the keys the local API reads, and the PIN goes through `hash_pin`, so
 sign-in finds these accounts exactly as it finds anyone else.
+
+Insert-only, with one exception: a person's seeded credits (the test man's 60)
+are granted even if he is already there, by an account from before T-5.1 or a
+seed that ran before credits existed. They go through `wallet.service.credit()`
+like any other credit (rule 5), under a key of the seed's own (`SEED_EVENT`),
+so a second run finds the entry and changes nothing.
 """
 
 from __future__ import annotations
@@ -28,7 +34,13 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core import clock
 from app.core.config import Settings, get_settings
 from app.core.db import build_engine
-from app.core.enums import Gender, OnboardingStep, SwipeDirection, UserStatus
+from app.core.enums import (
+    Gender,
+    LedgerReason,
+    OnboardingStep,
+    SwipeDirection,
+    UserStatus,
+)
 from app.core.errors import AppError
 from app.core.security import hash_phone, hash_pin, normalize_phone
 from app.modules.auth import pins
@@ -44,6 +56,8 @@ from app.modules.profiles.models import (
 from app.modules.swipes.models import Swipe
 from app.modules.users import service as users_service
 from app.modules.users.models import User
+from app.modules.wallet import service as wallet_service
+from app.modules.wallet.service import WalletMisuse
 from seed.data import PEOPLE, SWIPES, Person, SeedSwipe
 
 # --- The three checks: each an allowlist (rule 16, D-064) ---------------------
@@ -68,6 +82,9 @@ AREA_CITY = "Bengaluru"
 # Malleshwaram, 1,728 m), so every profile stays nearer its own area's centroid
 # than any other's; a test checks that, so P-38's areas can't quietly break it.
 SCATTER_RADIUS_M = 750
+# The event in the key of every credit the seed grants, `{user_id}:admin_grant:
+# dev-seed` (D-077): one per person, however many times the seed runs.
+SEED_EVENT = "dev-seed"
 
 
 class SeedRefused(Exception):
@@ -182,6 +199,10 @@ def _person_problems(person: Person, today: date) -> list[str]:
     # T-3.9's rule itself (D-069), so the seeded PIN is one the API would take.
     if person.pin is not None and (problem := pins.pin_problem(person.pin)):
         problems.append(f"the PIN {problem} (T-3.9)")
+    if person.credits < 0:
+        problems.append("credits are granted, never taken: 0 or more")
+    elif person.credits and person.gender is not Gender.MALE:
+        problems.append("only a man may hold credits (D-076)")
 
     if person.step is OnboardingStep.DOB:
         asked_later = (
@@ -265,6 +286,8 @@ class SeedReport:
     created: list[str] = field(default_factory=list)
     existing: list[str] = field(default_factory=list)
     swipes_added: int = 0
+    credited: list[str] = field(default_factory=list)
+    already_credited: list[str] = field(default_factory=list)
 
 
 async def write_seed(
@@ -273,8 +296,9 @@ async def write_seed(
     people: Sequence[Person] = PEOPLE,
     swipes: Sequence[SeedSwipe] = SWIPES,
 ) -> SeedReport:
-    """Write everyone who isn't there yet, and the swipes. Insert-only: someone
-    found by their phone hash is left exactly as they are."""
+    """Write everyone who isn't there yet, the swipes, and the credits.
+    Insert-only but for credits: someone found by their phone hash is left
+    exactly as they are, except that their seeded credits are granted once."""
     # `interests.label` and `areas.name` are nullable (P-24); a row without one
     # can't be the one a label names.
     interest_ids = {
@@ -389,7 +413,32 @@ async def write_seed(
             .returning(Swipe.swiper_id)
         )
         report.swipes_added += len(result.all())
+
+    for person in people:
+        if person.credits:
+            await _grant(session, person, user_ids[person.key], report)
     return report
+
+
+async def _grant(
+    session: AsyncSession, person: Person, user_id: UUID, report: SeedReport
+) -> None:
+    try:
+        granted = await wallet_service.credit(
+            session,
+            user_id,
+            person.credits,
+            LedgerReason.ADMIN_GRANT,
+            event=SEED_EVENT,
+        )
+    except WalletMisuse as refused:
+        raise SeedRefused(
+            f"{person.key}'s credits were refused: {refused}. A grant is made "
+            "once and never changed, so if an earlier seed granted another "
+            "amount, start over with make infra-reset, then make infra-up "
+            "migrate seed."
+        ) from refused
+    (report.credited if granted.applied else report.already_credited).append(person.key)
 
 
 def _require_catalogues(
@@ -433,10 +482,17 @@ def summary(report: SeedReport) -> str:
             "then make infra-up migrate seed."
         ),
     ]
+    if report.credited:
+        lines.append(f"  Credits granted to {', '.join(report.credited)}.")
     if report.existing:
         lines.append(
             "  Anyone already there was left as they are, even if seed/data.py "
-            "changed since."
+            "changed since, except that seeded credits are granted once"
+            + (
+                f" ({', '.join(report.already_credited)} had them already)."
+                if report.already_credited
+                else "."
+            )
         )
     return "\n".join(lines) + "\n"
 

@@ -47,11 +47,15 @@ A race test needs committed rows on separate connections, so the per-test rollba
 after it. From T-5.1 a committed ledger row can never be deleted: the ledger refuses DELETE and
 TRUNCATE, and foreign keys into `users` are RESTRICT. Each run's database is its own and starts
 empty (P-55), but other tests in the same run commit too. So a test that commits:
-- **Makes its own users:** fresh men, never onboarded, on phone numbers `make_user` never generates.
+- **Makes its own users:** fresh men, never onboarded, on phone numbers `make_user` never generates:
+  `fresh_man(engine, credits=0)` in `tests/committed.py` (T-5.1), on `+9197…`.
   It never deletes them, and never uses the owner's trigger bypass. They last until the run's slot
   is next taken, which recreates its database; CI starts empty every run.
 - **Scopes every assertion to the users it made.** Never a count of a whole table: such a test is
-  right alone and wrong the moment anything else commits.
+  right alone and wrong the moment anything else commits. That holds for every test, not only the
+  ones that commit: from T-5.1 every run holds committed men, so `select(User)` or a count of
+  `users` finds them too. T-5.1 found eleven such assertions (in `test_otp_verify.py`,
+  `test_refresh.py` and `test_dob_gender.py`) and scoped each to the test's own number.
 - **Never commits a wallet that disagrees with its ledger.** T-9.9's reconciliation is global by
   design, so a test proving it catches a mismatch runs inside the rolled-back transaction.
 - **Breaks constraints only on a database of its own.** Every run's is (P-55), so a guard broken to
@@ -65,8 +69,9 @@ empty (P-55), but other tests in the same run commit too. So a test that commits
 - `make_user(gender="male", onboarded=True, credits=0, verified=None)` → `(user, token)` (T-3.1):
   the four rows signup creates (through T-3.3's find-or-create service from then on, as `make seed`
   does), and a token the `app` fixture accepts. `verified` follows D-008
-  unless given, and an onboarded woman who isn't verified can't be made; `credits` other than 0
-  raises until T-5.1 credits them through `wallet.service.credit()` (rule 5).
+  unless given, and an onboarded woman who isn't verified can't be made; `credits` are granted
+  through `wallet.service.credit()` as an `admin_grant` (T-5.1, rule 5), so anyone but a man is
+  refused by the wallet (D-076).
 - `make_thread(a, b, status="active", messages=0)`.
 - `clock` — freezes/advances "now" for expiry tests (the app reads time only through
   `core.clock.now()` — never `datetime.now()` directly).
@@ -152,6 +157,11 @@ the run for that exact commit passed (D-044). Within each job:
 2. `pytest -m critical`, then the rest of pytest (`make test-api`) · vitest
 3. `next build`
 4. Playwright (from T-3.13, only if 1–3 pass)
+
+CI runs pytest in file order. `pytest --shuffle-seed N` runs it in the order seed N gives (P-48's
+plugin, committed in T-5.1: an option in `tests/conftest.py`, no dependency), and the header names
+the seed, so a reported order can be run again. A test that passes only in file order leans on
+something an earlier one left behind: a logger cached before its capture began, a row, a key.
 
 Running CI's commands locally does not prove CI will pass, because the infrastructure differs:
 T-1.20's first run failed only because the postgis image built CI's test database differently
