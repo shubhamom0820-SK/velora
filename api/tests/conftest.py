@@ -25,7 +25,7 @@ from collections.abc import AsyncIterator, Iterator, MutableMapping
 from dataclasses import dataclass
 from datetime import date
 from types import ModuleType
-from typing import Any, Protocol
+from typing import Any, NoReturn, Protocol
 
 import pytest
 import structlog
@@ -67,6 +67,7 @@ for _key, _value in {
     os.environ.setdefault(_key, _value)
 
 from redis.asyncio import Redis
+from redis.asyncio.client import PubSub
 
 from app.core import clock as core_clock
 from app.core.clock import today_ist
@@ -200,13 +201,45 @@ def fake_providers() -> FakeProviders:
     return FakeProviders()
 
 
+UNPUBLISHED_HERE = (
+    "P-64: nothing a request makes through the `client` fixture is ever "
+    "published. `session_for_the_app` stands in for `get_session`, and "
+    "`get_session` is what publishes a request's committed events, so a "
+    "subscription here would see nothing and pass blind. Read published events "
+    "from an app built with the real `get_session`, as `real_app` in "
+    "tests/core/test_events.py is, until P-64 lets endpoint tests see them."
+)
+
+
+# Every way a test listens: a new subscription, and one made before the app was
+# (fixtures set up in order), subscribing or reading.
+LISTENING: tuple[tuple[type, str], ...] = (
+    (Redis, "pubsub"),
+    (PubSub, "subscribe"),
+    (PubSub, "psubscribe"),
+    (PubSub, "get_message"),
+    (PubSub, "listen"),
+)
+
+
+def _unpublished_here(*args: Any, **kwargs: Any) -> NoReturn:
+    raise RuntimeError(UNPUBLISHED_HERE)
+
+
 @pytest.fixture
-async def app(fake_providers: FakeProviders) -> AsyncIterator[FastAPI]:
+async def app(
+    fake_providers: FakeProviders, monkeypatch: pytest.MonkeyPatch
+) -> AsyncIterator[FastAPI]:
     """The app, built from test settings; requests share the test's `db`, and
-    every provider is the test's fake."""
+    every provider is the test's fake.
+
+    While it's up, listening on Redis raises, naming P-64: through this app
+    nothing is ever published, and a test that listened would pass blind."""
     application = create_app(make_test_settings())
     application.dependency_overrides[get_session] = session_for_the_app
     application.state.providers = fake_providers.as_providers()
+    for owner, listen in LISTENING:
+        monkeypatch.setattr(owner, listen, _unpublished_here)
     try:
         yield application
     finally:

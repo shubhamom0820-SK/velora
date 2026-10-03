@@ -48,7 +48,8 @@ after it. From T-5.1 a committed ledger row can never be deleted: the ledger ref
 TRUNCATE, and foreign keys into `users` are RESTRICT. Each run's database is its own and starts
 empty (P-55), but other tests in the same run commit too. So a test that commits:
 - **Makes its own users:** fresh men, never onboarded, on phone numbers `make_user` never generates:
-  `fresh_man(engine, credits=0)` in `tests/committed.py` (T-5.1), on `+9197…`.
+  `fresh_man(engine, credits=0)` in `tests/committed.py` (T-5.1), on `+9197…`, numbered one past
+  the highest the database holds, never at random (two of fifty random numbers can collide).
   It never deletes them, and never uses the owner's trigger bypass. They last until the run's slot
   is next taken, which recreates its database; CI starts empty every run.
 - **Scopes every assertion to the users it made.** Never a count of a whole table: such a test is

@@ -1480,19 +1480,14 @@ committed rows.
   - every assertion scoped to their ids;
   - each run's database is its own, recreated when its slot is next taken (P-55); CI starts empty;
   - never the owner's trigger bypass.
-- [ ] **First, give `fresh_man`'s numbers a counter** (`tests/committed.py`, T-5.1). Today it is
-  `+9197` and 8 random digits: fine for T-5.1's two men, but nothing stops two of fifty colliding,
-  and a collision fails a 🔒 test that must never be flaky. The cost isn't the odds: a flaky
-  critical test teaches re-running instead of investigating, and that habit loses a real bug
-  later. A run pointed at its own database by `TEST_DATABASE_URL` keeps its men across runs (no
-  slot recreates it), so a counter alone must not restart into last run's numbers. At the
-  direction of the advisor directing Sprint 5, 3 October 2026, from T-5.1's report.
-- [ ] **Make P-64's gap announce itself.** In tests, `session_for_the_app` stands in for
-  `get_session`, so nothing a request does through the `client` fixture is ever published: a test
-  that reads events there sees none, and passes blind. Anything that tries to read published
-  events through `client` raises, with a message naming P-64 and pointing at the real
-  `get_session` (`tests/core/test_events.py`'s app). Tested both ways, and broken once. P-64's fix
-  itself stays with T-7.4. At the direction of the advisor directing Sprint 5, 3 October 2026.
+- **Moved out of this list, 4 October 2026: its first two items,** a counter for `fresh_man`'s
+  numbers and P-64's tripwire. They are harness, not wallet, and Sprint 4's tests use the same
+  helper, so they landed before Sprint 4 instead of waiting here, in `test(harness): fresh men by
+  a counter; P-64's tripwire [T-5.4]` (at the direction of the advisor, Claude in a separate chat,
+  relayed by the founder). What this task inherits: `fresh_man` numbers men one past the highest
+  `+9197` number the database holds, under an advisory lock, so fifty made at once never share
+  one and a run on a database `TEST_DATABASE_URL` keeps never restarts into an earlier run's; and
+  listening on Redis through the `client` fixture raises, naming P-64.
 - [ ] **A dedicated 50-connection engine,** asserting 50 distinct backends. If Postgres runs out of
   connections, fail loudly; never skip.
 - [ ] **Prove the overlap by what the lock decides** (`f543b0d`): all 50 are inside open transactions
@@ -2904,8 +2899,12 @@ Claude Code adds items here instead of doing unplanned work. Format:
   hands them to a fixture to read. Also: T-7.4's "publishing helper `realtime.publish()` used by
   services" predates `core/events.py`; services queue events, and T-7.4 builds only the socket
   side (T-5.1's text). Found in T-5.1, at the direction of the advisor directing Sprint 5.
-  **T-5.4 adds a tripwire first:** reading published events through `client` raises, naming this
-  item, so the gap fails loudly until T-7.4 closes it.
+  **The tripwire is in** (4 October 2026, moved out of T-5.4 ahead of Sprint 4): while the `app`
+  fixture is up, listening on Redis raises, naming this item and pointing at the real
+  `get_session`, on a new subscription and on one made before the app was (`LISTENING` in
+  `tests/conftest.py`), so the gap fails loudly until T-7.4 closes it. Proved both ways in
+  `tests/test_harness.py`, and red with the tripwire removed and with it on `pubsub()` alone.
+  This item's fix removes it, and turns that test into one that sees the events.
 - [ ] P-65 · Make the deploy read `alembic_version` back after migrating. **Before P-38 or P-62,
   whichever lands first:** the plan's next migrations (P-38's areas, due before T-4.10, on whose
   Needs line this sits; P-62's trigger fix). No task from T-3.12 to T-6.4 carries one: checked

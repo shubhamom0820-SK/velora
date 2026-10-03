@@ -3,6 +3,8 @@ under test shares the test's transaction."""
 
 from __future__ import annotations
 
+import uuid
+from collections.abc import AsyncIterator, Callable
 from datetime import UTC, datetime, timedelta
 from types import ModuleType
 from typing import Annotated, Any
@@ -10,6 +12,8 @@ from typing import Annotated, Any
 import pytest
 from fastapi import Depends, FastAPI
 from httpx import AsyncClient
+from redis.asyncio import Redis
+from redis.asyncio.client import PubSub
 from sqlalchemy import select, text
 from sqlalchemy.engine import make_url
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession
@@ -28,7 +32,7 @@ from app.modules.users.models import User
 from app.modules.wallet import service as wallet_service
 from app.modules.wallet.models import LedgerEntry, Wallet
 from app.modules.wallet.service import WalletMisuse
-from tests.conftest import MakeUser, shuffled
+from tests.conftest import UNPUBLISHED_HERE, MakeUser, shuffled
 from tests.infra import (
     TEST_DATABASE_URL,
     ensure_test_database,
@@ -166,6 +170,67 @@ async def test_the_app_session_refuses_when_no_db_fixture_is_active() -> None:
     with pytest.raises(RuntimeError, match="without the `db` fixture"):
         async for _ in session_for_the_app():
             pass
+
+
+# --- P-64's tripwire --------------------------------------------------------------
+
+
+@pytest.fixture
+async def subscribed_first(test_redis: Redis) -> AsyncIterator[PubSub]:
+    """A subscription made before the app is, as a `listening` fixture would
+    make one: fixtures set up in the order a test asks for them."""
+    pubsub = test_redis.pubsub()
+    try:
+        yield pubsub
+    finally:
+        await pubsub.aclose()  # type: ignore[no-untyped-call]
+
+
+async def test_listening_for_events_through_client_raises_naming_p64(
+    subscribed_first: PubSub, app: FastAPI, client: AsyncClient, test_redis: Redis
+) -> None:
+    """P-64's gap announces itself. Through `client` nothing is ever published,
+    so a test that listened would hear nothing and pass blind. It raises
+    instead, on any Redis client, and on a subscription made before the app."""
+    attempts: dict[str, Callable[[], object]] = {
+        "a new subscription": test_redis.pubsub,
+        "on the app's own Redis": app.state.redis.pubsub,
+        "subscribing, made earlier": lambda: subscribed_first.subscribe("user:x"),
+        "by pattern, made earlier": lambda: subscribed_first.psubscribe("user:*"),
+        "reading, made earlier": lambda: subscribed_first.get_message(timeout=0.1),
+        "listening, made earlier": subscribed_first.listen,
+    }
+    refused = {}
+    for way, attempt in attempts.items():
+        with pytest.raises(RuntimeError) as raised:
+            attempt()
+        refused[way] = str(raised.value)
+
+    assert refused == dict.fromkeys(attempts, UNPUBLISHED_HERE)
+    assert UNPUBLISHED_HERE.startswith("P-64: ")
+    assert "`get_session`" in UNPUBLISHED_HERE
+    assert "tests/core/test_events.py" in UNPUBLISHED_HERE
+
+
+async def test_listening_works_where_nothing_stands_in_for_get_session(
+    test_redis: Redis,
+) -> None:
+    """The tripwire is the overridden app's alone. Without it a subscription
+    hears what is published, as `real_app`'s tests in tests/core/test_events.py
+    hear a request's events."""
+    channel = f"harness:{uuid.uuid4()}"  # channels span Redis databases
+    pubsub = test_redis.pubsub()
+    try:
+        await pubsub.subscribe(channel)
+        confirmed = await pubsub.get_message(timeout=2.0)
+        assert confirmed is not None and confirmed["type"] == "subscribe"
+
+        await test_redis.publish(channel, "heard")
+
+        message = await pubsub.get_message(ignore_subscribe_messages=True, timeout=2.0)
+        assert message is not None and message["data"] == b"heard"
+    finally:
+        await pubsub.aclose()  # type: ignore[no-untyped-call]
 
 
 # --- Skip locally, fail in CI -------------------------------------------------
