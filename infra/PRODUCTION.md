@@ -232,6 +232,40 @@ an environment that doesn't exist creates it, without the rule.
 | Variable | `PRODUCTION_WEB_URL` | `https://veloraapp.co.in` |
 | Variable | `SUPABASE_PROJECT_REF` | `velora-prod`'s ref, from its URL |
 
+### 8. Firebase: `velora-ic`, which staging shares
+
+Set up and read back in the console by the founder, 3 and 4 October 2026 (T-3.14). The
+recommendations behind the settings were the advisor's (Claude, in a separate chat): no test
+numbers, India only, Analytics and Gemini off, both of the budget's Savings boxes cleared. This
+machine has no Google Cloud credentials, so no check reads any of it back: each line is the
+founder's reading, dated. **Staging shares this project until P-66 (D-065): a change here changes
+staging and production at once.**
+
+- **Authentication: plain Firebase Authentication, not Identity Platform.** The upgrade removes the
+  3,000 SMS a day ceiling, the only "how many" bound there is (P-0.18). Never take it without the
+  founder, and re-derive P-0.18's bound before, not after.
+- **Sign-in method → Phone: enabled.** **Turning it off makes the sign-in screen lie.** Firebase then
+  refuses every number with `auth/operation-not-allowed`, the same code it gives a number outside
+  India, and the web can't tell the two apart: every Indian user would be told "Only Indian mobile
+  numbers can sign in for now", their number blamed for our switch (T-3.14, its check 8b). It can't
+  be fixed in code, so it is fixed here: never switch phone sign-in off while `/login` is open.
+  Close sign-in in the web first, by a deploy, then the switch.
+- **SMS region policy: Allow, India (IN) only.** A number from anywhere else is refused before any
+  SMS (T-3.14). **Taking India off the list lies the same way** as switching phone sign-in off.
+- **Test phone numbers: none, ever** (D-065): in this project, one would be a permanent sign-in to
+  production for anyone who learned the pair. Staging's own project, with its own, is P-66.
+- **Authorised domains, exactly:** `localhost`, `velora-ic.firebaseapp.com` and `velora-ic.web.app`
+  (Firebase's defaults), `staging.veloraapp.co.in` and `veloraapp.co.in`. `localhost` can't host
+  phone sign-in (Firebase's docs). Taking either of ours off stops sign-in on that site.
+- **Google Analytics and Gemini in Firebase: off.**
+- **The web app `velora-web`:** its config is committed in `web/src/lib/firebase-config.ts`, public
+  by design (D-085). The API names the project in `[env]` (`FIREBASE_PROJECT_ID`); no service
+  account exists, and none is needed (D-085).
+- **Billing:** Blaze, through the Google Cloud free trial, until 2 January 2027 (P-0.18). **Budget
+  alert:** ₹500 a month, at 50, 90 and 100% of actual cost, email to billing admins, both Savings
+  boxes cleared, so it counts cost before credits. It alerts; it never caps.
+- **App Check: not yet** (P-68).
+
 ## After a release
 
 The smoke job is the check. By hand:

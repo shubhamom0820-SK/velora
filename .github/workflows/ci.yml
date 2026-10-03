@@ -241,7 +241,8 @@ jobs:
           docker run -d --name api -p 127.0.0.1:8000:8000 \
             -e ENV=staging -e DATABASE_URL -e REDIS_URL=rediss://ci:ci@127.0.0.1:6379/1 \
             -e JWT_SECRET -e PHONE_PEPPER -e PHONE_ENC_KEY -e CODE_PEPPER -e CLIENT_IP_HEADER=Fly-Client-IP \
-            -e AUTH_PHONE_PROVIDER=firebase -e SMS_PROVIDER=msg91 -e PAYMENTS_PROVIDER=razorpay \
+            -e AUTH_PHONE_PROVIDER=firebase -e FIREBASE_PROJECT_ID=velora-ic \
+            -e SMS_PROVIDER=msg91 -e PAYMENTS_PROVIDER=razorpay \
             -e MODERATION_PROVIDER=sightengine -e FACEMATCH_PROVIDER=rekognition \
             -e STORAGE_PROVIDER=s3 -e PUSH_PROVIDER=webpush "$IMAGE"
           for _ in $(seq 1 30); do curl -sf -o /dev/null http://127.0.0.1:8000/healthz && break; sleep 1; done
@@ -283,7 +284,8 @@ jobs:
           output="$(timeout 60 docker run --rm -e ENV=staging -e DATABASE_URL \
             -e REDIS_URL=rediss://ci:ci@127.0.0.1:6379/1 \
             -e JWT_SECRET -e PHONE_PEPPER -e PHONE_ENC_KEY -e CODE_PEPPER \
-            -e AUTH_PHONE_PROVIDER=firebase -e SMS_PROVIDER=msg91 -e PAYMENTS_PROVIDER=razorpay \
+            -e AUTH_PHONE_PROVIDER=firebase -e FIREBASE_PROJECT_ID=velora-ic \
+            -e SMS_PROVIDER=msg91 -e PAYMENTS_PROVIDER=razorpay \
             -e MODERATION_PROVIDER=sightengine -e FACEMATCH_PROVIDER=rekognition \
             -e STORAGE_PROVIDER=s3 -e PUSH_PROVIDER=webpush "$IMAGE" 2>&1)"
           status=$?

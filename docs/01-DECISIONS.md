@@ -335,6 +335,12 @@ App Check (P-68, proved by its effect), the India-only region policy and Firebas
 limits. This decision's own trade-off still holds: our server's limits don't apply, since the SMS
 is triggered from the browser. The billing alert stays, as an alert: budgets never cap.
 
+**Amended 4 October 2026 (T-3.14): the dependencies.** The web's `firebase`, 12.19.0, pinned
+exactly, its two install scripts denied in `web/pnpm-workspace.yaml` (neither does anything we
+use). The API's `firebase-admin`, approved in T-3.14's plan, was not added, approved by the
+advisor directing T-3.14 (Claude, in a separate chat), relayed by the founder: D-085 says why, and
+how tokens are checked instead.
+
 ### D-034 · Location — Locked
 Browser geolocation on onboarding, stored as a PostGIS point. Distances shown rounded to whole km,
 minimum "1 km". If permission is denied, the user picks their area from a seeded list of
@@ -1842,6 +1848,82 @@ directing it (Claude, in a separate chat), relayed by the founder, 3 October 202
 **Approved by the founder, 3 October 2026,** once the gate's table was in: the three layers, `ENV`,
 `SMS_PROVIDER` and Settings refusing to start, are the depth an endpoint handing out sign-in codes
 needs. **Locked** 3 October 2026.
+
+### D-085 · Firebase sign-in: tokens checked with PyJWT, used once by their hash, served only for firebase — Open
+**The decision (T-3.14):**
+- **The API checks a Firebase ID token itself,** as Google's "verify ID tokens using a third-party
+  JWT library" says (read 4 October 2026), with PyJWT (D-060). Google's keys are the X.509
+  certificates at `securetoken@system.gserviceaccount.com`, fetched with httpx and kept for their
+  `Cache-Control` max-age; a token naming a key we don't hold fetches again, at most once a
+  minute. A token must be RS256, signed by the key Google lists under its `kid`; `aud` the
+  project in `FIREBASE_PROJECT_ID` and nothing else, `iss` `https://securetoken.google.com/` and
+  that project; `exp` in the future, `iat` and `auth_time` in the past, read from `core.clock`
+  (rule 7) with 30 seconds for Google's clock running ahead, never for expiry; `sub` 1 to 128
+  characters; a `phone_number`; `firebase.sign_in_provider` `phone`. Then T-3.3's `sign_in()`,
+  India only (`PHONE_NOT_SUPPORTED`) and banned numbers included.
+- **A sign-in older than 5 minutes is refused** (`auth_time`). Our web exchanges its token seconds
+  after the code is confirmed, so it never comes near.
+- **Used once, keyed on the token's SHA-256,** held in Redis until the token would expire anyway.
+  Firebase ID tokens carry no `jti`: Google's list of their claims has none. A replayed token is
+  refused before the phone's limit counts it, so replaying someone's token can't lock them out.
+- **Every refusal is one answer,** `401 FIREBASE_TOKEN_INVALID`, so a forger learns nothing about
+  which check failed; the logs get a reason, never the token, its claims or the number (rule 15).
+  Google's keys unreachable is `503 PROVIDER_UNAVAILABLE`: not the token's fault.
+- **Served only where `AUTH_PHONE_PROVIDER` is `firebase`,** an allowlist (rule 16), the shape of
+  D-066: 404 elsewhere, a provider nobody has named included. `make types` reads
+  `contract_openapi()`, which holds both paths, so the web is typed against both.
+- **No service account,** and `FIREBASE_PROJECT_ID` is required where the provider is `firebase`,
+  shape-checked at startup. Staging and production both name `velora-ic` (D-065) until P-66.
+- **The web config is committed,** in `web/src/lib/firebase-config.ts`, by `APP_ENV`: staging and
+  production only. Local and ci builds get none, so nothing built on a dev machine reaches
+  Firebase and no seeded number (D-064) can be texted from one. Its API key carries gitleaks'
+  allow marker, with the reason: Firebase's own page says such keys "are not used to control
+  access to backend resources" and "are OK to include in code or checked-in config files".
+- **The SDK only through `web/src/lib/firebase.ts`** (ESLint enforces it): loaded on demand, so only
+  a Firebase build's `/login` downloads it; Firebase's user in memory only, never IndexedDB, and
+  signed out once our API has answered, whatever it answered; no popup or redirect resolver, so
+  Google's `apis.google.com` iframe never loads; invisible reCAPTCHA, rendered as the screen opens.
+- **The CSP widens on Firebase builds only** (D-059): reCAPTCHA's own list (its FAQ) for
+  `script-src`, `frame-src` and `connect-src`, and the SDK's two API hosts,
+  `identitytoolkit.googleapis.com` and `securetoken.googleapis.com`. Path B builds keep the policy
+  byte for byte. Firebase publishes no CSP for Auth.
+
+**Why not `firebase-admin`,** the plan's approved dependency (Claude's case, from its 7.7.0 source;
+approved by the advisor directing T-3.14, Claude in a separate chat, relayed by the founder on
+4 October 2026): its check is synchronous and fetches Google's keys with
+`requests`, against rule 7; it reads the wall clock, against D-060, so tests can't move expiry; its
+auth client asks for a credential when it starts (`google.auth.default()`), which Fly doesn't have;
+and it brings Firestore, Cloud Storage and gRPC. The advisor called the last the strongest:
+"adding a library that demands the service account we just proved unnecessary would have
+manufactured the secret we deleted tonight."
+
+**Why the 5 minutes** (the advisor, relayed by the founder): "It closes a real hole — a leftover Firebase session should
+not be able to mint a Velora session hours later — and our own flow can't trip it."
+
+**Why the hash** (the advisor, relayed by the founder): "it identifies without storing the thing." It stays out of logs
+like any other token material.
+
+**Why a committed module, not variables** (the advisor, relayed by the founder): local and ci getting nothing "makes 'no
+seeded number can reach Firebase from a dev machine' structural rather than a rule someone has to
+remember". `.env.*` files are git-ignored in both `.gitignore`s, and D-081 already rejected one more
+`NEXT_PUBLIC_` value on two Vercel projects when `APP_ENV` says which environment it is.
+
+**Proved by breaking each guard** (4 October 2026, each file restored to its SHA-256): fourteen in
+the API and seven in the web, every one red. Among them: a token spent every time it's used, the
+audience's strictness, the five minutes, expiry, the issuer, the sign-in provider, the phone's
+limit counted before the token is spent, the India check, the route served for `fake`, and a
+blacklist ("served wherever Path B isn't"), which `fake` and `msg91` passed and only a provider
+nobody has named failed (D-084's lesson); and on the web, the region refusal's copy, signing out
+of Firebase only on success, Google's hosts on every build, and a config for `local`.
+
+**Rejected:** `firebase-admin` (above); a `jti` check (there is none); serving the exchange for
+every provider; `NEXT_PUBLIC_FIREBASE_*` variables in Vercel; the config in `.env.production`
+(git-ignored, and every build, local and ci included, would carry it).
+
+Recommended by Claude in T-3.14's plan; approved by the advisor directing T-3.14 (Claude, in a
+separate chat), relayed by the founder on 4 October 2026: "PyJWT and httpx it is. Record D-085 as
+Open; I'm approving it now in these words." That line is the advisor's (the founder, the same
+day). **Open** until the founder locks it in his own words.
 
 ---
 

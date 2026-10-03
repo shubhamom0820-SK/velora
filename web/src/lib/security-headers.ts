@@ -15,8 +15,10 @@
  *           another user's text: T-6.5 today, sooner if a screen gets there
  *           first. Nonces scoped to (auth) and (app) would leave marketing
  *           static.
- *   T-3.14  Firebase phone sign-in: Google's script and connect hosts, and
- *           frame-src for reCAPTCHA.
+ *   T-3.14  Done: Firebase phone sign-in, on Firebase builds only (D-085).
+ *           reCAPTCHA's script, frame and connect hosts, and Firebase Auth's
+ *           two API hosts. Path B builds keep the policy as it was.
+ *   P-68    App Check: its hosts, the way T-3.14 added Firebase's.
  *   T-4.6   Photos: connect-src for R2's upload endpoint; img-src for the CDN
  *           and blob: previews.
  *   T-4.7   Selfie: camera=(self); blob: for the captured frame.
@@ -36,6 +38,8 @@
  * measured, and by its definition it would break `next start` and the E2E over
  * local http.
  */
+
+import { signInPathFor } from "./sign-in-path";
 
 /** `process.env` at build time, or a stand-in in tests. */
 type BuildEnv = Readonly<Record<string, string | undefined>>;
@@ -58,6 +62,39 @@ function isDev(env: BuildEnv): boolean {
 }
 
 /**
+ * Firebase phone sign-in's sources (T-3.14, D-059), on builds that sign in by
+ * Firebase only (D-081). Firebase publishes no CSP for Auth; these are
+ * reCAPTCHA's own list (its FAQ, read 4 October 2026) and the two API hosts
+ * the Auth SDK calls (its source, firebase 12.19.0). Not apis.google.com: that
+ * is the popup and redirect sign-ins' iframe, which src/lib/firebase.ts never
+ * loads. A CSP error at sign-in is this list, not a Firebase bug.
+ */
+const FIREBASE = {
+  // reCAPTCHA's script, and the scripts it loads from gstatic.
+  script: [
+    "https://www.google.com/recaptcha/",
+    "https://www.gstatic.com/recaptcha/",
+  ],
+  // reCAPTCHA's frames: the invisible widget and the challenge it may show.
+  frame: [
+    "https://www.google.com/recaptcha/",
+    "https://recaptcha.google.com/recaptcha/",
+  ],
+  connect: [
+    // reCAPTCHA's own requests.
+    "https://www.google.com/recaptcha/",
+    // Firebase Auth's API: its reCAPTCHA config, sending the code, checking it.
+    "https://identitytoolkit.googleapis.com",
+    // Firebase Auth's token service, should the SDK refresh its ID token.
+    "https://securetoken.googleapis.com",
+  ],
+} as const;
+
+function signsInByFirebase(env: BuildEnv): boolean {
+  return signInPathFor(env, { dev: isDev(env) }) === "firebase";
+}
+
+/**
  * The API's origin, by the same rule as `apiBaseUrl()`: `NEXT_PUBLIC_API_URL`,
  * or the local API under `next dev`. Without either, none: such a build can't
  * call the API at all (`apiBaseUrl()` throws), so the CSP allows no API either,
@@ -71,6 +108,9 @@ export function apiOrigin(env: BuildEnv = process.env): string | null {
 export function contentSecurityPolicy(env: BuildEnv = process.env): string {
   const dev = isDev(env);
   const api = apiOrigin(env);
+  const firebase = signsInByFirebase(env);
+  const extra = (sources: readonly string[]) =>
+    firebase ? ` ${sources.join(" ")}` : "";
   return [
     "default-src 'self'",
     // 'unsafe-inline': Next writes its page data as inline scripts on every
@@ -79,11 +119,14 @@ export function contentSecurityPolicy(env: BuildEnv = process.env): string {
     // margin. Kept at T-3.11, where the only user text on screen is the
     // user's own; re-examined when a screen first renders another user's
     // (D-059's amendment, T-6.5 today).
-    `script-src 'self' 'unsafe-inline'${dev ? " 'unsafe-eval'" : ""}`,
+    `script-src 'self' 'unsafe-inline'${dev ? " 'unsafe-eval'" : ""}${extra(FIREBASE.script)}`,
     ...(dev
       ? ["style-src 'self' 'unsafe-inline'", "img-src 'self' data:"]
       : []),
-    `connect-src 'self'${api ? ` ${api}` : ""}`,
+    `connect-src 'self'${api ? ` ${api}` : ""}${extra(FIREBASE.connect)}`,
+    // Frames fall back to default-src 'self' everywhere else; a Firebase build
+    // keeps that and adds reCAPTCHA's.
+    ...(firebase ? [`frame-src 'self'${extra(FIREBASE.frame)}`] : []),
     "object-src 'none'",
     "base-uri 'none'",
     "form-action 'self'",

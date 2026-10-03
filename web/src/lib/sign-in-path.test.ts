@@ -2,6 +2,8 @@ import { describe, expect, it } from "vitest";
 
 import { configFor } from "../../next.config";
 
+import { firebaseConfigFor } from "./firebase-config";
+
 import { signInOpen, signInPath, signInPathFor } from "./sign-in-path";
 
 describe("a build signs in by the path APP_ENV names, an allowlist (D-081)", () => {
@@ -35,19 +37,50 @@ describe("a build signs in by the path APP_ENV names, an allowlist (D-081)", () 
 });
 
 describe("whether anyone can sign in: one flag for /login and the waitlist box", () => {
-  it("is open on a Path B build only, until T-3.14 builds Firebase sign-in", () => {
+  it("is open on either path since T-3.14, and closed on a build with none", () => {
     expect(signInOpen("otp")).toBe(true);
-    expect(signInOpen("firebase")).toBe(false);
+    expect(signInOpen("firebase")).toBe(true);
     expect(signInOpen(null)).toBe(false);
   });
 });
 
-describe("next.config builds exactly these two values into the browser's code", () => {
+// velora-ic's, as firebase-config.ts holds it (D-065, D-085).
+const VELORA_IC = JSON.stringify(firebaseConfigFor({ APP_ENV: "production" }));
+
+describe("next.config builds exactly these three values into the browser's code", () => {
   it.each([
-    ["production", { AUTH_COOKIE_SUFFIX: "prod", SIGN_IN_PATH: "firebase" }],
-    ["staging", { AUTH_COOKIE_SUFFIX: "staging", SIGN_IN_PATH: "firebase" }],
-    ["local", { AUTH_COOKIE_SUFFIX: "local", SIGN_IN_PATH: "otp" }],
-    ["ci", { AUTH_COOKIE_SUFFIX: "local", SIGN_IN_PATH: "otp" }],
+    [
+      "production",
+      {
+        AUTH_COOKIE_SUFFIX: "prod",
+        SIGN_IN_PATH: "firebase",
+        FIREBASE_WEB_CONFIG: VELORA_IC,
+      },
+    ],
+    [
+      "staging",
+      {
+        AUTH_COOKIE_SUFFIX: "staging",
+        SIGN_IN_PATH: "firebase",
+        FIREBASE_WEB_CONFIG: VELORA_IC,
+      },
+    ],
+    [
+      "local",
+      {
+        AUTH_COOKIE_SUFFIX: "local",
+        SIGN_IN_PATH: "otp",
+        FIREBASE_WEB_CONFIG: "",
+      },
+    ],
+    [
+      "ci",
+      {
+        AUTH_COOKIE_SUFFIX: "local",
+        SIGN_IN_PATH: "otp",
+        FIREBASE_WEB_CONFIG: "",
+      },
+    ],
   ])("APP_ENV=%s", (appEnv, env) => {
     expect(
       configFor("phase-production-build", { APP_ENV: appEnv }).env,

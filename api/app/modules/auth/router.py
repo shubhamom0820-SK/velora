@@ -1,8 +1,9 @@
 """Sign-in routes (D-035), and the PIN lock (T-3.9).
 
-`otp_router` is Path B, MSG91's codes. `create_app()` mounts it only where
-`AUTH_PHONE_PROVIDER` allows (D-066); everywhere else its routes 404.
-`router` holds what every path shares, refresh and logout, mounted everywhere.
+`otp_router` is Path B, MSG91's codes, and `firebase_router` Path A, Firebase's
+token exchange. `create_app()` mounts each only where `AUTH_PHONE_PROVIDER`
+chooses it (D-066, D-085); everywhere else its routes 404. `router` holds what
+every path shares, refresh and logout, mounted everywhere.
 """
 
 from __future__ import annotations
@@ -35,6 +36,7 @@ from app.modules.auth.cookies import (
 )
 from app.modules.auth.schemas import (
     AccessToken,
+    FirebaseSignIn,
     OtpSend,
     OtpSent,
     OtpVerify,
@@ -62,7 +64,14 @@ CSRF_HEADER = "X-CSRF"
 PIN_CHECKS_PER_MINUTE = 10
 _pin_limit = Depends(user_rate_limit("pin", limit=PIN_CHECKS_PER_MINUTE, window_s=60))
 
+# 02-ARCHITECTURE §12: 10 token exchanges an hour per client IP (an IPv6 /64),
+# counted before the body is read, invalid tokens included. The 5 a phone is
+# the service's, once the token has named the phone.
+FIREBASE_EXCHANGES_PER_IP = 10
+FIREBASE_EXCHANGE_WINDOW_S = 60 * 60
+
 otp_router = APIRouter(prefix="/auth/otp", tags=["auth"])
+firebase_router = APIRouter(prefix="/auth", tags=["auth"])
 router = APIRouter(prefix="/auth", tags=["auth"])
 
 
@@ -107,6 +116,38 @@ async def verify_otp(
 ) -> SignedIn:
     signed_in = await service.verify_code(
         session, redis, settings, raw_phone=body.phone, code=body.otp
+    )
+    set_session_cookies(
+        response,
+        settings,
+        refresh_token=signed_in.refresh_token,
+        csrf=signed_in.csrf,
+    )
+    return SignedIn(access_token=signed_in.access_token, user=signed_in.me)
+
+
+@firebase_router.post(
+    "/firebase",
+    dependencies=[
+        Depends(
+            rate_limit(
+                "firebase_ip",
+                limit=FIREBASE_EXCHANGES_PER_IP,
+                window_s=FIREBASE_EXCHANGE_WINDOW_S,
+            )
+        )
+    ],
+)
+async def sign_in_with_firebase(
+    body: FirebaseSignIn,
+    response: Response,
+    session: Annotated[AsyncSession, Depends(get_session)],
+    redis: Annotated[Redis, Depends(app_redis)],
+    settings: Annotated[Settings, Depends(app_settings)],
+    providers: Annotated[Providers, Depends(get_providers)],
+) -> SignedIn:
+    signed_in = await service.sign_in_with_firebase(
+        session, redis, providers.firebase_keys, settings, id_token=body.id_token
     )
     set_session_cookies(
         response,

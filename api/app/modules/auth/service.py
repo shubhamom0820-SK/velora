@@ -1,5 +1,6 @@
 """Sign-in by phone (D-035). Path B's codes: send (T-3.2) and verify (T-3.3);
-the session every path ends in (T-3.3); and the PIN lock (T-3.9).
+Path A's Firebase token exchange (T-3.14); the session every path ends in
+(T-3.3); and the PIN lock (T-3.9).
 
 Every number is answered the same way and counts against the same limits,
 banned and unknown ones included: a ban surfaces only at verify (D-066). No
@@ -21,12 +22,14 @@ from app.core import clock, ratelimit
 from app.core.config import Settings
 from app.core.enums import OnboardingStep
 from app.core.errors import AppError, invalid_field
+from app.core.providers.firebase import FirebaseKeys
 from app.core.providers.sms import SmsProvider, SmsRecipientNotAllowed
 from app.core.security import (
     E164,
     PinCheck,
     check_pin,
     csrf_matches,
+    firebase_token_invalid,
     hash_otp,
     hash_phone,
     hash_pin,
@@ -37,9 +40,10 @@ from app.core.security import (
     new_refresh_token,
     normalize_phone,
     otp_matches,
+    verify_firebase_id_token,
 )
 from app.modules.admin import service as admin_service
-from app.modules.auth import otp_store, pins, repository
+from app.modules.auth import firebase_store, otp_store, pins, repository
 from app.modules.auth.models import Session as SessionRow
 from app.modules.users import service as users_service
 from app.modules.users.schemas import Me
@@ -261,6 +265,49 @@ def _otp_too_many() -> AppError:
     return AppError(
         "OTP_TOO_MANY", "Too many wrong codes. Try again later.", status=429
     )
+
+
+# --- Path A: the Firebase token exchange (T-3.14, D-085) -------------------------
+
+# 02-ARCHITECTURE §12: 5 sign-ins a phone an hour. The router holds the 10 an IP.
+FIREBASE_SIGN_INS_PER_PHONE = 5
+FIREBASE_SIGN_IN_WINDOW_S = 60 * 60
+
+
+async def sign_in_with_firebase(
+    session: AsyncSession,
+    redis: Redis,
+    keys: FirebaseKeys,
+    settings: Settings,
+    *,
+    id_token: str,
+) -> NewSession:
+    """Swap a Firebase ID token for a session of ours, exactly as Path B's
+    verify ends: `sign_in()`, banned numbers and all.
+
+    Firebase proved the number by SMS; the token says so, once checked
+    (`verify_firebase_id_token`). Then India only (`PHONE_NOT_SUPPORTED`), then
+    used once, then 5 sign-ins a phone an hour. A replayed token is refused
+    before it counts against the number, so replaying someone's token can't
+    lock them out. A number Firebase texted that `normalize_phone` still
+    refuses gets its usual answer, as it would on Path B.
+    """
+    verified = await verify_firebase_id_token(id_token, keys, settings)
+    phone = normalize_phone(verified.phone_number)
+    ttl_s = math.ceil((verified.expires_at - clock.now()).total_seconds())
+    if not await firebase_store.spend(redis, hash_token(id_token), ttl_s=ttl_s):
+        log.info("firebase_token_refused", reason="reused")
+        raise firebase_token_invalid()
+    verdict = await ratelimit.hit(
+        redis,
+        "firebase_phone",
+        hash_phone(phone, settings),
+        limit=FIREBASE_SIGN_INS_PER_PHONE,
+        window_s=FIREBASE_SIGN_IN_WINDOW_S,
+    )
+    if not verdict.allowed:
+        raise _rate_limited(verdict.retry_after_s)
+    return await sign_in(session, settings, phone)
 
 
 # --- Sign-in: every path ends here (T-3.3; T-3.14 reuses it) ------------------

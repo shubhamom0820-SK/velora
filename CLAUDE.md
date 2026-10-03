@@ -25,6 +25,7 @@ Permanence is granted by the other person, never bought.
 | Web | Next.js (App Router) + React + TypeScript strict + Tailwind; lucide-react icons (D-042) |
 | Web data | TanStack Query (server state), Zustand (client state), Zod, React Hook Form |
 | Swipe | @use-gesture/react + @react-spring/web |
+| Sign-in | Firebase phone auth (D-035): the web's `firebase` SDK; the API checks its tokens with PyJWT and httpx, no `firebase-admin` (D-085) |
 | API | Python 3.12, FastAPI, Pydantic v2, SQLAlchemy 2.0 async, asyncpg, Alembic, GeoAlchemy2 (D-040); PyJWT, argon2-cffi, cryptography, phonenumberslite (D-060) |
 | API logging | structlog (JSON logs); responses serialised by FastAPI/Pydantic — D-038 |
 | DB | PostgreSQL 16 + PostGIS + pg_trgm + pgcrypto + citext locally and in CI; Supabase runs 17 (D-047, P-34) |
@@ -64,7 +65,10 @@ Next reads as a file; a test holds it to `en.ts`). `src/lib/site.ts` says where 
 that only production is indexed (T-2.4), from `APP_ENV`, which `next build` refuses unless it is
 local, ci, staging or production (`src/lib/build-env.ts`, T-2.6). `src/lib/security-headers.ts` is
 the CSP and the other security headers, exactly as strict as today's pages: a task that needs more
-widens it there (D-059); HSTS covers every subdomain (D-074). `src/components/ui/` holds the shared primitives (T-1.19),
+widens it there (D-059); HSTS covers every subdomain (D-074). `src/lib/firebase.ts` is the only code
+that touches the Firebase SDK (ESLint enforces it), loaded on demand by a Firebase build's `/login`;
+`src/lib/firebase-config.ts` holds the public web config by `APP_ENV`, staging and production only,
+so local and ci builds can't reach Firebase (D-085). `src/components/ui/` holds the shared primitives (T-1.19),
 each with a vitest test beside it; `/dev/ui` shows them all under `next dev` and 404s everywhere
 else. Feature components go in `src/components/<feature>/`. Server data (T-1.18):
 `src/lib/api.ts` is the only code that calls `fetch` (ESLint enforces it), typed from

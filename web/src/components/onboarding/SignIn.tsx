@@ -2,7 +2,8 @@
 
 import { zodResolver } from "@hookform/resolvers/zod";
 import { Phone } from "lucide-react";
-import { useEffect, useState } from "react";
+import Link from "next/link";
+import { useEffect, useRef, useState } from "react";
 import { useForm } from "react-hook-form";
 
 import { Button } from "@/components/ui/Button";
@@ -11,14 +12,20 @@ import { Icon } from "@/components/ui/Icon";
 import { OtpInput } from "@/components/ui/OtpInput";
 import { t } from "@/i18n/t";
 import { APP_NAME } from "@/lib/app";
-import { useSendCode, useVerifyCode } from "@/lib/queries/onboarding";
-import { signInOpen } from "@/lib/sign-in-path";
+import {
+  useFirebaseSendCode,
+  useFirebaseVerifyCode,
+  useSendCode,
+  useVerifyCode,
+} from "@/lib/queries/onboarding";
+import { signInOpen, signInPath } from "@/lib/sign-in-path";
 import { useSession } from "@/store/session";
 import { z } from "@/lib/zod";
 
 import { errorCopy } from "./errorCopy";
 import { FormError } from "./FormError";
 import { StepFrame } from "./StepFrame";
+import { useFirebasePhone } from "./useFirebasePhone";
 
 /**
  * The ten digits of an Indian mobile number as people type or paste it: with
@@ -37,15 +44,16 @@ const phoneForm = z.object({
 });
 
 /**
- * /login (T-3.11). The path follows the build (D-081): Path B where `APP_ENV`
- * is local or ci; a Firebase build says sign-in isn't open yet until T-3.14.
- * After an under-18 date of birth, it says what happened (D-079, D-072).
+ * /login (T-3.11, T-3.14). The path follows the build (D-081): Path B where
+ * `APP_ENV` is local or ci, Firebase on staging and production, on the same
+ * two screens. A build with neither says sign-in isn't open yet. After an
+ * under-18 date of birth, it says what happened (D-079, D-072).
  */
 export function SignIn() {
   const farewell = useSession((state) => state.farewell);
   if (farewell === "underage") return <Underage />;
   if (!signInOpen()) return <SignInClosed />;
-  return <CodeSignIn />;
+  return signInPath() === "firebase" ? <FirebaseSignIn /> : <PathBSignIn />;
 }
 
 function Underage() {
@@ -75,14 +83,54 @@ export function SignInClosed() {
   );
 }
 
+/** Texts a code, and says when another may be asked for. */
+type SendCode = ReturnType<typeof useSendCode>;
+/** Checks the code; on success the session has started. */
+type VerifyCode = ReturnType<typeof useVerifyCode>;
+
+/** Path B (T-3.11): our API sends the code and checks it. */
+function PathBSignIn() {
+  const send = useSendCode();
+  const verify = useVerifyCode();
+  return <CodeSignIn send={send} verify={verify} namesGoogle={false} />;
+}
+
+/**
+ * Path A (T-3.14): Firebase sends the code and checks it, and our API
+ * exchanges its token for our session (D-085). reCAPTCHA's invisible widget
+ * renders into the element below, as the screen opens.
+ */
+function FirebaseSignIn() {
+  const recaptcha = useRef<HTMLDivElement>(null);
+  const firebase = useFirebasePhone(recaptcha);
+  const send = useFirebaseSendCode(firebase);
+  const verify = useFirebaseVerifyCode(firebase);
+  return (
+    <>
+      <CodeSignIn send={send} verify={verify} namesGoogle />
+      <div ref={recaptcha} />
+    </>
+  );
+}
+
 type Stage =
   { kind: "phone" } | { kind: "code"; phone: string; resendAt: number };
 
-function CodeSignIn() {
+function CodeSignIn({
+  send,
+  verify,
+  namesGoogle,
+}: {
+  send: SendCode;
+  verify: VerifyCode;
+  namesGoogle: boolean;
+}) {
   // The number stays here, in memory: never a URL (D-080, rule 15).
   const [stage, setStage] = useState<Stage>({ kind: "phone" });
   return stage.kind === "phone" ? (
     <PhoneStage
+      send={send}
+      namesGoogle={namesGoogle}
       onSent={(phone, resendAfterS) =>
         setStage({
           kind: "code",
@@ -93,22 +141,31 @@ function CodeSignIn() {
     />
   ) : (
     <CodeStage
+      send={send}
+      verify={verify}
       phone={stage.phone}
       resendAt={stage.resendAt}
       onResent={(resendAfterS) =>
         setStage({ ...stage, resendAt: Date.now() + resendAfterS * 1000 })
       }
-      onChangeNumber={() => setStage({ kind: "phone" })}
+      onChangeNumber={() => {
+        send.reset();
+        verify.reset();
+        setStage({ kind: "phone" });
+      }}
     />
   );
 }
 
 function PhoneStage({
+  send,
+  namesGoogle,
   onSent,
 }: {
+  send: SendCode;
+  namesGoogle: boolean;
   onSent: (phone: string, resendAfterS: number) => void;
 }) {
-  const send = useSendCode();
   const form = useForm({
     resolver: zodResolver(phoneForm),
     mode: "onChange",
@@ -130,14 +187,17 @@ function PhoneStage({
         title={t("onboarding.phone.title")}
         sub={t("onboarding.phone.sub")}
         footer={
-          <Button
-            type="submit"
-            fullWidth
-            loading={send.isPending}
-            disabled={!form.formState.isValid}
-          >
-            {t("onboarding.phone.send")}
-          </Button>
+          <>
+            <Button
+              type="submit"
+              fullWidth
+              loading={send.isPending}
+              disabled={!form.formState.isValid}
+            >
+              {t("onboarding.phone.send")}
+            </Button>
+            {namesGoogle && <GoogleConsent />}
+          </>
         }
       >
         <label className="text-small text-mute" htmlFor="phone">
@@ -172,6 +232,23 @@ function PhoneStage({
   );
 }
 
+/**
+ * Firebase asks apps to get consent before a number goes to Google (its phone
+ * sign-in docs), so the line is there before "Send code" is tapped, worded as
+ * /privacy puts it (D-048). Only on Firebase builds: on Path B, Google sends
+ * nothing, and the line would be false (D-081).
+ */
+function GoogleConsent() {
+  return (
+    <p className="text-small text-mute mt-3 text-center">
+      {t("onboarding.phone.googleConsent")}{" "}
+      <Link href="/privacy" className="underline underline-offset-2">
+        {t("onboarding.phone.googleConsentLink")}
+      </Link>
+    </p>
+  );
+}
+
 function useSecondsUntil(at: number): number {
   const [now, setNow] = useState(() => Date.now());
   useEffect(() => {
@@ -182,19 +259,21 @@ function useSecondsUntil(at: number): number {
 }
 
 function CodeStage({
+  send: resend,
+  verify,
   phone,
   resendAt,
   onResent,
   onChangeNumber,
 }: {
+  send: SendCode;
+  verify: VerifyCode;
   phone: string;
   resendAt: number;
   onResent: (resendAfterS: number) => void;
   onChangeNumber: () => void;
 }) {
   const [code, setCode] = useState("");
-  const verify = useVerifyCode();
-  const resend = useSendCode();
   const seconds = useSecondsUntil(resendAt);
   const failure = verify.error ?? resend.error;
   const copy = failure ? errorCopy(failure) : null;

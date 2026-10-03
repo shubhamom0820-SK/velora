@@ -1013,7 +1013,7 @@ exist yet. The batch is a chain, T-3.10 → T-3.11 → T-3.12 → T-3.13, each n
 - [x] **Commit:** `feat(web): onboarding about, interests, pin [T-3.12]`
 
 ### T-3.14 · Firebase phone sign-in (launch path)
-- [ ] **Needs:** T-3.3, T-3.10 (it restores the session on reload, which the Done-when checks), T-3.11 (its phone and OTP screens, which this task's web step puts Firebase on), and **P-0.13** (the Google billing account, verified: Firebase's Blaze plan bills to it)
+- [x] **Needs:** T-3.3, T-3.10 (it restores the session on reload, which the Done-when checks), T-3.11 (its phone and OTP screens, which this task's web step puts Firebase on), and **P-0.13** (the Google billing account, verified: Firebase's Blaze plan bills to it)
   **And the two authorised domains, added by the founder** in Firebase's console (Authentication,
   Settings, Authorised domains) for project `velora-ic`: `staging.veloraapp.co.in` and
   `veloraapp.co.in`. Nothing else: no Vercel preview domain, since neither Vercel project is
@@ -1024,9 +1024,13 @@ exist yet. The batch is a chain, T-3.10 → T-3.11 → T-3.12 → T-3.13, each n
   **Done, 3 October 2026 (the founder):** registered. The founder holds the config and gives it to
   the build session directly (4 October 2026); it goes in the repo's env for the web, public by
   design (Keys, below).
-- [ ] **Not in T-3.10 to T-3.13's batch** (planned 3 October 2026): P-0.13's account didn't exist yet. When this task starts, switch D-081's Firebase builds from "sign-in isn't open yet" to the Firebase flow: make `signInOpen()` (`web/src/lib/sign-in-path.ts`) true for `firebase`, which moves `/login` and the landing page's waitlist heading together.
-- [ ] **New dependencies (approved, recorded in D-035):** api `firebase-admin`; web `firebase`.
-- [ ] **Keys (the founder, 3 October 2026):** "the Firebase web config is public by design and
+- [x] **Not in T-3.10 to T-3.13's batch** (planned 3 October 2026): P-0.13's account didn't exist yet. When this task starts, switch D-081's Firebase builds from "sign-in isn't open yet" to the Firebase flow: make `signInOpen()` (`web/src/lib/sign-in-path.ts`) true for `firebase`, which moves `/login` and the landing page's waitlist heading together.
+- [x] **New dependencies (approved, recorded in D-035):** api `firebase-admin`; web `firebase`.
+  **As built (D-085; approved by the advisor directing T-3.14, relayed by the founder, 4 October
+  2026):** web `firebase` 12.19.0, pinned
+  exactly; api `firebase-admin` not added. PyJWT and httpx check the token, as Google documents for
+  third-party JWT libraries, with no new API dependency.
+- [x] **Keys (the founder, 3 October 2026):** "the Firebase web config is public by design and
   belongs in the repo's env for the web. Any service account JSON is a secret and goes in the
   password manager and the host's secrets, never in the repo. Say which of the two you need and
   I'll handle it; don't ask me to paste either into chat." This task expects to need no service
@@ -1036,14 +1040,25 @@ exist yet. The batch is a chain, T-3.10 → T-3.11 → T-3.12 → T-3.13, each n
   2026, at the founder's direction: a document that says a secret is needed when it isn't gets the
   secret created and stored, and then a key that never had to exist is guarded. If this task finds
   one is needed after all, it says why before asking.
-- [ ] Firebase console: project created, Phone provider enabled, authorised domains =
+- [x] Firebase console: project created, Phone provider enabled, authorised domains =
   `veloraapp.co.in` + `staging.veloraapp.co.in` (the Done-when signs in there; on the Needs line),
   billing alert set at a fixed rupee amount. **App Check is P-68, the very next task after this
   one** (the founder, 4 October 2026): this task's first staging deploy puts the web config in a
   public bundle, on a hostname in public certificate logs, and P-68 closes what that opens.
   **Done by the founder, 3 October 2026:** project `velora-ic` (no Google Analytics, no Gemini in
   Firebase); Phone sign-in enabled; SMS region policy "Allow", India (IN) only; Blaze linked to a
-  billing account; later the same day, the two authorised domains. **Not yet:** the budget alert.
+  billing account; later the same day, the two authorised domains.
+  **Read in the console by the founder, 4 October 2026** (the clicks and the readings his): plain
+  Firebase Authentication, not Identity Platform; no Google Analytics and no Gemini in Firebase;
+  Phone sign-in enabled; no test phone numbers; SMS region policy "Allow", India (IN) only; Blaze
+  active through the Google Cloud trial, ₹28,796 of credit until 2 January 2027; web app
+  `velora-web` registered; the budget alert set (its Done-when, below). The authorised domains,
+  exactly as they stand: `localhost`, `velora-ic.firebaseapp.com`, `velora-ic.web.app`,
+  `staging.veloraapp.co.in` and `veloraapp.co.in`. `localhost` is Firebase's default and can't
+  host phone sign-in ("localhost is not allowed as a hosted domain for the purposes of phone
+  auth", Firebase's web phone-auth page, read 4 October 2026); `127.0.0.1`, where local builds
+  run, isn't listed. **The recommendation behind them was the advisor's** (Claude, in a separate
+  chat): no test numbers, India only, Analytics and Gemini off, and both Savings boxes cleared.
   The first plan text also listed a Vercel preview and `localhost`: neither is needed (Needs
   line), and a daily SMS quota cap, which isn't a setting at all (below).
   **No console field caps SMS** (4 October 2026, at the founder's direction; the first text
@@ -1055,17 +1070,25 @@ exist yet. The batch is a chain, T-3.10 → T-3.11 → T-3.12 → T-3.13, each n
   throttle on `/v1/auth/firebase` counts token exchanges, not sends. **The founder deliberately
   didn't take the Identity Platform upgrade, and this task doesn't either,** even where the
   console offers a feature behind it: the upgrade removes the daily ceiling (P-0.18).
-- [ ] **A number outside India is refused by Firebase itself,** under that region policy, before any
+- [x] **A number outside India is refused by Firebase itself,** under that region policy, before any
   of our code runs. What the person sees then is a case this task handles and tests, not an
   accident. (The phone screen fixes +91, so it takes a pasted or edited number to get there.)
-- [ ] **One project, `velora-ic`, for staging and production, and never a Firebase test number in
+  **What Firebase answers** (4 October 2026, Claude, one REST call for the fictional
+  `+1 650-555-0100`, approved in the advisor's review, relayed by the founder): `400`, "OPERATION_NOT_ALLOWED : SMS unable to be
+  sent until this region enabled by the app developer.", before any reCAPTCHA check, so no SMS
+  could go. The SDK turns it into `auth/operation-not-allowed` (its default mapping, firebase
+  12.19.0), and the screen says "Only Indian mobile numbers can sign in for now." (`errorCopy.ts`,
+  tested): the number, not them. The same code would come back if phone sign-in were switched off
+  in the console, and that line would then be wrong. P-70 is what someone with a foreign number
+  actually meets on the screen, which this refusal never reaches.
+- [x] **One project, `velora-ic`, for staging and production, and never a Firebase test number in
   it** (D-065, decided by the founder on 3 October 2026): "Not one, not temporarily." A test
   number is a fixed phone and a fixed code that sign in without an SMS. In a project production
   uses, that is a permanent sign-in bypass for anyone who learns the pair. It has the shape of
   T-3.13's `/v1/test/sms/last-code`, proved gated in code; a test number would rebuild it by hand
   in the console, with no gate. So the Done-when signs in with the founder's own phone. A Firebase
   project of staging's own, with its own test numbers, is P-66.
-- [ ] **Staging sign-ins land in the same Firebase user pool as production** (the founder,
+- [x] **Staging sign-ins land in the same Firebase user pool as production** (the founder,
   3 October 2026). That's acceptable while there are no real users, and it is not acceptable
   after launch. Sharing one project means: a real person can sign in to staging with their own
   number, since staging texts whoever production texts, and their number then sits in staging's
@@ -1074,37 +1097,58 @@ exist yet. The batch is a chain, T-3.10 → T-3.11 → T-3.12 → T-3.13, each n
   that real people's sign-ins need. P-66 ends it. It is on REL-1's Needs line if REL-1's tag
   includes this task, since that tag is what makes real users possible, and on T-9.15's
   regardless.
-- [ ] `POST /v1/auth/firebase {id_token}`: verify signature and `aud`/`iss`/`exp` against Google's
+- [x] `POST /v1/auth/firebase {id_token}`: verify signature and `aud`/`iss`/`exp` against Google's
   public keys (cached); require `phone_number` and `firebase.sign_in_provider == "phone"`;
   reject non-`+91` → `PHONE_NOT_SUPPORTED`; reject a reused `jti` (Redis until expiry) →
   `FIREBASE_TOKEN_INVALID`; throttle 10/IP/hour and 5/phone/hour.
-- [ ] Then reuse the exact same service as T-3.3: banned check → find-or-create user + profile +
+  **As built (D-085):** a Firebase ID token has no `jti` (Google's list of its claims), so used
+  once keys on the token's SHA-256; and a sign-in over 5 minutes old is refused too.
+- [x] Then reuse the exact same service as T-3.3: banned check → find-or-create user + profile +
   wallet + prefs → session + cookies → `{access_token, user}`.
-- [ ] The phone screen shows a consent line naming Google before `signInWithPhoneNumber` runs:
+- [x] The phone screen shows a consent line naming Google before `signInWithPhoneNumber` runs:
   Google's Firebase sends the code, processes the number in the United States and keeps it for abuse
   prevention (D-048, `/privacy`). Firebase asks apps to get this consent. It moved here from T-3.11
   (D-081): on Path B it would be false. Deleting the Firebase user after sign-in is P-39, not this
   task.
-- [ ] Web: Firebase JS SDK on the phone screen (invisible reCAPTCHA), `signInWithPhoneNumber`,
+- [x] Web: Firebase JS SDK on the phone screen (invisible reCAPTCHA), `signInWithPhoneNumber`,
   6-digit code box (Path B's codes are 6 digits too since D-066, so the OTP screen is the same
   on both paths), resend cooldown, friendly copy for `auth/too-many-requests`,
   `auth/invalid-phone-number`, `auth/code-expired`.
-- [ ] Sign the user out of Firebase immediately after the exchange — we keep our own session.
-- [ ] **Widen the CSP here, deliberately (D-059).** T-2.5's policy allows no outside script, connect or frame host, so Firebase's SDK and its reCAPTCHA check fail at sign-in until this task adds exactly the Google hosts Firebase documents (`script-src`, `connect-src`, `frame-src`), each with its reason in `web/src/lib/security-headers.ts`. A CSP error at sign-in is this line, not a Firebase bug.
-- [ ] **Seeded numbers and test numbers (D-064, D-065).** Firebase sends its code from the
+- [x] Sign the user out of Firebase immediately after the exchange — we keep our own session.
+- [x] **Widen the CSP here, deliberately (D-059).** T-2.5's policy allows no outside script, connect or frame host, so Firebase's SDK and its reCAPTCHA check fail at sign-in until this task adds exactly the Google hosts Firebase documents (`script-src`, `connect-src`, `frame-src`), each with its reason in `web/src/lib/security-headers.ts`. A CSP error at sign-in is this line, not a Firebase bug.
+  **As built (D-085):** Firebase publishes no CSP for Auth, so the hosts are reCAPTCHA's own list
+  (its FAQ) and the SDK's two API hosts, on Firebase builds only. **Checked before deploy, locally**
+  (4 October 2026, Claude): a production build with `APP_ENV=staging` served the policy
+  `security-headers.ts` builds for it, and `/login` in Playwright's Chromium 153 and Firefox 155
+  rendered reCAPTCHA (its badge placed and styled) with no `securitypolicyviolation` event, while a
+  deliberate one, an image from example.com, was caught, so the listener was live. No SMS could
+  go: `127.0.0.1` isn't an authorised domain. The SDK (131 KB) loaded on `/login` only, not on `/`
+  or `/privacy`. Those scripts ran from Claude's scratchpad and aren't committed; staging's
+  sign-ins below are the proof of record.
+- [x] **Seeded numbers and test numbers (D-064, D-065).** Firebase sends its code from the
   browser, so no server guard can stop a text to a seeded number (`+91 90000 00xxx`, T-1.15)
   when the local web runs on Firebase. Locally, seeded users sign in on
   `AUTH_PHONE_PROVIDER=fake`; this task decides how the local web keeps a seeded number from
   reaching Firebase. A Firebase test number signs anyone in as that number wherever its project's
   tokens are accepted, so it never goes in a project production uses.
-- [ ] Tests: forged token rejected; expired rejected; reused token rejected; non-Indian number
+  **Decided (D-085; approved by the advisor, relayed by the founder, 4 October 2026):** local and
+  ci builds get no Firebase
+  config at all (`web/src/lib/firebase-config.ts`, by `APP_ENV`) and sign in by Path B (D-081), so
+  nothing built on a dev machine reaches Firebase, "structural rather than a rule someone has to
+  remember" (the advisor, relayed by the founder). Behind that, Firebase's own: `127.0.0.1` isn't an authorised domain, and
+  `localhost`, which is, can't host phone sign-in (its docs; not proved by effect, which would mean
+  trying a real send).
+- [x] Tests: forged token rejected; expired rejected; reused token rejected; non-Indian number
   rejected; banned phone rejected; a valid token creates exactly one user.
-- [ ] **Done when, before any real SMS path ships: a budget alert is set** on the billing account
+- [x] **Done when, before any real SMS path ships: a budget alert is set** on the billing account
   Blaze bills to, at a fixed rupee amount (the founder, 3 October 2026). No real SMS path ships
   without one: an SMS sent from the browser is outside our server's limits (D-035). **Set it on
   cost before credits** (clear the budget's Promotions box): by default a budget subtracts
   promotional credits, so while the account is on its free trial (P-0.13, P-0.18) it sees ₹0 and
   can never fire (Google's budgets page, read 3 October 2026). A budget only alerts; it never caps.
+  **Set by the founder, 4 October 2026,** read in the console: ₹500 a month, alerts at 50, 90 and
+  100% of actual cost, email to billing admins, both Savings boxes cleared so it tracks cost before
+  credits. Claude can't read it back: this machine has no Google Cloud credentials.
 - [ ] **Done when:** on staging, sign in at `https://staging.veloraapp.co.in` with the founder's
   own phone, by real SMS (D-065: no test number, as decided on 3 October 2026), once the budget
   alert above is set. Then reload, and the session is still there, restored by `/auth/refresh`.
@@ -1148,7 +1192,7 @@ exist yet. The batch is a chain, T-3.10 → T-3.11 → T-3.12 → T-3.13, each n
   path. It moved here from T-3.13 (decision 18 of T-3.10 to T-3.13's plan): it needs this task.~~
   **Moved out, 3 October 2026, to P-67, whose Needs line carries P-66:** it needs a test number,
   and none goes in `velora-ic` (D-065, as the founder decided).
-- [ ] **Commit:** `feat(auth): firebase phone sign-in [T-3.14]`
+- [x] **Commit:** `feat(auth): firebase phone sign-in [T-3.14]`
 
 ### T-3.13 · E2E signup
 - [x] **Needs:** T-3.12. **Not T-3.14:** the one run on staging's Firebase path moved there (decision 18), so this task closes without P-0.13.
@@ -2918,7 +2962,8 @@ Claude Code adds items here instead of doing unplanned work. Format:
   3. **Enforcement stays off** until this task's code is live and the metrics show our own
      traffic passing. Authentication stays unenforced, which still collects metrics; then the
      founder enforces it. Enforced before the web sends tokens, it refuses every sign-in.
-  The key is public by design (`NEXT_PUBLIC_FIREBASE_*`, 02-ARCHITECTURE §11). Assessments above
+  The key is public by design, and joins the web config committed in
+  `web/src/lib/firebase-config.ts` by `APP_ENV` (D-085), not a variable. Assessments above
   a no-cost quota are charged.
   Worst case without it: the web config, public by design, ships in the bundle from T-3.14 on,
   and with it anyone can ask Firebase to send SMS from a script, needing only a solved reCAPTCHA
@@ -2943,3 +2988,43 @@ Claude Code adds items here instead of doing unplanned work. Format:
   3,000-a-day ceiling, the only "how many" bound there is (P-0.18), and trading a known ceiling
   for an unproven guard would leave us worse off than today. That decision has a cost on both
   sides, so it is the founder's. At the founder's direction, 4 October 2026.
+- [ ] P-69 · Restrict `velora-ic`'s browser API key. **After T-3.14's staging check, beside P-68,
+  and before REL-1** (on its Needs line), by the founder in the Google Cloud console. Worst case without it: the key, which every page of
+  staging and production ships, works from any website and any script. One call from this machine
+  on 4 October 2026, with no referrer at all, got Firebase's own answer (T-3.14's region refusal).
+  Firebase's page on API keys, read that day: "Although API keys for Firebase services are safe to
+  include in code, you should review and apply appropriate restrictions and limits to them."
+  Restrict it to the referrers `https://veloraapp.co.in/*` and `https://staging.veloraapp.co.in/*`
+  and to the APIs the web calls (Identity Toolkit and the Token Service; reCAPTCHA Enterprise from
+  P-68). A referrer is a header a script can write, so this stops other websites, not scripts:
+  App Check (P-68) is the lever against scripts. Prove it by its effect: the same call without a
+  referrer is refused, naming the restriction, and staging still signs in. Not before T-3.14's
+  staging check: a restriction set wrong refuses every sign-in, and that check has 5 SMS an hour.
+
+  Found building T-3.14.
+- [ ] P-70 · Stop a number from outside India being texted as an Indian one. **Before REL-1** (on
+  its Needs line). **It protects a person who isn't our user.** Worst case, and it can happen today:
+  someone with a foreign number, in Dubai or living in Phagwara, types their own ten digits; the
+  screen puts +91 in front, and the code lands as an SMS on the phone of a stranger in India who
+  never asked for it, at 2 a.m. if that's when it's sent, for an app they've never heard of, and
+  again every time that person tries. The person trying waits for a code that went to someone
+  else. Firebase's region policy can't stop it: the stranger's number is Indian, so it's allowed.
+  **The fix is before the typing, not after the send:** +91 fixed and unremovable beside the
+  input (it is today, from T-3.11, outside the field; keep it so), and under it a line saying
+  Velora works with Indian mobile numbers only, in Phagwara to start, so nobody reaches the point
+  of sending a code to a stranger. T-3.14's copy for a number Firebase refuses stays as the
+  backstop, not the fix: the screen never sends a number that isn't +91, so only devtools reaches
+  it. At the founder's direction, 4 October 2026.
+
+  Found building T-3.14.
+- [ ] P-71 · Name reCAPTCHA on `/privacy`. **Before REL-1** (on its Needs line). Worst case:
+  `/privacy` is published, and is inaccurate from the moment `/login` ships on a Firebase build:
+  `/login` loads Google's reCAPTCHA as it opens (T-3.14 renders it then, so the first tap is quick),
+  and reCAPTCHA reads browser and device signals for Google before a number is typed, while
+  `/privacy` names Google only for sending the code and handling the number. A published page that
+  says less than the product does is the same failure as switching on Google Analytics would have
+  been. One line in its section on Google; its list of processors already names Google. It goes in
+  P-0.7's review too, and to a lawyer when there is one (none is engaged, P-0.7). At the founder's
+  direction, 4 October 2026.
+
+  Found building T-3.14.

@@ -6,6 +6,7 @@ import {
 
 import { authCookieSuffix } from "./src/lib/auth-cookies";
 import { assertKnownAppEnv } from "./src/lib/build-env";
+import { firebaseConfigFor } from "./src/lib/firebase-config";
 import { signInPathFor } from "./src/lib/sign-in-path";
 import { securityHeaders } from "./src/lib/security-headers";
 
@@ -42,10 +43,12 @@ export function buildsTheSite(
  * the site builds as not-production, silently. `next dev`, `next start` and
  * `next typegen` need no APP_ENV.
  *
- * The auth cookies' suffix (T-3.10, auth-cookies.ts) and the sign-in path
- * (D-081, sign-in-path.ts) go into the browser's code here, from APP_ENV. A
- * build always has both, since it refused an unknown APP_ENV above; elsewhere
- * they're empty, and nothing signs in.
+ * The auth cookies' suffix (T-3.10, auth-cookies.ts), the sign-in path
+ * (D-081, sign-in-path.ts) and the Firebase web config (D-085,
+ * firebase-config.ts) go into the browser's code here, from APP_ENV. A build
+ * always has the first two, since it refused an unknown APP_ENV above, and the
+ * config only where APP_ENV is staging or production; elsewhere they're empty,
+ * and nothing signs in.
  */
 export function configFor(
   phase: string,
@@ -53,12 +56,16 @@ export function configFor(
 ): NextConfig {
   if (buildsTheSite(phase)) assertKnownAppEnv(env);
   const dev = phase === PHASE_DEVELOPMENT_SERVER;
+  const firebase = firebaseConfigFor(env);
   return {
     ...nextConfig,
     env: {
       AUTH_COOKIE_SUFFIX: authCookieSuffix(env, { dev }) ?? "",
       // D-081: which way this build signs people in, from APP_ENV too.
       SIGN_IN_PATH: signInPathFor(env, { dev }) ?? "",
+      // D-085: the Firebase project a Firebase build signs in with, as JSON;
+      // empty for local and ci, which never reach Firebase.
+      FIREBASE_WEB_CONFIG: firebase ? JSON.stringify(firebase) : "",
     },
   };
 }

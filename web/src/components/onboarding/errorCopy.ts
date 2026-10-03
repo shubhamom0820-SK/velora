@@ -7,6 +7,9 @@ import { APP_NAME } from "@/lib/app";
  * through `en.ts`, never the API's own words: those are English only and
  * worded for developers. Business rules are the server's alone (D-082), so a
  * refusal arrives here and is shown inline, beside the field it names.
+ *
+ * On Path A, Firebase answers first (T-3.14): its errors carry an `auth/…`
+ * code, read here by shape so this file never loads the SDK.
  */
 
 const FIELDS = [
@@ -50,7 +53,50 @@ function namedFields(error: ApiError): ErrorCopy["fields"] {
   return fields;
 }
 
+/** Firebase Auth's code for `error`, if it is one of its errors. */
+function firebaseCode(error: unknown): string | null {
+  if (!(error instanceof Error) || !("code" in error)) return null;
+  const { code } = error;
+  return typeof code === "string" && code.startsWith("auth/") ? code : null;
+}
+
+function firebaseCopy(code: string): ErrorCopy {
+  switch (code) {
+    case "auth/invalid-phone-number":
+    case "auth/missing-phone-number":
+      return {
+        ...plain(t("apiErrors.invalid")),
+        fields: { phone: t("apiErrors.fields.phone") },
+      };
+    // The SMS region policy, India only, refusing a number from anywhere
+    // else. Asked for +1 650-555-0100 on 4 October 2026, Firebase answered 400
+    // "OPERATION_NOT_ALLOWED : SMS unable to be sent until this region enabled
+    // by the app developer.", before any reCAPTCHA check, and the SDK turns
+    // OPERATION_NOT_ALLOWED into this code. It says it's the number, not them.
+    // The same code would come back if phone sign-in were switched off in the
+    // console: our outage, and this line would then be wrong.
+    case "auth/operation-not-allowed":
+      return plain(t("apiErrors.phoneNotSupported"));
+    case "auth/invalid-verification-code":
+      return plain(t("apiErrors.codeInvalid"));
+    case "auth/code-expired":
+      return plain(t("apiErrors.otpExpired"));
+    case "auth/too-many-requests":
+      return plain(t("apiErrors.firebaseTooMany"));
+    case "auth/quota-exceeded":
+      return plain(t("apiErrors.codesUnavailable"));
+    case "auth/captcha-check-failed":
+      return plain(t("apiErrors.captchaFailed"));
+    case "auth/network-request-failed":
+      return plain(t("apiErrors.network", { app: APP_NAME }));
+    default:
+      return plain(t("apiErrors.unknown"));
+  }
+}
+
 export function errorCopy(error: unknown): ErrorCopy {
+  const firebase = firebaseCode(error);
+  if (firebase) return firebaseCopy(firebase);
   if (!(error instanceof ApiError)) {
     return plain(t("apiErrors.network", { app: APP_NAME }));
   }
@@ -75,6 +121,8 @@ export function errorCopy(error: unknown): ErrorCopy {
       return plain(t("apiErrors.otpExpired"));
     case "OTP_TOO_MANY":
       return plain(t("apiErrors.otpTooMany"));
+    case "FIREBASE_TOKEN_INVALID":
+      return plain(t("apiErrors.firebaseTokenInvalid"));
     case "ACCOUNT_BANNED":
     case "ACCOUNT_FROZEN":
     case "FORBIDDEN":

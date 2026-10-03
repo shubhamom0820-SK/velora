@@ -43,6 +43,8 @@ _REQUIRED = {
 }
 _REAL = {
     "AUTH_PHONE_PROVIDER": "firebase",
+    # Path A names its project (D-085).
+    "FIREBASE_PROJECT_ID": "velora-test",
     "SMS_PROVIDER": "msg91",
     "PAYMENTS_PROVIDER": "razorpay",
     "MODERATION_PROVIDER": "sightengine",

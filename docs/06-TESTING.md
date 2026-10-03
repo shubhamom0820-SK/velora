@@ -115,7 +115,8 @@ If any of these fails, nothing ships.
 15. **Refresh reuse** (T-3.4): replaying a refresh token rotated more than 10 seconds ago revokes
     the family; within 10 seconds it's refused without that (D-067).
 16. **Firebase token** (T-3.14): forged, expired, wrong-audience and already-used ID tokens are all
-    rejected; a non-`+91` number never creates a user.
+    rejected, with wrong issuers, other sign-in providers and stale sign-ins among them, each the
+    same `FIREBASE_TOKEN_INVALID` (D-085); a non-`+91` number never creates a user.
 17. **The dev seed stays local** (T-1.15): `ENV` staging and production, a database on another
     host, and a local address to a database `make infra-up` didn't stamp are each refused before
     a row is written (D-064).

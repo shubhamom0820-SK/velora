@@ -111,7 +111,8 @@ afterEach(() => {
 });
 
 describe("which way /login signs in (D-081)", () => {
-  it.each(["firebase", ""])(
+  // A Firebase build is open since T-3.14 (SignIn.firebase.test.tsx).
+  it.each(["", "msg91"])(
     "a \"%s\" build says sign-in isn't open yet, never a form that can't work",
     (path) => {
       vi.stubEnv("SIGN_IN_PATH", path);

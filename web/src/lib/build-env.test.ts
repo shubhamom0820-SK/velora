@@ -86,12 +86,14 @@ describe("next.config runs the check for builds only", () => {
     "phase-production-server",
     "phase-test",
   ])("leaves %s alone, so next dev and next start need no APP_ENV", (phase) => {
-    // Nothing refused; only the auth cookies' suffix is added (T-3.10).
+    // Nothing refused; only the values for the browser's code are added
+    // (T-3.10, D-081, D-085).
     const { env, ...rest } = configFor(phase, {});
     expect(rest).toEqual(nextConfig);
     expect(Object.keys(env ?? {})).toEqual([
       "AUTH_COOKIE_SUFFIX",
       "SIGN_IN_PATH",
+      "FIREBASE_WEB_CONFIG",
     ]);
   });
 });

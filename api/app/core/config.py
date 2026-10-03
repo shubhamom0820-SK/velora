@@ -70,6 +70,9 @@ REAL_SMS_TO_ANYONE_IN: frozenset[str] = frozenset({"staging", "production"})
 # would look like protection it isn't (D-066).
 SMS_LOCAL_ALLOWED_TO_ALLOWED_IN: frozenset[str] = frozenset({"local"})
 _HEX = re.compile(r"[0-9a-fA-F]+")
+# A Google Cloud project ID: 6 to 30 lowercase letters, digits and hyphens,
+# starting with a letter and not ending with a hyphen.
+_PROJECT_ID = re.compile(r"[a-z][a-z0-9-]{4,28}[a-z0-9]")
 PROVIDER_SETTINGS = (
     "AUTH_PHONE_PROVIDER",
     "SMS_PROVIDER",
@@ -122,6 +125,10 @@ class Settings(BaseSettings):
 
     # --- Auth provider selection (D-035) ---
     AUTH_PHONE_PROVIDER: PhoneProvider = "fake"
+    # The project whose ID tokens sign in (Path A, D-085): a token's audience
+    # must be it, and its issuer https://securetoken.google.com/ followed by it.
+    # Required where AUTH_PHONE_PROVIDER is firebase. Not secret, and no service
+    # account goes with it: verifying needs only this and Google's public keys.
     FIREBASE_PROJECT_ID: str = ""
 
     # --- SMS (Path B) ---
@@ -378,6 +385,28 @@ class Settings(BaseSettings):
                 "tokens and read phone numbers with them. They work only where ENV is "
                 f"{', '.join(sorted(TEST_KEYS_ALLOWED_IN))} (D-060). Generate real ones "
                 "with openssl rand -hex (infra/STAGING.md)."
+            )
+        return self
+
+    @model_validator(mode="after")
+    def _firebase_names_its_project(self) -> Settings:
+        """Path A needs the project its tokens must come from (D-085).
+
+        Without it every token would be refused for the wrong audience, and
+        sign-in would fail at the first real try instead of at startup.
+        """
+        if self.AUTH_PHONE_PROVIDER != "firebase":
+            return self
+        if not self.FIREBASE_PROJECT_ID:
+            raise ValueError(
+                "AUTH_PHONE_PROVIDER=firebase needs FIREBASE_PROJECT_ID: the Firebase "
+                "project whose ID tokens sign in (D-085)."
+            )
+        if not _PROJECT_ID.fullmatch(self.FIREBASE_PROJECT_ID):
+            raise ValueError(
+                "FIREBASE_PROJECT_ID must be a Firebase project ID: 6 to 30 lowercase "
+                "letters, digits and hyphens, starting with a letter; check for stray "
+                "quotes or spaces"
             )
         return self
 

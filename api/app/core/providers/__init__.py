@@ -7,6 +7,11 @@ every test gets them through the `fake_providers` fixture.
 
 Routes reach them with `Depends(get_providers)`; the worker will build its own
 with `build_providers` (T-4.4).
+
+Google's keys for Firebase ID tokens (T-3.14) are the exception to choosing by
+setting: they are always Google's, because the route that reads them is served
+only where `AUTH_PHONE_PROVIDER` is `firebase` (D-085). Elsewhere nothing asks
+them for anything, and nothing is fetched. Their fake is the tests' alone.
 """
 
 from __future__ import annotations
@@ -20,6 +25,11 @@ from app.core.providers.facematch import (
     FaceMatchProvider,
     FakeFaceMatch,
     RekognitionFaceMatch,
+)
+from app.core.providers.firebase import (
+    FakeFirebaseKeys,
+    FirebaseKeys,
+    GoogleFirebaseKeys,
 )
 from app.core.providers.moderation import (
     FakeModeration,
@@ -40,6 +50,7 @@ class Providers:
     facematch: FaceMatchProvider
     push: PushProvider
     storage: StorageProvider
+    firebase_keys: FirebaseKeys
 
 
 @dataclass(frozen=True)
@@ -53,6 +64,7 @@ class FakeProviders:
     facematch: FakeFaceMatch = field(default_factory=FakeFaceMatch)
     push: FakePush = field(default_factory=FakePush)
     storage: FakeStorage = field(default_factory=FakeStorage)
+    firebase_keys: FakeFirebaseKeys = field(default_factory=FakeFirebaseKeys)
 
     def as_providers(self) -> Providers:
         return Providers(
@@ -62,6 +74,7 @@ class FakeProviders:
             facematch=self.facematch,
             push=self.push,
             storage=self.storage,
+            firebase_keys=self.firebase_keys,
         )
 
 
@@ -89,6 +102,7 @@ def build_providers(settings: Settings) -> Providers:
         ),
         push=FakePush() if settings.PUSH_PROVIDER == "fake" else WebPush(),
         storage=FakeStorage() if settings.STORAGE_PROVIDER == "fake" else S3Storage(),
+        firebase_keys=GoogleFirebaseKeys(),
     )
 
 

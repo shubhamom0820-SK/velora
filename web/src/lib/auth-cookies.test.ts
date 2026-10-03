@@ -58,7 +58,10 @@ describe("next.config puts the suffix into the build", () => {
         context: { defaultConfig: object },
       ) => ReturnType<typeof config>;
       expect(call("phase-production-build", { defaultConfig: {} }).env).toEqual(
-        { AUTH_COOKIE_SUFFIX: "staging", SIGN_IN_PATH: "firebase" },
+        expect.objectContaining({
+          AUTH_COOKIE_SUFFIX: "staging",
+          SIGN_IN_PATH: "firebase",
+        }),
       );
     } finally {
       vi.unstubAllEnvs();

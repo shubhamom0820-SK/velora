@@ -5,9 +5,9 @@
  * `AUTH_PHONE_PROVIDER`.
  *
  * - `otp`: Path B, `/v1/auth/otp/*` (the fake provider locally, MSG91 later).
- * - `firebase`: Path A. Until T-3.14 builds it, /login says sign-in isn't open
- *   yet and links to the waitlist, never a form that can't work: staging and
- *   production run Firebase, where Path B answers 404 (D-066).
+ * - `firebase`: Path A (T-3.14): Firebase texts the code from the browser and
+ *   `/v1/auth/firebase` exchanges its token (D-085). Staging and production,
+ *   where Path B answers 404 (D-066).
  */
 export type SignInPath = "otp" | "firebase";
 
@@ -30,13 +30,12 @@ export function signInPathFor(
 }
 
 /**
- * Whether anyone can sign in on this build: Path B builds only, until T-3.14
- * builds Firebase sign-in, which flips this for `firebase`. /login's closed
- * screen and the landing page's waitlist heading both read it, so they can't
- * disagree (D-081).
+ * Whether anyone can sign in on this build: either path, since T-3.14. A build
+ * with neither still says sign-in isn't open. /login's closed screen and the
+ * landing page's waitlist heading both read it, so they can't disagree (D-081).
  */
 export function signInOpen(path: SignInPath | null = signInPath()): boolean {
-  return path === "otp";
+  return path !== null;
 }
 
 /**

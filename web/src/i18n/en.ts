@@ -43,6 +43,11 @@ export const en = {
       prefix: "+91",
       placeholder: "98765 43210",
       send: "Send code",
+      // Firebase builds only (T-3.14, D-081), before the number goes to
+      // Google: worded as /privacy's "Your phone number and Google" (D-048).
+      googleConsent:
+        "By tapping Send code, you agree that Google's Firebase sends it. Google processes your number in the United States and keeps it to prevent spam and abuse.",
+      googleConsentLink: "How we use your number",
     },
     code: {
       title: "Enter the code",
@@ -53,7 +58,8 @@ export const en = {
       resend: "Send a new code",
       changeNumber: "Change number",
     },
-    // D-081: a Firebase build before T-3.14, instead of a form that can't work.
+    // D-081: a build that signs in by neither path, instead of a form that
+    // can't work. Since T-3.14 every known APP_ENV has a path.
     closed: {
       title: "Sign-in isn't open yet",
       body: "{app} is getting ready. Leave your email and we'll tell you when it opens.",
@@ -162,6 +168,14 @@ export const en = {
     otpInvalidMany: "That code isn't right. {count} tries left.",
     otpExpired: "That code has expired. Send a new one.",
     otpTooMany: "Too many wrong codes. Wait a while, then send a new one.",
+    // Firebase's answers on Path A (T-3.14), and our API's to its token.
+    // Firebase says nothing of tries left, so neither do these.
+    codeInvalid: "That code isn't right.",
+    firebaseTooMany: "Too many tries. Wait a while, then try again.",
+    codesUnavailable: "We can't send codes right now. Try again later.",
+    captchaFailed:
+      "We couldn't check this browser. Reload the page and try again.",
+    firebaseTokenInvalid: "That sign-in didn't work. Send a new code.",
     // Decision 16: neutral, with a way to reach a person. P-51 may change it.
     cantSignIn: "This account can't sign in.",
     contact: "Contact us",

@@ -85,6 +85,7 @@ from app.core.ratelimit import KEY_PREFIX as RATE_LIMIT_KEY_PREFIX
 from app.core.redis import build_redis
 from app.core.security import make_access_token, normalize_phone
 from app.main import close_resources, create_app
+from app.modules.auth.firebase_store import KEY_PREFIX as FIREBASE_KEY_PREFIX
 from app.modules.auth.otp_store import KEY_PREFIX as OTP_KEY_PREFIX
 from app.modules.users import service as users_service
 from app.modules.users.models import User
@@ -313,8 +314,8 @@ def make_user(db: AsyncSession) -> MakeUser:
 
 @pytest.fixture
 async def test_redis() -> AsyncIterator[Redis]:
-    """The test Redis, with no rate-limit windows or sign-in codes left over
-    from another test.
+    """The test Redis, with no rate-limit windows, sign-in codes or spent
+    Firebase tokens left over from another test.
 
     Rate limits outlive a request by design, so without this the sixth test to
     post from the same address in a minute would fail for a reason it never
@@ -326,7 +327,7 @@ async def test_redis() -> AsyncIterator[Redis]:
     client = build_redis(TEST_REDIS_URL)
 
     async def clear() -> None:
-        for prefix in (RATE_LIMIT_KEY_PREFIX, OTP_KEY_PREFIX):
+        for prefix in (RATE_LIMIT_KEY_PREFIX, OTP_KEY_PREFIX, FIREBASE_KEY_PREFIX):
             async for key in client.scan_iter(match=f"{prefix}*"):
                 await client.delete(key)
 

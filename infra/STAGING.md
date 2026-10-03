@@ -17,6 +17,7 @@ a page of its own that names its pieces and says what differs: `infra/PRODUCTION
 | Postgres | Supabase, Mumbai (`ap-south-1`) | project `velora-staging` |
 | Redis | Upstash, Mumbai | database `velora-staging` |
 | Objects | Cloudflare R2 | buckets `velora-staging-public`, `velora-staging-private` |
+| Phone sign-in | Firebase | **production's** project `velora-ic`, until P-66 (D-065): a change in its console changes production too (`infra/PRODUCTION.md` §8) |
 
 ## How a deploy happens
 

@@ -33,6 +33,42 @@ describe("the CSP in a production build (D-059)", () => {
     );
   });
 
+  it.each(["local", "ci"])(
+    "is the same on a Path B build, APP_ENV=%s: no Google host at all",
+    (appEnv) => {
+      const csp = contentSecurityPolicy({ ...STAGING, APP_ENV: appEnv });
+
+      expect(csp).toBe(contentSecurityPolicy(STAGING));
+      expect(csp).not.toContain("google");
+      expect(csp).not.toContain("frame-src");
+    },
+  );
+
+  it.each(["staging", "production"])(
+    "adds exactly Firebase sign-in's hosts on a Firebase build, APP_ENV=%s (T-3.14)",
+    (appEnv) => {
+      expect(contentSecurityPolicy({ ...STAGING, APP_ENV: appEnv })).toBe(
+        [
+          "default-src 'self'",
+          "script-src 'self' 'unsafe-inline' https://www.google.com/recaptcha/ https://www.gstatic.com/recaptcha/",
+          "connect-src 'self' https://api.staging.veloraapp.co.in https://www.google.com/recaptcha/ https://identitytoolkit.googleapis.com https://securetoken.googleapis.com",
+          "frame-src 'self' https://www.google.com/recaptcha/ https://recaptcha.google.com/recaptcha/",
+          "object-src 'none'",
+          "base-uri 'none'",
+          "form-action 'self'",
+          "frame-ancestors 'none'",
+        ].join("; "),
+      );
+    },
+  );
+
+  it("never adds apis.google.com, the popup sign-ins' iframe we never load", () => {
+    const csp = contentSecurityPolicy({ ...STAGING, APP_ENV: "production" });
+
+    expect(csp).not.toContain("apis.google.com");
+    expect(csp).not.toContain("firebaseapp.com");
+  });
+
   it.each(["production", "test", undefined, "Development", "dev"])(
     "has none of next dev's allowances where NODE_ENV is %s",
     (nodeEnv) => {

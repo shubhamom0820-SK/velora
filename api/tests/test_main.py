@@ -14,12 +14,14 @@ import pytest
 from httpx import ASGITransport, AsyncClient
 
 from app.core.config import Settings
-from app.main import close_resources, create_app
+from app.main import close_resources, contract_openapi, create_app
 from tests.keys import random_keys
 
 # D-045: outside local, every provider must be a real one.
 _REAL_PROVIDERS = {
     "AUTH_PHONE_PROVIDER": "firebase",
+    # Path A names its project (D-085).
+    "FIREBASE_PROJECT_ID": "velora-test",
     "SMS_PROVIDER": "msg91",
     "PAYMENTS_PROVIDER": "razorpay",
     "MODERATION_PROVIDER": "sightengine",
@@ -125,6 +127,63 @@ async def test_local_serves_the_schema_and_docs() -> None:
     assert '"paths"' in schema and '"/healthz"' in schema
     assert docs_status == 200
     assert "swagger" in docs.lower()
+
+
+# --- Each sign-in path is served only for its providers (D-066, D-085) ---------
+
+PATH_A = "/v1/auth/firebase"
+PATH_B = ("/v1/auth/otp/send", "/v1/auth/otp/verify")
+
+
+def _paths(app_paths: dict[str, object]) -> set[str]:
+    return {path for path in app_paths if path.startswith("/v1/auth/")}
+
+
+@pytest.mark.parametrize(
+    ("provider", "served", "not_served"),
+    [
+        ("fake", set(PATH_B), {PATH_A}),
+        ("msg91", set(PATH_B), {PATH_A}),
+        ("firebase", {PATH_A}, set(PATH_B)),
+    ],
+)
+async def test_an_app_serves_only_the_sign_in_path_its_provider_chooses(
+    provider: str, served: set[str], not_served: set[str]
+) -> None:
+    app = create_app(
+        _settings(
+            "velora_test",
+            1,
+            AUTH_PHONE_PROVIDER=provider,
+            FIREBASE_PROJECT_ID="velora-test",
+        )
+    )
+    try:
+        paths = _paths(app.openapi()["paths"])
+    finally:
+        await close_resources(app)
+
+    assert served <= paths
+    assert not (not_served & paths)
+    # Refresh, logout and the PIN are every path's.
+    assert {"/v1/auth/refresh", "/v1/auth/logout"} <= paths
+
+
+@pytest.mark.parametrize("provider", ["fake", "msg91", "firebase"])
+def test_the_contract_holds_both_paths_whichever_provider_runs(provider: str) -> None:
+    """`make types` reads this: the web is typed against both paths (D-081)."""
+    schema = contract_openapi(
+        _settings(
+            "velora_test",
+            1,
+            AUTH_PHONE_PROVIDER=provider,
+            FIREBASE_PROJECT_ID="velora-test",
+        )
+    )
+
+    assert {PATH_A, *PATH_B} <= _paths(schema["paths"])
+    body = schema["paths"][PATH_A]["post"]["requestBody"]["content"]["application/json"]
+    assert body["schema"] == {"$ref": "#/components/schemas/FirebaseSignIn"}
 
 
 # --- The pool is sized per process, deliberately (T-1.22) ---------------------

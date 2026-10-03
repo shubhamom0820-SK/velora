@@ -8,7 +8,7 @@ the source for `web/src/types/api.ts`.
 ## Auth & session
 | Method | Path | Auth | Body → Response | Task |
 |---|---|---|---|---|
-| POST | /auth/firebase | 🔓 | `{id_token}` → `{access_token, user}` + refresh cookie | T-3.14 |
+| POST | /auth/firebase | 🔓 | `{id_token}` → `{access_token, user: Me}` + refresh and CSRF cookies. Path A; served only where `AUTH_PHONE_PROVIDER` is `firebase`, else 404. Used once; a sign-in under 5 minutes old; 10 / IP and 5 / phone an hour (D-085) | T-3.14 |
 | POST | /auth/otp/send | 🔓 | `{phone}` → `{resend_after_s}`. Path B, MSG91; served only where `AUTH_PHONE_PROVIDER` is `msg91` or `fake`, else 404 (D-066) | T-3.2 |
 | POST | /auth/otp/verify | 🔓 | `{phone, otp}` (6 digits, D-066) → `{access_token, user: Me}` + refresh and CSRF cookies | T-3.3 |
 | POST | /auth/refresh | 🔓 cookie + X-CSRF | → `{access_token}` + rotated cookies | T-3.4 |
@@ -197,9 +197,9 @@ API sent nothing to (D-073) gets `null`, as its phone would. The E2E is its only
 | `SWIPE_LIMIT_REACHED` | 429 | daily cap |
 | `RATE_LIMITED` | 429 | `details.retry_after_s` |
 | `OTP_INVALID` / `OTP_EXPIRED` / `OTP_TOO_MANY` | 400/400/429 | `OTP_INVALID`: `details.attempts_left`. `OTP_TOO_MANY`: 5 wrong for one code, or 10 for one phone in 24 h (D-066) |
-| `FIREBASE_TOKEN_INVALID` | 401 | bad signature, expired, wrong audience, or already used |
+| `FIREBASE_TOKEN_INVALID` | 401 | bad signature, an unknown key, expired, wrong audience or issuer, not a phone sign-in, a sign-in over 5 minutes old, or already used: one answer for all (D-085) |
 | `PHONE_NOT_SUPPORTED` | 422 | non-`+91` number |
 | `PIN_INVALID` | 401 | `details.attempts_left`; `details.reset_required` when the stored PIN can't be checked (D-069) |
 | `INTERNAL` | 500 | unexpected server error; the message never contains internals |
-| `PROVIDER_UNAVAILABLE` | 503 | SMS/payment provider down; the daily SMS cap reached (D-066); locally, a number not in `SMS_LOCAL_ALLOWED_TO` (D-064) |
+| `PROVIDER_UNAVAILABLE` | 503 | SMS/payment provider down; Google's Firebase keys unreachable (D-085); the daily SMS cap reached (D-066); locally, a number not in `SMS_LOCAL_ALLOWED_TO` (D-064) |
 | `NOT_READY` | 503 | a dependency of ours is not ready (`/readyz` only); `details` = `{"database": "ok"\|"fail", "redis": "ok"\|"fail"}` |

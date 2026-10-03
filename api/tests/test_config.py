@@ -26,6 +26,7 @@ _ALL_VARS = [
     "COOKIE_DOMAIN",
     "CLIENT_IP_HEADER",
     "AUTH_PHONE_PROVIDER",
+    "FIREBASE_PROJECT_ID",
     "SMS_PROVIDER",
     "SMS_LOCAL_ALLOWED_TO",
     "PAYMENTS_PROVIDER",
@@ -62,11 +63,14 @@ _REAL_PROVIDERS = {
     "STORAGE_PROVIDER": "s3",
     "PUSH_PROVIDER": "webpush",
 }
+# Path A's project, which firebase needs wherever it runs (D-085).
+_FIREBASE = {"FIREBASE_PROJECT_ID": "velora-test"}
 # What staging and production must set beyond that: Redis over TLS, the header
 # the proxy puts the client's IP in (D-056), and keys that aren't the repo's
 # public test keys (D-060).
 _DEPLOYED = {
     **_REAL_PROVIDERS,
+    **_FIREBASE,
     "REDIS_URL": "rediss://default:x@redis.example:6379/0",
     "CLIENT_IP_HEADER": "Fly-Client-IP",
     **random_keys(),
@@ -152,7 +156,10 @@ def test_real_providers_start_outside_local(env: str) -> None:
 
 def test_local_may_use_fakes_and_real_providers() -> None:
     assert _settings(ENV="local").PAYMENTS_PROVIDER == "fake"
-    assert _settings(ENV="local", **_REAL_PROVIDERS).PAYMENTS_PROVIDER == "razorpay"
+    assert (
+        _settings(ENV="local", **_REAL_PROVIDERS, **_FIREBASE).PAYMENTS_PROVIDER
+        == "razorpay"
+    )
 
 
 # --- URLs: a wrong scheme fails at the settings check, and no value is echoed --
@@ -439,6 +446,62 @@ def test_ci_publishes_exactly_the_refused_keys() -> None:
         assert value == expected, f"{name} isn't the refused test key"
 
 
+# --- Path A names its Firebase project (D-085) -----------------------------------
+
+
+@pytest.mark.parametrize("env", ["local", "staging", "production"])
+def test_firebase_without_a_project_refuses_to_start(env: str) -> None:
+    """Every token would fail its audience check; better to fail here."""
+    deployed = {} if env == "local" else _DEPLOYED
+    with pytest.raises(ValidationError) as excinfo:
+        _settings(
+            ENV=env,
+            **{
+                **deployed,
+                "AUTH_PHONE_PROVIDER": "firebase",
+                "FIREBASE_PROJECT_ID": "",
+            },
+        )
+
+    assert "AUTH_PHONE_PROVIDER=firebase needs FIREBASE_PROJECT_ID" in str(
+        excinfo.value
+    )
+
+
+@pytest.mark.parametrize(
+    "project",
+    [
+        "Velora-IC",  # capitals
+        "velora-ic ",  # a stray space
+        '"velora-ic"',  # stray quotes
+        "velor",  # too short: six at least
+        "9velora-ic",  # starts with a digit
+        "velora-ic-",  # ends with a hyphen
+        "v" * 31,  # too long: thirty at most
+    ],
+)
+def test_a_malformed_project_is_named_but_not_echoed(project: str) -> None:
+    with pytest.raises(ValidationError) as excinfo:
+        _settings(AUTH_PHONE_PROVIDER="firebase", FIREBASE_PROJECT_ID=project)
+
+    message = str(excinfo.value)
+    assert "FIREBASE_PROJECT_ID must be a Firebase project ID" in message
+    assert project not in message
+
+
+def test_a_firebase_project_id_is_accepted() -> None:
+    settings = _settings(
+        AUTH_PHONE_PROVIDER="firebase", FIREBASE_PROJECT_ID="velora-ic"
+    )
+
+    assert settings.FIREBASE_PROJECT_ID == "velora-ic"
+
+
+@pytest.mark.parametrize("provider", ["fake", "msg91"])
+def test_other_providers_need_no_firebase_project(provider: str) -> None:
+    assert _settings(AUTH_PHONE_PROVIDER=provider).FIREBASE_PROJECT_ID == ""
+
+
 # --- Staging's own settings, as fly.api.toml sets them (T-3.3) -----------------
 
 FLY_API_TOML = Path(__file__).resolve().parents[2] / "infra" / "fly.api.toml"
@@ -480,3 +543,17 @@ def test_stagings_env_block_passes_settings() -> None:
         "staging",
         "staging.veloraapp.co.in",
     )
+
+
+FLY_API_PRODUCTION_TOML = FLY_API_TOML.with_name("fly.api.production.toml")
+
+
+def test_staging_and_production_both_accept_velora_ic_tokens() -> None:
+    """One Firebase project for both (D-065), never a test number in it. P-66
+    gives staging a project of its own: when it does, staging's line changes and
+    this test with it, so production refuses staging's tokens as an audience."""
+    with FLY_API_PRODUCTION_TOML.open("rb") as f:
+        production: dict[str, str] = tomllib.load(f)["env"]
+
+    assert _fly_env()["FIREBASE_PROJECT_ID"] == "velora-ic"
+    assert production["FIREBASE_PROJECT_ID"] == "velora-ic"

@@ -31,6 +31,18 @@ class OtpVerify(BaseModel):
     otp: Annotated[str, StringConstraints(pattern=r"^[0-9]{6}$")]
 
 
+# A Firebase ID token is around a kilobyte; this is room to spare, and short
+# enough that nothing large reaches the JWT parser.
+ID_TOKEN_MAX = 4096
+
+
+class FirebaseSignIn(BaseModel):
+    """Path A (D-035): the ID token Firebase gave the browser once the code was
+    right. Used once, never stored (D-085)."""
+
+    id_token: Annotated[str, StringConstraints(min_length=1, max_length=ID_TOKEN_MAX)]
+
+
 class SignedIn(BaseModel):
     """A sign-in's body. The refresh token and CSRF value go in cookies, never
     here: the refresh token is HttpOnly, out of the page's reach (D-024)."""

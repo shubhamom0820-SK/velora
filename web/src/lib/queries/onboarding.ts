@@ -1,6 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import { api } from "@/lib/api";
+import type { FirebasePhoneSignIn } from "@/lib/firebase";
 import { useSession } from "@/store/session";
 import type { components } from "@/types/api";
 
@@ -33,6 +34,64 @@ export function useVerifyCode() {
       useSession.getState().signIn(access_token, { fresh: true });
     },
   });
+}
+
+/**
+ * How long Path A's code screen waits before offering a new code: Path B's
+ * server says 45 s (T-3.2), and the screens are the same on both paths.
+ * Firebase's own limits apply on top.
+ */
+export const FIREBASE_RESEND_AFTER_S = 45;
+
+/**
+ * Path A's first half (T-3.14): Firebase texts the code from the browser, so
+ * our API isn't asked. Answers as Path B's send does, so one screen serves
+ * both. `firebase` is null until the screen's Firebase has started.
+ */
+export function useFirebaseSendCode(firebase: FirebasePhoneSignIn | null) {
+  return useMutation({
+    mutationFn: async (phone: string) => {
+      if (!firebase) throw new FirebaseNotReady();
+      await firebase.sendCode(phone);
+      return { resend_after_s: FIREBASE_RESEND_AFTER_S };
+    },
+  });
+}
+
+/**
+ * Path A's second half (T-3.14, D-085): Firebase checks the code, our API
+ * exchanges its ID token for our session, and Firebase's user is signed out
+ * whatever the API said: we keep our own session. Then as Path B's verify.
+ */
+export function useFirebaseVerifyCode(firebase: FirebasePhoneSignIn | null) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ otp }: { phone: string; otp: string }) => {
+      if (!firebase) throw new FirebaseNotReady();
+      const idToken = await firebase.confirm(otp);
+      try {
+        return await api.post("/v1/auth/firebase", {
+          body: { id_token: idToken },
+        });
+      } finally {
+        // A failed sign-out is swallowed: it must not turn a sign-in that
+        // worked into an error, and the user is in this tab's memory only.
+        await firebase.signOut().catch(() => undefined);
+      }
+    },
+    onSuccess: ({ access_token, user }) => {
+      queryClient.setQueryData(queryKeys.me(), user);
+      useSession.getState().signIn(access_token, { fresh: true });
+    },
+  });
+}
+
+/** The screen's Firebase hasn't started: its script didn't load, most likely. */
+export class FirebaseNotReady extends Error {
+  constructor() {
+    super("Firebase hasn't started on this screen.");
+    this.name = "FirebaseNotReady";
+  }
 }
 
 /** An onboarding write that answers with the new `Me`, which replaces the cached one. */

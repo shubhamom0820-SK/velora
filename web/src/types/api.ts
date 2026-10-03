@@ -359,6 +359,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/auth/firebase": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Sign In With Firebase */
+        post: operations["sign_in_with_firebase_v1_auth_firebase_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -379,6 +396,15 @@ export interface components {
              * Format: date
              */
             dob: string;
+        };
+        /**
+         * FirebaseSignIn
+         * @description Path A (D-035): the ID token Firebase gave the browser once the code was
+         *     right. Used once, never stored (D-085).
+         */
+        FirebaseSignIn: {
+            /** Id Token */
+            id_token: string;
         };
         /**
          * Gender
@@ -1178,6 +1204,39 @@ export interface operations {
         requestBody: {
             content: {
                 "application/json": components["schemas"]["OtpVerify"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SignedIn"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    sign_in_with_firebase_v1_auth_firebase_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["FirebaseSignIn"];
             };
         };
         responses: {

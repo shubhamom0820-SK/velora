@@ -1,5 +1,5 @@
-"""Security primitives: phone numbers, access and refresh tokens, PINs, CSRF,
-OTP codes.
+"""Security primitives: phone numbers, access and refresh tokens, Firebase ID
+tokens, PINs, CSRF, OTP codes.
 
 Every primitive is a vetted library's (D-060): phonenumbers parses numbers,
 `hmac` and `hashlib` hash, `secrets` draws tokens, PyJWT signs and checks access
@@ -24,7 +24,7 @@ import secrets
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from enum import Enum
-from typing import Literal, NewType
+from typing import Any, Literal, NewType
 from uuid import UUID
 
 import jwt
@@ -40,6 +40,7 @@ from app.core import clock
 from app.core.config import Settings
 from app.core.enums import Role
 from app.core.errors import AppError
+from app.core.providers.firebase import FirebaseKeys, FirebaseKeysUnavailable
 
 log = structlog.get_logger(__name__)
 
@@ -247,6 +248,146 @@ def _auth_required() -> AppError:
     return AppError("AUTH_REQUIRED", "Sign in to continue.", status=401)
 
 
+# --- Firebase ID tokens, Path A (D-035, D-085) -------------------------------------
+
+FIREBASE_ISSUER_PREFIX = "https://securetoken.google.com/"
+_FIREBASE_ALGORITHM = "RS256"
+# How far Google's clock may run ahead of ours, for "issued" and "signed in"
+# only. Never for expiry: a token is dead the moment our clock says so.
+FIREBASE_CLOCK_SKEW = timedelta(seconds=30)
+# A token whose sign-in is older than this is refused (D-085). The web exchanges
+# its token seconds after the code is confirmed, so ours never come near it; a
+# leftover Firebase session minting a token hours later is what it stops.
+FIREBASE_SIGN_IN_FRESH_FOR = timedelta(minutes=5)
+_FIREBASE_UID_MAX = 128
+_FIREBASE_CLAIMS = ("exp", "iat", "auth_time", "aud", "iss", "sub")
+
+
+@dataclass(frozen=True)
+class FirebasePhone:
+    """What a verified token proves: Firebase texted `phone_number` a code and
+    got it back. The number is Firebase's E.164, not yet `normalize_phone`'s."""
+
+    phone_number: str
+    expires_at: datetime
+
+
+async def verify_firebase_id_token(
+    token: str, keys: FirebaseKeys, settings: Settings
+) -> FirebasePhone:
+    """Check a Firebase ID token as Google's "verify ID tokens using a
+    third-party JWT library" says, and that it is a phone sign-in.
+
+    RS256, signed by the key Google lists under its `kid`; `aud` our project and
+    `iss` its issuer; `exp` in the future, `iat` and `auth_time` in the past, by
+    `core.clock` (rule 7), with `auth_time` no older than 5 minutes (D-085);
+    `sub` 1 to 128 characters; a `phone_number`; and
+    `firebase.sign_in_provider` `phone`. Every refusal is the same
+    `FIREBASE_TOKEN_INVALID`, so a forger learns nothing about which check
+    failed; the logs get the reason, never the token, its claims or the number
+    (rule 15). Google's keys being unreachable is `PROVIDER_UNAVAILABLE`: not
+    the token's fault, so never answered as though it were.
+
+    Used once is the caller's: tokens carry no `jti`, so the service keys it on
+    the token's hash (D-085).
+    """
+    project = settings.FIREBASE_PROJECT_ID
+    try:
+        header = jwt.get_unverified_header(token)
+    except jwt.InvalidTokenError:
+        raise _firebase_token_invalid("malformed") from None
+    if header.get("alg") != _FIREBASE_ALGORITHM:
+        raise _firebase_token_invalid("algorithm")
+    kid = header.get("kid")
+    if not isinstance(kid, str) or not kid:
+        raise _firebase_token_invalid("no_kid")
+    try:
+        key = await keys.key_for(kid)
+    except FirebaseKeysUnavailable:
+        log.warning("firebase_keys_unavailable")
+        raise AppError(
+            "PROVIDER_UNAVAILABLE",
+            "We can't check sign-ins right now. Try again in a few minutes.",
+            status=503,
+        ) from None
+    if key is None:
+        raise _firebase_token_invalid("unknown_kid")
+    try:
+        claims: dict[str, Any] = jwt.decode(
+            token,
+            key,
+            algorithms=[_FIREBASE_ALGORITHM],
+            audience=project,
+            issuer=FIREBASE_ISSUER_PREFIX + project,
+            options={
+                "require": list(_FIREBASE_CLAIMS),
+                "strict_aud": True,
+                # Times are ours to check, against core.clock (rule 7).
+                "verify_exp": False,
+                "verify_iat": False,
+                "verify_nbf": False,
+            },
+        )
+    except jwt.InvalidSignatureError:
+        raise _firebase_token_invalid("signature") from None
+    except jwt.InvalidAudienceError:
+        raise _firebase_token_invalid("audience") from None
+    except jwt.InvalidIssuerError:
+        raise _firebase_token_invalid("issuer") from None
+    except jwt.InvalidTokenError:
+        raise _firebase_token_invalid("claims") from None
+    return FirebasePhone(
+        phone_number=_firebase_phone_number(claims),
+        expires_at=_firebase_times_hold(claims),
+    )
+
+
+def _firebase_times_hold(claims: dict[str, Any]) -> datetime:
+    """`exp` in the future, `iat` and `auth_time` in the past, the sign-in
+    fresh: returns when the token expires."""
+    times = [claims["exp"], claims["iat"], claims["auth_time"]]
+    # Whole seconds: not a float, and not a bool, which is an int.
+    if any(type(value) is not int for value in times):
+        raise _firebase_token_invalid("claims")
+    expires, issued, signed_in = (datetime.fromtimestamp(t, UTC) for t in times)
+    now = clock.now()
+    if now >= expires:
+        raise _firebase_token_invalid("expired")
+    if issued > now + FIREBASE_CLOCK_SKEW or signed_in > now + FIREBASE_CLOCK_SKEW:
+        raise _firebase_token_invalid("from_the_future")
+    if now - signed_in > FIREBASE_SIGN_IN_FRESH_FOR:
+        raise _firebase_token_invalid("stale_sign_in")
+    return expires
+
+
+def _firebase_phone_number(claims: dict[str, Any]) -> str:
+    """The number, from a phone sign-in with a real user ID; nothing else."""
+    sub = claims["sub"]
+    if not isinstance(sub, str) or not 0 < len(sub) <= _FIREBASE_UID_MAX:
+        raise _firebase_token_invalid("subject")
+    firebase = claims.get("firebase")
+    if not isinstance(firebase, dict) or firebase.get("sign_in_provider") != "phone":
+        raise _firebase_token_invalid("not_phone")
+    phone = claims.get("phone_number")
+    if not isinstance(phone, str) or not phone:
+        raise _firebase_token_invalid("no_phone")
+    return phone
+
+
+def firebase_token_invalid() -> AppError:
+    """The one answer to every refused Firebase token (04-API)."""
+    return AppError(
+        "FIREBASE_TOKEN_INVALID",
+        "That sign-in didn't work. Ask for a new code.",
+        status=401,
+    )
+
+
+def _firebase_token_invalid(reason: str) -> AppError:
+    log.info("firebase_token_refused", reason=reason)
+    return firebase_token_invalid()
+
+
 # --- Refresh tokens and CSRF (D-024, D-054, D-055) ------------------------------
 
 # 32 random bytes as unpadded urlsafe base64: 43 characters of [A-Za-z0-9_-],
@@ -262,7 +403,8 @@ def new_refresh_token() -> str:
 
 
 def hash_token(token: str) -> str:
-    """SHA-256 of a refresh token, as hex: `sessions.token_hash`.
+    """SHA-256 of a refresh token, as hex: `sessions.token_hash`. Also a
+    Firebase ID token's one-use key (D-085), which names it without keeping it.
 
     Plain SHA-256 is enough because the token is 256 random bits: there is
     nothing to guess, so no salt or pepper adds anything. The same token always

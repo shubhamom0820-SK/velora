@@ -92,17 +92,20 @@ sequenceDiagram
   participant B as Browser
   participant F as Firebase
   participant A as API
-  B->>F: signInWithPhoneNumber(+91…) with App Check + reCAPTCHA
+  B->>F: signInWithPhoneNumber(+91…) with invisible reCAPTCHA (App Check from P-68)
   F-->>B: SMS, then confirm(code) → Firebase ID token
   B->>A: POST /v1/auth/firebase {id_token}
-  A->>A: verify signature + aud/iss/exp against Google keys, phone_number present, +91 only
-  A->>A: throttle per IP and per phone; check banned_identities
+  A->>A: verify signature + aud/iss/exp/iat/auth_time against Google keys, a phone sign-in, +91 only
+  A->>A: used once; throttle per IP and per phone; check banned_identities
   A->>A: find or create user (same as Path B)
-  A-->>B: {access_token} + refresh cookie
+  A-->>B: {access_token, user} + refresh and CSRF cookies
+  B->>F: signOut: we keep our own session
 ```
 
-The Firebase ID token is used once, never stored, and never accepted twice (jti cached in Redis
-until expiry).
+The Firebase ID token is used once, never stored, and never accepted twice. It carries no `jti`,
+so its SHA-256 is held in Redis until it would expire (D-085). Its sign-in must be under 5 minutes
+old. Served only where `AUTH_PHONE_PROVIDER` is `firebase`; 404 elsewhere (D-085). The browser asks
+Google for the SMS, so none of our server's limits stands in front of a send (D-035, P-0.18).
 
 **Path B — own OTP over MSG91 (after DLT approval)**
 
@@ -265,8 +268,8 @@ that person in the last 7 days → `wallet.credit(reason=refund_banned_partner)`
 | `COOKIE_DOMAIN` | api | the readable CSRF cookie's domain (D-055): `veloraapp.co.in` in production, `staging.veloraapp.co.in` on staging. The refresh cookie has none: host-only on the API (D-054) |
 | `CLIENT_IP_HEADER` | api | the header the platform's proxy puts the client's IP in, for per-IP rate limits: `Fly-Client-IP` on Fly. Empty only where `ENV` is `local`, which reads the socket (D-056) |
 | `AUTH_PHONE_PROVIDER` | api | `firebase` \| `msg91` \| `fake`. The web never reads it: a build signs in by the path its `APP_ENV` names, Path B where it's `local` or `ci`, Firebase on `staging` and `production` (D-081) |
-| `FIREBASE_PROJECT_ID` | api | token verification: the project whose ID tokens sign in. A token's audience must be it and its issuer `https://securetoken.google.com/` followed by it; with Google's public keys, that is all verifying takes. No service account: none is needed to verify, and an unneeded one is a key guarded for nothing (P-39's deletes would need one, and would add it then, with the reason) |
-| `NEXT_PUBLIC_FIREBASE_*` | web | apiKey, authDomain, projectId, appId, App Check site key — public by design |
+| `FIREBASE_PROJECT_ID` | api | token verification: the project whose ID tokens sign in. A token's audience must be it and its issuer `https://securetoken.google.com/` followed by it; with Google's public keys, that is all verifying takes. Required where `AUTH_PHONE_PROVIDER` is `firebase`, checked at startup; `velora-ic` on staging and production, in each Fly config's `[env]`, until P-66 (D-065, D-085). No service account: none is needed to verify, and an unneeded one is a key guarded for nothing (P-39's deletes would need one, and would add it then, with the reason) |
+| Firebase web config | web (build) | not a variable: apiKey, authDomain, projectId and appId are committed in `web/src/lib/firebase-config.ts`, by `APP_ENV`, staging and production only, public by design (D-085). `next.config` builds this `APP_ENV`'s into the bundle; local and ci get none. App Check's site key joins it with P-68 |
 | `SMS_PROVIDER` | api | `msg91` \| `fake` (`fake` locally) |
 | `SMS_LOCAL_ALLOWED_TO` | api | locally, the only numbers a real SMS provider is called for: comma-separated, each passing `normalize_phone` at startup, empty by default. Any other number gets `503 PROVIDER_UNAVAILABLE` and its code is discarded, because the seed's numbers may be real people's (D-064). Refused outside local, where it would look like protection it isn't (D-066) |
 | `MSG91_AUTH_KEY`, `MSG91_TEMPLATE_ID`, `MSG91_SENDER_ID` | api | Path B only |
@@ -305,8 +308,14 @@ secret is left empty. Real secret values are never committed.
   strict-origin-when-cross-origin`; and `Permissions-Policy: camera=(), microphone=(),
   geolocation=(), browsing-topics=()`; and `Strict-Transport-Security: max-age=63072000;
   includeSubDomains`, never preloaded before launch (D-074). **This is what is served, not a
-  target.** Each task that needs more widens it there, deliberately: Firebase
-  (T-3.14), R2 and the CDN (T-4.6), the camera (T-4.7), location (T-4.10), the microphone
+  target.** On builds that sign in by Firebase (staging and production, D-081), T-3.14 adds
+  reCAPTCHA's hosts to `script-src` (`https://www.google.com/recaptcha/`,
+  `https://www.gstatic.com/recaptcha/`), a `frame-src 'self' https://www.google.com/recaptcha/
+  https://recaptcha.google.com/recaptcha/`, and to `connect-src` reCAPTCHA's and Firebase Auth's
+  (`https://www.google.com/recaptcha/`, `https://identitytoolkit.googleapis.com`,
+  `https://securetoken.googleapis.com`); Path B builds have none of them (D-085). Each task that
+  needs more widens it there, deliberately: App Check (P-68), R2 and the CDN (T-4.6), the camera
+  (T-4.7), location (T-4.10), the microphone
   (T-7.11), WebSockets (T-7.12), Razorpay (T-8.7), Sentry (T-9.12) and analytics (T-10.2). This
   line changes with each.
 - API headers (`app/core/headers.py`, P-42): `X-Content-Type-Options: nosniff` on every

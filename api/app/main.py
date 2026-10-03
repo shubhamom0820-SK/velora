@@ -9,8 +9,9 @@ from __future__ import annotations
 
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
+from typing import Any
 
-from fastapi import FastAPI
+from fastapi import APIRouter, FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.core.config import APP_NAME, Settings, get_settings
@@ -20,7 +21,7 @@ from app.core.headers import SecurityHeadersMiddleware
 from app.core.logging import RequestIDMiddleware, configure_logging
 from app.core.providers import build_providers
 from app.core.redis import build_redis
-from app.modules.auth.router import otp_router
+from app.modules.auth.router import firebase_router, otp_router
 from app.modules.auth.router import router as auth_router
 from app.modules.e2e.router import router as e2e_router
 from app.modules.health.router import router as health_router
@@ -33,6 +34,14 @@ SCHEMA_SERVED_IN: frozenset[str] = frozenset({"local"})
 # an allowlist (rule 16, D-066). Everywhere else they 404, so staging and
 # production, on firebase, can't be made to send a Path B SMS at all.
 OTP_SERVED_FOR: frozenset[str] = frozenset({"msg91", "fake"})
+# Path A's exchange (/v1/auth/firebase) only for firebase: an allowlist again
+# (rule 16, D-085). Nowhere else does a Firebase token sign anyone in.
+FIREBASE_SERVED_FOR: frozenset[str] = frozenset({"firebase"})
+# Each sign-in path, with the providers it is served for.
+SIGN_IN_PATHS: tuple[tuple[APIRouter, frozenset[str]], ...] = (
+    (otp_router, OTP_SERVED_FOR),
+    (firebase_router, FIREBASE_SERVED_FOR),
+)
 # The E2E's test-only routes (T-3.13): only where ENV is local and the SMS is the
 # fake's, whose outbox they read. Allowlists both (rule 16).
 E2E_SERVED_IN: frozenset[str] = frozenset({"local"})
@@ -116,12 +125,27 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.include_router(auth_router, prefix="/v1")
     app.include_router(users_router, prefix="/v1")
     app.include_router(profiles_router, prefix="/v1")
-    if settings.AUTH_PHONE_PROVIDER in OTP_SERVED_FOR:
-        app.include_router(otp_router, prefix="/v1")
+    for sign_in_router, served_for in SIGN_IN_PATHS:
+        if settings.AUTH_PHONE_PROVIDER in served_for:
+            app.include_router(sign_in_router, prefix="/v1")
     if settings.ENV in E2E_SERVED_IN and settings.SMS_PROVIDER in E2E_SERVED_FOR:
         app.include_router(e2e_router, prefix="/v1")
 
     return app
+
+
+def contract_openapi(settings: Settings | None = None) -> dict[str, Any]:
+    """The whole contract, for `make types` (D-043): every sign-in path's
+    routes, though a deployment serves only the one its `AUTH_PHONE_PROVIDER`
+    chooses (D-066, D-085). The web is typed against both, and calls the one
+    its build signs in by (D-081). Nothing connects.
+    """
+    application = create_app(settings)
+    provider = application.state.settings.AUTH_PHONE_PROVIDER
+    for sign_in_router, served_for in SIGN_IN_PATHS:
+        if provider not in served_for:
+            application.include_router(sign_in_router, prefix="/v1")
+    return application.openapi()
 
 
 app = create_app()

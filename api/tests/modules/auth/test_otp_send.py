@@ -457,6 +457,8 @@ _DEPLOYED: dict[str, Any] = {
     "DATABASE_URL": TEST_DATABASE_URL,
     "REDIS_URL": "rediss://default:x@redis.example:6379/0",
     "CLIENT_IP_HEADER": "Fly-Client-IP",
+    # Path A names its project (D-085).
+    "FIREBASE_PROJECT_ID": "velora-test",
     "SMS_PROVIDER": "msg91",
     "PAYMENTS_PROVIDER": "razorpay",
     "MODERATION_PROVIDER": "sightengine",
@@ -546,6 +548,7 @@ async def test_locally_a_seeded_number_never_reaches_a_real_provider(
         facematch=providers.facematch,
         push=providers.push,
         storage=providers.storage,
+        firebase_keys=providers.firebase_keys,
     )
 
     async with _client_for(settings, providers) as client:

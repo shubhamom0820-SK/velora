@@ -7,6 +7,25 @@ import nextTs from "eslint-config-next/typescript";
 const NO_FETCH =
   "Server data goes through src/lib: the api client and the TanStack Query hooks in src/lib/queries (CLAUDE.md rule 14).";
 
+// zod only through src/lib/zod.ts, which turns its eval probe off: production's
+// CSP reports the probe as a violation (T-3.11).
+const ZOD = {
+  name: "zod",
+  message:
+    "Import z from @/lib/zod, which sets jitless: production's CSP reports zod's eval probe (T-3.11).",
+};
+
+// The Firebase SDK only through src/lib/firebase.ts (T-3.14): it loads the SDK
+// on demand, so only a Firebase build's sign-in screen downloads it, and it
+// keeps Firebase's user in memory, signed out after the exchange (D-085).
+const FIREBASE = {
+  // Anchored: a bare "firebase" pattern is gitignore-style, and would also
+  // match our own @/lib/firebase.
+  regex: "^@?firebase(/|$)",
+  message:
+    "Use @/lib/firebase, which loads the SDK on demand and keeps Firebase's user in memory (T-3.14).",
+};
+
 const eslintConfig = defineConfig([
   ...nextVitals,
   ...nextTs,
@@ -25,25 +44,26 @@ const eslintConfig = defineConfig([
       ],
     },
   },
-  // zod only through src/lib/zod.ts, which turns its eval probe off: production's
-  // CSP reports the probe as a violation (T-3.11).
+  // Each library that must come through one module of ours (T-3.11, T-3.14).
+  // One rule for both: flat config replaces a rule's options rather than adding
+  // to them, so two blocks would leave the later one's ban alone in force.
   {
     files: ["src/**/*.{js,jsx,mjs,ts,tsx}"],
-    ignores: ["src/lib/zod.ts"],
+    ignores: ["src/lib/zod.ts", "src/lib/firebase.ts"],
     rules: {
       "no-restricted-imports": [
         "error",
-        {
-          paths: [
-            {
-              name: "zod",
-              message:
-                "Import z from @/lib/zod, which sets jitless: production's CSP reports zod's eval probe (T-3.11).",
-            },
-          ],
-        },
+        { paths: [ZOD], patterns: [FIREBASE] },
       ],
     },
+  },
+  {
+    files: ["src/lib/zod.ts"],
+    rules: { "no-restricted-imports": ["error", { patterns: [FIREBASE] }] },
+  },
+  {
+    files: ["src/lib/firebase.ts"],
+    rules: { "no-restricted-imports": ["error", { paths: [ZOD] }] },
   },
   // Override default ignores of eslint-config-next.
   globalIgnores([

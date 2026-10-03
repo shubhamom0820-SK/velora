@@ -133,8 +133,9 @@ describe("the waitlist box says which of two people it's for (D-081's flag)", ()
     vi.unstubAllEnvs();
   });
 
-  it.each(["firebase", ""])(
-    "a %s build, where nobody can sign in, says the app isn't open yet",
+  // A Firebase build signs in since T-3.14; only a build with no path doesn't.
+  it.each(["", "msg91"])(
+    'a "%s" build, where nobody can sign in, says the app isn\'t open yet',
     (path) => {
       vi.stubEnv("SIGN_IN_PATH", path);
       renderPage();
@@ -154,14 +155,17 @@ describe("the waitlist box says which of two people it's for (D-081's flag)", ()
     },
   );
 
-  it("a build where sign-in is open speaks to people outside the launch city", () => {
-    vi.stubEnv("SIGN_IN_PATH", "otp");
-    renderPage();
+  it.each(["otp", "firebase"])(
+    "a %s build, where sign-in is open, speaks to people outside the launch city",
+    (path) => {
+      vi.stubEnv("SIGN_IN_PATH", path);
+      renderPage();
 
-    const box = screen.getByRole("region", { name: "Not in your city yet?" });
-    expect(box).toHaveTextContent(
-      "We're starting in Phagwara. Leave your email and we'll tell you when we reach you.",
-    );
-    expect(box).not.toHaveTextContent("isn't open yet");
-  });
+      const box = screen.getByRole("region", { name: "Not in your city yet?" });
+      expect(box).toHaveTextContent(
+        "We're starting in Phagwara. Leave your email and we'll tell you when we reach you.",
+      );
+      expect(box).not.toHaveTextContent("isn't open yet");
+    },
+  );
 });

@@ -794,6 +794,7 @@ async def test_staging_and_production_on_firebase_serve_no_verify(env: str) -> N
         _env_file=None,
         ENV=env,
         AUTH_PHONE_PROVIDER="firebase",
+        FIREBASE_PROJECT_ID="velora-test",
         SMS_PROVIDER="msg91",
         PAYMENTS_PROVIDER="razorpay",
         MODERATION_PROVIDER="sightengine",

@@ -1,3 +1,9 @@
 allowBuilds:
   sharp: false
   unrs-resolver: false
+  # firebase's (T-3.14). @firebase/util's hard-codes a config from Firebase App
+  # Hosting's FIREBASE_WEBAPP_CONFIG, which we don't use: ours is passed in code
+  # (src/lib/firebase-config.ts). protobufjs's checks its own version, for
+  # Firestore and Messaging, which we don't load.
+  "@firebase/util": false
+  protobufjs: false
