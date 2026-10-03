@@ -605,6 +605,16 @@ waits on the founder's decisions, so it is a task of its own, outside the sprint
 - [ ] **Needs:** T-2.6; **P-0.14**, the registered office, a judgement no check can make; and
   **P-0.15** (Vercel Pro) and **P-0.16** (Supabase Pro), which the release gate also refuses
   without (D-075). From the tag on, the site is public, crawled and takes real sign-ups.
+  **And three found building T-3.14, each with no condition** (at the founder's direction,
+  4 October 2026: "before REL-1" written only on an item, and not here, is a prerequisite nobody
+  reads, as P-65's and P-66's were):
+  - **P-70:** the phone screen says it takes Indian mobile numbers only, before anything is typed.
+    It protects a person who isn't our user: today a foreign number's own ten digits, behind the
+    fixed +91, send a code to a stranger in India, every time its owner tries.
+  - **P-71:** `/privacy` names reCAPTCHA, which `/login` loads as it opens. The page is published,
+    and inaccurate from the moment `/login` ships.
+  - **P-69:** `velora-ic`'s browser API key restricted to our two sites and the APIs the web calls,
+    after T-3.14's staging check.
   **And three that block only under their condition** (the founder, 3 and 4 October 2026), each
   condition written beside it so nobody reads it as unconditional and blocks a release that
   doesn't need it:

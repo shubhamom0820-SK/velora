@@ -79,6 +79,10 @@ Each blocks the release, not the build:
   (see "The keys" below).
 - **DNS for the apex and `www`** (§6), added on release day: before then nothing should answer
   at `veloraapp.co.in`.
+- **P-70, P-71 and P-69,** found building T-3.14, all on REL-1's Needs line: the phone screen
+  saying, before anything is typed, that it takes Indian mobile numbers only, so a foreign
+  number's digits never text a stranger in India; `/privacy` naming reCAPTCHA, which `/login`
+  loads; and the browser API key restricted to our two sites (§8), after T-3.14's staging check.
 
 And three that block only under their condition, all on REL-1's Needs line with the condition
 beside them, so none blocks a release that doesn't need it:
