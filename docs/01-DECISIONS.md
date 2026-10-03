@@ -1269,6 +1269,11 @@ moderation may need (no messages, reports, ledger or payments, rule 12), so noth
 preferences row, and exactly one `banned_identities` row for the number. `/privacy` adds that
 everything else is deleted at once (T-3.6).
 
+**It makes D-032's "underage-banned" exclusion unreachable.** D-032 (Locked) excludes
+underage-banned users from discovery, but under this decision no such user ever exists: the
+account is deleted and only the hash is kept. The set is always empty and the clause never
+matches. D-032 isn't edited for a no-op; this note is the reason the clause matches nothing.
+
 **Rejected:** keeping the row with status `banned` (T-3.6's first text); dropping the hash too, a
 soft gate, which would supersede D-009 and the published pages.
 

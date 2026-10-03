@@ -8,6 +8,11 @@ app, read Velora (`APP_NAME`). Thread and Knot stay as the product's nouns ("Tie
 Velas, the unit of paid balance (D-049). This file turns the prototype into rules so the real
 app stays consistent.
 
+**Where this file departs from the prototype on purpose, naming the decision behind it, this file
+is the live spec and the prototype is historical for that screen.** The prototype is never edited
+to match (P-22). The OTP screen is one such screen: its four boxes and "Any four digits work
+here" predate D-066's six-digit codes, and `OtpInput` below is the spec.
+
 ## 1. Tokens — the only place colours live
 
 `web/src/styles/tokens.css`. Components use **semantic** names only (`--surface`, never `#FFFFFF`).
@@ -94,7 +99,7 @@ Checked value by value against the prototype in T-1.19, and corrected where the 
 | IconButton | round, sizes 40/46/56, optional price tag badge |
 | Chip | default · active · removable |
 | Field / TextArea | label, helper, error, counter |
-| OtpInput | 6 boxes (D-066; the prototype shows 4), paste, auto-advance, backspace-back |
+| OtpInput | 6 boxes (D-066; the prototype's 4 are historical), paste, auto-advance, backspace-back |
 | Toggle | on · off · disabled |
 | Sheet | bottom (mobile) / centred (desktop); title; scroll body; sticky footer |
 | Toast | info (ink) · error (accent) · with action (Undo) |
