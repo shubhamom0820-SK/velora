@@ -11,6 +11,7 @@ Codes come from the table in `04-API.md` — never invent one at a call site.
 
 from __future__ import annotations
 
+from collections.abc import Mapping
 from typing import Any
 
 import structlog
@@ -58,11 +59,21 @@ class AppError(Exception):
 def invalid_field(field: str, problem: str) -> AppError:
     """`VALIDATION_ERROR` for a rule a service checks, shaped exactly as the
     schema's own failures are: one entry in `details.fields`."""
+    return invalid_fields({field: problem})
+
+
+def invalid_fields(problems: Mapping[str, str]) -> AppError:
+    """`VALIDATION_ERROR` naming every field a service refused, at once."""
     return AppError(
         "VALIDATION_ERROR",
         "Some of the information sent was not valid.",
         status=400,
-        details={"fields": [{"field": field, "problem": problem}]},
+        details={
+            "fields": [
+                {"field": field, "problem": problem}
+                for field, problem in problems.items()
+            ]
+        },
     )
 
 

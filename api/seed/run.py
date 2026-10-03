@@ -32,6 +32,7 @@ from app.core.db import build_engine
 from app.core.enums import Gender, OnboardingStep, SwipeDirection, UserStatus
 from app.core.errors import AppError
 from app.core.security import hash_phone, hash_pin, normalize_phone
+from app.modules.profiles import rules
 from app.modules.profiles.models import (
     Area,
     Intent,
@@ -116,10 +117,6 @@ async def require_local_marker(session: AsyncSession) -> None:
 
 # --- The data, checked against the rules before anything is written ----------
 
-_FIRST_NAME = re.compile(r"[A-Za-z]+(?: [A-Za-z]+)*")
-_USERNAME = re.compile(r"[a-z0-9._]{4,20}")
-_URL = re.compile(r"https?://|www\.|\.(?:com|in|net|org|io|app)\b", re.IGNORECASE)
-_PHONE_LIKE = re.compile(r"(?:\d[\s-]?){7,}")
 _PIN = re.compile(r"[0-9]{4}")
 _PINS_REFUSED = frozenset({"0000", "1234"})  # T-3.9, as written
 
@@ -220,19 +217,24 @@ def _person_problems(person: Person, today: date) -> list[str]:
         problems.append("needs an area and who they're seeking")
     if person.dob is not None and age_on(person.dob, today) < 18:
         problems.append("under 18 today in IST (D-009)")
-    if person.first_name is not None and not (
-        len(person.first_name) <= 30 and _FIRST_NAME.fullmatch(person.first_name)
-    ):
-        problems.append("first_name is 1-30 letters and single spaces (T-3.7)")
-    if person.username is not None and not _USERNAME.fullmatch(person.username):
-        problems.append("username is 4-20 of a-z, 0-9, '.' and '_' (T-3.7)")
-    if person.about is not None:
-        if not 40 <= len(person.about.strip()) <= 300:
-            problems.append("about is 40-300 characters (T-3.7)")
-        if _URL.search(person.about) or _PHONE_LIKE.search(person.about):
-            problems.append("about has a URL or a phone number in it (T-3.7)")
-    if person.hometown is not None and len(person.hometown) > 40:
-        problems.append("hometown is at most 40 characters")
+    # T-3.7's rules themselves, so a seeded profile is one the API would take.
+    texts = {
+        "first_name": (person.first_name, rules.first_name_problem),
+        "about": (person.about, rules.about_problem),
+        "hometown": (person.hometown, rules.place_problem),
+    }
+    for name, (value, rule) in texts.items():
+        if value is None:
+            continue
+        if rules.clean_text(value) != value:
+            problems.append(f"{name} isn't as the API stores it, trimmed and in NFC")
+        elif (problem := rule(value)) is not None:
+            problems.append(f"{name} {problem} (T-3.7)")
+    if person.username is not None:
+        if (problem := rules.username_problem(person.username)) is not None:
+            problems.append(f"username {problem} (T-3.7)")
+        elif rules.is_reserved(person.username):
+            problems.append("username is reserved (T-3.7)")
     if len(person.interests) != 5 or len(set(person.interests)) != 5:
         problems.append("exactly 5 different interests (T-3.8)")
     if not 1 <= len(set(person.intents)) == len(person.intents) <= 3:

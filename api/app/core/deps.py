@@ -1,7 +1,7 @@
 """FastAPI dependencies shared across modules (02-ARCHITECTURE.md §2).
 
 `rate_limit` arrived with the waitlist (T-2.3); `current_user`,
-`onboarded_user` and `require_role` with T-3.5.
+`onboarded_user` and `require_role` with T-3.5; `user_rate_limit` with T-3.7.
 """
 
 from __future__ import annotations
@@ -186,6 +186,30 @@ async def current_user(
     if user is None:
         raise AppError("AUTH_REQUIRED", "Sign in to continue.", status=401)
     return user
+
+
+def user_rate_limit(
+    scope: str, *, limit: int, window_s: int
+) -> Callable[..., Awaitable[None]]:
+    """A dependency allowing `limit` requests per signed-in user per `window_s`
+    seconds, for a route that needs less than `current_user`'s 300 a minute:
+    the username check's 30 (02-ARCHITECTURE §12)."""
+
+    async def dependency(
+        request: Request, user: Annotated[User, Depends(current_user)]
+    ) -> None:
+        verdict = await ratelimit.hit(
+            request.app.state.redis, scope, str(user.id), limit=limit, window_s=window_s
+        )
+        if not verdict.allowed:
+            raise AppError(
+                "RATE_LIMITED",
+                "Too many tries. Wait a moment and try again.",
+                status=429,
+                details={"retry_after_s": verdict.retry_after_s},
+            )
+
+    return dependency
 
 
 async def onboarded_user(user: Annotated[User, Depends(current_user)]) -> User:

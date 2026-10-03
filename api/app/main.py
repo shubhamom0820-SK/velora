@@ -13,7 +13,7 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from app.core.config import Settings, get_settings
+from app.core.config import APP_NAME, Settings, get_settings
 from app.core.db import build_engine, build_sessionmaker
 from app.core.errors import register_error_handlers
 from app.core.headers import SecurityHeadersMiddleware
@@ -27,7 +27,6 @@ from app.modules.profiles.router import router as profiles_router
 from app.modules.users.router import router as users_router
 from app.modules.waitlist.router import router as waitlist_router
 
-APP_NAME = "Velora"  # One constant, so a rename stays cheap (D-015).
 SCHEMA_SERVED_IN: frozenset[str] = frozenset({"local"})
 # Path B's sign-in routes (/v1/auth/otp/*) are served only for these providers:
 # an allowlist (rule 16, D-066). Everywhere else they 404, so staging and

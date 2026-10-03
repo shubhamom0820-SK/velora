@@ -40,3 +40,11 @@ async def replace_intents(
         ]
     )
     await session.flush()
+
+
+async def username_owner(session: AsyncSession, username: str) -> UUID | None:
+    """Whose profile has `username`, in any case: the column is citext."""
+    owner: UUID | None = await session.scalar(
+        select(Profile.user_id).where(Profile.username == username)
+    )
+    return owner

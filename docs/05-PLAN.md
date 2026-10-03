@@ -697,14 +697,38 @@ One migration per task, each with a working `downgrade()`. Build exactly `03-SCH
 - [x] **Commit:** `feat(onboarding): dob, gender, seeking [T-3.6]`
 
 ### T-3.7 · Name, places, username
-- [ ] **Needs:** T-3.6
-- [ ] `PATCH /me/profile`: first_name 1–30 characters after trimming, letters in any script (Devanagari, Gurmukhi and the rest), single spaces, and an apostrophe or hyphen inside a name; hometown, city ≤ 40; about 40–300, trimmed, no URLs, no phone numbers. It spans two steps (D-068): `profile` advances once first_name, hometown and city are all set, `about` when about is set at that step; a field of a step not yet reached → `ONBOARDING_INCOMPLETE`.
-- [ ] "No URLs, no phone numbers" in about: URLs, `www.` and bare domains; and a phone number is a **run** of 10 or more digits with at most two separators (space, dash or dot) inside it, never digits scattered across a sentence. Ten, because the check exists to catch a reachable Indian mobile number, which is exactly ten digits; below ten it catches dates, and "2010-2015" is a life story, not a contact detail (the advisor directing T-3.2 to T-3.10, approved by the founder, 3 October 2026; seven was a guess). T-7.3's contact masking builds its own, broader check later.
-- [ ] `GET /usernames/{u}/available` → `{available, suggestion?}`, 30 a minute per user: the regex, then the reserved list (D-068): admin, administrator, mod, moderator, support, help, helpdesk, staff, team, official, root, system, security, api, www, mail, billing, payments, legal, privacy, terms, grievance, knot, knots, thread, threads, vela, velas, me, null, undefined, and the brand from `APP_NAME`, so a rename moves it (rule 17). Matching ignores case, dots and underscores (`ad.min` is admin). The suggestion is the name plus two random digits, checked free.
-- [ ] `PUT /me/username`: typed in any case, stored in lowercase; handles the unique-violation race → `USERNAME_TAKEN`. Changeable until onboarding is `done`, then `IMMUTABLE_FIELD` until T-9.6 designs changes (D-068). The public page stays D-001's `/@username`: usernames never take a bare top-level path, so the reserved list needn't hold route segments.
-- [ ] Tests: each first-name rule both ways; "9876543210", "98765 43210", "+91 98765 43210" and "Call me on 98765 43210" refused; "I lived in Delhi 2010-2015" and "I was born in 1998 and moved here in 2015" allowed; a reserved name, a dotted variant of one, and the brand; `USERNAME_TAKEN` in the race; capitals stored lowercase; a change after `done` → `IMMUTABLE_FIELD`; a field before its step → `ONBOARDING_INCOMPLETE`.
-- [ ] **At `/done`:** D-068 becomes Locked.
-- [ ] **Commit:** `feat(onboarding): profile basics and username [T-3.7]`
+- [x] **Needs:** T-3.6
+- [x] `PATCH /me/profile`: first_name 1–30 characters after trimming, letters in any script (Devanagari, Gurmukhi and the rest), single spaces, and an apostrophe or hyphen inside a name; hometown, city ≤ 40; about 40–300, trimmed, no URLs, no phone numbers. It spans two steps (D-068): `profile` advances once first_name, hometown and city are all set, `about` when about is set at that step; a field of a step not yet reached → `ONBOARDING_INCOMPLETE`.
+  **Built** (`profiles/rules.py`, which `make seed` now checks its people against too): text is
+  trimmed and put in NFC before it is measured or stored. A letter is any Unicode letter, and the
+  marks after it, since no Devanagari or Gurmukhi name is written without vowel signs and viramas;
+  digits in any script, zero-width joiners and no-break spaces are refused, and two spaces in a row
+  are refused, not collapsed. The apostrophe is `'` or `’`, which a phone's keyboard types.
+  Hometown and city refuse control and format characters, where a NUL would have been a 500. A
+  null field is "not sent"; every refused field is named at once; and a field of a step not
+  reached refuses the whole request, the fields sent beside it too.
+- [x] "No URLs, no phone numbers" in about: URLs, `www.` and bare domains; and a phone number is a **run** of 10 or more digits with at most two separators (space, dash or dot) inside it, never digits scattered across a sentence. Ten, because the check exists to catch a reachable Indian mobile number, which is exactly ten digits; below ten it catches dates, and "2010-2015" is a life story, not a contact detail (the advisor directing T-3.2 to T-3.10, approved by the founder, 3 October 2026; seven was a guess). T-7.3's contact masking builds its own, broader check later.
+  **Built:** a link is a scheme, `www.`, or a bare domain: a name, a dot and an ending from a list
+  people type for links, India's and the shorteners' included (`wa.me`, `t.me`, `bit.ly`). Not
+  every ending there is: that would refuse words run together. The ending must be lowercase, so a
+  sentence after a missed space ("chai.In the evenings") passes, and the name two characters or
+  more, so "B.Com" and "B.Tech" pass, unless a path follows (`x.com/ravi`). Digits in any script
+  count toward a phone number. Allowed as the rule is written, and pinned by tests at its edges:
+  "98 765 43 210" (three separators) and "98765 - 43210" (three separator characters).
+- [x] `GET /usernames/{u}/available` → `{available, suggestion?}`, 30 a minute per user: the regex, then the reserved list (D-068): admin, administrator, mod, moderator, support, help, helpdesk, staff, team, official, root, system, security, api, www, mail, billing, payments, legal, privacy, terms, grievance, knot, knots, thread, threads, vela, velas, me, null, undefined, and the brand from `APP_NAME`, so a rename moves it (rule 17). Matching ignores case, dots and underscores (`ad.min` is admin). The suggestion is the name plus two random digits, checked free.
+  **Built:** a name outside the format is `VALIDATION_ERROR`; a reserved or taken one is
+  `available: false`, and `PUT` answers `USERNAME_TAKEN` for both. A reserved name gets no
+  suggestion: the name with two digits after it is the impersonation the list exists to stop. A
+  user's own name is available to them. The suggestion trims the name to 18 characters, so it
+  fits 20. `APP_NAME` moved from `app/main.py` to `app/core/config.py`, where a service can read it
+  (a service importing `main` would be a cycle).
+- [x] `PUT /me/username`: typed in any case, stored in lowercase; handles the unique-violation race → `USERNAME_TAKEN`. Changeable until onboarding is `done`, then `IMMUTABLE_FIELD` until T-9.6 designs changes (D-068). The public page stays D-001's `/@username`: usernames never take a bare top-level path, so the reserved list needn't hold route segments.
+  **Built:** the race is proved on two connections, both finding the name free before either
+  writes; only the unique index tells them apart, and it is read by SQLSTATE `23505` and the
+  constraint's name, `uq_profiles_username`, never the message.
+- [x] Tests: each first-name rule both ways; "9876543210", "98765 43210", "+91 98765 43210" and "Call me on 98765 43210" refused; "I lived in Delhi 2010-2015" and "I was born in 1998 and moved here in 2015" allowed; a reserved name, a dotted variant of one, and the brand; `USERNAME_TAKEN` in the race; capitals stored lowercase; a change after `done` → `IMMUTABLE_FIELD`; a field before its step → `ONBOARDING_INCOMPLETE`.
+- [x] **At `/done`:** D-068 becomes Locked.
+- [x] **Commit:** `feat(onboarding): profile basics and username [T-3.7]`
 
 ### T-3.8 · Interests
 - [ ] **Needs:** T-3.7
@@ -2046,3 +2070,12 @@ Claude Code adds items here instead of doing unplanned work. Format:
   `UNDERAGE_DELETES` (`api/app/modules/users/repository.py`) with a test. The same goes for any 🔐
   route that writes a row before dob: D-068's step rule already keeps photos (T-4.2) and the selfie
   (T-4.5) behind their steps. Found in T-3.6.
+- [ ] P-55 · Let two checkouts' test suites run at once. **Before the next time two sessions build
+  in parallel.** Worst case: a session sees tests fail that nothing in its change broke, and spends
+  an hour on them or "fixes" them. Seen on 3 October 2026: T-3.7's username rate-limit test and
+  four of T-2.6's OTP rate-limit tests failed in the same minute, because both suites use
+  `velora_test` and Redis db 1, and `test_redis` clears every `ratelimit:*` key, so each run wiped
+  the other's windows; alone, each passed. The database is shared too: two runs' uncommitted rows
+  with the same unique values (`make_user`'s serial phone numbers) wait on each other. Give each run
+  its own Redis database or key prefix and its own test database (by worktree, or by a run id),
+  with a test that two runs can't see each other's keys. Found in T-3.7.

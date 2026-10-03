@@ -1156,7 +1156,7 @@ Recommended by Claude in the joint plan for T-3.2 to T-3.10; answered by the adv
 that plan (Claude, in a separate chat); approved by the founder on 3 October 2026. Locked at T-3.5's
 `/done`, 3 October 2026.
 
-### D-068 · Onboarding: a step's endpoint works at the step or after it, never before — Open
+### D-068 · Onboarding: a step's endpoint works at the step or after it, never before — Locked
 **The decision (T-3.6, T-3.7):**
 - Each onboarding step's endpoint works at that step, advancing it, and after it, as an edit that
   doesn't advance. Before it: `ONBOARDING_INCOMPLETE`, with `details.step` the user's current step.
@@ -1185,8 +1185,8 @@ advisor recommended in answer 27, because D-001's `/@username` already does the 
 founder, 3 October 2026).
 
 Recommended by Claude in the joint plan for T-3.2 to T-3.10; answered by the advisor directing
-that plan (Claude, in a separate chat); approved by the founder on 3 October 2026. **Open** until T-3.7 lands, its last part; that task's
-`/done` marks it Locked.
+that plan (Claude, in a separate chat); approved by the founder on 3 October 2026. Locked at T-3.7's
+`/done`, 3 October 2026.
 
 ### D-069 · PIN: its rules, its reset, and what the lock doesn't do — Open
 **The decision (T-3.9):**

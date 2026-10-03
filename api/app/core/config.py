@@ -21,6 +21,10 @@ from pydantic_settings import BaseSettings, NoDecode, SettingsConfigDict
 from redis.asyncio.connection import parse_url as parse_redis_url
 from sqlalchemy.engine import make_url
 
+# The brand: one constant, so a rename stays cheap (D-015). Thread and Knot are
+# product nouns and never read it (rule 17). The web's twin is web/src/lib/app.ts.
+APP_NAME = "Velora"
+
 Env = Literal["local", "staging", "production"]
 PhoneProvider = Literal["firebase", "msg91", "fake"]
 SmsProvider = Literal["msg91", "fake"]

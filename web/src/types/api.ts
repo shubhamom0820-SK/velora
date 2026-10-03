@@ -186,6 +186,57 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/me/profile": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /** Update Profile */
+        patch: operations["update_profile_v1_me_profile_patch"];
+        trace?: never;
+    };
+    "/v1/usernames/{username}/available": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Username Available */
+        get: operations["username_available_v1_usernames__username__available_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/me/username": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** Set Username */
+        put: operations["set_username_v1_me_username_put"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/auth/otp/send": {
         parameters: {
             query?: never;
@@ -358,6 +409,22 @@ export interface components {
             /** Otp */
             otp: string;
         };
+        /**
+         * ProfilePatch
+         * @description Any of the four, each only if sent (a null is not sent). First name,
+         *     hometown and city are the `profile` step's; about is the `about` step's
+         *     (D-068). The rules are `profiles.rules`, checked by the service.
+         */
+        ProfilePatch: {
+            /** First Name */
+            first_name?: string | null;
+            /** Hometown */
+            hometown?: string | null;
+            /** City */
+            city?: string | null;
+            /** About */
+            about?: string | null;
+        };
         /** ReadinessChecks */
         ReadinessChecks: {
             /**
@@ -412,6 +479,18 @@ export interface components {
          * @enum {string}
          */
         UserStatus: "active" | "paused" | "frozen" | "banned" | "deleted";
+        /** UsernameAvailability */
+        UsernameAvailability: {
+            /** Available */
+            available: boolean;
+            /** Suggestion */
+            suggestion?: string | null;
+        };
+        /** UsernameSet */
+        UsernameSet: {
+            /** Username */
+            username: string;
+        };
         /** ValidationError */
         ValidationError: {
             /** Location */
@@ -683,6 +762,103 @@ export interface operations {
         requestBody: {
             content: {
                 "application/json": components["schemas"]["SeekingSet"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Me"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    update_profile_v1_me_profile_patch: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ProfilePatch"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Me"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    username_available_v1_usernames__username__available_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                username: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["UsernameAvailability"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    set_username_v1_me_username_put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UsernameSet"];
             };
         };
         responses: {

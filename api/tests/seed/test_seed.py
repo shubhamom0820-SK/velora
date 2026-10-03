@@ -237,27 +237,37 @@ TODAY = date(2026, 10, 3)
         (
             _with("dev", about="Find me at www.example.com, I'm on there daily."),
             SWIPES,
-            "dev: about has a URL or a phone number in it (T-3.7)",
+            "dev: about can't hold a link (T-3.7)",
         ),
         (
             _with("dev", about="Text me on 98765 43210 any time, I reply fast."),
             SWIPES,
-            "dev: about has a URL or a phone number in it (T-3.7)",
+            "dev: about can't hold a phone number (T-3.7)",
         ),
         (
             _with("dev", about="Too short to say anything about me at all"[:39]),
             SWIPES,
-            "dev: about is 40-300 characters (T-3.7)",
+            "dev: about must be 40 to 300 characters (T-3.7)",
         ),
         (
             _with("dev", first_name="Dev2"),
             SWIPES,
-            "dev: first_name is 1-30 letters and single spaces (T-3.7)",
+            "dev: first_name may only hold letters, single spaces, and an apostrophe",
+        ),
+        (
+            _with("dev", first_name="Dev "),
+            SWIPES,
+            "dev: first_name isn't as the API stores it, trimmed and in NFC",
         ),
         (
             _with("dev", username="Dev"),
             SWIPES,
-            "dev: username is 4-20 of a-z, 0-9, '.' and '_' (T-3.7)",
+            "dev: username must be 4 to 20 of a-z, 0-9, '.' and '_' (T-3.7)",
+        ),
+        (
+            _with("dev", username="ad.min"),
+            SWIPES,
+            "dev: username is reserved (T-3.7)",
         ),
         (
             _with("dev", phone="+919800000112"),
@@ -331,6 +341,17 @@ def test_data_that_breaks_a_rule_is_refused(
 
 def test_eighteen_today_is_old_enough() -> None:
     check_people(_with("dev", dob=date(2008, 10, 3)), SWIPES, TODAY)
+
+
+def test_the_seed_holds_names_and_abouts_to_the_apis_own_rules() -> None:
+    """T-3.7's rules, not an ASCII stand-in: a Gurmukhi name and a range of
+    years pass, as they do through the API."""
+    people = _with(
+        "dev",
+        first_name="ਗੁਰਪ੍ਰੀਤ",
+        about="I lived in Delhi 2010-2015, then moved here for the food and stayed.",
+    )
+    check_people(people, SWIPES, TODAY)
 
 
 def test_a_pass_back_on_a_like_makes_no_match_so_is_allowed() -> None:
