@@ -19,12 +19,12 @@ import importlib.util
 import pkgutil
 import uuid
 from collections.abc import AsyncIterator
-from datetime import datetime
+from datetime import datetime, timedelta
 from enum import StrEnum
 from typing import Any
 
 from fastapi import Request
-from sqlalchemy import DateTime, ForeignKey, MetaData, func, text
+from sqlalchemy import DateTime, ForeignKey, MetaData, event, exc, func, text
 from sqlalchemy.dialects.postgresql import ENUM, UUID
 from sqlalchemy.engine import Connection, Engine
 from sqlalchemy.ext.asyncio import (
@@ -40,7 +40,9 @@ from sqlalchemy.orm import (
     Session,
     mapped_column,
 )
+from sqlalchemy.pool import ConnectionPoolEntry, PoolProxiedConnection
 
+from app.core import clock
 from app.core.enums import PG_ENUMS
 
 # Constraint names are deterministic, so migrations can drop and alter them by
@@ -151,14 +153,54 @@ def import_models() -> None:
                 importlib.import_module(name)
 
 
+# A pooled connection is checked before it's handed out only if it has sat idle
+# this long (P-53). The check is asyncpg's: BEGIN, `;`, ROLLBACK, three round
+# trips (four the first time on a connection, which prepares `;`), 495 ms from
+# Singapore to Mumbai (P-49), where `pool_pre_ping` paid them on every checkout. A warm connection is handed out unchecked; one that died
+# within this window fails the request that finds it, and the pool replaces it.
+CHECK_IF_IDLE_FOR = timedelta(seconds=30)
+_CHECKED_IN_AT = "checked_in_at"
+
+
 def build_engine(url: str, *, pool_size: int = 5, max_overflow: int = 5) -> AsyncEngine:
     """An engine whose pool holds `pool_size` connections, plus `max_overflow`
     more under load. The pool is per process: every uvicorn worker opens its own,
     so a deployment's connection budget is workers x (pool_size + max_overflow)
-    (infra/STAGING.md)."""
-    return create_async_engine(
-        url, pool_pre_ping=True, pool_size=pool_size, max_overflow=max_overflow
+    (infra/STAGING.md).
+
+    Newest connection first (LIFO), so a quiet pool keeps reusing the one it
+    just used, warm and unchecked, and the rest can idle out; checked only after
+    `CHECK_IF_IDLE_FOR` idle (P-53).
+    """
+    engine = create_async_engine(
+        url, pool_size=pool_size, max_overflow=max_overflow, pool_use_lifo=True
     )
+    event.listen(engine.sync_engine.pool, "checkin", _note_checkin)
+    event.listen(engine.sync_engine.pool, "checkout", _check_if_idle)
+    return engine
+
+
+def _note_checkin(dbapi_connection: Any, record: ConnectionPoolEntry) -> None:
+    record.info[_CHECKED_IN_AT] = clock.now()
+
+
+def _check_if_idle(
+    dbapi_connection: Any, record: ConnectionPoolEntry, proxy: PoolProxiedConnection
+) -> None:
+    """Check a connection idle for `CHECK_IF_IDLE_FOR`; a new one never is.
+
+    A failed check raises DisconnectionError, on which the pool drops the
+    connection and hands out a new one: the request never sees the dead one.
+    """
+    checked_in_at = record.info.get(_CHECKED_IN_AT)
+    if checked_in_at is None or clock.now() - checked_in_at < CHECK_IF_IDLE_FOR:
+        return
+    try:
+        dbapi_connection.ping()
+    except Exception as error:  # whatever the failure, the connection is unusable
+        raise exc.DisconnectionError(
+            "an idle connection failed its liveness check"
+        ) from error
 
 
 class RequestSession(Session):

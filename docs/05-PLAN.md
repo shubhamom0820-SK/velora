@@ -1809,7 +1809,7 @@ Claude Code adds items here instead of doing unplanned work. Format:
   staging; single-transaction endpoints unchanged.
 
   Split from P-50, at the direction of the advisor directing T-3.2 to T-3.10.
-- [ ] P-53 · Make the liveness ping cheap. **Now, before T-3.6.** Worst case left: `pool_pre_ping`
+- [x] P-53 · Make the liveness ping cheap. **Now, before T-3.6.** Worst case left: `pool_pre_ping`
   costs three round trips on every checkout, about 495 ms on staging (D-048 priced it at 165):
   asyncpg's ping wraps `;` in BEGIN and ROLLBACK for PgBouncer's transaction mode, which we don't
   use (staging connects direct, `infra/STAGING.md`). The fix: no ping for a connection used in the
@@ -1817,5 +1817,20 @@ Claude Code adds items here instead of doing unplanned work. Format:
   the pool hands out its newest connection first, so a quiet pool keeps reusing a warm one. Proved
   by counting the round trips a request makes, and by killing an idle connection's backend and
   seeing the next request succeed.
+  **Done, 3 October 2026:** `build_engine` drops `pool_pre_ping`, checks a connection only after
+  `CHECK_IF_IDLE_FOR` (30 s) idle, never a new one, and hands out the newest first. A new test
+  helper, `tests/roundtrips.py`, counts round trips at the wire, deterministically (a client send
+  after the server's answer is one): a warm connection's request is three (BEGIN, the select,
+  COMMIT), where `pool_pre_ping` made six; after 30 s idle, seven the first time (asyncpg also
+  prepares `;`) and six after. A killed idle connection is replaced before the request sees it; one
+  killed within 30 s of use fails one request, then is replaced, pinned by a test as the price.
+  Eight weakenings, each red. Found on the way: the kill helper's wait read Postgres's
+  `pg_stat_activity`, which keeps one snapshot per transaction, so it sometimes waited on a stale
+  answer until it timed out; a fresh transaction per poll fixed it (fifteen runs clean).
+  **Measured with P-52, by the delay proxy:** OTP send about 14 round trips to about 11, verify for a
+  new account about 25 to about 12, refresh about 9 to about 6, `/me` about 17 to about 11. Most of
+  verify's drop is LIFO, not the check: with only LIFO off it is about 21, because a pool handing
+  out its oldest connection first kept moving verify to connections that hadn't prepared its
+  statements yet. That part is a cold-pool effect; in a long-warm pool the gap closes.
 
   Split from P-50, at the direction of the advisor directing T-3.2 to T-3.10.

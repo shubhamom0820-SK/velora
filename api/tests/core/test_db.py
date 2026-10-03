@@ -3,8 +3,11 @@ connection for the whole request (P-52)."""
 
 from __future__ import annotations
 
+import asyncio
 import uuid
 from collections.abc import AsyncIterator, Iterator
+from datetime import UTC, datetime, timedelta
+from types import ModuleType
 from typing import Annotated, Any
 
 import pytest
@@ -12,7 +15,9 @@ from fastapi import Depends, FastAPI
 from httpx import ASGITransport, AsyncClient, Response
 from redis.asyncio import Redis
 from sqlalchemy import event, text
-from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession
+from sqlalchemy.dialects.postgresql.asyncpg import AsyncAdapt_asyncpg_connection
+from sqlalchemy.exc import DBAPIError
+from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker
 from sqlalchemy.pool import QueuePool
 
 from app.core import clock
@@ -25,6 +30,7 @@ from app.modules.users import service as users_service
 from tests.conftest import make_test_settings
 from tests.infra import TEST_DATABASE_URL, requires_infra
 from tests.keys import random_keys
+from tests.roundtrips import RoundTrips
 
 _TEST_DB_URL = "postgresql+asyncpg://velora:velora@127.0.0.1:5432/velora_test"
 _DEV_DB_URL = "postgresql+asyncpg://velora:velora@127.0.0.1:5432/velora"
@@ -227,5 +233,176 @@ async def test_every_way_a_session_ends_returns_its_connection(
         await getattr(session, ending)()
 
         assert pool.checkedout() == 0
+    finally:
+        await engine.dispose()
+
+
+# --- The liveness check, only for idle connections (P-53) -------------------------
+
+START = datetime(2026, 10, 3, 6, 30, tzinfo=UTC)
+
+
+async def _one_request(maker: async_sessionmaker[AsyncSession]) -> int:
+    """A request's transaction: one select between BEGIN and COMMIT. Returns
+    the server process behind the connection, which names the connection."""
+    async with maker() as session, session.begin():
+        return int(await session.scalar(text("select pg_backend_pid()")) or 0)
+
+
+async def _kill(test_engine: AsyncEngine, pid: int) -> None:
+    """End a connection's server process and wait until it has gone."""
+    async with test_engine.connect() as admin:
+        await admin.execute(text("select pg_terminate_backend(:pid)"), {"pid": pid})
+        await admin.commit()
+        for _ in range(200):
+            alive = await admin.scalar(
+                text("select count(*) from pg_stat_activity where pid = :pid"),
+                {"pid": pid},
+            )
+            # Postgres takes pg_stat_activity's snapshot once per transaction:
+            # without ending it, every poll would read the first answer again.
+            await admin.rollback()
+            if not alive:
+                return
+            await asyncio.sleep(0.01)
+    raise AssertionError("the server process didn't end")
+
+
+@pytest.fixture
+async def through_a_counter() -> AsyncIterator[tuple[RoundTrips, AsyncEngine]]:
+    """An engine with one connection, its round trips counted."""
+    async with RoundTrips() as trips:
+        engine = build_engine(trips.url, pool_size=1, max_overflow=0)
+        try:
+            yield trips, engine
+        finally:
+            await engine.dispose()
+
+
+async def test_a_warm_connection_is_handed_out_unchecked(
+    through_a_counter: tuple[RoundTrips, AsyncEngine],
+) -> None:
+    """BEGIN, the select, COMMIT: three round trips. With `pool_pre_ping`, six:
+    asyncpg's check wraps `;` in a BEGIN and a ROLLBACK of its own, 495 ms on
+    staging, on every checkout (P-49)."""
+    trips, engine = through_a_counter
+    maker = build_sessionmaker(engine)
+    for _ in range(2):  # connect, and prepare the statement
+        await _one_request(maker)
+    trips.reset()
+
+    await _one_request(maker)
+
+    assert trips.count == 3
+
+
+async def test_a_connection_idle_for_30_seconds_is_checked_first(
+    through_a_counter: tuple[RoundTrips, AsyncEngine], clock: ModuleType
+) -> None:
+    trips, engine = through_a_counter
+    maker = build_sessionmaker(engine)
+    clock.freeze(START)
+    for _ in range(2):
+        await _one_request(maker)
+
+    clock.advance(timedelta(seconds=29, microseconds=999_999))
+    trips.reset()
+    await _one_request(maker)
+    assert trips.count == 3
+
+    # The check is BEGIN, `;` and ROLLBACK, then the request's three. The first
+    # time on a connection asyncpg also prepares `;`, one round trip more.
+    clock.advance(timedelta(seconds=30))
+    trips.reset()
+    await _one_request(maker)
+    assert trips.count == 7
+
+    clock.advance(timedelta(seconds=30))
+    trips.reset()
+    await _one_request(maker)
+    assert trips.count == 6
+
+
+async def test_a_dead_idle_connection_is_replaced_before_the_request_sees_it(
+    test_engine: AsyncEngine, clock: ModuleType
+) -> None:
+    engine = build_engine(TEST_DATABASE_URL, pool_size=1, max_overflow=0)
+    maker = build_sessionmaker(engine)
+    try:
+        clock.freeze(START)
+        pid = await _one_request(maker)
+        await _kill(test_engine, pid)
+        clock.advance(timedelta(seconds=30))
+
+        assert await _one_request(maker) != pid
+    finally:
+        await engine.dispose()
+
+
+async def test_a_connection_that_dies_within_30_seconds_fails_one_request(
+    test_engine: AsyncEngine, clock: ModuleType
+) -> None:
+    """The price of not checking warm connections, pinned so nobody mistakes it
+    for a bug: one that dies within 30 seconds of its last use fails the request
+    that finds it. The pool then drops it, and the next request gets a new one."""
+    engine = build_engine(TEST_DATABASE_URL, pool_size=1, max_overflow=0)
+    maker = build_sessionmaker(engine)
+    try:
+        clock.freeze(START)
+        pid = await _one_request(maker)
+        await _kill(test_engine, pid)
+        clock.advance(timedelta(seconds=29))
+
+        with pytest.raises(DBAPIError) as failed:
+            await _one_request(maker)
+        assert failed.value.connection_invalidated
+        assert await _one_request(maker) != pid
+    finally:
+        await engine.dispose()
+
+
+async def test_the_pool_hands_out_its_newest_connection_first() -> None:
+    """So a quiet pool keeps reusing the connection it just used, which is warm
+    and unchecked, rather than the one that has idled longest."""
+    engine = build_engine(TEST_DATABASE_URL, pool_size=2, max_overflow=0)
+    maker = build_sessionmaker(engine)
+    try:
+        older, newer = maker(), maker()
+        await older.scalar(text("select pg_backend_pid()"))
+        newer_pid = await newer.scalar(text("select pg_backend_pid()"))
+        await older.close()
+        await newer.close()  # back in the pool last
+
+        async with maker() as next_request:
+            assert (
+                await next_request.scalar(text("select pg_backend_pid()")) == newer_pid
+            )
+    finally:
+        await engine.dispose()
+
+
+async def test_a_new_connection_is_never_checked(
+    monkeypatch: pytest.MonkeyPatch, clock: ModuleType
+) -> None:
+    """It has just proved itself by connecting. Counted at the driver: the
+    first request checks nothing; the first after 30 idle seconds, once."""
+    pings: list[object] = []
+    real_ping = AsyncAdapt_asyncpg_connection.ping
+
+    def counted(self: AsyncAdapt_asyncpg_connection) -> None:
+        pings.append(self)
+        real_ping(self)  # type: ignore[no-untyped-call]  # SQLAlchemy's, untyped
+
+    monkeypatch.setattr(AsyncAdapt_asyncpg_connection, "ping", counted)
+    engine = build_engine(TEST_DATABASE_URL, pool_size=1, max_overflow=0)
+    maker = build_sessionmaker(engine)
+    try:
+        clock.freeze(START)
+        await _one_request(maker)
+        assert pings == []
+
+        clock.advance(timedelta(seconds=30))
+        await _one_request(maker)
+        assert len(pings) == 1
     finally:
         await engine.dispose()
