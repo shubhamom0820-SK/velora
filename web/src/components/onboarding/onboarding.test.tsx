@@ -715,6 +715,16 @@ describe("the PIN (T-3.12, D-069)", () => {
     }
   }
 
+  it("says when it will be asked: on open, and after 5 minutes away (T-3.10)", () => {
+    renderUi(<PinStep me={me({ onboarding_step: "pin" })} />);
+
+    expect(
+      screen.getByText(
+        "You'll enter it when you open Velora, and when you come back after 5 minutes away.",
+      ),
+    ).toBeInTheDocument();
+  });
+
   it("asks twice, and starts again when the two don't match, sending nothing", async () => {
     const api_ = fakeApi({});
     renderUi(<PinStep me={me({ onboarding_step: "pin" })} />);

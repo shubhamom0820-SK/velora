@@ -877,9 +877,9 @@ exist yet. The batch is a chain, T-3.10 → T-3.11 → T-3.12 → T-3.13, each n
     lock queued them), both tabs signed in; a third reload after them, 200.
   - "Forgot your PIN? Sign out": logout 204, both cookies cleared with `Max-Age=0` on their own
     paths, the jar empty, the tab on `/login`; the other tab's next reload, 401 and `/login`.
-  - Safari's line is struck (above). The founder is turning on Safari's remote automation so the
-    same check runs in Safari against `make dev`: with a PWA first, every iPhone user is a Safari
-    user.
+  - Safari's line is struck (above), and Safari isn't run locally (the founder, 3 October 2026):
+    its case is HTTPS, unverified until T-3.14's staging check, which waits on P-0.13, the
+    founder's Google Cloud billing account.
   Found on the way: the local dev database was two migrations behind (T-3.2's cap, T-3.3's
   `auth_time`), so OTP send answered 500 until `make migrate`; and that 500 reached Chrome as
   "Failed to fetch", not the API's envelope (P-61).
@@ -910,7 +910,17 @@ exist yet. The batch is a chain, T-3.10 → T-3.11 → T-3.12 → T-3.13, each n
   - server errors show inline, from `ApiError.code` via `en.ts`;
   - loading and error states (rule 14);
   - `ACCOUNT_BANNED`, `ACCOUNT_FROZEN` and `FORBIDDEN` at sign-in get one neutral line, "This account can't sign in.", with a link to `/contact`, which lists grievance@ (decision 16). P-51 may change it.
-- [ ] **Copy** (decision 4): every new string is drafted from wording already in `en.ts` (/terms, /privacy) and the decisions, and listed in this task's plan for the founder's approval.
+- [x] **Copy** (decision 4): every new string is drafted from wording already in `en.ts` (/terms, /privacy) and the decisions, and listed in this task's plan for the founder's approval.
+  **Approved by the founder, 3 October 2026, with two changes,** T-3.12's strings included:
+  - The PIN step said "You'll enter it each time you open {app}", which the lock doesn't do: it asks
+    when a restored session opens and after 5 minutes hidden, never right after a sign-in by code.
+    It now says exactly that, with the minutes read from the lock's own constant, so the two can't
+    drift.
+  - The waitlist box has two headings on D-081's flag (`signInOpen()`, which `/login` reads too):
+    "{app} isn't open yet" while nobody can sign in anywhere, "Not in your city yet?" once someone
+    can. Two different people; the second heading would tell the first it works elsewhere.
+  - **One word departs from the founder's wording:** his subs said "Leave your number"; the
+    waitlist form collects an email (T-2.3), so they say "Leave your email".
 - [x] **No inline `style=`.** Production's CSP has no `style-src 'unsafe-inline'`, so a progress width or a counter set inline works under `next dev` and is blocked everywhere else (P-41's lesson). Use classes only.
 - [x] The consent line naming Google moved to T-3.14 (D-081): on Path B, Google sends nothing.
 - [x] **Proved, 3 October 2026:**
@@ -972,7 +982,7 @@ exist yet. The batch is a chain, T-3.10 → T-3.11 → T-3.12 → T-3.13, each n
 
 ### T-3.14 · Firebase phone sign-in (launch path)
 - [ ] **Needs:** T-3.3, T-3.10 (it restores the session on reload, which the Done-when checks), T-3.11 (its phone and OTP screens, which this task's web step puts Firebase on), and **P-0.13** (the Google billing account, verified: Firebase's Blaze plan bills to it)
-- [ ] **Not in T-3.10 to T-3.13's batch** (planned 3 October 2026): P-0.13's account doesn't exist yet. When this task starts, switch D-081's Firebase builds from "sign-in isn't open yet" to the Firebase flow.
+- [ ] **Not in T-3.10 to T-3.13's batch** (planned 3 October 2026): P-0.13's account doesn't exist yet. When this task starts, switch D-081's Firebase builds from "sign-in isn't open yet" to the Firebase flow: make `signInOpen()` (`web/src/lib/sign-in-path.ts`) true for `firebase`, which moves `/login` and the landing page's waitlist heading together.
 - [ ] **New dependencies (approved, recorded in D-035):** api `firebase-admin`; web `firebase`.
 - [ ] Firebase console: project created, Phone provider enabled, **App Check with reCAPTCHA
   Enterprise enforced on Authentication**, authorised domains = `veloraapp.co.in` + `staging.veloraapp.co.in`
@@ -1083,7 +1093,10 @@ exist yet. The batch is a chain, T-3.10 → T-3.11 → T-3.12 → T-3.13, each n
     in a URL, no cookies sent to `/v1/auth`, a sign-out the API never hears, and the under-18
     ending gone. **Five of the test-only endpoint's:** served in any `ENV`, served beside a real
     SMS provider, in the OpenAPI schema, the code logged, the number not normalised. Each restored
-    by SHA-256.
+    by SHA-256. **Then, at the founder's question:** the gate broken into two blacklists. "Not
+    staging or production" (today's names) passed staging's and production's cases and went red
+    only on `preview` and `env-nobody-has-named-2031`, a name listed nowhere; "not production" also
+    failed staging's. The allowlist refuses all three.
   - **The API suite in 8 shuffled orders** (seeds 11 to 18): 1,192 passed each, the new rule-15
     test among them; a seed's order differs from file order (seen, not assumed).
   - **CI's `e2e` job** runs after `api` and `web`, uploads nothing, and is proved by its first run

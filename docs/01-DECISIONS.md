@@ -1654,7 +1654,7 @@ The options were Claude's (P-54). (a) was chosen, with the condition on files, b
 directing T-3.2 to T-3.10 (Claude, in a separate chat), relayed by the founder, 3 October 2026.
 Locked at P-54's `/done`, 3 October 2026, with the row half built; the file half is T-4.2's.
 
-### D-079 · The browser never judges the date of birth — Open
+### D-079 · The browser never judges the date of birth — Locked
 **The decision (T-3.11):** the birthday screen sends the date as typed, and the server alone works
 out the age, in IST (rule 6, D-009). The browser has no under-18 check and computes no age ("you'll
 appear as 25"). Before the date is sent, a confirm step shows it in words and says it can't be
@@ -1676,9 +1676,10 @@ device can't be registered" when it is the number that is barred (`/terms`).
 
 Recommended by Claude in the joint plan for T-3.10 to T-3.13; answered by the advisor directing
 that plan (Claude, in a separate chat), relayed by the founder, 3 October 2026.
-**Open** until T-3.11 builds it; its `/done` marks it Locked on the founder's word.
+Approved by the founder in his own words, 3 October 2026: "approved as built and tested in T-3.10
+and T-3.11." **Locked** 3 October 2026.
 
-### D-080 · Onboarding URLs are stable slugs, and a phone number never goes in a URL — Open
+### D-080 · Onboarding URLs are stable slugs, and a phone number never goes in a URL — Locked
 **The decision (T-3.10, T-3.11):**
 - Each `onboarding_t` step has a URL under `/onboarding/`, from one typed map in the web that stops
   compiling when the enum gains a value, with a test that the slugs are unique: `birthday`,
@@ -1701,9 +1702,10 @@ including onto answers the server will refuse to change.
 
 Recommended by Claude in the joint plan for T-3.10 to T-3.13; answered by the advisor directing
 that plan (Claude, in a separate chat), relayed by the founder, 3 October 2026.
-**Open** until T-3.11 builds it; its `/done` marks it Locked on the founder's word.
+Approved by the founder in his own words, 3 October 2026: "approved as built and tested in T-3.10
+and T-3.11." **Locked** 3 October 2026.
 
-### D-081 · The web signs in by the path `APP_ENV` names — Open
+### D-081 · The web signs in by the path `APP_ENV` names — Locked
 **The decision (T-3.11):** builds where `APP_ENV` is `local` or `ci` sign in by Path B
 (`/v1/auth/otp/*`, the fake provider locally); `staging` and `production` sign in by Firebase. It is
 an allowlist (rule 16), like T-3.10's cookie suffixes, with no new Vercel variable, and the web
@@ -1722,9 +1724,10 @@ when `APP_ENV` already says which environment it is); leaving `/login` broken un
 
 Recommended by Claude in the joint plan for T-3.10 to T-3.13; answered by the advisor directing
 that plan (Claude, in a separate chat), relayed by the founder, 3 October 2026.
-**Open** until T-3.11 builds it; its `/done` marks it Locked on the founder's word.
+Approved by the founder in his own words, 3 October 2026: "approved as built and tested in T-3.10
+and T-3.11." **Locked** 3 October 2026.
 
-### D-082 · Business rules are checked on the server only — Open
+### D-082 · Business rules are checked on the server only — Locked
 **The decision (T-3.11, T-3.12, and every form after):** the browser checks only what the API's
 schema states: lengths, the username's format, a 6-digit code, a 4-digit PIN. Every rule beyond the
 schema is the server's alone and comes back inline from `ApiError`: no links or phone numbers in
@@ -1738,7 +1741,8 @@ whichever copy nobody tests.
 
 Recommended by Claude in the joint plan for T-3.10 to T-3.13; answered by the advisor directing
 that plan (Claude, in a separate chat), relayed by the founder, 3 October 2026.
-**Open** until T-3.11 builds it; its `/done` marks it Locked on the founder's word.
+Approved by the founder in his own words, 3 October 2026: "approved as built and tested in T-3.10
+and T-3.11." **Locked** 3 October 2026.
 
 ### D-083 · Web forms: React Hook Form and zod — Open
 T-3.11 added the web app's form tooling, the first forms to need it. Versions are pinned exactly.
@@ -1770,8 +1774,8 @@ T-3.13 added the end-to-end tests 06-TESTING has named since Sprint 1. Pinned ex
   are downloads, not packages: Chromium in CI (`playwright install --with-deps chromium`), and
   Playwright's own Firefox build by hand (`E2E_FIREFOX=1`), never in CI.
 - **A production build, not `next dev`,** so production's strict CSP is the one the journeys run
-  under, and any violation fails them: `next dev`'s allowances hid both of T-3.11's CSP findings
-  until a production build ran.
+  under, and any violation fails them: `next dev`'s `'unsafe-eval'` hid T-3.11's CSP finding, zod's
+  eval probe, until a production build ran.
 - **The API on a P-55 slot of its own** (`api/tests/e2e_server.py`), so an E2E run and any pytest
   run never meet, and each starts empty.
 - **Nothing is kept from a run (decision 22):** no traces, videos or screenshots, and CI uploads no
@@ -1779,6 +1783,13 @@ T-3.13 added the end-to-end tests 06-TESTING has named since Sprint 1. Pinned ex
   among them; a page snapshot shows the phone screen. Failures speak through their assertions.
 - **Codes come from a test-only endpoint** (04-API, local only) reading the fake SMS's outbox: what a
   phone would have received, so D-073's silent ban is testable.
+- **That endpoint's gate is an allowlist, proved against a name nobody has listed** (the founder's
+  question before approving this entry). Its code signs anyone in, so if it ever answered outside
+  local, a phone number alone would be account takeover. `create_app()` mounts it only where `ENV`
+  is in `{"local"}` and `SMS_PROVIDER` in `{"fake"}`, and Settings refuses any fake provider outside
+  local anyway (D-045). Broken into a blacklist of today's names, "not staging or production", the
+  cases written with today's names passed, and only `preview` and `env-nobody-has-named-2031`, a
+  name listed nowhere else, went red; broken into "not production", staging went red too.
 
 **Rejected:** running against `next dev` (its CSP allowances hide what production blocks); keeping
 traces on failure (they would hold the very data rule 15 keeps out of logs); reading codes from the

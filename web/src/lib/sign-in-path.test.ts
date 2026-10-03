@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import { configFor } from "../../next.config";
 
-import { signInPath, signInPathFor } from "./sign-in-path";
+import { signInOpen, signInPath, signInPathFor } from "./sign-in-path";
 
 describe("a build signs in by the path APP_ENV names, an allowlist (D-081)", () => {
   it.each([
@@ -31,6 +31,14 @@ describe("a build signs in by the path APP_ENV names, an allowlist (D-081)", () 
     expect(signInPath("")).toBeNull();
     expect(signInPath("msg91")).toBeNull();
     expect(signInPath(undefined)).toBeNull();
+  });
+});
+
+describe("whether anyone can sign in: one flag for /login and the waitlist box", () => {
+  it("is open on a Path B build only, until T-3.14 builds Firebase sign-in", () => {
+    expect(signInOpen("otp")).toBe(true);
+    expect(signInOpen("firebase")).toBe(false);
+    expect(signInOpen(null)).toBe(false);
   });
 });
 

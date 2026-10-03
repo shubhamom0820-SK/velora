@@ -12,7 +12,7 @@ import { OtpInput } from "@/components/ui/OtpInput";
 import { t } from "@/i18n/t";
 import { APP_NAME } from "@/lib/app";
 import { useSendCode, useVerifyCode } from "@/lib/queries/onboarding";
-import { signInPath } from "@/lib/sign-in-path";
+import { signInOpen } from "@/lib/sign-in-path";
 import { useSession } from "@/store/session";
 import { z } from "@/lib/zod";
 
@@ -44,7 +44,7 @@ const phoneForm = z.object({
 export function SignIn() {
   const farewell = useSession((state) => state.farewell);
   if (farewell === "underage") return <Underage />;
-  if (signInPath() !== "otp") return <SignInClosed />;
+  if (!signInOpen()) return <SignInClosed />;
   return <CodeSignIn />;
 }
 

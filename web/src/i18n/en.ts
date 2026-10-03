@@ -134,7 +134,10 @@ export const en = {
     },
     pin: {
       setTitle: "Set a 4-digit PIN",
-      setSub: "You'll enter it each time you open {app}.",
+      // What the lock does (T-3.10): on every open of a session it restores,
+      // and after this many minutes hidden. Not after a sign-in by code.
+      setSub:
+        "You'll enter it when you open {app}, and when you come back after {minutes} minutes away.",
       confirmTitle: "Confirm your PIN",
       confirmSub: "Type it once more so we know it stuck.",
       mismatch: "Those PINs didn't match. Try again.",
@@ -265,9 +268,14 @@ export const en = {
     // The waitlist box (T-2.3), for people outside the launch city. Its city is
     // optional and tells us where demand is, the input to choosing a second
     // city; /privacy says both uses (legal.privacy.collect.waitlist).
+    // Two different people (D-081's flag, the founder's copy): while nobody can
+    // sign in anywhere, the box mustn't suggest it works somewhere else.
     waitlist: {
+      closedTitle: "{app} isn't open yet",
+      closedBody: "Leave your email and we'll tell you the day it is.",
+      // The launch city is D-013's; change it with the decision.
       title: "Not in your city yet?",
-      body: "Leave your email and we'll tell you when {app} opens near you.",
+      body: "We're starting in Phagwara. Leave your email and we'll tell you when we reach you.",
       email: "Email",
       emailPlaceholder: "you@email.com",
       city: "Your city (optional)",

@@ -30,6 +30,16 @@ export function signInPathFor(
 }
 
 /**
+ * Whether anyone can sign in on this build: Path B builds only, until T-3.14
+ * builds Firebase sign-in, which flips this for `firebase`. /login's closed
+ * screen and the landing page's waitlist heading both read it, so they can't
+ * disagree (D-081).
+ */
+export function signInOpen(path: SignInPath | null = signInPath()): boolean {
+  return path === "otp";
+}
+
+/**
  * This build's path. A build with none has no way to sign in, and is shown
  * the closed screen: never a guess.
  */

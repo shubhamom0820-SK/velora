@@ -85,8 +85,13 @@ async def _app_answer(app: FastAPI) -> int:
         {"ENV": "staging"},
         {"ENV": "production"},
         {"ENV": "preview"},
+        # A name nobody has listed anywhere, in any allowlist or test: a
+        # blacklist that names today's environments waves it through; the
+        # allowlist refuses it (rule 16). The endpoint's code signs anyone in.
+        {"ENV": "env-nobody-has-named-2031"},
         {"SMS_PROVIDER": "msg91"},
     ],
+    ids=lambda update: ",".join(f"{k}={v}" for k, v in update.items()),
 )
 async def test_isnt_served_anywhere_else(
     db: AsyncSession, update: dict[str, str]

@@ -3,7 +3,7 @@ import { join } from "node:path";
 
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { render, screen, within } from "@testing-library/react";
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { t } from "@/i18n/t";
 import { APP_NAME } from "@/lib/app";
@@ -39,7 +39,7 @@ describe("/ (landing)", () => {
       t("landing.features.threads.title"),
       t("landing.features.knot.title"),
       t("landing.features.safety.title"),
-      t("landing.waitlist.title"),
+      t("landing.waitlist.closedTitle", { app: APP_NAME }),
     ]);
     const main = screen.getByRole("main");
     expect(within(main).getAllByRole("listitem")).toHaveLength(3);
@@ -128,19 +128,40 @@ describe("the landing page's JavaScript", () => {
   );
 });
 
-describe("the waitlist box", () => {
-  it("names its section, and says the app's name, not the prototype's", () => {
+describe("the waitlist box says which of two people it's for (D-081's flag)", () => {
+  afterEach(() => {
+    vi.unstubAllEnvs();
+  });
+
+  it.each(["firebase", ""])(
+    "a %s build, where nobody can sign in, says the app isn't open yet",
+    (path) => {
+      vi.stubEnv("SIGN_IN_PATH", path);
+      renderPage();
+
+      const box = screen.getByRole("region", {
+        name: "Velora isn't open yet",
+      });
+      expect(box).toHaveTextContent(
+        "Leave your email and we'll tell you the day it is.",
+      );
+      // Never the other person's words: that would say it works elsewhere.
+      expect(box).not.toHaveTextContent("Not in your city yet?");
+      expect(box).not.toHaveTextContent("Knot opens");
+      expect(
+        within(box).getByRole("button", { name: t("landing.waitlist.join") }),
+      ).toBeInTheDocument();
+    },
+  );
+
+  it("a build where sign-in is open speaks to people outside the launch city", () => {
+    vi.stubEnv("SIGN_IN_PATH", "otp");
     renderPage();
 
-    const box = screen.getByRole("region", {
-      name: t("landing.waitlist.title"),
-    });
+    const box = screen.getByRole("region", { name: "Not in your city yet?" });
     expect(box).toHaveTextContent(
-      t("landing.waitlist.body", { app: APP_NAME }),
+      "We're starting in Phagwara. Leave your email and we'll tell you when we reach you.",
     );
-    expect(box).not.toHaveTextContent("Knot opens");
-    expect(
-      within(box).getByRole("button", { name: t("landing.waitlist.join") }),
-    ).toBeInTheDocument();
+    expect(box).not.toHaveTextContent("isn't open yet");
   });
 });

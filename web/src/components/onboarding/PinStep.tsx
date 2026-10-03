@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 
+import { RELOCK_AFTER_HIDDEN_MS } from "@/components/session/PinLock";
 import { Button } from "@/components/ui/Button";
 import { PinPad } from "@/components/ui/PinPad";
 import { t } from "@/i18n/t";
@@ -81,7 +82,10 @@ export function PinStep({ me }: { me: Me }) {
       sub={
         confirming
           ? t("onboarding.pin.confirmSub")
-          : t("onboarding.pin.setSub", { app: APP_NAME })
+          : t("onboarding.pin.setSub", {
+              app: APP_NAME,
+              minutes: RELOCK_AFTER_HIDDEN_MS / 60_000,
+            })
       }
       back={
         confirming
