@@ -100,11 +100,12 @@ everywhere, locally too (D-067). **Seen in Chrome on 3 October 2026** (T-3.10, r
 own network events): it keeps both over plain `http://127.0.0.1`, sends them back on refresh,
 rotates them, and clears them at sign-out. `localhost` fails for a different reason:
 `localhost:3000` calling `127.0.0.1:8000` is cross-site, so the `Lax` refresh cookie isn't sent,
-and the API's local CORS refuses `localhost` so that mistake fails loudly. **Safari: expected to
-keep no `Secure` cookie over plain `http://127.0.0.1`, not yet seen** (its remote automation is
-off on this Mac); test Safari on staging, which has HTTPS. **Firefox: not yet seen** (not
-installed); T-3.13 runs it through Playwright. Until 3 October 2026 this line said "Chrome or
-Firefox" as fact, from documentation alone.
+and the API's local CORS refuses `localhost` so that mistake fails loudly. **Safari over plain
+`http://127.0.0.1` isn't a case to carry:** with D-074's HSTS, production is never plain HTTP, so
+no user can reach it. Safari's real case is HTTPS, **unverified until T-3.14's staging check**,
+which waits on P-0.13. **Firefox: not yet seen** (not installed); T-3.13 runs it through
+Playwright. Until 3 October 2026 this line said "Chrome or Firefox" as fact, from documentation
+alone.
 
 **Never run `make infra-reset` without telling the founder first, and never while another session
 is testing.** Every worktree on this machine shares one Docker stack, so a reset drops every

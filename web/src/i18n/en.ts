@@ -29,9 +29,9 @@ export const en = {
     restoreFailedTitle: "We couldn't reach {app}",
     restoreFailedBody: "Check your connection and try again.",
   },
-  // Sign-in and onboarding (T-3.11, T-3.12). Drafted from the prototype where
-  // 08-DESIGN's list of its errors leaves it trusted, and from /terms and the
-  // decisions where it doesn't; approved by the founder at review.
+  // Sign-in and onboarding (T-3.11, T-3.12). Drafted by Claude from the
+  // prototype where 08-DESIGN's list of its errors leaves it trusted, and from
+  // /terms and the decisions where it doesn't; for the founder's review.
   onboarding: {
     progress: "Step {step} of {total}",
     back: "Back",

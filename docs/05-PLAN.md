@@ -850,13 +850,16 @@ exist yet. The batch is a chain, T-3.10 → T-3.11 → T-3.12 → T-3.13, each n
 - [x] **Durations kept in the browser** (decision 9): the 5 minutes, and T-3.11's 400 ms before a username check, are named constants. That's a Checklist A exception, recorded here as T-2.1 recorded its copy: a deterrent the browser runs is not a limit the server enforces, and reading `app_config` would need a new public endpoint.
 - [x] **A sign-out before T-9.8** (decision 7): `logout()` in the session layer, and two controls. "Forgot your PIN? Sign out" goes on the lock screen, D-069's way out. A quiet "Sign out" goes in the onboarding frame's top bar, which T-3.11 places. T-3.14's item 5 needs the second: its tester can't reach the PIN step before Sprint 4, because it comes after photos (D-068).
 - [x] Local development at `127.0.0.1` only: `localhost:3000` → `127.0.0.1:8000` is cross-site, so the `Lax` refresh cookie silently isn't sent. Remove `localhost` from the local `CORS_ORIGINS` (`api/.env.example`, the test settings), so that mistake fails loudly. In CLAUDE.md's local sign-in paragraph, add that reason, and replace "expected, not yet observed" with what the Done-when below sees, dated.
-- [ ] **Done when, locally, in Chrome against `make dev`** (decision 10). This task has no phone screen, so sign in from the browser console, with the two requests T-3.11's screens will make. Then observe, on the wire (devtools' network and cookie panes), never inferred from a test:
+- [x] **Done when, locally, in Chrome against `make dev`** (decision 10). This task has no phone screen, so sign in from the browser console, with the two requests T-3.11's screens will make. Then observe, on the wire (devtools' network and cookie panes), never inferred from a test:
   - a reload restores the session;
   - both cookies rotate, and the next refresh carries the new values;
   - two tabs reloaded together both stay signed in;
   - `test_woman`'s lock appears, and a wrong PIN shows the attempts left;
   - sign-out clears both cookies;
-  - Safari, going through the same steps, loses the session at reload.
+  - ~~Safari, going through the same steps, loses the session at reload.~~ **Struck, 3 October 2026
+    (the founder):** with D-074's HSTS, production is never plain HTTP, so Safari dropping a
+    session over plain `http://127.0.0.1` is not a case any user can reach. It isn't carried as
+    unverified. Safari's real case is HTTPS: T-3.14's.
 
   This proves T-3.14's items 4 and 6, and parts of 1, 3 and 5, as mechanism. Nothing comes off T-3.14's list, which only staging can prove.
   **Seen in Chrome 154 on 3 October 2026, all but Safari,** read from Chrome's own DevTools Protocol
@@ -874,12 +877,19 @@ exist yet. The batch is a chain, T-3.10 → T-3.11 → T-3.12 → T-3.13, each n
     lock queued them), both tabs signed in; a third reload after them, 200.
   - "Forgot your PIN? Sign out": logout 204, both cookies cleared with `Max-Age=0` on their own
     paths, the jar empty, the tab on `/login`; the other tab's next reload, 401 and `/login`.
-  - **Still open: Safari.** Its remote automation is off on this Mac, so the founder runs it or
-    turns it on. Until then CLAUDE.md says Safari's behaviour is expected, not seen.
+  - Safari's line is struck (above). The founder is turning on Safari's remote automation so the
+    same check runs in Safari against `make dev`: with a PWA first, every iPhone user is a Safari
+    user.
   Found on the way: the local dev database was two migrations behind (T-3.2's cap, T-3.3's
   `auth_time`), so OTP send answered 500 until `make migrate`; and that 500 reached Chrome as
   "Failed to fetch", not the API's envelope (P-61).
-- [ ] **Done when, on staging, after deploy, with nobody signed in:** `/login` at `https://staging.veloraapp.co.in` calls refresh with credentials and gets `401 AUTH_REQUIRED`, not a CORS error. It is the first credentialed request staging has served: the leg T-3.14 would otherwise have to debug at the same time as Firebase.
+- [x] **Done when, on staging, after deploy, with nobody signed in:** `/login` at `https://staging.veloraapp.co.in` calls refresh with credentials and gets `401 AUTH_REQUIRED`, not a CORS error. It is the first credentialed request staging has served: the leg T-3.14 would otherwise have to debug at the same time as Firebase.
+  **Proved, 3 October 2026,** on deploy run 37129957718 (`feed332`), in headless Chrome 154, read from
+  its own network events: `/login` sent the credentialed refresh and got 401, with
+  `Access-Control-Allow-Origin: https://staging.veloraapp.co.in` and
+  `Access-Control-Allow-Credentials: true`; the same request from the page's console read the body,
+  `AUTH_REQUIRED`. The control: a preflight from `https://evil.example` got 400 with no
+  `Access-Control-Allow-Origin`, so the 401 isn't CORS letting everyone through.
 - [x] **Commit:** `feat(web): auth session, refresh, route gates, pin lock [T-3.10]`
 
 ### T-3.11 · Web onboarding 1–7
@@ -929,6 +939,11 @@ exist yet. The batch is a chain, T-3.10 → T-3.11 → T-3.12 → T-3.13, each n
     caught, so the detector is live. The same run showed `/me` fetched again on every step, 7 extra
     round trips (1.8 to 3 s each on staging today, P-49); `useMe` now keeps a written `Me` fresh for
     60 s (`ME_FRESH_FOR_MS`, a Checklist A exception like T-3.10's), and the rerun made none.
+  - **D-081 on staging,** deploy run 37131611191 (`7dcd832`), in Chrome: `/login` says "Sign-in
+    isn't open yet", with no phone input and no API call but the restore attempt; "Join the
+    waitlist" lands on `/#waitlist`; no CSP violation. **Seen there:** the box it lands on is headed
+    "Not in your city yet?", written for people outside the launch city, not for someone who can't
+    sign in anywhere. Raised with the copy review.
 - [x] **Commit:** `feat(web): onboarding steps 1-7 [T-3.11]`
 
 ### T-3.12 · Web onboarding 8, 10, 11
@@ -992,6 +1007,10 @@ exist yet. The batch is a chain, T-3.10 → T-3.11 → T-3.12 → T-3.13, each n
      (D-055), is readable by the page there and sent back as `X-CSRF`, and refresh accepts it.
   3. **`Secure` cookies are kept by real browsers over HTTPS**: Chrome, Firefox and Safari. Safari
      can't be tested locally (D-067, CLAUDE.md), so staging is its only proof.
+     **Safari over HTTPS is unverified until this check runs** (the founder, 3 October 2026), and
+     this task is blocked on P-0.13, the founder's Google Cloud billing account. "Staging covers
+     Safari" is a promise with that dependency, not coverage. With a PWA first, every iPhone user
+     is a Safari user.
   4. **Rotation in the browser:** a refresh replaces both cookies, and the next refresh uses the
      new values, not the old ones.
   5. **Logout clears both cookies in the browser** (the clearing cookies must match each cookie's

@@ -1750,6 +1750,12 @@ T-3.11 added the web app's form tooling, the first forms to need it. Versions ar
   server and comes back inline.
 - **Not on the landing page.** T-2.3's waitlist form keeps plain React state, so neither library
   ships with the page whose performance score is measured (98–100, T-2.1).
+- **zod never compiles its parsers here** (added after T-3.11's Chrome check, before this entry was
+  locked). zod 4 probes `new Function("")` to see whether it may, and production's CSP has no
+  `'unsafe-eval'` (D-059): the probe is blocked and caught, but the browser still reports a
+  `script-src eval` violation, which Chrome did against a production build. So `src/lib/zod.ts`
+  sets `jitless` once and is the only place `"zod"` may be imported (ESLint refuses it anywhere
+  else); the rerun had no violation. The cost is zod's interpreted parse, nothing a form notices.
 
 **Rejected:** plain React state for every onboarding form, which would leave each screen to rebuild
 validation, dirty tracking and submit state by hand.
