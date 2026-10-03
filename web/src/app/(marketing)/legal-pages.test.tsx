@@ -2,6 +2,7 @@ import { render, screen } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { t } from "@/i18n/t";
+import { APP_NAME } from "@/lib/app";
 import { OFFICE_ADDRESS } from "@/lib/legal";
 
 /** The two mailboxes (P-0.3): the only email addresses a legal page may show. */
@@ -133,6 +134,20 @@ describe("/privacy", () => {
     expect(
       screen.getByText(t("legal.privacy.deletion.kept")),
     ).toHaveTextContent("a hashed copy of your phone number");
+  });
+
+  it("says an under-18 sign-up is deleted at once, all but the number's hash (D-072)", () => {
+    render(<PrivacyPage />);
+
+    const children = screen.getByText(
+      t("legal.privacy.children.body", { app: APP_NAME }),
+    );
+    expect(children).toHaveTextContent(
+      "delete the account and everything in it at once",
+    );
+    expect(children).toHaveTextContent(
+      "We keep only a hashed copy of the phone number",
+    );
   });
 });
 

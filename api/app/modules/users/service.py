@@ -8,13 +8,13 @@ from datetime import date
 from uuid import UUID
 
 from redis.asyncio import Redis
-from sqlalchemy.exc import IntegrityError
+from sqlalchemy.exc import DBAPIError, IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core import clock, ratelimit
 from app.core.config import Settings
-from app.core.enums import UserStatus
-from app.core.errors import AppError
+from app.core.enums import Gender, OnboardingStep, UserStatus
+from app.core.errors import AppError, invalid_field
 from app.core.security import E164, encrypt_phone, hash_phone
 from app.modules.profiles.models import Profile
 from app.modules.users import repository
@@ -165,6 +165,136 @@ def account_banned() -> AppError:
 
 def age_on(dob: date, today: date) -> int:
     return today.year - dob.year - ((today.month, today.day) < (dob.month, dob.day))
+
+
+# --- Onboarding (T-3.6): the step rule, dob and gender ---------------------------
+
+# In the order `onboarding_t` declares them, which is the order they're asked.
+_STEPS = tuple(OnboardingStep)
+
+
+def at_step(user: User, step: OnboardingStep) -> bool:
+    """D-068's rule for every onboarding endpoint: True if the user is at
+    `step`, so the endpoint advances it; False once they're past it, so it is
+    an edit that doesn't; `ONBOARDING_INCOMPLETE`, naming the step they're at,
+    if they haven't reached it."""
+    here, there = _STEPS.index(user.onboarding_step), _STEPS.index(step)
+    if here < there:
+        raise AppError(
+            "ONBOARDING_INCOMPLETE",
+            "Finish the earlier steps first.",
+            status=403,
+            details={"step": user.onboarding_step.value},
+        )
+    return here == there
+
+
+def advance_past(user: User, step: OnboardingStep) -> None:
+    user.onboarding_step = _STEPS[_STEPS.index(step) + 1]
+
+
+async def locked_user(session: AsyncSession, user_id: UUID) -> User:
+    """The user, re-read and locked for the caller's transaction, so the step
+    and the fields an onboarding write checks are the ones it changes."""
+    user = await repository.user_for_update(session, user_id)
+    if user is None:
+        raise LookupError("no such user")
+    return user
+
+
+# D-009: a hard 18+ gate, by age in IST today. A date further back than this is
+# a typo, not a person.
+ADULT_AGE = 18
+OLDEST_DOB_YEARS = 100
+UNDERAGE_REASON = "underage"
+
+
+async def set_dob(session: AsyncSession, user: User, dob: date) -> Me:
+    """Set the date of birth once, at the dob step.
+
+    Under 18 is D-072: the account and everything attached are deleted in this
+    transaction, only the number's hash is kept in `banned_identities`, and the
+    answer is `UNDERAGE`, sent once the deletion has committed.
+    """
+    today = clock.today_ist()
+    async with session.begin():
+        user = await locked_user(session, user.id)
+        advancing = at_step(user, OnboardingStep.DOB)
+        if user.dob is not None:
+            raise _immutable()
+        _refuse_an_impossible_dob(dob, today)
+        if age_on(dob, today) >= ADULT_AGE:
+            user.dob = dob
+            if advancing:
+                advance_past(user, OnboardingStep.DOB)
+            await _flush_identity(session)
+            return await me(session, user)
+        await repository.ban_phone_hash(session, user.phone_hash, UNDERAGE_REASON)
+        await repository.delete_account(session, user.id)
+    session.expunge(user)
+    raise AppError(
+        "UNDERAGE",
+        "You must be 18 or older to sign up.",
+        status=422,
+    )
+
+
+def _refuse_an_impossible_dob(dob: date, today: date) -> None:
+    if dob > today:
+        raise invalid_field("dob", "is in the future")
+    if dob < _years_before(today, OLDEST_DOB_YEARS):
+        raise invalid_field("dob", f"is more than {OLDEST_DOB_YEARS} years ago")
+
+
+def _years_before(day: date, years: int) -> date:
+    """The same day `years` earlier; 29 February becomes the 28th."""
+    try:
+        return day.replace(year=day.year - years)
+    except ValueError:
+        return day.replace(year=day.year - years, day=28)
+
+
+async def set_gender(session: AsyncSession, user: User, gender: Gender) -> Me:
+    """Set gender once, at the gender step; never again (D-068). Changing it
+    after signup is rejected permanently (CLAUDE.md)."""
+    async with session.begin():
+        user = await locked_user(session, user.id)
+        advancing = at_step(user, OnboardingStep.GENDER)
+        if user.gender is not None:
+            raise _immutable()
+        user.gender = gender
+        if advancing:
+            advance_past(user, OnboardingStep.GENDER)
+        await _flush_identity(session)
+        return await me(session, user)
+
+
+# T-1.9's trigger refuses a change to a set gender or dob with this SQLSTATE,
+# behind the checks above: it catches any write that gets past them. Read by
+# code, never by message, which Postgres may reword. `users` has no CHECK
+# constraint, so on this table only the trigger raises it.
+CHECK_VIOLATION = "23514"
+
+
+async def _flush_identity(session: AsyncSession) -> None:
+    try:
+        await session.flush()
+    except IntegrityError as error:
+        if sqlstate_of(error) == CHECK_VIOLATION:
+            raise _immutable() from None
+        raise
+
+
+def sqlstate_of(error: DBAPIError) -> str | None:
+    """The SQLSTATE asyncpg reported, if any."""
+    sqlstate = getattr(error.orig, "sqlstate", None)
+    return sqlstate if isinstance(sqlstate, str) else None
+
+
+def _immutable() -> AppError:
+    return AppError(
+        "IMMUTABLE_FIELD", "This can't be changed once it's set.", status=422
+    )
 
 
 async def me(session: AsyncSession, user: User) -> Me:

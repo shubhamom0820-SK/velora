@@ -16,9 +16,13 @@ import pytest
 from sqlalchemy import text
 from sqlalchemy.engine import make_url
 from sqlalchemy.exc import DBAPIError
-from sqlalchemy.ext.asyncio import AsyncConnection, AsyncEngine
+from sqlalchemy.ext.asyncio import AsyncConnection, AsyncEngine, AsyncSession
 
 from app.core.db import build_engine
+from app.core.security import normalize_phone
+from app.modules.users import repository as users_repository
+from app.modules.users import service as users_service
+from tests.conftest import make_test_settings
 from tests.infra import TEST_DATABASE_URL
 
 APP_ROLE = "velora_app"
@@ -120,6 +124,36 @@ async def test_payments_status_can_still_change(as_app: AsyncConnection) -> None
         text("update payments set status = status where false")
     )
     assert result.rowcount == 0
+
+
+async def test_the_app_role_can_delete_an_under_18_account(
+    as_app: AsyncConnection,
+) -> None:
+    """D-072's deletion runs as the app role on staging and production: signup's
+    rows, written and then deleted through the same repository calls the dob
+    step makes, with only the number's hash kept (T-3.6)."""
+    settings = make_test_settings()
+    phone = normalize_phone("+919812345699")
+    session = AsyncSession(bind=as_app, join_transaction_mode="create_savepoint")
+    account = await users_service.create_account(session, phone, settings)
+    user_id = account.user.id
+
+    await users_repository.ban_phone_hash(session, account.user.phone_hash, "underage")
+    await users_repository.delete_account(session, user_id)
+    await session.flush()
+
+    for table in ("users", "profiles", "wallets", "notification_prefs"):
+        column = "id" if table == "users" else "user_id"
+        left = await as_app.scalar(
+            text(f"select count(*) from {table} where {column} = :id"),
+            {"id": user_id},
+        )
+        assert left == 0, table
+    kept = await as_app.scalar(
+        text("select reason from banned_identities where value = :hash"),
+        {"hash": account.user.phone_hash},
+    )
+    assert kept == "underage"
 
 
 @pytest.mark.parametrize(

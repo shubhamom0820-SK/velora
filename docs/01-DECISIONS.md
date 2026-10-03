@@ -1265,7 +1265,7 @@ Recommended by Claude in the joint plan for T-3.2 to T-3.10; answered by the adv
 that plan (Claude, in a separate chat); approved by the founder on 3 October 2026. Locked at T-3.3's
 `/done`, 3 October 2026.
 
-### D-072 · An under-18 refusal deletes the account and keeps only the number's hash — Open
+### D-072 · An under-18 refusal deletes the account and keeps only the number's hash — Locked
 **The decision (T-3.6):** `UNDERAGE` deletes, in the transaction that refuses the date, the user
 and everything attached: the user row with its encrypted number, the profile, wallet,
 notification preferences and sessions. It keeps only what D-009 has always required, the number's
@@ -1297,8 +1297,14 @@ matches. D-032 isn't edited for a no-op; this note is the reason the clause matc
 **Rejected:** keeping the row with status `banned` (T-3.6's first text); dropping the hash too, a
 soft gate, which would supersede D-009 and the published pages.
 
+**If the premise fails (found building T-3.6):** the deletion clears exactly the six tables a user
+can have rows in at the dob step, and every other foreign key into `users` is RESTRICT. So if an
+under-18 account ever holds a row anywhere else, the deletion fails whole, a 500 with nothing
+deleted and no hash kept, rather than taking a moderation or money record with it. A test holds
+every key into `users` to that split; P-54 is the first route that could make it happen.
+
 The deletion is the advisor's answer 42, approved by the founder; keeping the hash is the founder's
-own decision, both on 3 October 2026. **Open** until T-3.6 lands; its `/done` marks it Locked.
+own decision, both on 3 October 2026. Locked at T-3.6's `/done`, 3 October 2026.
 
 ### D-073 · On Path B a banned number's codes stop arriving, with no message — Open
 **The fact, built in T-3.2 and T-3.3:** a number whose hash is in `banned_identities` (D-009's

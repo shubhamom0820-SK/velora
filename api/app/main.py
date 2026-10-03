@@ -23,6 +23,7 @@ from app.core.redis import build_redis
 from app.modules.auth.router import otp_router
 from app.modules.auth.router import router as auth_router
 from app.modules.health.router import router as health_router
+from app.modules.profiles.router import router as profiles_router
 from app.modules.users.router import router as users_router
 from app.modules.waitlist.router import router as waitlist_router
 
@@ -110,6 +111,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.include_router(waitlist_router, prefix="/v1")
     app.include_router(auth_router, prefix="/v1")
     app.include_router(users_router, prefix="/v1")
+    app.include_router(profiles_router, prefix="/v1")
     if settings.AUTH_PHONE_PROVIDER in OTP_SERVED_FOR:
         app.include_router(otp_router, prefix="/v1")
 

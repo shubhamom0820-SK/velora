@@ -600,16 +600,32 @@ One migration per task, each with a working `downgrade()`. Build exactly `03-SCH
 - [x] **Commit:** `feat(users): current user and /me [T-3.5]`
 
 ### T-3.6 · DOB, gender, seeking
-- [ ] **Needs:** T-3.5
-- [ ] `POST /me/dob`: compute age in IST. Under 18 → **D-072**: in one transaction, delete the user and everything attached (the user row with its encrypted number, profile, wallet, notification preferences, sessions), keep only the number's hash in `banned_identities` (`reason` `underage`, D-009), and return `UNDERAGE`. A date in the future, or more than 100 years ago → `VALIDATION_ERROR`. Otherwise advance.
-- [ ] `/privacy`'s under-18 paragraph (`web/src/i18n/en.ts`) adds that everything else is deleted at once (D-072); `/terms` already says the number is barred.
-- [ ] `POST /me/gender`: only if null → set, advance; else `IMMUTABLE_FIELD`.
-- [ ] The database also refuses the change (T-1.9's `users_identity_immutable` trigger) with SQLSTATE `23514` `check_violation`, which SQLAlchemy raises as `IntegrityError`. Map it to `IMMUTABLE_FIELD` by that SQLSTATE — never by the message text, which Postgres can reword.
-- [ ] `GET /intents`; `POST /me/seeking {seeking, intent_ids}`: seeking women, men or everyone, as the prototype offers; 1 to 3 valid distinct ids (D-041), replace the set in one tx → advance.
-- [ ] **The step rule (D-068):** each step's endpoint works at its step, advancing it, and after it, as an edit that doesn't advance; before it → `ONBOARDING_INCOMPLETE` with `details.step`, the user's current step. Once set, dob and gender are `IMMUTABLE_FIELD` instead.
-- [ ] Tests for each branch, including "17 years 364 days" and "exactly 18 today"; after `UNDERAGE` nothing survives but one `banned_identities` row: no user, session, profile, wallet or preferences row (🔒 7); a future date and one 101 years ago → `VALIDATION_ERROR`; a step before its turn → `ONBOARDING_INCOMPLETE` with the current step; an edit after it doesn't move the step.
-- [ ] **At `/done`:** D-072 becomes Locked.
-- [ ] **Commit:** `feat(onboarding): dob, gender, seeking [T-3.6]`
+- [x] **Needs:** T-3.5
+- [x] `POST /me/dob`: compute age in IST. Under 18 → **D-072**: in one transaction, delete the user and everything attached (the user row with its encrypted number, profile, wallet, notification preferences, sessions), keep only the number's hash in `banned_identities` (`reason` `underage`, D-009), and return `UNDERAGE`. A date in the future, or more than 100 years ago → `VALIDATION_ERROR`. Otherwise advance.
+  **Built:** the deletion clears exactly six tables' rows (sessions, notification preferences,
+  wallet, profile intents, profile interests, profile) and then the user, and commits before
+  `UNDERAGE` is sent. Every other foreign key into `users` is RESTRICT, so a row anywhere else
+  stops the deletion whole: a 500, nothing deleted, no hash kept, rather than a moderation or
+  money record taken with the account (rule 12); a test holds every key into `users` to that
+  split, so a later table that cascades fails it (P-54). A date is only `YYYY-MM-DD`: pydantic
+  alone reads a number as a Unix timestamp in UTC, the wrong day in India for part of every day.
+  "More than 100 years ago" is before this day 100 years back, so 100 years to the day is accepted.
+- [x] `/privacy`'s under-18 paragraph (`web/src/i18n/en.ts`) adds that everything else is deleted at once (D-072); `/terms` already says the number is barred.
+- [x] `POST /me/gender`: only if null → set, advance; else `IMMUTABLE_FIELD`.
+  **Built:** the same value sent again is `IMMUTABLE_FIELD` too, for gender and dob alike, as
+  "only if null" says; a client retrying after a lost answer reads `/me` instead.
+- [x] The database also refuses the change (T-1.9's `users_identity_immutable` trigger) with SQLSTATE `23514` `check_violation`, which SQLAlchemy raises as `IntegrityError`. Map it to `IMMUTABLE_FIELD` by that SQLSTATE — never by the message text, which Postgres can reword.
+  **Built:** mapped only where `users` is written, which has no CHECK constraint, so 23514 there
+  is the trigger's; `profiles`' length CHECKs raise the same SQLSTATE and are never mapped. A test
+  switches the service's own check off and gets `IMMUTABLE_FIELD` from the trigger, for both fields.
+- [x] `GET /intents`; `POST /me/seeking {seeking, intent_ids}`: seeking women, men or everyone, as the prototype offers; 1 to 3 valid distinct ids (D-041), replace the set in one tx → advance.
+- [x] **The step rule (D-068):** each step's endpoint works at its step, advancing it, and after it, as an edit that doesn't advance; before it → `ONBOARDING_INCOMPLETE` with `details.step`, the user's current step. Once set, dob and gender are `IMMUTABLE_FIELD` instead.
+  **Built:** `users.service.at_step`, called by every onboarding write after it re-reads the user
+  `FOR UPDATE`, so two writes at once take turns. A test on two connections proves it for seeking,
+  and failed without the lock: the user ended with both sets of intents.
+- [x] Tests for each branch, including "17 years 364 days" and "exactly 18 today"; after `UNDERAGE` nothing survives but one `banned_identities` row: no user, session, profile, wallet or preferences row (🔒 7); a future date and one 101 years ago → `VALIDATION_ERROR`; a step before its turn → `ONBOARDING_INCOMPLETE` with the current step; an edit after it doesn't move the step.
+- [x] **At `/done`:** D-072 becomes Locked.
+- [x] **Commit:** `feat(onboarding): dob, gender, seeking [T-3.6]`
 
 ### T-3.7 · Name, places, username
 - [ ] **Needs:** T-3.6
@@ -1934,3 +1950,12 @@ Claude Code adds items here instead of doing unplanned work. Format:
   against 1,097 ms that morning.
 
   Split from P-50, at the direction of the advisor directing T-3.2 to T-3.10.
+- [ ] P-54 · Keep D-072's deletion possible once T-8.6 lets a referral code be applied during
+  onboarding. **With T-8.6.** Worst case: someone under 18 applies a code before the dob step, then
+  gives their date; the referral's row, RESTRICT to `users`, stops the deletion, they get a 500, and
+  their account, encrypted number included, stays: the data D-072 exists not to hold. T-3.6 made
+  it fail closed (nothing deleted, no hash kept), and a test fails if any key into `users`
+  cascades. T-8.6 either refuses `/referrals/apply` until dob is set, or adds its table to
+  `UNDERAGE_DELETES` (`api/app/modules/users/repository.py`) with a test. The same goes for any 🔐
+  route that writes a row before dob: D-068's step rule already keeps photos (T-4.2) and the selfie
+  (T-4.5) behind their steps. Found in T-3.6.

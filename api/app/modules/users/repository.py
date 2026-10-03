@@ -4,9 +4,12 @@ from __future__ import annotations
 
 from uuid import UUID
 
-from sqlalchemy import exists, select
+from sqlalchemy import delete, exists, select
+from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.enums import BanKind
+from app.modules.auth.models import BannedIdentity, Session
 from app.modules.notifications.models import NotificationPrefs
 from app.modules.profiles.models import Profile, ProfileIntent, ProfileInterest
 from app.modules.users.models import User
@@ -22,6 +25,60 @@ async def user_by_phone_hash(session: AsyncSession, phone_hash: str) -> User | N
 
 async def user_by_id(session: AsyncSession, user_id: UUID) -> User | None:
     return await session.get(User, user_id)
+
+
+async def user_for_update(session: AsyncSession, user_id: UUID) -> User | None:
+    """The user, re-read and locked until the transaction ends: two onboarding
+    requests at once take turns, each seeing what the other wrote."""
+    user: User | None = await session.scalar(
+        select(User)
+        .where(User.id == user_id)
+        .with_for_update()
+        .execution_options(populate_existing=True)
+    )
+    return user
+
+
+# The tables a user can have rows in at the dob step: signup's four, and the
+# picks a later step makes. Nothing else is deleted with an account (D-072);
+# every other table's key to users is RESTRICT, so a row anywhere else makes
+# the deletion fail whole rather than take moderation or money records with it
+# (rule 12). A test holds every foreign key into users to exactly this split.
+UNDERAGE_DELETES = (
+    Session,
+    NotificationPrefs,
+    Wallet,
+    ProfileIntent,
+    ProfileInterest,
+    Profile,
+)
+
+
+async def delete_account(session: AsyncSession, user_id: UUID) -> None:
+    """Delete the user and everything attached, in the caller's transaction."""
+    for model in UNDERAGE_DELETES:
+        await session.execute(
+            delete(model)
+            .where(model.user_id == user_id)
+            .execution_options(synchronize_session=False)
+        )
+    deleted = await session.execute(
+        delete(User)
+        .where(User.id == user_id)
+        .execution_options(synchronize_session=False)
+    )
+    if deleted.rowcount != 1:  # type: ignore[attr-defined]
+        raise LookupError("no such user to delete")
+
+
+async def ban_phone_hash(session: AsyncSession, phone_hash: str, reason: str) -> None:
+    """Keep a number's hash in `banned_identities` (D-009). A hash already
+    there keeps its row and reason: one row per number, whatever banned it."""
+    await session.execute(
+        insert(BannedIdentity)
+        .values(kind=BanKind.PHONE_HASH, value=phone_hash, reason=reason)
+        .on_conflict_do_nothing(index_elements=["kind", "value"])
+    )
 
 
 async def referral_code_taken(session: AsyncSession, code: str) -> bool:

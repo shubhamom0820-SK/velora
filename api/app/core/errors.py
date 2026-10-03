@@ -55,6 +55,17 @@ class AppError(Exception):
         self.details = details
 
 
+def invalid_field(field: str, problem: str) -> AppError:
+    """`VALIDATION_ERROR` for a rule a service checks, shaped exactly as the
+    schema's own failures are: one entry in `details.fields`."""
+    return AppError(
+        "VALIDATION_ERROR",
+        "Some of the information sent was not valid.",
+        status=400,
+        details={"fields": [{"field": field, "problem": problem}]},
+    )
+
+
 def envelope(
     code: str, message: str, details: dict[str, Any] | None = None
 ) -> dict[str, Any]:

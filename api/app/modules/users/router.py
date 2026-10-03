@@ -1,4 +1,5 @@
-"""`GET /v1/me` (T-3.5): the signed-in user as the web sees them."""
+"""`GET /v1/me` (T-3.5): the signed-in user as the web sees them; the dob and
+gender onboarding steps (T-3.6)."""
 
 from __future__ import annotations
 
@@ -11,7 +12,7 @@ from app.core.db import get_session
 from app.core.deps import current_user
 from app.modules.users import service
 from app.modules.users.models import User
-from app.modules.users.schemas import Me
+from app.modules.users.schemas import DobSet, GenderSet, Me
 
 router = APIRouter(tags=["users"])
 
@@ -22,3 +23,21 @@ async def get_me(
     session: Annotated[AsyncSession, Depends(get_session)],
 ) -> Me:
     return await service.me_for(session, user)
+
+
+@router.post("/me/dob")
+async def set_dob(
+    body: DobSet,
+    user: Annotated[User, Depends(current_user)],
+    session: Annotated[AsyncSession, Depends(get_session)],
+) -> Me:
+    return await service.set_dob(session, user, body.dob)
+
+
+@router.post("/me/gender")
+async def set_gender(
+    body: GenderSet,
+    user: Annotated[User, Depends(current_user)],
+    session: Annotated[AsyncSession, Depends(get_session)],
+) -> Me:
+    return await service.set_gender(session, user, body.gender)

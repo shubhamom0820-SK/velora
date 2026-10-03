@@ -118,6 +118,74 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/me/dob": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Set Dob */
+        post: operations["set_dob_v1_me_dob_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/me/gender": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Set Gender */
+        post: operations["set_gender_v1_me_gender_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/intents": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Intents */
+        get: operations["list_intents_v1_intents_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/me/seeking": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Set Seeking */
+        post: operations["set_seeking_v1_me_seeking_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/auth/otp/send": {
         parameters: {
             query?: never;
@@ -165,11 +233,23 @@ export interface components {
             /** Access Token */
             access_token: string;
         };
+        /** DobSet */
+        DobSet: {
+            /**
+             * Dob
+             * Format: date
+             */
+            dob: string;
+        };
         /**
          * Gender
          * @enum {string}
          */
         Gender: "male" | "female";
+        /** GenderSet */
+        GenderSet: {
+            gender: components["schemas"]["Gender"];
+        };
         /** HTTPValidationError */
         HTTPValidationError: {
             /** Detail */
@@ -183,6 +263,19 @@ export interface components {
              * @constant
              */
             status: "ok";
+        };
+        /**
+         * Intent
+         * @description One of the catalogue's intents (D-041). The web shows its own label for
+         *     each id, from `en.ts` (P-26).
+         */
+        Intent: {
+            /** Id */
+            id: number;
+            /** Slug */
+            slug: string;
+            /** Label */
+            label: string;
         };
         /**
          * Me
@@ -298,6 +391,12 @@ export interface components {
          * @enum {string}
          */
         Seeking: "women" | "men" | "everyone";
+        /** SeekingSet */
+        SeekingSet: {
+            seeking: components["schemas"]["Seeking"];
+            /** Intent Ids */
+            intent_ids: number[];
+        };
         /**
          * SignedIn
          * @description A sign-in's body. The refresh token and CSRF value go in cookies, never
@@ -484,6 +583,125 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["Me"];
+                };
+            };
+        };
+    };
+    set_dob_v1_me_dob_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["DobSet"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Me"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    set_gender_v1_me_gender_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["GenderSet"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Me"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_intents_v1_intents_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Intent"][];
+                };
+            };
+        };
+    };
+    set_seeking_v1_me_seeking_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SeekingSet"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Me"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };

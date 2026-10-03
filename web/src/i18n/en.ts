@@ -271,8 +271,8 @@ export const en = {
       },
       children: {
         title: "Under-18s",
-        // D-009.
-        body: "{app} is only for people aged 18 and over. If someone gives a date of birth under 18, we refuse the sign-up and keep a hashed copy of the phone number, so that it can't sign up again.",
+        // D-009; everything else deleted at once: D-072.
+        body: "{app} is only for people aged 18 and over. If someone gives a date of birth under 18, we refuse the sign-up and delete the account and everything in it at once. We keep only a hashed copy of the phone number, so that it can't sign up again.",
       },
       grievance: {
         title: "Questions and complaints",
