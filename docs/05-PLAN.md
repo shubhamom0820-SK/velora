@@ -1790,7 +1790,7 @@ Claude Code adds items here instead of doing unplanned work. Format:
   grievance@. Whether Path B's silence is acceptable is this task's question.
 
   Found reviewing T-3.2 to T-3.5, at the direction of the advisor directing them.
-- [ ] P-52 · One connection per request: stop the second checkout T-3.5 added. **Now, before
+- [x] P-52 · One connection per request: stop the second checkout T-3.5 added. **Now, before
   T-3.6.** Worst case left: every authenticated request checks out twice and pays the liveness ping
   twice, about 990 ms on staging, in every environment, colocated or not. `current_user` reads the
   user in a transaction of its own and ends it, so the route's service can begin another (T-3.5),
@@ -1799,6 +1799,14 @@ Claude Code adds items here instead of doing unplanned work. Format:
   keeps it until the request ends, so later transactions reuse it; a request that never reaches the
   database, a bad token say, still checks out nothing. Proved on the real `get_session` by counting
   pool checkouts, failing with the old session.
+  **Done, 3 October 2026:** `core/db.py`'s `RequestSession` opens its connection inside `get_bind`
+  at the first query and hands it back from `close`, `reset` and `invalidate`. On the real
+  `get_session`: two transactions in a request take one checkout, as do `current_user` and `/me`'s
+  route together; a bad token takes none. Every way a session ends returns the connection, between
+  transactions too, where only the session knows it holds one (the first version of that test,
+  mid-transaction only, missed a leak from `invalidate`). Six weakenings, each red. Measured by the
+  delay proxy: `/me` from about 17 round trips to about 14, one liveness ping fewer, about 495 ms on
+  staging; single-transaction endpoints unchanged.
 
   Split from P-50, at the direction of the advisor directing T-3.2 to T-3.10.
 - [ ] P-53 · Make the liveness ping cheap. **Now, before T-3.6.** Worst case left: `pool_pre_ping`

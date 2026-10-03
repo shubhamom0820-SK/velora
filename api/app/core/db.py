@@ -9,7 +9,8 @@ Building an engine opens no connection; the first query does. So an app starts
 even when Postgres is down, and `/readyz` is what reports it.
 
 Transactions are opened in the service layer (`async with session.begin():`);
-repositories receive a session and never commit (`02-ARCHITECTURE.md` §2).
+repositories receive a session and never commit (`02-ARCHITECTURE.md` §2). A
+request may open several, one after another, on one connection (P-52).
 """
 
 from __future__ import annotations
@@ -25,13 +26,20 @@ from typing import Any
 from fastapi import Request
 from sqlalchemy import DateTime, ForeignKey, MetaData, func, text
 from sqlalchemy.dialects.postgresql import ENUM, UUID
+from sqlalchemy.engine import Connection, Engine
 from sqlalchemy.ext.asyncio import (
     AsyncEngine,
     AsyncSession,
     async_sessionmaker,
     create_async_engine,
 )
-from sqlalchemy.orm import DeclarativeBase, Mapped, MappedColumn, mapped_column
+from sqlalchemy.orm import (
+    DeclarativeBase,
+    Mapped,
+    MappedColumn,
+    Session,
+    mapped_column,
+)
 
 from app.core.enums import PG_ENUMS
 
@@ -153,8 +161,64 @@ def build_engine(url: str, *, pool_size: int = 5, max_overflow: int = 5) -> Asyn
     )
 
 
+class RequestSession(Session):
+    """A request's session: one pooled connection, checked out at its first
+    query and kept until the session closes (P-52).
+
+    A session bound to the engine hands its connection back to the pool at the
+    end of every transaction, and its next transaction checks out again,
+    paying the pool's liveness check again. `current_user` ends a transaction
+    of its own before the route's service begins another (T-3.5), so every
+    authenticated request checked out twice. Bound to a connection, a session
+    keeps it across transactions and leaves it open; this one opens it at first
+    use, so a request that never reaches the database (a bad token) takes
+    nothing from the pool, and closes it with the session.
+
+    The connection is opened inside `get_bind`, which SQLAlchemy calls on the
+    async session's greenlet. Calling `AsyncSession.get_bind()` from async code
+    would run it off that greenlet: nothing does, and nothing should.
+    """
+
+    _request_connection: Connection | None = None
+
+    def get_bind(self, mapper: Any = None, **kw: Any) -> Engine | Connection:
+        bind = super().get_bind(mapper, **kw)
+        if isinstance(bind, Connection):
+            return bind
+        if self._request_connection is None:
+            self._request_connection = bind.connect()
+        return self._request_connection
+
+    # Every way a session ends hands the connection back.
+    def close(self) -> None:
+        try:
+            super().close()
+        finally:
+            self._release_connection()
+
+    def reset(self) -> None:
+        try:
+            super().reset()
+        finally:
+            self._release_connection()
+
+    def invalidate(self) -> None:
+        try:
+            super().invalidate()
+        finally:
+            self._release_connection()
+
+    def _release_connection(self) -> None:
+        held, self._request_connection = self._request_connection, None
+        if held is not None:
+            held.close()
+
+
 def build_sessionmaker(engine: AsyncEngine) -> async_sessionmaker[AsyncSession]:
-    return async_sessionmaker(engine, expire_on_commit=False)
+    """Sessions for requests: each holds one connection while it lives (P-52)."""
+    return async_sessionmaker(
+        engine, expire_on_commit=False, sync_session_class=RequestSession
+    )
 
 
 async def get_session(request: Request) -> AsyncIterator[AsyncSession]:
