@@ -1584,6 +1584,53 @@ one transaction share `created_at`. That isn't worth building for a repairable b
 Directed by the advisor directing Sprint 5 (Claude, in a separate chat). Approved by the founder on
 3 October 2026.
 
+### D-078 · An under-18 refusal deletes everything the app may delete, files included — Open
+**Supersedes** D-072's paragraph "If the premise fails": that the deletion clears six tables, and
+that a row anywhere else stops it whole. The rest of D-072 stands: the user and everything attached
+are deleted in the transaction that refuses the date, and only the number's hash is kept.
+
+**The decision (P-54):**
+- An under-18 refusal deletes the user's rows in every table the app role may delete from, under
+  every column that names the user. It keeps only what rule 12 keeps and the app role can't delete
+  (T-1.22): `messages`, `reports`, `ledger_entries`, `payments` and `audit_log`. A user at the dob
+  step can't have a row there; if one ever does, the deletion fails whole, a 500, and the bug is in
+  whatever wrote the row.
+- **Files go too, in this order.** In the transaction that deletes the rows, and before it deletes
+  them, read the storage key of every file behind them: photos, selfies, and any file a later table
+  stores behind a user row. Then delete the rows, commit, and enqueue the files' deletion with the
+  keys read. The order is the decision: deleting the rows first and then looking up what to delete
+  from storage loses the keys it needs. The job retries, and if it still fails it raises where
+  someone sees it (T-9.12's alerts), never only a log line, since a file left behind is a minor's
+  selfie in a bucket. The enqueue comes after the commit, so a refusal that rolls back deletes no
+  file a kept row still points to; the moment between commit and enqueue is the implementing
+  task's to close (a row written in the same transaction, which the job reads, is the usual way).
+- A table added with a key to `users` fails CI, naming D-072, until it is listed as deleted or kept
+  (T-3.6's test, which P-54 extends), so the deletion can't fall behind the schema.
+- **Not either/or forever.** If a kept table ever genuinely needs a refusal before dob, that is a
+  narrow guard on that one table, with its own reason, never a global rule.
+
+**Why:** it is what D-072 already promises, "the user and everything attached"; refusing every
+write before dob would be a different promise put in its place. CI keeps the list current without
+more machinery, and it costs nothing until a minor signs up.
+
+**Rejected:** (b), a database guard refusing a row in a kept table for any user whose dob is null.
+It is D-068's step rule a second time, in the database, and a rule kept in two places drifts: a row
+written before dob is a D-068 bug, fixed in the step rule. It needs an exception for staff, whose dob
+can be null (the seed's moderator), and a guard that exempts a class of users is one widening from
+not being a guard (the advisor: the week's other guards, the gender trigger and D-076's closed
+system, hold because they have no exception). And it costs a lookup on every insert into busy
+tables, paid by every user forever, against a state that arises only when other code is already
+broken. Also rejected: deleting rule 12's tables too, which rule 12 forbids and the app role can't
+do.
+
+**How it lands:** P-54's row half, every table the app role may delete from, before T-4.2. The file
+half in T-4.2, the first task to store a file behind a user row, whose keys it defines; T-4.5 adds
+its selfies. Both inherit the rule: any file they store behind a user row joins the list.
+
+The options were Claude's (P-54). (a) was chosen, with the condition on files, by the advisor
+directing T-3.2 to T-3.10 (Claude, in a separate chat), relayed by the founder, 3 October 2026.
+**Open** until P-54 lands it; its `/done` marks it Locked.
+
 ---
 
 ## Adding a decision

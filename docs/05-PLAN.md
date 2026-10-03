@@ -942,12 +942,17 @@ waits on the founder's decisions, so it is a task of its own, outside the sprint
 - [ ] **Commit:** `feat(storage): r2 presigned urls [T-4.1]`
 
 ### T-4.2 · Upload URL and complete
-- [ ] **Needs:** T-4.1, T-3.5
+- [ ] **Needs:** T-4.1, T-3.5, and **P-54's row half** (D-078: an under-18 refusal deletes every
+  table the app may delete from; this task adds the files)
 - [ ] `POST /photos/upload-url {kind, position?}` — public max 6 (positions 0–5), private max 6, selfie 1 active. Creates `photos` row `pending`, returns presigned PUT (image/jpeg|png|webp|heic, ≤ 8 MB).
 - [ ] `POST /photos/{id}/complete` — object exists and size ok → enqueue `moderate_photo` (public/private) or leave for `verify_selfie` (selfie).
-- [ ] **D-072 (P-54):** `photos` is kept by an under-18 refusal, on the claim that nobody has a row
-  before giving a dob. Refuse an upload URL before its step (D-068), or move `photos` to
-  `UNDERAGE_DELETES` with its objects deleted too; a test either way.
+- [ ] **D-078 (P-54's file half, built here):** an under-18 refusal deletes `photos` rows and the files
+  behind them, keys read in the deleting transaction before the rows go, the files' deletion
+  enqueued after the commit, a final failure raised where someone sees it. The first file stored
+  behind a user row must be deletable the day it can exist: if T-4.4's job queue isn't there yet,
+  decide here how the deletion runs until it is; D-078's order holds either way. Any file this task
+  stores behind a user row joins the list, with a test. The upload URL still waits for its step
+  (D-068).
 - [ ] **Commit:** `feat(photos): upload url and completion [T-4.2]`
 
 ### T-4.3 · Manage photos
@@ -978,9 +983,9 @@ waits on the founder's decisions, so it is a task of its own, outside the sprint
 - [ ] `verify_selfie`: re-encode; `FaceMatchProvider.compare(selfie, approved_public_photos)`; similarity ≥ 85 and exactly one face → `approved`, `users.is_verified = true`; else `rejected` with reason. Max 5 attempts / day.
 - [ ] Selfies are never public and never shown to other users.
 - [ ] Extend `make seed` (T-1.15): an approved verification row, with a placeholder selfie in the private bucket, for every seeded user marked verified — 15: the test woman, and the prototype's 14 `v` profiles (7 women, 7 men). Ishita, Riya and Pooja stop at the selfie step, unverified, with no row: they're who this task verifies against (the advisor directing T-1.15, Claude in a separate chat, 3 October 2026).
-- [ ] **D-072 (P-54):** `verifications` is kept by an under-18 refusal, on the claim that nobody has a
-  row before giving a dob. Refuse a challenge before the selfie step (D-068), or move the table to
-  `UNDERAGE_DELETES` with the selfie's object deleted too; a test either way.
+- [ ] **D-078 (P-54):** an under-18 refusal deletes `verifications` rows and the selfies behind them,
+  keys read in the deleting transaction before the rows go. Any file this task stores behind a user
+  row joins that list, with a test. The challenge still waits for the selfie step (D-068).
 - [ ] **Commit:** `feat(verification): selfie challenge and face match [T-4.5]`
 
 ### T-4.6 · Web photos step
@@ -1424,9 +1429,9 @@ committed rows.
 - [ ] **Needs:** T-8.2
 - [ ] `POST /referrals/apply {code}` only before onboarding `done`, not own code, once. Reward both (Velas from `app_config`) when the referee completes selfie verification or first purchase, whichever first; idempotent. `GET /referrals/me`. Apply looks a code up and never checks its format: the seed's three test accounts carry readable codes outside the generated one (T-3.3).
 - [ ] **A woman's referral reward is never Velas** (D-076): the database refuses any ledger row for her, and "Reward both" would otherwise reach every referred woman, since every woman verifies her selfie (D-008). Decide here what she gets instead, if anything, and write it down.
-- [ ] **D-072 (P-54):** a code applied before dob is set leaves a `referrals` row that stops an under-18
-  refusal's deletion, keeping the minor's account. Refuse `/referrals/apply` until dob is set, or
-  move `referrals` to `UNDERAGE_DELETES`; a test either way.
+- [ ] **D-078 (P-54):** an under-18 refusal deletes `referrals` rows naming the user, as referrer or
+  referee, once P-54's row half has landed; check it has. A reward already paid is a ledger row,
+  which rule 12 keeps, and would stop the deletion: none can exist before dob is set.
 - [ ] **Commit:** `feat(referrals): codes and rewards [T-8.6]`
 
 ### T-8.7 · Web store and checkout
@@ -1456,8 +1461,8 @@ committed rows.
 - [ ] Signals written as `fraud_events` by services: report received, contact-info masked, message rejected (abuse / solicitation), > 30 new threads in 24 h, identical first message to > 10 people, > 3 devices in 7 days, location jumps > 500 km in 1 h.
 - [ ] Sessions store no IP address or user agent (D-067), and "> 3 devices in 7 days" needs one of them. Add what this task needs here, with a line on `/privacy`, which lists neither today.
 - [ ] `recompute_fraud` worker: weighted sum with 7-day decay → `fraud_scores` + band. Actions: `shadow` → shown only to other shadowed users; `freeze` → status `frozen`, sessions revoked, admin notified. 3 reports from different users in 24 h → freeze immediately.
-- [ ] **D-072 (P-54):** record no `fraud_events` and score no user before dob is set (a location jump
-  can come first), or move both tables to `UNDERAGE_DELETES`; a test either way.
+- [ ] **D-078 (P-54):** an under-18 refusal deletes `fraud_events` and `fraud_scores` rows, once P-54's
+  row half has landed; check it has, since a location jump can come before dob is set.
 - [ ] **Commit:** `feat(safety): fraud scoring and auto-freeze [T-9.2]`
 
 ### T-9.3 · Refund when a partner is banned
@@ -2307,7 +2312,8 @@ Claude Code adds items here instead of doing unplanned work. Format:
 
   Split from P-50, at the direction of the advisor directing T-3.2 to T-3.10.
 - [ ] P-54 · Keep D-072's deletion possible once T-8.6 lets a referral code be applied during
-  onboarding. **With T-8.6.** Worst case: someone under 18 applies a code before the dob step, then
+  onboarding. **Decided as D-078. The row half before T-4.2, on its Needs line; the file half in
+  T-4.2.** Worst case: someone under 18 applies a code before the dob step, then
   gives their date; the referral's row, RESTRICT to `users`, stops the deletion, they get a 500, and
   their account, encrypted number included, stays: the data D-072 exists not to hold. T-3.6 made
   it fail closed (nothing deleted, no hash kept), and a test fails if any key into `users`
@@ -2327,12 +2333,20 @@ Claude Code adds items here instead of doing unplanned work. Format:
   done") and T-9.2 (`fraud_events` and `fraud_scores`). Each now carries a line saying so.
   **Covering every table literally isn't possible:** `messages`, `reports`, `ledger_entries`,
   `payments` and `audit_log` are never hard-deleted (rule 12), and the app role can't delete from
-  them (T-1.22). **Two ways to make the rest mechanical, the founder's call, since either changes
-  Locked D-072's mechanics:** (a) widen the deletion to every kept table rule 12 doesn't protect,
-  with the R2 objects behind `photos` and `verifications` deleted too, or the minor's images
-  outlive the account; or (b) a database guard refusing a row in a kept table for a user whose
-  dob is null: a migration, a lookup per insert on hot tables (swipes, messages), and an exception
-  for staff in `audit_log`, whose dob can be null (the seed's moderator).
+  them (T-1.22).
+  **Decided, 3 October 2026: D-078, the deletion takes everything the app may delete, files
+  included** (the advisor, relayed by the founder; a database guard refusing rows before dob was
+  rejected). What this task builds:
+  - **The row half,** which can land at once: every table the app role may delete from moves from
+    `UNDERAGE_KEEPS` to the deletions, under every column that names the user, in an order the
+    keys between those tables allow. `UNDERAGE_KEEPS` is then exactly rule 12's five, and the test
+    holds it so. The deletion is proved as `velora_app`, as T-3.6's is.
+  - **The file half,** D-078's sequence: the storage keys behind the rows read in the deleting
+    transaction, before the rows go; the files' deletion enqueued with them after the commit; a
+    final failure raised where someone sees it. It lands in T-4.2, the first task to store a file
+    behind a user row, since the keys are T-4.2's to define; T-4.5 adds its selfies. The job queue
+    arrives with T-4.4, after T-4.2, so T-4.2 decides how the deletion runs until then.
+  - The lines on T-4.2, T-4.5, T-8.6 and T-9.2 say what each inherits.
 - [ ] P-55 · Let two checkouts' test suites run at once. **Next: raised by the advisor on 3
   October 2026, on T-3.10's Needs line, the next task in the plan.** **Until it lands, a green local
   `make lint test` while another session is running is not evidence: only the CI run on the exact

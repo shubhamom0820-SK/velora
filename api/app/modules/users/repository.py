@@ -54,9 +54,10 @@ UNDERAGE_DELETES = (
 )
 # Kept, each with why a user at the dob step can't have a row there. Their keys
 # are RESTRICT, so if one ever does, the deletion fails whole: a 500, and the
-# minor's account kept, the very thing D-072 exists to prevent (P-54). A claim
-# below is only as good as the task that writes the table: it is that task's to
-# keep true, or to move its table to the deletions with a test.
+# minor's account kept, the very thing D-072 exists to prevent. D-078 settles
+# it: P-54 moves every table here but rule 12's five (messages, reports,
+# ledger_entries, payments, audit_log) to the deletions, and photos and
+# verifications go with their files, keys read before the rows are deleted.
 UNDERAGE_KEEPS = {
     "album_requests": "T-8.4, onboarded users only",
     "audit_log": "rule 12; its key is the staff member acting",
@@ -72,16 +73,16 @@ UNDERAGE_KEEPS = {
     "messages": "rule 12",
     "notifications": "T-9.4, onboarded users only",
     "payments": "rule 12; money",
-    "photos": "T-4.2, once its upload URL waits for the photos step: P-54",
+    "photos": "T-4.2; deleted with its files by P-54 (D-078)",
     "profile_views": "T-6.3, onboarded users only",
     "push_subscriptions": "T-9.4, onboarded users only",
-    "referrals": "T-8.6, which applies a code during onboarding: P-54",
+    "referrals": "T-8.6, which applies a code during onboarding; P-54 (D-078)",
     "refund_requests": "T-8.3, onboarded users only; money",
     "reports": "rule 12",
     "swipes": "T-6.4, onboarded users only",
     "thread_clears": "T-7.8, onboarded users only",
     "threads": "T-7.1, onboarded users only",
-    "verifications": "T-4.5, once its challenge waits for the selfie step: P-54",
+    "verifications": "T-4.5; deleted with its selfies by P-54 (D-078)",
 }
 
 
