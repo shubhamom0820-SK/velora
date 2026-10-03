@@ -134,6 +134,56 @@ jobs:
           APP_ENV: ci
         run: pnpm build
 
+
+  # T-3.13 (06-TESTING's step 4): the user journeys in Playwright, after lint,
+  # unit tests and the build passed. A production build of the web against the
+  # API on a P-55 slot of its own (api/tests/e2e_server.py). Nothing is uploaded
+  # from it, on purpose (decision 22): a trace records request and response
+  # bodies, phone numbers, codes and access tokens among them, and a page
+  # snapshot shows the phone screen. Failures speak through their assertions.
+  e2e:
+    name: e2e — Playwright
+    needs: [api, web]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Start Postgres and Redis (infra/docker-compose.yml)
+        run: docker compose -f infra/docker-compose.yml up -d --wait db redis
+
+      - uses: astral-sh/setup-uv@c18668ad3cf93ea998bef934396af7bb5c839dc7 # v10.2.0
+        with:
+          version: ${{ env.UV_VERSION }}
+          enable-cache: true
+          cache-dependency-glob: api/uv.lock
+
+      - uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
+        with:
+          package_json_file: web/package.json
+
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: pnpm
+          cache-dependency-path: web/pnpm-lock.yaml
+
+      - name: Install
+        run: |
+          (cd api && uv sync --locked)
+          (cd web && pnpm install --frozen-lockfile)
+
+      - name: Install Chromium for Playwright
+        working-directory: web
+        run: pnpm exec playwright install --with-deps chromium
+
+      # The workflow's env says ENV=local and the test keys; the launcher sets
+      # its own database and Redis from its slot, and the web builds for local.
+      - name: E2E (Playwright)
+        run: make e2e
+
   image:
     name: image — no .env inside, serves, fails fast
     runs-on: ubuntu-24.04

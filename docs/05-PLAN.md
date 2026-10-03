@@ -1047,29 +1047,48 @@ exist yet. The batch is a chain, T-3.10 → T-3.11 → T-3.12 → T-3.13, each n
 - [ ] **Commit:** `feat(auth): firebase phone sign-in [T-3.14]`
 
 ### T-3.13 · E2E signup
-- [ ] **Needs:** T-3.12. **Not T-3.14:** the one run on staging's Firebase path moved there (decision 18), so this task closes without P-0.13.
-- [ ] **New dependency, approved** (decision 1): web `@playwright/test`, a devDependency pinned exactly, with Playwright's Chromium. Record it in `01-DECISIONS.md` under the next free number at install.
-- [ ] **Journeys,** Chromium at 390 × 844 and 1280 × 800 (06-TESTING), against the local stack with `AUTH_PHONE_PROVIDER=fake`:
+- [x] **Needs:** T-3.12. **Not T-3.14:** the one run on staging's Firebase path moved there (decision 18), so this task closes without P-0.13.
+- [x] **New dependency, approved** (decision 1): web `@playwright/test`, a devDependency pinned exactly, with Playwright's Chromium. Record it in `01-DECISIONS.md` under the next free number at install.
+- [x] **Journeys,** Chromium at 390 × 844 and 1280 × 800 (06-TESTING), against the local stack with `AUTH_PHONE_PROVIDER=fake`:
   - a new man reaches the photos step;
   - under 18 is refused, and the same number tried again gets a normal answer and no code (D-072, D-073: on Path B a ban is silent);
   - T-3.10's mechanism, so it runs on every push: a reload restores the session, a refresh rotates both cookies, two pages reloaded together both stay signed in, and sign-out clears both cookies.
-- [ ] **Where it runs** (decision 19):
+- [x] **Where it runs** (decision 19):
   - its own database and Redis database, taken as a P-55 slot, so an E2E run and any number of pytest runs never meet (the plan first said a `velora_e2e` made by `make infra-up`; the slot does the same and frees itself);
   - a production build (`next build && next start`, `APP_ENV=local`), so the strict CSP is the one tested;
   - ports apart from `make dev`'s;
   - any CSP violation in the browser console fails the run.
-- [ ] **The test-only OTP endpoint** (decision 20) answers with the last code the fake SMS provider sent to a number, which is what the phone would have received. It is:
+- [x] **The test-only OTP endpoint** (decision 20) answers with the last code the fake SMS provider sent to a number, which is what the phone would have received. It is:
   - served only where `ENV` is `local` and `AUTH_PHONE_PROVIDER` is `fake`, an allowlist;
   - a POST with the number in the body, because the request logger binds the path and uvicorn logs path and query;
   - `include_in_schema=False`, so `make types` is the same everywhere;
   - listed in 04-API under a local-only heading;
   - covered by a rule-15 test through `captured_logs`.
-- [ ] **CI** (decision 21): a new job on every push. `/done`'s gate (D-044) and the release gate (D-075) then wait on it.
-- [ ] **Nothing kept from CI** (decision 22): no traces, videos or screenshots. A trace records request and response bodies (numbers, codes, access tokens), and a screenshot of the phone screen shows the number. Failures report through their assertion messages.
-- [ ] **The shuffle plugin** (decision 23): commit P-48's seeded shuffle option to `api/tests/conftest.py`, opt-in, with no new dependency, unless T-5.1 already has. Run the whole API suite in 8 seeded orders before `/done`, with the seeds in this task's record. CI stays in file order. A fix whose mechanism isn't in the repo is not a fix (CLAUDE.md).
-- [ ] **Firefox** (decision 2): run T-3.10's local browser checks once in Playwright's Firefox, locally, not in CI, and put what it shows into CLAUDE.md's local sign-in paragraph, dated.
-- [ ] **06-TESTING's E2E section** says what runs: every push, not "every PR touching `web/`" (D-044 has no pull requests); the nightly staging run waits for T-3.14; J1's "→ discover" is T-4.9's, since photos is as far as this task gets.
-- [ ] **Commit:** `test(e2e): signup flow [T-3.13]`
+- [x] **CI** (decision 21): a new job on every push. `/done`'s gate (D-044) and the release gate (D-075) then wait on it.
+- [x] **Nothing kept from CI** (decision 22): no traces, videos or screenshots. A trace records request and response bodies (numbers, codes, access tokens), and a screenshot of the phone screen shows the number. Failures report through their assertion messages.
+- [x] **The shuffle plugin** (decision 23): commit P-48's seeded shuffle option to `api/tests/conftest.py`, opt-in, with no new dependency, unless T-5.1 already has. Run the whole API suite in 8 seeded orders before `/done`, with the seeds in this task's record. CI stays in file order. A fix whose mechanism isn't in the repo is not a fix (CLAUDE.md).
+- [x] **Firefox** (decision 2): run T-3.10's local browser checks once in Playwright's Firefox, locally, not in CI, and put what it shows into CLAUDE.md's local sign-in paragraph, dated.
+- [x] **06-TESTING's E2E section** says what runs: every push, not "every PR touching `web/`" (D-044 has no pull requests); the nightly staging run waits for T-3.14; J1's "→ discover" is T-4.9's, since photos is as far as this task gets.
+- [x] **The shuffle plugin** came from T-5.1, which committed it first (`--shuffle-seed N` in
+  `api/tests/conftest.py`), as both tasks' lines allowed; this task used it.
+- [x] **Proved, 3 October 2026:**
+  - **E2E:** 10 journeys (J1, J3 and T-3.10's reload, rotation, two tabs and sign-out, at 390 × 844
+    and 1280 × 800) pass in 1.8 minutes, the production build included; and the same five in
+    Playwright's own Firefox 155 build, by hand.
+  - **Two of the E2E's own checks were wrong at first, and fixed:** Playwright's `cookies(url)`
+    withholds `Secure` cookies from an `http://` URL, so the cookie read was always empty and the
+    sign-out test's "both cookies gone" could never fail (it now reads the whole jar); and J3's
+    alert matched Next's route announcer and the toast region too.
+  - **Six breaks of what the E2E guards, each red:** an inline style, zod's eval probe, the number
+    in a URL, no cookies sent to `/v1/auth`, a sign-out the API never hears, and the under-18
+    ending gone. **Five of the test-only endpoint's:** served in any `ENV`, served beside a real
+    SMS provider, in the OpenAPI schema, the code logged, the number not normalised. Each restored
+    by SHA-256.
+  - **The API suite in 8 shuffled orders** (seeds 11 to 18): 1,192 passed each, the new rule-15
+    test among them; a seed's order differs from file order (seen, not assumed).
+  - **CI's `e2e` job** runs after `api` and `web`, uploads nothing, and is proved by its first run
+    on this commit, the only place it can be.
+- [x] **Commit:** `test(e2e): signup flow [T-3.13]`
 
 ---
 

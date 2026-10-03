@@ -1764,6 +1764,30 @@ Approved in the joint plan for T-3.10 to T-3.13 (decision 1), answered by the ad
 (Claude, in a separate chat), relayed by the founder, 3 October 2026. **Open** until the founder
 approves it in his own words, with D-079 to D-082.
 
+### D-084 · The E2E: Playwright, Chromium in CI, nothing kept — Open
+T-3.13 added the end-to-end tests 06-TESTING has named since Sprint 1. Pinned exactly.
+- **@playwright/test** 1.63.0, a `devDependency`: CLAUDE.md's stack pins Playwright. Its browsers
+  are downloads, not packages: Chromium in CI (`playwright install --with-deps chromium`), and
+  Playwright's own Firefox build by hand (`E2E_FIREFOX=1`), never in CI.
+- **A production build, not `next dev`,** so production's strict CSP is the one the journeys run
+  under, and any violation fails them: `next dev`'s allowances hid both of T-3.11's CSP findings
+  until a production build ran.
+- **The API on a P-55 slot of its own** (`api/tests/e2e_server.py`), so an E2E run and any pytest
+  run never meet, and each starts empty.
+- **Nothing is kept from a run (decision 22):** no traces, videos or screenshots, and CI uploads no
+  artifact. A trace records request and response bodies, phone numbers, codes and access tokens
+  among them; a page snapshot shows the phone screen. Failures speak through their assertions.
+- **Codes come from a test-only endpoint** (04-API, local only) reading the fake SMS's outbox: what a
+  phone would have received, so D-073's silent ban is testable.
+
+**Rejected:** running against `next dev` (its CSP allowances hide what production blocks); keeping
+traces on failure (they would hold the very data rule 15 keeps out of logs); reading codes from the
+fake's terminal echo (masked numbers, parsing, and codes in CI's log).
+
+Approved in the joint plan for T-3.10 to T-3.13 (decisions 1, 19, 21 and 22), answered by the advisor
+directing it (Claude, in a separate chat), relayed by the founder, 3 October 2026. **Open** until the
+founder approves it in his own words.
+
 ---
 
 ## Adding a decision

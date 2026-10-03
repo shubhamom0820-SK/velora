@@ -41,3 +41,8 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# Playwright (T-3.13): its per-test output can hold a page snapshot of the phone screen.
+/test-results/
+/playwright-report/
+/blob-report/

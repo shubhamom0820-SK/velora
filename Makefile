@@ -78,5 +78,5 @@ types: ## Regenerate web/src/types/api.ts from the API's OpenAPI schema (offline
 		&& ( cd web && pnpm exec openapi-typescript $$dir/openapi.json -o src/types/api.ts ); \
 	status=$$?; rm -rf $$dir; exit $$status
 
-e2e: ## Playwright [T-3.13]
-	@echo "not yet — T-3.13"
+e2e: ## Playwright: a production build against the API on a P-55 slot of its own (needs make infra-up) [T-3.13]
+	cd web && pnpm exec playwright test

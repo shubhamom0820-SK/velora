@@ -159,6 +159,17 @@ turns them into copy.
 `POST /waitlist`: `{email, city?}` → `201 {}`, the same for an email already on the list (D-057).
 Five tries a minute per client IP, invalid ones included → `RATE_LIMITED` (D-056).
 
+## Local only (never in OpenAPI)
+| Method | Path | Auth | Body → Response | Task |
+|---|---|---|---|---|
+| POST | /test/sms/last-code | 🔓 | `{phone}` → `{code}`, the code the fake SMS last sent the number, or `null` | T-3.13 |
+
+Served only where `ENV` is `local` and `SMS_PROVIDER` is `fake` (an allowlist, rule 16); a 404
+everywhere else. Kept out of the OpenAPI schema, so `make types` is the same everywhere and the web
+can't call it. The number is in the body, never the path or query, which the request logger and
+uvicorn's access log record (rule 15). It reads the fake's outbox, not the stored code: a number the
+API sent nothing to (D-073) gets `null`, as its phone would. The E2E is its only caller (06-TESTING).
+
 ---
 
 ## Error codes

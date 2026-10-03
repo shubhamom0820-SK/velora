@@ -22,6 +22,7 @@ from app.core.providers import build_providers
 from app.core.redis import build_redis
 from app.modules.auth.router import otp_router
 from app.modules.auth.router import router as auth_router
+from app.modules.e2e.router import router as e2e_router
 from app.modules.health.router import router as health_router
 from app.modules.profiles.router import router as profiles_router
 from app.modules.users.router import router as users_router
@@ -32,6 +33,10 @@ SCHEMA_SERVED_IN: frozenset[str] = frozenset({"local"})
 # an allowlist (rule 16, D-066). Everywhere else they 404, so staging and
 # production, on firebase, can't be made to send a Path B SMS at all.
 OTP_SERVED_FOR: frozenset[str] = frozenset({"msg91", "fake"})
+# The E2E's test-only routes (T-3.13): only where ENV is local and the SMS is the
+# fake's, whose outbox they read. Allowlists both (rule 16).
+E2E_SERVED_IN: frozenset[str] = frozenset({"local"})
+E2E_SERVED_FOR: frozenset[str] = frozenset({"fake"})
 
 
 async def close_resources(app: FastAPI) -> None:
@@ -113,6 +118,8 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.include_router(profiles_router, prefix="/v1")
     if settings.AUTH_PHONE_PROVIDER in OTP_SERVED_FOR:
         app.include_router(otp_router, prefix="/v1")
+    if settings.ENV in E2E_SERVED_IN and settings.SMS_PROVIDER in E2E_SERVED_FOR:
+        app.include_router(e2e_router, prefix="/v1")
 
     return app
 

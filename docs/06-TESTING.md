@@ -126,7 +126,7 @@ A test in this list is marked `@pytest.mark.critical`; CI runs them first and fa
 
 | # | Journey | Task |
 |---|---|---|
-| J1 | New man: phone → OTP → all onboarding → discover | T-3.13, T-4.9 |
+| J1 | New man: phone → OTP → all onboarding → discover. T-3.13 runs it as far as the photos step; the rest is T-4.9's | T-3.13, T-4.9 |
 | J2 | New woman: blocked until selfie approved | T-4.9 |
 | J3 | Under-18 refused, same number can't retry | T-3.13 |
 | J4 | Swipe → match → open thread (−5) → chat both ways live | T-7.13 |
@@ -139,7 +139,27 @@ A test in this list is marked `@pytest.mark.critical`; CI runs them first and fa
 | J11 | Moderator resolves a report and freezes the account | T-9.5 |
 | J12 | Clear chat → undo → restore from You tab | T-7.10 |
 
-Run E2E on every PR touching `web/` and nightly against staging.
+**How it runs (T-3.13).** `make e2e` (CI's `e2e` job, on every push, after `api` and `web` pass):
+Playwright drives a production build of the web (`next build && next start`, `APP_ENV=local`, so
+production's strict CSP is the one tested) on `127.0.0.1:3100`, against the API from
+`api/tests/e2e_server.py` on `127.0.0.1:8100`. The launcher takes a P-55 slot, so the run has a
+database and a Redis database of its own, created empty: it never meets a pytest run, and every run
+starts with no accounts, bans or rate-limit windows. Chromium at 390 × 844 and 1280 × 800; one
+worker, because the fake SMS's outbox lives in the API's one process.
+- **Codes** come from `POST /v1/test/sms/last-code` (04-API, local only): what the fake actually
+  sent, so a number nothing was sent to, a banned one (D-073), gets none.
+- **Any CSP violation fails the journey** (`web/e2e/fixtures.ts`), and the journeys check no URL
+  holds the number (D-080).
+- **Nothing is kept:** no traces, videos or screenshots, locally or in CI. A trace records request
+  and response bodies (numbers, codes, access tokens), and a snapshot of the phone screen shows the
+  number. `test-results/` is gitignored for the same reason.
+- **T-3.10's session machinery** runs here too (`web/e2e/session.spec.ts`): reload, rotation, two
+  tabs, sign-out.
+- **Firefox** is Playwright's own build, run by hand (`E2E_FIREFOX=1 make e2e`), never in CI.
+- **Against staging, nightly,** waits for T-3.14: staging signs in by Firebase, where Path B and
+  the fake don't exist.
+
+There are no pull requests (D-044): "every push" is the trigger, through `/done`'s gate.
 
 ## What not to test
 
