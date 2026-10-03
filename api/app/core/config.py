@@ -123,7 +123,6 @@ class Settings(BaseSettings):
     # --- Auth provider selection (D-035) ---
     AUTH_PHONE_PROVIDER: PhoneProvider = "fake"
     FIREBASE_PROJECT_ID: str = ""
-    FIREBASE_SERVICE_ACCOUNT_JSON: str = ""
 
     # --- SMS (Path B) ---
     SMS_PROVIDER: SmsProvider = "fake"

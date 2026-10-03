@@ -102,8 +102,8 @@ rotates them, and clears them at sign-out. `localhost` fails for a different rea
 `localhost:3000` calling `127.0.0.1:8000` is cross-site, so the `Lax` refresh cookie isn't sent,
 and the API's local CORS refuses `localhost` so that mistake fails loudly. **Safari over plain
 `http://127.0.0.1` isn't a case to carry:** with D-074's HSTS, production is never plain HTTP, so
-no user can reach it. Safari's real case is HTTPS, **unverified until T-3.14's staging check**,
-which waits on P-0.13. **Firefox: seen on 3 October 2026 in Playwright's own Firefox 155 build**
+no user can reach it. Safari's real case is HTTPS, **unverified until T-3.14's staging check**.
+**Firefox: seen on 3 October 2026 in Playwright's own Firefox 155 build**
 (T-3.13), not stock Firefox: every E2E journey passed, sign-in, reload, rotation, two tabs and
 sign-out among them, so it keeps both `Secure` cookies over plain `http://127.0.0.1`. Until 3
 October 2026 this line said "Chrome or Firefox" as fact, from documentation alone.

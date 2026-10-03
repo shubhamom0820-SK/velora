@@ -1097,8 +1097,10 @@ signs in with the founder's own phone. A Firebase project for staging alone, wit
 numbers, is P-66, due when a staging check that signs in first has to run unattended, "because a
 check that needs a human holding a phone is a check that stops being run" (the founder). Sharing
 the project puts staging's sign-ins in production's user pool: "acceptable while there are no
-real users, and it is not acceptable after launch" (the founder). Claude put P-66 on the Needs
-line of T-9.15, Go live, to hold that line.
+real users, and it is not acceptable after launch" (the founder). So P-66 is on the Needs line of
+T-9.15, Go live (Claude's placement), and of REL-1 if REL-1's tag includes T-3.14, the condition
+written beside it: REL-1 is what makes real users possible (the founder, agreeing, the same day).
+Its first use, the Playwright run moved out of T-3.14, is P-67, whose Needs line carries it.
 
 ### D-066 · Path B codes: six digits, served only where chosen, with a ceiling in rupees — Locked
 **The decision (T-3.2, T-3.3):**

@@ -156,10 +156,11 @@ worker, because the fake SMS's outbox lives in the API's one process.
 - **T-3.10's session machinery** runs here too (`web/e2e/session.spec.ts`): reload, rotation, two
   tabs, sign-out.
 - **Firefox** is Playwright's own build, run by hand (`E2E_FIREFOX=1 make e2e`), never in CI.
-- **Against staging, nightly,** waits for P-66, a Firebase project for staging alone. Staging signs
-  in by Firebase, where Path B and the fake don't exist, so a run nobody attends needs a Firebase
-  test number, and none ever goes in `velora-ic`, the project production uses (D-065). Until then,
-  staging's sign-in has one check, T-3.14's, made by hand with the founder's own phone.
+- **Against staging, nightly,** is P-67, whose Needs line carries P-66, a Firebase project for
+  staging alone. Staging signs in by Firebase, where Path B and the fake don't exist, so a run
+  nobody attends needs a Firebase test number, and none ever goes in `velora-ic`, the project
+  production uses (D-065). Until then, staging's sign-in has one check, T-3.14's, made by hand
+  with the founder's own phone.
 
 There are no pull requests (D-044): "every push" is the trigger, through `/done`'s gate.
 
