@@ -27,7 +27,6 @@ from app.modules.auth import service as auth_service
 from app.modules.auth.models import BannedIdentity, Session
 from app.modules.notifications.models import NotificationPrefs
 from app.modules.profiles.models import Profile, ProfileIntent, ProfileInterest
-from app.modules.safety.models import FraudScore
 from app.modules.users import repository as users_repository
 from app.modules.users import service as users_service
 from app.modules.users.models import User
@@ -479,7 +478,7 @@ async def _d072_problems(db: AsyncSession) -> list[str]:
     )
     keys = {(str(table), str(rule)) for table, rule in rows}
     keyed = {table for table, _ in keys}
-    deleted = {model.__tablename__ for model in users_repository.UNDERAGE_DELETES}
+    deleted = _deleted_tables()
     kept = set(users_repository.UNDERAGE_KEEPS)
     problems = []
     if unclassified := sorted(keyed - deleted - kept):
@@ -512,6 +511,92 @@ async def test_every_table_keyed_to_users_is_one_d072_deletes_or_one_it_keeps(
     assert await _d072_problems(db) == []
 
 
+def _deleted_tables() -> set[str]:
+    return {a.model.__tablename__ for a in users_repository.UNDERAGE_DELETES}
+
+
+async def _keys(db: AsyncSession, parent: str) -> set[tuple[str, str]]:
+    """Every (table, column) holding a key to `parent`, read from the database."""
+    rows = await db.execute(
+        text(
+            """
+            select c.conrelid::regclass::text, a.attname
+            from pg_constraint c
+            join pg_attribute a
+              on a.attrelid = c.conrelid and a.attnum = any(c.conkey)
+            where c.contype = 'f' and c.confrelid = cast(:parent as regclass)
+            """
+        ),
+        {"parent": parent},
+    )
+    return {(str(table), str(column)) for table, column in rows}
+
+
+async def test_each_deleted_table_names_exactly_its_columns_keyed_to_users(
+    db: AsyncSession,
+) -> None:
+    """A column naming the user that the deletion doesn't check would leave
+    that row, and the row would stop the deletion (D-078)."""
+    keyed = await _keys(db, "users")
+    listed = {
+        a.model.__tablename__: set(a.columns) for a in users_repository.UNDERAGE_DELETES
+    }
+
+    assert {table: {c for t, c in keyed if t == table} for table in listed} == listed
+
+
+async def test_every_deleted_table_keyed_to_threads_deletes_by_thread(
+    db: AsyncSession,
+) -> None:
+    """Another user's row on the user's thread (their clear of it) names the
+    thread, not the user; without it the thread can't be deleted."""
+    on_threads = {t for t, _ in await _keys(db, "threads")} & _deleted_tables()
+
+    assert {
+        a.model.__tablename__ for a in users_repository.UNDERAGE_DELETES if a.on_threads
+    } == on_threads
+
+
+async def test_the_deletion_runs_in_the_order_of_the_keys_between_its_tables(
+    db: AsyncSession,
+) -> None:
+    """A table is deleted from before any table it holds a key to: verifications
+    before photos, a thread's children before the thread."""
+    order = [a.model.__tablename__ for a in users_repository.UNDERAGE_DELETES]
+    rows = await db.execute(
+        text(
+            """
+            select c.conrelid::regclass::text, c.confrelid::regclass::text
+            from pg_constraint c where c.contype = 'f'
+            """
+        )
+    )
+    edges = {(str(child), str(parent)) for child, parent in rows}
+    inside = [(c, p) for c, p in edges if c in order and p in order and c != p]
+
+    assert inside, "the check must have keys between deleted tables to check"
+    assert [(c, p) for c, p in inside if order.index(c) > order.index(p)] == []
+
+
+async def test_kept_is_exactly_what_the_app_role_cant_delete(db: AsyncSession) -> None:
+    """D-078: the deletion takes every table the app role may delete from and
+    keeps only rule 12's, which it can't (T-1.22): read from its grants."""
+    keyed = {t for t, _ in await _keys(db, "users")}
+    rows = await db.execute(
+        text(
+            "select t, has_table_privilege('velora_app', t, 'DELETE') "
+            "from unnest(cast(:tables as text[])) as t"
+        ),
+        {"tables": sorted(keyed)},
+    )
+    deletable = {str(t): bool(can) for t, can in rows}
+
+    assert {t for t, can in deletable.items() if not can} == set(
+        users_repository.UNDERAGE_KEEPS
+    )
+    assert {t for t, can in deletable.items() if can} == _deleted_tables()
+
+
 async def test_a_new_table_keyed_to_users_fails_until_d072_names_it(
     db: AsyncSession,
 ) -> None:
@@ -536,6 +621,7 @@ async def test_a_kept_table_that_cascades_fails(
             "references users (id) on delete cascade)"
         )
     )
+    await db.execute(text("revoke all on d072_probe from velora_app"))
     monkeypatch.setitem(users_repository.UNDERAGE_KEEPS, "d072_probe", "a probe")
 
     assert await _d072_problems(db) == [
@@ -547,14 +633,26 @@ async def test_a_kept_table_that_cascades_fails(
 
 
 async def test_a_row_the_deletion_doesnt_clear_stops_it_whole(
-    db: AsyncSession, client: AsyncClient, new_account: NewAccount, clock: ModuleType
+    db: AsyncSession,
+    client: AsyncClient,
+    new_account: NewAccount,
+    make_user: MakeUser,
+    clock: ModuleType,
 ) -> None:
-    """If an under-18 account somehow has a row elsewhere, nothing is deleted
-    and no hash is kept: a 500, never a half-deleted account."""
+    """If an under-18 account somehow has a row rule 12 keeps (a report about
+    it), nothing is deleted and no hash is kept: a 500, never a half-deleted
+    account, and the bug is in whatever wrote the row (D-078)."""
     clock.freeze(NOON_IST)
     user, token = await new_account()
     user_id = user.id
-    db.add(FraudScore(user_id=user_id))
+    reporter, _ = await make_user()
+    await db.execute(
+        text(
+            "insert into reports (reporter_id, reported_id, reason) "
+            "values (:r, :u, 'other')"
+        ),
+        {"r": reporter.id, "u": user_id},
+    )
     await db.flush()
 
     response = await _post_dob(client, token, "2010-01-01")
@@ -565,6 +663,129 @@ async def test_a_row_the_deletion_doesnt_clear_stops_it_whole(
     assert await _count(db, Profile, user_id=user_id) == 1
     assert await _count(db, Wallet, user_id=user_id) == 1
     assert await _count(db, BannedIdentity) == 0
+
+
+# Rows only a kept row can stand behind: an unlock is of a message, a refund
+# request of a payment. Either means the deletion fails whole, as above.
+BEHIND_A_KEPT_ROW = {"message_unlocks", "refund_requests"}
+
+
+async def _a_row_naming_them_everywhere(
+    db: AsyncSession, minor: uuid.UUID, other: uuid.UUID
+) -> uuid.UUID:
+    """A row in every deleted table that can hold one, naming `minor` in each
+    of its columns that can; and `other`'s clear of their shared thread, which
+    names only the thread. Returns the thread."""
+    low, high = sorted((minor, other))
+    thread = await db.scalar(
+        text(
+            "insert into threads (user_low, user_high, origin, opened_by, expires_at) "
+            "values (:low, :high, 'match', :m, now() + interval '1 day') returning id"
+        ),
+        {"low": low, "high": high, "m": minor},
+    )
+    photo = await db.scalar(
+        text(
+            "insert into photos (user_id, kind, raw_key) "
+            "values (:m, 'private', 'raw/probe') returning id"
+        ),
+        {"m": minor},
+    )
+    both_ways = [
+        (
+            "insert into kudos (from_id, to_id, kind, thread_id) "
+            "values (:a, :b, 'great_conversation', :t)"
+        ),
+        "insert into gift_sends (sender_id, recipient_id, gift_id) values (:a, :b, 'coffee')",
+        "insert into liked_you_reveals (viewer_id, liker_id) values (:a, :b)",
+        "insert into swipes (swiper_id, target_id, dir) values (:a, :b, 'like')",
+        (
+            "insert into profile_views (viewer_id, viewed_id, last_viewed_at) "
+            "values (:a, :b, now())"
+        ),
+        "insert into blocks (blocker_id, blocked_id) values (:a, :b)",
+        "insert into album_requests (requester_id, owner_id) values (:a, :b)",
+        "insert into referrals (referee_id, referrer_id) values (:a, :b)",
+    ]
+    for statement in both_ways:
+        for a, b in ((minor, other), (other, minor)):
+            await db.execute(text(statement), {"a": a, "b": b, "t": thread})
+    theirs = [
+        "insert into thread_clears (user_id, thread_id, cleared_at) values (:m, :t, now())",
+        "insert into thread_clears (user_id, thread_id, cleared_at) values (:o, :t, now())",
+        "insert into matches (user_low, user_high, thread_id) values (:low, :high, :t)",
+        "insert into notifications (user_id, kind) values (:m, 'probe')",
+        (
+            "insert into push_subscriptions (user_id, endpoint, p256dh, auth) "
+            "values (:m, 'https://push.invalid/probe', 'p', 'a')"
+        ),
+        "insert into fraud_events (user_id, signal, weight) values (:m, 'probe', 1)",
+        "insert into fraud_scores (user_id) values (:m)",
+        "insert into profile_intents (user_id, intent_id) values (:m, 1)",
+        "insert into profile_interests (user_id, interest_id) values (:m, 1)",
+        (
+            "insert into sessions (user_id, family_id, token_hash, expires_at, "
+            "auth_time) values (:m, gen_random_uuid(), 'probe', now(), now())"
+        ),
+        (
+            "insert into verifications (user_id, challenge, selfie_photo_id) "
+            "values (:m, 'smile', :p)"
+        ),
+    ]
+    values = {"m": minor, "o": other, "t": thread, "p": photo, "low": low, "high": high}
+    for statement in theirs:
+        await db.execute(text(statement), values)
+    await db.flush()
+    assert isinstance(thread, uuid.UUID)
+    return thread
+
+
+async def _naming(db: AsyncSession, user_id: uuid.UUID) -> dict[str, int]:
+    """How many rows name `user_id`, by table, in every column keyed to users."""
+    counts: dict[str, int] = {}
+    for table, column in sorted(await _keys(db, "users")):
+        found = await db.scalar(
+            text(f"select count(*) from {table} where {column} = :u"), {"u": user_id}
+        )
+        if found:
+            counts[table] = counts.get(table, 0) + int(found)
+    return counts
+
+
+@pytest.mark.critical
+async def test_under_eighteen_deletes_every_row_in_every_table_the_app_may(
+    db: AsyncSession,
+    client: AsyncClient,
+    new_account: NewAccount,
+    make_user: MakeUser,
+    clock: ModuleType,
+) -> None:
+    """🔒 7, with D-078: a row naming the minor in every table the deletion
+    takes, in every column that can name them, and another user's clear of
+    their shared thread. Afterwards no row anywhere names them, the other
+    user is untouched, and only the number's hash is kept."""
+    clock.freeze(NOON_IST)
+    minor, token = await new_account()
+    minor_id, minor_hash = minor.id, minor.phone_hash
+    other, _ = await make_user()
+    other_id = other.id
+    thread = await _a_row_naming_them_everywhere(db, minor_id, other_id)
+    # Every table it could fill, so "none left" below means something.
+    assert set(await _naming(db, minor_id)) == _deleted_tables() - BEHIND_A_KEPT_ROW
+
+    response = await _post_dob(client, token, "2010-01-01")
+
+    assert _error(response)["code"] == "UNDERAGE"
+    assert await _naming(db, minor_id) == {}
+    assert await _count(db, User, id=minor_id) == 0
+    left = await db.scalar(
+        text("select count(*) from thread_clears where thread_id = :t"), {"t": thread}
+    )
+    assert left == 0
+    assert await _count(db, User, id=other_id) == 1
+    assert await _count(db, Profile, user_id=other_id) == 1
+    bans = (await db.scalars(select(BannedIdentity))).all()
+    assert [(b.value, b.reason) for b in bans] == [(minor_hash, "underage")]
 
 
 async def test_deleting_an_account_that_isnt_there_is_an_error(

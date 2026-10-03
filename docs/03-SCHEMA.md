@@ -4,8 +4,8 @@ PostgreSQL 16. Extensions: `postgis`, `pg_trgm`, `pgcrypto`, `citext`.
 Conventions: every table has `created_at timestamptz not null default now()`; mutable tables also
 have `updated_at` (set by trigger `set_updated_at`). PKs are `uuid default gen_random_uuid()` unless
 noted. FKs are `on delete restrict` unless noted — we don't hard-delete users (see `users.status`),
-with one exception: an under-18 refusal deletes the new account and keeps only the number's
-hash (D-072).
+with one exception: an under-18 refusal deletes the new account, and its rows in every table the
+app role may delete from, and keeps only the number's hash (D-072, D-078).
 
 The Alembic migrations in Sprint 1 create **everything below in this order**.
 

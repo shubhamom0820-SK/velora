@@ -2,17 +2,36 @@
 
 from __future__ import annotations
 
+from dataclasses import dataclass
+from typing import Any
 from uuid import UUID
 
-from sqlalchemy import delete, exists, func, select, update
+from sqlalchemy import delete, exists, func, or_, select, update
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.enums import BanKind
+from app.modules.album.models import AlbumRequest
 from app.modules.auth.models import BannedIdentity, Session
-from app.modules.notifications.models import NotificationPrefs
+from app.modules.discovery.models import ProfileView
+from app.modules.gifts.models import GiftSend
+from app.modules.kudos.models import Kudos
+from app.modules.matches.models import Match
+from app.modules.messages.models import MessageUnlock
+from app.modules.notifications.models import (
+    Notification,
+    NotificationPrefs,
+    PushSubscription,
+)
+from app.modules.payments.models import RefundRequest
+from app.modules.photos.models import Photo
 from app.modules.profiles.models import Profile, ProfileIntent, ProfileInterest
+from app.modules.referrals.models import Referral
+from app.modules.safety.models import Block, FraudEvent, FraudScore
+from app.modules.swipes.models import LikedYouReveal, Swipe
+from app.modules.threads.models import Thread, ThreadClear
 from app.modules.users.models import User
+from app.modules.verification.models import Verification
 from app.modules.wallet.models import Wallet
 
 
@@ -39,59 +58,81 @@ async def user_for_update(session: AsyncSession, user_id: UUID) -> User | None:
     return user
 
 
-# D-072: what an under-18 refusal does with each table that has a key to users.
-# A test holds every such key, every table, to exactly these two lists, so a
-# table added later fails CI, naming D-072, until someone decides which it is.
-#
-# Deleted with the account: signup's four, and the picks a later step makes.
+@dataclass(frozen=True)
+class Attached:
+    """A table an under-18 refusal deletes from (D-078): its rows naming the
+    user in any of `columns`, and, `on_threads`, every row on a thread the user
+    is in, whoever's it is (another user's clear of the user's thread)."""
+
+    model: type[Any]
+    columns: tuple[str, ...]
+    on_threads: bool = False
+
+
+# D-072 and D-078: an under-18 refusal deletes the user's rows in every table
+# the app role may delete from, in an order the keys between them allow: a
+# table before any it holds a key to. Tests hold this to the database: every
+# table with a key to users is here or kept below, every column naming the user
+# is listed, every table with a key to threads has `on_threads`, and the order
+# is the keys'. A table added later fails CI, naming D-072, until it is listed.
 UNDERAGE_DELETES = (
-    Session,
-    NotificationPrefs,
-    Wallet,
-    ProfileIntent,
-    ProfileInterest,
-    Profile,
+    Attached(ThreadClear, ("user_id",), on_threads=True),
+    Attached(Kudos, ("from_id", "to_id"), on_threads=True),
+    Attached(GiftSend, ("sender_id", "recipient_id"), on_threads=True),
+    Attached(Match, ("user_low", "user_high"), on_threads=True),
+    Attached(MessageUnlock, ("user_id",)),
+    Attached(LikedYouReveal, ("viewer_id", "liker_id")),
+    Attached(Swipe, ("swiper_id", "target_id")),
+    Attached(ProfileView, ("viewer_id", "viewed_id")),
+    Attached(Block, ("blocker_id", "blocked_id")),
+    Attached(AlbumRequest, ("requester_id", "owner_id")),
+    Attached(Referral, ("referee_id", "referrer_id")),
+    Attached(RefundRequest, ("user_id",)),
+    Attached(Notification, ("user_id",)),
+    Attached(PushSubscription, ("user_id",)),
+    Attached(FraudEvent, ("user_id",)),
+    Attached(FraudScore, ("user_id",)),
+    # Rows only: no file is stored behind either yet. T-4.2 adds the files,
+    # their keys read before these rows are deleted (D-078).
+    Attached(Verification, ("user_id",)),
+    Attached(Photo, ("user_id",)),
+    Attached(Thread, ("user_low", "user_high", "opened_by")),
+    Attached(Session, ("user_id",)),
+    Attached(NotificationPrefs, ("user_id",)),
+    Attached(Wallet, ("user_id",)),
+    Attached(ProfileIntent, ("user_id",)),
+    Attached(ProfileInterest, ("user_id",)),
+    Attached(Profile, ("user_id",)),
 )
-# Kept, each with why a user at the dob step can't have a row there. Their keys
-# are RESTRICT, so if one ever does, the deletion fails whole: a 500, and the
-# minor's account kept, the very thing D-072 exists to prevent. D-078 settles
-# it: P-54 moves every table here but rule 12's five (messages, reports,
-# ledger_entries, payments, audit_log) to the deletions, and photos and
-# verifications go with their files, keys read before the rows are deleted.
+# Kept: rule 12's, which nothing hard-deletes and the app role can't (T-1.22).
+# A user at the dob step can't have a row in any of them; if one ever does, the
+# deletion fails whole, a 500, and the bug is in whatever wrote it (D-078).
 UNDERAGE_KEEPS = {
-    "album_requests": "T-8.4, onboarded users only",
     "audit_log": "rule 12; its key is the staff member acting",
-    "blocks": "T-9.1, onboarded users only",
-    "fraud_events": "T-9.2's signals; it must not record one before dob is set",
-    "fraud_scores": "T-9.2's worker; it must not score a user before dob is set",
-    "gift_sends": "T-8.9, onboarded users only; money",
-    "kudos": "T-8.5, onboarded users only",
     "ledger_entries": "rule 12; money",
-    "liked_you_reveals": "T-6.7, onboarded users only; money",
-    "matches": "T-6.4, onboarded users only",
-    "message_unlocks": "T-7.9, onboarded users only; money",
     "messages": "rule 12",
-    "notifications": "T-9.4, onboarded users only",
     "payments": "rule 12; money",
-    "photos": "T-4.2; deleted with its files by P-54 (D-078)",
-    "profile_views": "T-6.3, onboarded users only",
-    "push_subscriptions": "T-9.4, onboarded users only",
-    "referrals": "T-8.6, which applies a code during onboarding; P-54 (D-078)",
-    "refund_requests": "T-8.3, onboarded users only; money",
     "reports": "rule 12",
-    "swipes": "T-6.4, onboarded users only",
-    "thread_clears": "T-7.8, onboarded users only",
-    "threads": "T-7.1, onboarded users only",
-    "verifications": "T-4.5; deleted with its selfies by P-54 (D-078)",
 }
 
 
 async def delete_account(session: AsyncSession, user_id: UUID) -> None:
     """Delete the user and everything attached, in the caller's transaction."""
-    for model in UNDERAGE_DELETES:
+    users_threads = select(Thread.id).where(
+        or_(
+            Thread.user_low == user_id,
+            Thread.user_high == user_id,
+            Thread.opened_by == user_id,
+        )
+    )
+    for attached in UNDERAGE_DELETES:
+        model = attached.model
+        naming = [getattr(model, column) == user_id for column in attached.columns]
+        if attached.on_threads:
+            naming.append(model.thread_id.in_(users_threads))
         await session.execute(
             delete(model)
-            .where(model.user_id == user_id)
+            .where(or_(*naming))
             .execution_options(synchronize_session=False)
         )
     deleted = await session.execute(

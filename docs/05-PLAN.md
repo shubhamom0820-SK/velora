@@ -2317,7 +2317,7 @@ Claude Code adds items here instead of doing unplanned work. Format:
   against 1,097 ms that morning.
 
   Split from P-50, at the direction of the advisor directing T-3.2 to T-3.10.
-- [ ] P-54 · Keep D-072's deletion possible once T-8.6 lets a referral code be applied during
+- [x] P-54 · Keep D-072's deletion possible once T-8.6 lets a referral code be applied during
   onboarding. **Decided as D-078. The row half before T-4.2, on its Needs line; the file half in
   T-4.2.** Worst case: someone under 18 applies a code before the dob step, then
   gives their date; the referral's row, RESTRICT to `users`, stops the deletion, they get a 500, and
@@ -2353,6 +2353,17 @@ Claude Code adds items here instead of doing unplanned work. Format:
     behind a user row, since the keys are T-4.2's to define; T-4.5 adds its selfies. The job queue
     arrives with T-4.4, after T-4.2, so T-4.2 decides how the deletion runs until then.
   - The lines on T-4.2, T-4.5, T-8.6 and T-9.2 say what each inherits.
+  **Row half done, 3 October 2026:** the deletion takes the user's rows in all 25 tables the app
+  role may delete from, under every column that names them, and every row on their threads (another
+  user's clear of one), in the order of the keys between those tables; it keeps only rule 12's five.
+  Tests hold it to the database, not to a list: every table keyed to `users` is deleted or kept;
+  each deleted table's listed columns are exactly its keys to `users`; every one keyed to `threads`
+  deletes by thread; the order follows the keys; and the kept set is exactly what `velora_app` has
+  no DELETE on, read from its grants. A 🔒 test puts a row naming the minor in every table that can
+  hold one (all but `message_unlocks` and `refund_requests`, whose rows stand behind a message or a
+  payment, which rule 12 keeps) and finds none afterwards, the other user untouched. Nine
+  weakenings, each red. With no file stored anywhere yet, this is the whole protection today. The
+  file half is T-4.2's own line, where the first file behind a user row is stored.
 - [x] P-55 · Let two checkouts' test suites run at once. **Next: raised by the advisor on 3
   October 2026, on T-3.10's Needs line, the next task in the plan.** **Until it lands, a green local
   `make lint test` while another session is running is not evidence: only the CI run on the exact

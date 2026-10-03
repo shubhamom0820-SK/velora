@@ -96,7 +96,8 @@ If any of these fails, nothing ships.
     non-zero balance, for a user whose gender isn't `male`, including one with no gender yet.
     Proved by breaking each trigger, and by turning each into a blacklist.
 7. **Age gate** (T-3.6): 17y364d refused, the account and everything attached deleted, and only
-   the number's hash kept in `banned_identities` (D-072); exactly 18 today accepted.
+   the number's hash kept in `banned_identities` (D-072); exactly 18 today accepted. "Everything
+   attached" is a row in every table the app role may delete from (D-078, P-54).
 8. **Gender immutable** (T-1.16, T-3.6): second set → `IMMUTABLE_FIELD`; DB trigger also blocks.
 9. **Blocks are total** (T-9.1): after a block, neither side appears to the other anywhere.
 10. **Clearing is one-sided** (T-7.8): A clears → B still sees every message.

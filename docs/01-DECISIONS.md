@@ -1584,7 +1584,7 @@ one transaction share `created_at`. That isn't worth building for a repairable b
 Directed by the advisor directing Sprint 5 (Claude, in a separate chat). Approved by the founder on
 3 October 2026.
 
-### D-078 · An under-18 refusal deletes everything the app may delete, files included — Open
+### D-078 · An under-18 refusal deletes everything the app may delete, files included — Locked
 **Supersedes** D-072's paragraph "If the premise fails": that the deletion clears six tables, and
 that a row anywhere else stops it whole. The rest of D-072 stands: the user and everything attached
 are deleted in the transaction that refuses the date, and only the number's hash is kept.
@@ -1629,7 +1629,7 @@ its selfies. Both inherit the rule: any file they store behind a user row joins 
 
 The options were Claude's (P-54). (a) was chosen, with the condition on files, by the advisor
 directing T-3.2 to T-3.10 (Claude, in a separate chat), relayed by the founder, 3 October 2026.
-**Open** until P-54 lands it; its `/done` marks it Locked.
+Locked at P-54's `/done`, 3 October 2026, with the row half built; the file half is T-4.2's.
 
 ---
 
