@@ -33,6 +33,8 @@ any commit whose CI passed):
    routes to the new machine once `/readyz` passes.
 4. **web** builds and deploys with the Vercel CLI. The project has no Git connection
    (`web/vercel.json` also turns Git deploys off), so the web can't go live around the gate.
+   **A red `web — Vercel` job on green code** is most likely Vercel's Hobby upload cap: look for
+   `api-upload-free` in its log (P-0.15). The web stays on the last build that uploaded.
 5. **smoke** runs `scripts/staging-smoke` against staging from the outside, bodies included:
    `/readyz`, the hidden schema and docs, the web (it must be our build, calling this API), the
    hidden `/admin` and `/dev/*`, and CORS.
