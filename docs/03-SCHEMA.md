@@ -394,7 +394,7 @@ Seed (D-005): `pack-25` 25/₹1,500 · `pack-50` 50/₹2,500 · `pack-75` 75/₹
 | provider_payment_id | text unique null | **idempotency anchor** |
 | status | payment_status_t not null default 'created' | |
 | paid_at | timestamptz null | |
-| raw_webhook | jsonb null | last verified payload |
+| raw_webhook | jsonb null | the last verified payload's allowlisted fields only: ids, amount, currency, status, method, error code, timestamps; never the payer's email, phone, UPI ID, card or bank details (T-8.2) |
 
 Check `status NOT IN ('paid','refunded') OR (provider_payment_id IS NOT NULL AND paid_at IS NOT NULL)` —
 once money has moved the idempotency anchor exists, or a payment could be credited twice.

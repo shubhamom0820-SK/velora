@@ -131,6 +131,12 @@ never done silently.
   Rekognition (T-4.5 — signed up, but its payment method failed verification) and Sentry (T-9.12).
   Each is on its task's **Needs** line, which `/task` checks before planning.
 - [ ] **P-0.7** Review our own legal text before real users arrive — no lawyer at this stage (the founder's call, 1 October 2026). Check Terms, Privacy, Refunds and Contact (T-2.2) against the decisions they cite and against what the product actually does at go-live; against the IT Rules 2021 (Grievance Officer, timelines) and the DPDP Act (notice, consent, rights — section 16 and Rule 15 take effect on 13 May 2027; check for any restricted-country notification); and gender-based pricing. Start with the law-and-courts text (D-052), the weakest part we wrote ourselves. Look closely, not in passing, at the under-18 section: it keeps a hashed phone number of someone just identified as a minor (D-009). The mechanism and saying so openly are right, but minors plus retention is the most scrutinised combination there is. Privacy has no section yet on what happens to people's data if the app shuts down or is sold; add one when there is something honest to say. Gates T-9.15, not the production build (D-053). Terms' consumer-rights line (D-058) was written without a lawyer, by the founder and Claude: if the terms are ever reviewed properly, show it to one.
+  **No lawyer is engaged: an open item, and its owner is the founder, Shubham Kumar** (recorded 3
+  October 2026). This review is his own, with Claude; no lawyer has read the legal pages. D-048
+  calls this item "the DPDP session" and P-36 "the DPDP lawyer session", but none is booked. A
+  dating app holding women's photos and phone numbers, with Terms, Privacy and Refunds written
+  in-house, needs a lawyer's review before launch (the advisor directing T-3.2 to T-3.10, Claude in
+  a separate chat). When one is booked, record who and when here.
 - [ ] **P-0.8** After T-2.2 is live: apply to Razorpay and Cashfree. Before applying, confirm each gateway's exact refund and cancellation-policy requirement against `/refunds` (D-050).
 - [ ] **P-0.9** Buy a ₹10–12k Android phone for testing.
 - [ ] **P-0.10** 15 conversations with women aged 22–28 in the launch city about why they left their last dating app. Write findings in `docs/research.md`.
@@ -733,7 +739,8 @@ One migration per task, each with a working `downgrade()`. Build exactly `03-SCH
 ### T-4.1 · Storage provider
 - [ ] **Needs:** T-1.21, T-1.2, and **R2 enabled on the Cloudflare account, with the staging buckets
   `velora-staging-public` and `velora-staging-private`** (`infra/STAGING.md` §3) — not enabled yet
-  (T-1.22)
+  (T-1.22); and **P-49**: the API moves to Mumbai before Sprint 4, so T-4.4's worker is built once,
+  on the new host (directed by the advisor on 3 October 2026; the founder decides)
 - [ ] Real `StorageProvider` on aioboto3 (works for R2 and MinIO): `presign_put(bucket, key, content_type, max_bytes, ttl=300)`, `presign_get(bucket, key, ttl=600)`, `get_bytes`, `put_bytes`, `copy`, `delete`.
 - [ ] Key helpers: `raw/{user_id}/{photo_id}`, `p/{photo_id}.jpg`, `voice/{thread_id}/{message_id}.webm`, `album/{photo_id}/{viewer_id}.jpg`.
 - [ ] **Commit:** `feat(storage): r2 presigned urls [T-4.1]`
@@ -1011,6 +1018,13 @@ Built before discovery and chat because swipes, threads and unlocks all spend Ve
 - [ ] `POST /payments/webhook`: verify `X-Razorpay-Signature` (HMAC SHA-256 of raw body with webhook secret) → else 400 and log. Handle `payment.captured` and `payment.failed` only; others → 200 ignore.
 - [ ] Captured: find by order id; if `provider_payment_id` already set → 200 no-op. Else one transaction: set paid + ids + `raw_webhook`, `wallet.credit(purchase)`, `wallet.credit(purchase_bonus)` if any, referral reward check (T-8.6). Always return 200 quickly.
 - [ ] Amount mismatch vs row → mark `failed`, alert, no credit.
+- [ ] **`raw_webhook` keeps no payer details, whatever city the database is in** (directed 3 October
+  2026, from P-49's residency read): it stores an allowlist of the verified payload's fields and
+  nothing else, Razorpay's payment and order ids, amount, currency, status, method, error code and
+  timestamps. Never the payer's email, phone (`contact`), UPI ID (`vpa`), card or bank details:
+  RBI's own list of payment data, and not ours to keep. An allowlist, never a list of fields to
+  strip, so a field Razorpay adds later stays out. Test: a payload with every payer field set is
+  stored with exactly the allowlisted keys.
 - [ ] `GET /payments/{id}` for the client poll.
 - [ ] Tests: same webhook delivered 5 times concurrently → credited once; bad signature → no credit; amount mismatch → no credit.
 - [ ] **Commit:** `feat(payments): verified idempotent webhook [T-8.2]`
@@ -1760,9 +1774,55 @@ Claude Code adds items here instead of doing unplanned work. Format:
     - **No lawyer is scheduled.** P-0.7 is the founder's own review ("no lawyer at this stage", 1
       October 2026), though D-048 calls it "the DPDP session" and P-36 "the DPDP lawyer session". So
       B is the founder's call on our own promise, unless he books a lawyer first.
-  - **Not decided here.** The founder decides; this is the measurement and the reading. Whichever
-    city, the move is a task of its own, done before Sprint 6 builds on these numbers, and a decision
-    superseding D-048 (and D-023's region).
+  - **Directed, 3 October 2026: both in Mumbai, before Sprint 4** (the advisor directing T-3.2 to
+    T-3.10, Claude in a separate chat; the founder decides, and it stays open until he does). Why
+    Mumbai, though Singapore is cheaper today: the latency a person feels includes their own hop, so
+    Singapore is two to three times Mumbai end to end, not the few tens of milliseconds the server
+    side suggests (from the founder's machine, `/me` would be about 160 to 220 ms against 70 to 90);
+    `/privacy`'s "stored in Mumbai, India" is something a woman deciding whether to upload her
+    photos can check, a trust asset worth more than the latency; and Rule 13 is the tail risk, so
+    moving out now and back later is worse than not moving. Why before Sprint 4: T-4.4 makes the
+    worker a second Fly app, so moving now migrates one thing, and after Sprint 4 two, with every
+    sprint adding Fly-specific secrets, checks, CI and `infra/STAGING.md` to rewrite. It is on
+    T-4.1's Needs line, so `/task` stops there until it's done or decided otherwise.
+  - **The three checks the direction asked for, done 3 October 2026:**
+    1. **Cloud Run cold starts and cost.** One instance kept warm (`min-instances` 1) has no cold
+       start; only instances added for a burst start cold. Our part of a start, the imports and
+       `create_app()`, takes about 330 ms on the founder's Mac; Cloud Run adds pulling the image and
+       starting the container on one vCPU, unmeasured without an account. Mumbai (`asia-south1`) has
+       been on Cloud Run's cheaper Tier 1 since 15 November 2024. For one instance of 1 vCPU and 512
+       MiB over a 30-day month, at list prices: **kept warm but idle, about $10** (request-based
+       billing's idle rates); **busy all month, about $49** (instance-based billing) **to $65**
+       (request-based). An open WebSocket counts as busy, so T-7.4's chat keeps instances busy
+       whenever anyone is connected, and T-4.4's worker, which polls Redis all the time, needs an
+       always-on instance of its own: about $49 more. So production with chat live is roughly $100
+       to $115 a month on Cloud Run, against Fly's roughly $3 to $4 per small machine (published
+       rates; flyctl's size list shows no prices), $7 to $8 for an API and a worker. **A Compute
+       Engine VM in Mumbai** under the same Google billing account, `e2-small` at $14.69 a month on
+       demand (`e2-micro` $7.34), runs the API, the worker and WebSockets flat, with no cold starts,
+       at the cost of looking after a VM (OS updates, TLS, the deploy). **What this changes:** the
+       warm instance is cheap; WebSockets and the worker are what make Cloud Run the dearest of the
+       three. Mumbai stands; the host is the founder's choice between Cloud Run's management and a
+       VM's flat price.
+    2. **The Postgres-versus-Redis gap is not the pooler.** The API reaches Postgres over Supabase's
+       direct connection, IPv6, not its pooler (`infra/STAGING.md`), and the pooler measured 171 ms
+       anyway. Both hosts are Amazon's, in Mumbai: from the founder's machine in India, Upstash's four
+       addresses answer in 61 to 68 ms, like AWS Mumbai's own 66, so no nearer edge fronts them. The
+       gap is Fly's routing from Singapore, which differs by destination and changed during the day:
+       165 to 171 ms to every AWS Mumbai address tried (Supabase direct and pooler, AWS's EC2 API),
+       while Upstash's fell from 165 that morning to 56. So nothing in our configuration is free to
+       recover, and inside Mumbai the detour doesn't exist, so the Mumbai estimate stands. A route
+       that moves threefold in a day is one more reason not to depend on it.
+    3. **Whether Google can be paid: not confirmed, and only the founder can confirm it.** This
+       machine has no Google Cloud CLI to ask with. Google's own page says an Indian billing account
+       must complete mandatory identity verification within 30 days or be suspended: an individual
+       by PAN or e-Aadhaar through DigiLocker and proof of address, a business by a GST or Udyam
+       certificate (P-0.2's PAN and GST are still unconfirmed). Firebase's Blaze plan (P-0.12) needs
+       the same billing account, so it is owed anyway. Until a billing account exists and is
+       verified, no plan should rest on Google either.
+  - **Not decided here.** The founder decides the city and the host; this is the measurement, the
+    reading and the advisor's direction. The move is a task of its own and a decision superseding
+    D-048 (and D-023's region).
 
   Found reviewing T-3.2 to T-3.5, at the direction of the advisor directing them (Claude, in a
   separate chat), who added option B and the residency question.
@@ -1788,6 +1848,11 @@ Claude Code adds items here instead of doing unplanned work. Format:
   **Split, 3 October 2026:** the first two items are our own waste, worth fixing whatever P-49
   decides, so they are P-52 (the second checkout) and P-53 (the ping), done now. The rest waits for
   P-49's answer.
+  **P-49's answer, as directed (3 October 2026): both in Mumbai.** There a round trip costs about a
+  millisecond, so what's left here saves tens of milliseconds a request, not seconds: `/me` is about
+  11 round trips after P-52 and P-53. So the rest waits for the move, and after it is done only where
+  a route proves slow, measured with `tests/roundtrips.py`. If the founder keeps the split instead,
+  it is worth doing at once: at 165 ms a round trip it is most of `/me`'s remaining 1.8 s.
 - [ ] P-51 · Decide what a banned number is told. **In T-9.5, where bans are written, or T-9.6.**
   Worst case: a person barred by mistake, or a minor's family, has no way to learn why sign-in stopped
   working, or that grievance@ exists, which the IT Rules' grievance obligations (D-052) assume.
