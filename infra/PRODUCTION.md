@@ -75,8 +75,8 @@ Each blocks the release, not the build:
   crawled and archived, past any later change. A judgement, so no check can enforce it: it is on
   REL-1's Needs line.
 - **P-0.15:** Vercel Pro. **P-0.16:** Supabase Pro. The gate refuses without them.
-- **Production's keys,** generated with their second copy in the founder's password manager (see
-  "The keys" below).
+- **Production's keys,** generated with their second copy in Apple Passwords, synced through iCloud
+  (see "The keys" below).
 - **DNS for the apex and `www`** (§6), added on release day: before then nothing should answer
   at `veloraapp.co.in`.
 
@@ -96,16 +96,19 @@ repo's public test keys, but it can't know a copy of staging's.
   `db-owner`, `velora-api-db`, `jwt-secret`, `phone-pepper`, `phone-enc-key`, `code-pepper`.
 - **After setting the four keys,** read their shapes on the machine (lengths only) and compare
   each with its stored copy by SHA-256, first 8 hex characters, as T-3.1 did for staging.
-- **The second copy lives in a password manager that syncs,** never only on this Mac (the
+- **The second copy lives in Apple Passwords, synced through iCloud,** never only on this Mac (the
   founder, 3 October 2026). A Keychain on one laptop is one laptop away from every production
-  key being unrecoverable. Which password manager is the founder's to name; nobody else ever
-  asks for or reads its contents.
+  key being unrecoverable. Only the founder reads its contents; nobody else ever asks for them.
 
 ## The keys: what exists, what each protects, what losing one costs
 
 Read this before touching any key during an incident. It lists consequences, never values. The
 values live in three places: Fly's secrets for `velora-api` (they move, unchanged, with P-49), the
-Keychain service `velora-production` on the founder's Mac, and the founder's password manager.
+Keychain service `velora-production` on the founder's Mac, and **Apple Passwords, synced through
+iCloud** (named by the founder on 3 October 2026, with iCloud sync confirmed on in System
+Settings). The Passwords copy depends on the founder's Apple Account, not on this Mac, so it
+survives losing the Mac: any device signed in to that account, with Passwords syncing through
+iCloud, has it.
 
 **The four that cannot be replaced** without losing something:
 

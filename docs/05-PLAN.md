@@ -577,12 +577,15 @@ waits on the founder's decisions, so it is a task of its own, outside the sprint
   one-year Vercel token; the `api` record at Cloudflare, which issues its certificate; and, on
   release day, the apex and `www` records.
 - [ ] The prod app's four keys (`JWT_SECRET`, `PHONE_PEPPER`, `PHONE_ENC_KEY`, `CODE_PEPPER`) freshly generated, never staging's: startup refuses the repo's test keys (D-060) but can't know a copy of staging's. Read their shapes on the machine, lengths only, and compare each with its stored copy by SHA-256 prefix, as T-3.1 did for staging.
-- [ ] **And the only copy of production's keys must not be one Mac's Keychain** (the founder, 3 October 2026). Losing `PHONE_ENC_KEY` makes every stored phone number unreadable; losing `CODE_PEPPER` makes every PIN unverifiable; losing `PHONE_PEPPER` silently unbans every banned number, and login can't find any account until every number is re-hashed from its encrypted copy (D-061, D-062). Today that costs nothing, since no data depends on them. Decide here, where production's keys are born, where the second copy lives.
+- [x] **And the only copy of production's keys must not be one Mac's Keychain** (the founder, 3 October 2026). Losing `PHONE_ENC_KEY` makes every stored phone number unreadable; losing `CODE_PEPPER` makes every PIN unverifiable; losing `PHONE_PEPPER` silently unbans every banned number, and login can't find any account until every number is re-hashed from its encrypted copy (D-061, D-062). Today that costs nothing, since no data depends on them. Decide here, where production's keys are born, where the second copy lives.
   **Decided (the founder, 3 October 2026): a password manager that syncs,** so the copy survives
   the machine; never only the Mac's Keychain, where `CODE_PEPPER` already sits, one laptop away
   from every production key being unrecoverable. The founder names which; nobody asks for or reads
   its contents. `infra/PRODUCTION.md` ("The keys") lists what each key protects and what losing
   it costs: consequences, never values.
+  **Named, closing this (the founder, 3 October 2026): Apple Passwords, synced through iCloud,**
+  with iCloud sync confirmed on in System Settings. Recorded beside the keys table in
+  `infra/PRODUCTION.md`. The keys themselves are still the box above.
 - [ ] **Tag `v0.1.0`** on a commit of `main` that staging deployed: `git tag v0.1.0 <commit> &&
   git push origin v0.1.0` (`infra/PRODUCTION.md`). The gate checks the rest.
 - [ ] **Done when:** `https://veloraapp.co.in` shows the landing page; `https://api.veloraapp.co.in/healthz` is 200. → **Unblocks P-0.8.**
