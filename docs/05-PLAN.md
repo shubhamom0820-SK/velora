@@ -2443,6 +2443,8 @@ Claude Code adds items here instead of doing unplanned work. Format:
   payment, which rule 12 keeps) and finds none afterwards, the other user untouched. Nine
   weakenings, each red. With no file stored anywhere yet, this is the whole protection today. The
   file half is T-4.2's own line, where the first file behind a user row is stored.
+  **The count, read from the database on 3 October 2026:** 43 keys into `users`, from 30 tables:
+  25 deleted, 5 kept. (A chat report that day said 37 tables; it was wrong, and is corrected here.)
 - [x] P-55 · Let two checkouts' test suites run at once. **Next: raised by the advisor on 3
   October 2026, on T-3.10's Needs line, the next task in the plan.** **Until it lands, a green local
   `make lint test` while another session is running is not evidence: only the CI run on the exact
@@ -2484,6 +2486,11 @@ Claude Code adds items here instead of doing unplanned work. Format:
     not flushed, the lock released at once (a transaction lock), and the lock's connection closed
     after taking it. Each ran with no bytecode on slots 13 to 15, so a broken harness couldn't
     touch a peer's run; restored and checked by SHA-256. Settles P-11.
+  **So the caveat at the top of this entry has expired:** a local run no longer depends on what
+  else is running, and is evidence again; the CI run on the exact commit is still the gate (D-044).
+  Until it landed, three sessions building that day (T-2.6, T-3.6 to T-3.9, and this one) worked
+  around its absence: two saw rate-limit tests fail for one another's runs, and gates were run
+  only in quiet windows agreed between sessions by message.
 - [ ] P-56 · Refuse a charge whose price changed after it was shown. **For T-7.1,** the first paid
   action a person taps. Worst case: a man sees "Open thread · 5 Velas" and is charged 6, because
   the price changed in between. The server still decides the price (rule 6), and `/terms` says
@@ -2522,3 +2529,19 @@ Claude Code adds items here instead of doing unplanned work. Format:
   about, Claude's rather than decided: it refuses ordinary prose run together with a lowercase
   ending ("goa.in summer"), and misses "ravi dot com" and endings off its list. At the direction
   of the advisor, 3 October 2026; found in T-3.7.
+- [ ] P-60 · Make `scripts/ci-gate` refuse a commit that is already on `main`. **Before the next
+  `/done`.** Worst case: a session's commit step is skipped or fails, the gate runs anyway on
+  HEAD, a commit already on `main` with a green run, and prints "CI is green". The session reports
+  its work landed and removes its worktree, and the change it never committed is lost, or sits
+  unpushed while everyone believes it is on `main`. Seen on 3 October 2026, in P-54: Claude's shell
+  chain joined the gate with `;` rather than `&&`, so after the fast-forward check refused (`main`
+  had moved) and nothing was committed, the gate checked the untouched HEAD, `c47feca`, and printed
+  its earlier green run. The gate named the commit it checked, but nothing compared that with the
+  commit meant, and the green line is the one people read. `/done` runs its steps in order and
+  stops on a failure; an improvised chain doesn't, which is why the gate must refuse rather than
+  trust its caller. Fix: with no argument, `/done`'s use, refuse when HEAD is already contained in
+  `origin/main`, with an exit code of its own and a message saying nothing new was committed; an
+  explicit ref (`scripts/ci-gate main`, the manual path's step 4) is checked as now. Print the
+  commit's subject beside its SHA. In `scripts/ci-gate-test`: an already-merged HEAD exits with the
+  new code and says why; an explicit `main` still checks. At the direction of the advisor directing
+  T-3.2 to T-3.10, 3 October 2026; found in P-54.
