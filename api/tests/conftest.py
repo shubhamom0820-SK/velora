@@ -14,13 +14,17 @@ them.
 from __future__ import annotations
 
 import itertools
+import json
+import logging
 import os
-from collections.abc import AsyncIterator, Iterator
+from collections.abc import AsyncIterator, Iterator, MutableMapping
+from dataclasses import dataclass
 from datetime import date
 from types import ModuleType
-from typing import Protocol
+from typing import Any, Protocol
 
 import pytest
+import structlog
 from fastapi import FastAPI
 from httpx import ASGITransport, AsyncClient
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession
@@ -284,3 +288,43 @@ def clock() -> Iterator[ModuleType]:
         yield clock_module
     finally:
         clock_module.unfreeze()
+
+
+# --- Logs, for rule 15 ------------------------------------------------------------
+
+PROBE = "rule15_probe"
+
+
+@dataclass
+class CapturedLogs:
+    events: list[MutableMapping[str, Any]]
+    caplog: pytest.LogCaptureFixture
+
+    def _records(self) -> list[logging.LogRecord]:
+        # The probe is logged while the fixture is set up: another phase.
+        return [*self.caplog.get_records("setup"), *self.caplog.records]
+
+    @property
+    def text(self) -> str:
+        """Every captured line, structlog's events and the stdlib's records."""
+        lines = [json.dumps(dict(event), default=str) for event in self.events]
+        lines += [record.getMessage() for record in self._records()]
+        return "\n".join(lines)
+
+    def assert_listening(self) -> None:
+        """Both probes arrived: a check that found nothing secret proves
+        something only if the capture was listening (P-48)."""
+        assert any(e.get("event") == PROBE for e in self.events)
+        assert any(r.getMessage() == PROBE for r in self._records())
+
+
+@pytest.fixture
+def captured_logs(caplog: pytest.LogCaptureFixture) -> Iterator[CapturedLogs]:
+    """Every log line a test's code emits, structlog's and the stdlib's, with a
+    probe logged through each at the start. End a rule-15 test with
+    `captured_logs.assert_listening()` beside its "nothing secret" check."""
+    caplog.set_level(logging.DEBUG)
+    with structlog.testing.capture_logs() as events:
+        structlog.get_logger("rule15").info(PROBE)
+        logging.getLogger("rule15").warning(PROBE)
+        yield CapturedLogs(events, caplog)

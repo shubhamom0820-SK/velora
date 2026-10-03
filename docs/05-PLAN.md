@@ -1623,6 +1623,10 @@ Claude Code adds items here instead of doing unplanned work. Format:
   tell whoever asks whether a number is banned. Send the SMS off the request (an ARQ job, or a
   background task) so every number's answer takes the same time, or pad to it; and keep T-3.2's
   `503` for D-064's local refusal, which happens before anything is sent.
+  **And keep httpx from logging the number** (found in P-48): httpx logs every request's URL at
+  INFO through the stdlib, which reaches Fly's logs. If MSG91's API takes the mobile number in the
+  query string, each send would log a phone number (rule 15). Send it in the body, or lower httpx's
+  logger, and test it with `captured_logs`.
 
   Found while planning T-3.2 to T-3.10.
 - [ ] P-47 · Give `app_config` its 60-second cache. **With T-6.4**, the first hot path to read a
@@ -1632,7 +1636,7 @@ Claude Code adds items here instead of doing unplanned work. Format:
   cap, is rate-limited, and fresh means a lowered cap applies at once. A cache must be per app
   (`app.state`), not per process, or tests that tune a setting would read another test's value.
   Found in T-3.2.
-- [ ] P-48 · Make `structlog.testing.capture_logs` see every log line in tests. Worst case: a test
+- [x] P-48 · Make `structlog.testing.capture_logs` see every log line in tests. Worst case: a test
   that nothing secret is logged (rule 15) passes having captured nothing. structlog caches a
   logger at first use against the processor list configured then, and every `create_app()` calls
   `configure_logging()`, which installs a new list; `capture_logs` edits only the current one, so
@@ -1640,3 +1644,13 @@ Claude Code adds items here instead of doing unplanned work. Format:
   assert they saw the event they expect; T-3.1's PIN-hash log test relies on test order. Fix at
   the root: configure logging once per process, or keep one processor list and change it in place.
   Found in T-3.2.
+  **Done, 3 October 2026:** `configure_logging()` keeps one processor list and changes it in place,
+  so every logger, cached or not, reaches `capture_logs`. Proved by shuffling the whole suite (a
+  seeded plugin, no new dependency): before the fix, T-3.1's PIN-hash log test failed in 8 of 8
+  orders; with T-3.2's fresh-logger workaround switched off, its two log tests and T-3.3's failed
+  in 8 of 8 too, loudly only because each asserts an event it expects. After the fix, with the
+  workaround removed, all 749 pass in file order and in 8 of 8 shuffled orders. Two tests could never
+  fail, asserting only absence on paths that log nothing (T-1.21's OTP check, T-2.3's waitlist
+  email check via `capfd`, which can miss a logger bound to an earlier stream); both now use a new
+  `captured_logs` fixture whose probes, through structlog and the stdlib, must arrive, and each goes
+  red when a leak is planted.

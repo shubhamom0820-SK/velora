@@ -12,7 +12,6 @@ from types import ModuleType
 from typing import Any
 
 import pytest
-import structlog
 from fastapi import FastAPI
 from httpx import ASGITransport, AsyncClient, Response
 from redis.asyncio import Redis
@@ -28,7 +27,7 @@ from app.core.providers import FakeProviders, Providers
 from app.core.providers.sms import Msg91Sms, guard_real_sms
 from app.core.security import E164, _code_key, decrypt_phone, hash_otp, hash_phone
 from app.main import close_resources, create_app
-from app.modules.auth import otp_store, service
+from app.modules.auth import otp_store
 from app.modules.auth.models import BannedIdentity
 from tests.conftest import MakeUser, make_test_settings
 from tests.infra import TEST_DATABASE_URL, session_for_the_app
@@ -66,16 +65,6 @@ def _assert_rate_limited(response: Response, retry_after_s: int) -> None:
             "details": {"retry_after_s": retry_after_s},
         }
     }
-
-
-@pytest.fixture(autouse=True)
-def _uncached_service_log(monkeypatch: pytest.MonkeyPatch) -> None:
-    """structlog caches a logger at first use, against the processors set then,
-    and every create_app() sets new ones: a logger cached in an earlier test
-    escapes capture_logs, and a test that nothing secret was logged would pass
-    having seen nothing. A fresh one each test is captured; the tests that read
-    the logs also check they saw the event they expect."""
-    monkeypatch.setattr(service, "log", structlog.get_logger(service.__name__))
 
 
 @pytest.fixture

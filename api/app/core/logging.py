@@ -22,6 +22,15 @@ from starlette.responses import Response
 REQUEST_ID_HEADER = "X-Request-ID"
 
 
+# One processor list for the life of the process, changed in place. structlog
+# binds each logger, at first use, to the list configured then; with a new list
+# per call (create_app() calls this every time), a logger used before the last
+# call kept the old one, out of reach of structlog.testing.capture_logs, which
+# edits the current list in place. A rule-15 test then passed having captured
+# nothing (P-48).
+_PROCESSORS: list[structlog.types.Processor] = []
+
+
 def configure_logging(*, json_logs: bool, level: str = "INFO") -> None:
     """Configure structlog and route the stdlib logger through it."""
     shared: list[structlog.types.Processor] = [
@@ -37,8 +46,9 @@ def configure_logging(*, json_logs: bool, level: str = "INFO") -> None:
         else structlog.dev.ConsoleRenderer(colors=True)
     )
 
+    _PROCESSORS[:] = [*shared, renderer]
     structlog.configure(
-        processors=[*shared, renderer],
+        processors=_PROCESSORS,
         wrapper_class=structlog.make_filtering_bound_logger(
             logging.getLevelNamesMapping()[level]
         ),

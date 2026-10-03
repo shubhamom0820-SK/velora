@@ -43,6 +43,10 @@ use the **fake** providers from `app/core/providers/`.
 - `make_thread(a, b, status="active", messages=0)`.
 - `clock` — freezes/advances "now" for expiry tests (the app reads time only through
   `core.clock.now()` — never `datetime.now()` directly).
+- `captured_logs` (P-48) — every log line, structlog's and the stdlib's, with a probe through each.
+  A rule-15 test ends with `captured_logs.assert_listening()` beside its "nothing secret" check:
+  an absence proves something only if the capture was listening. Read logs from it, never from
+  `capfd` or `capsys`, which can miss a logger bound to an earlier test's stream.
 - `fake_providers` (T-1.21) — every external service as its in-memory fake; the `app` fixture
   installs it, so no test reaches a real provider. `fake_providers.sms.last_code(phone)`,
   `fake_providers.payments.capture(order_id)` (a signed webhook to deliver),

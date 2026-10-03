@@ -8,7 +8,6 @@ from collections.abc import Awaitable, Callable
 from typing import Annotated
 
 import pytest
-import structlog
 from fastapi import Depends, FastAPI
 from httpx import AsyncClient
 
@@ -32,6 +31,7 @@ from app.core.providers.sms import (
     mask_phone,
 )
 from app.core.providers.storage import FakeStorage, ObjectNotFound, S3Storage
+from tests.conftest import CapturedLogs
 from tests.keys import random_keys
 
 PHONE = "+919812345678"
@@ -162,13 +162,14 @@ async def test_fake_sms_stays_quiet_without_echo(
     assert capsys.readouterr() == ("", "")
 
 
-async def test_an_otp_never_reaches_a_log_event() -> None:
-    """Rule 15: the echo goes to the terminal, never through the logger."""
-    with structlog.testing.capture_logs() as events:
-        await FakeSms(echo=True).send_otp(PHONE, "482193")
+async def test_an_otp_never_reaches_a_log_event(captured_logs: CapturedLogs) -> None:
+    """Rule 15: the echo goes to the terminal, never through the logger. The
+    capture's probes prove it was listening, so "not found" means something."""
+    await FakeSms(echo=True).send_otp(PHONE, "482193")
 
-    assert not any("482193" in json.dumps(event, default=str) for event in events)
-    assert not any(PHONE in json.dumps(event, default=str) for event in events)
+    captured_logs.assert_listening()
+    assert "482193" not in captured_logs.text
+    assert PHONE not in captured_logs.text
 
 
 def test_mask_phone_keeps_country_code_and_last_four() -> None:

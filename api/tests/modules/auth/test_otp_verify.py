@@ -16,7 +16,6 @@ from typing import Any
 
 import jwt
 import pytest
-import structlog
 from fastapi import FastAPI
 from httpx import ASGITransport, AsyncClient, Response
 from redis.asyncio import Redis
@@ -58,12 +57,6 @@ TYPED = "98123 45678"
 VERIFY = "/v1/auth/otp/verify"
 SETTINGS = make_test_settings()
 THIRTY_DAYS = 30 * 24 * 60 * 60
-
-
-@pytest.fixture(autouse=True)
-def _uncached_service_log(monkeypatch: pytest.MonkeyPatch) -> None:
-    """A fresh logger each test, so capture_logs sees it (see P-48)."""
-    monkeypatch.setattr(service, "log", structlog.get_logger(service.__name__))
 
 
 def _phone_hash(phone: str = PHONE) -> str:

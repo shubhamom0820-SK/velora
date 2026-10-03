@@ -16,6 +16,7 @@ from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.redis import build_redis
+from tests.conftest import CapturedLogs
 
 pytestmark = pytest.mark.usefixtures("test_redis")
 
@@ -89,14 +90,17 @@ async def test_a_repeat_answers_exactly_as_a_new_email_and_changes_nothing(
 
 
 async def test_the_email_is_never_logged(
-    client: AsyncClient, db: AsyncSession, capfd: pytest.CaptureFixture[str]
+    client: AsyncClient, db: AsyncSession, captured_logs: CapturedLogs
 ) -> None:
+    """Read from the captured log events, not stdout: structlog binds a logger
+    to the stream of its first use, so an output check could miss a line and
+    pass. The probes prove the capture was listening (P-48)."""
     await _post(client, {"email": "never-logged@example.com"})
     await _post(client, {"email": "never-logged@example.com"})
     await _post(client, {"email": "never-logged-bad@"})
 
-    out, err = capfd.readouterr()
-    assert "never-logged" not in out + err
+    captured_logs.assert_listening()
+    assert "never-logged" not in captured_logs.text
 
 
 # --- Validation -----------------------------------------------------------------
