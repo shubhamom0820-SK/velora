@@ -1237,8 +1237,12 @@ committed rows.
   **Since P-55** every run has a database of its own, created empty when it starts, so
   `TEST_DATABASE_URL` is optional here. It still works, and the run still takes a slot for its Redis
   database. The full `make test` runs on its own slot's database.
-- [ ] **Done when:** the docs commit after `/done` names the staging deploy run that applied both
-  migrations.
+- [x] **Done when:** the docs commit after `/done` names the staging deploy run that applied both
+  migrations. **Deploy run 37131243030** (commit `1938709`): its migrate job, as the owner against
+  Supabase, logged `Running upgrade 684b79a19e8b -> 97ddae55f597` and `97ddae55f597 ->
+  190d7bebf133` (3 October 2026, 14:53 UTC), so the D-076 migration's count found nothing held
+  by anyone but a man on staging; smoke passed. Read from alembic's own log, not the database's
+  `alembic_version`, which this session can't reach.
 - [x] **Commit:** `feat(wallet): row-locked debit and credit [T-5.1]`
 
 ### T-5.4 · The concurrency test 🔒
