@@ -982,11 +982,28 @@ exist yet. The batch is a chain, T-3.10 → T-3.11 → T-3.12 → T-3.13, each n
 
 ### T-3.14 · Firebase phone sign-in (launch path)
 - [ ] **Needs:** T-3.3, T-3.10 (it restores the session on reload, which the Done-when checks), T-3.11 (its phone and OTP screens, which this task's web step puts Firebase on), and **P-0.13** (the Google billing account, verified: Firebase's Blaze plan bills to it)
+  **And the two authorised domains, added by the founder** in Firebase's console (Authentication,
+  Settings, Authorised domains) for project `velora-ic`: `staging.veloraapp.co.in` and
+  `veloraapp.co.in`. Nothing else: no Vercel preview domain, since neither Vercel project is
+  connected to Git (T-1.22, `infra/PRODUCTION.md`); not `www`, which 308s to the apex; not
+  `127.0.0.1`, since local builds sign in by Path B (D-081). Today the list holds only `localhost`
+  and the two `firebaseapp` defaults, so sign-in fails everywhere real until these are in.
 - [ ] **Not in T-3.10 to T-3.13's batch** (planned 3 October 2026): P-0.13's account doesn't exist yet. When this task starts, switch D-081's Firebase builds from "sign-in isn't open yet" to the Firebase flow: make `signInOpen()` (`web/src/lib/sign-in-path.ts`) true for `firebase`, which moves `/login` and the landing page's waitlist heading together.
 - [ ] **New dependencies (approved, recorded in D-035):** api `firebase-admin`; web `firebase`.
 - [ ] Firebase console: project created, Phone provider enabled, **App Check with reCAPTCHA
   Enterprise enforced on Authentication**, authorised domains = `veloraapp.co.in` + `staging.veloraapp.co.in`
-  (the Done-when signs in there) + Vercel preview + `localhost`, daily SMS quota capped, billing alert set at a fixed rupee amount.
+  (the Done-when signs in there; on the Needs line), daily SMS quota capped, billing alert set at a fixed rupee amount.
+  **Done by the founder, 3 October 2026:** project `velora-ic` (no Google Analytics, no Gemini in
+  Firebase); Phone sign-in enabled; SMS region policy "Allow", India (IN) only; Blaze linked to a
+  billing account. **Not yet:** App Check enforced, the authorised domains, the daily SMS quota,
+  the budget alert. The first plan text also listed a Vercel preview and `localhost`: neither is
+  needed (Needs line).
+- [ ] **A number outside India is refused by Firebase itself,** under that region policy, before any
+  of our code runs. What the person sees then is a case this task handles and tests, not an
+  accident. (The phone screen fixes +91, so it takes a pasted or edited number to get there.)
+- [ ] **One project, `velora-ic`, so far.** If staging and production share it, no Firebase test
+  number may go in it (D-065): the Done-when's sign-in uses a second project for staging, or the
+  founder's own phone. This task decides which, before anything is configured.
 - [ ] `POST /v1/auth/firebase {id_token}`: verify signature and `aud`/`iss`/`exp` against Google's
   public keys (cached); require `phone_number` and `firebase.sign_in_provider == "phone"`;
   reject non-`+91` → `PHONE_NOT_SUPPORTED`; reject a reused `jti` (Redis until expiry) →
@@ -1012,6 +1029,9 @@ exist yet. The batch is a chain, T-3.10 → T-3.11 → T-3.12 → T-3.13, each n
   tokens are accepted, so it never goes in a project production uses.
 - [ ] Tests: forged token rejected; expired rejected; reused token rejected; non-Indian number
   rejected; banned phone rejected; a valid token creates exactly one user.
+- [ ] **Done when, before any real SMS path ships: a budget alert is set** on the billing account
+  Blaze bills to, at a fixed rupee amount (the founder, 3 October 2026). No real SMS path ships
+  without one: an SMS sent from the browser is outside our server's limits (D-035).
 - [ ] **Done when:** on staging, sign in at `https://staging.veloraapp.co.in` with a Firebase
   test phone number (fixed code, no SMS, no cost) in a Firebase project production doesn't use
   (D-065). As first written, the number lived in the one project P-0.12 sets up, which would let
