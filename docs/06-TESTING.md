@@ -15,13 +15,23 @@ A task isn't done until its tests pass. Tests are written in the same task as th
 | Unit (web) | vitest + Testing Library | primitives, hooks, formatters, countdown | < 20 s |
 | E2E | Playwright (Chromium, mobile viewport 390×844 + desktop 1280×800) | the user journeys below | < 5 min |
 
-No mocking of the database — tests use a real Postgres (`velora_test`). External services always
+No mocking of the database — tests use a real Postgres, a database of each run's own. External services always
 use the **fake** providers from `app/core/providers/`.
 
 ## Test database (api)
 
-- Tests run on `velora_test` (created by `make infra-up`). Override the location with
-  `TEST_DATABASE_URL` — test-only, so it is documented here, not in `02-ARCHITECTURE.md` §11.
+- **Each run has a database and a Redis database of its own (P-55).** Every checkout on the
+  machine shares one Postgres and one Redis, and runs that shared a database failed each other's
+  tests (two full runs at once failed 45 and 42 tests that pass alone). So a run takes a slot,
+  2 to 15, for as long as its process lives: a Postgres advisory lock on a connection
+  `tests/infra.py` keeps open, so a run that crashes or is killed frees its slot when the
+  connection closes. The slot gives it `velora_slot<n>_test` and Redis database `<n>`, dropped and
+  created empty (the Redis database flushed) when the run takes the slot, so nothing a previous
+  run left reaches it. pytest's header names the slot. Redis databases 0 and 1 are `make dev`'s
+  and the shared test database used before P-55, which `make infra-up` still creates as
+  `velora_test` for branches cut before it.
+- `TEST_DATABASE_URL` names a database of your own instead of the slot's; the run still takes a
+  slot for its Redis database. Test-only, so it is documented here, not in `02-ARCHITECTURE.md` §11.
 - The harness **refuses to start** unless the database name ends in `_test`, and it forces
   `DATABASE_URL`/`REDIS_URL` to the test values, so an exported dev `DATABASE_URL` can never
   put tests on the dev database.
@@ -35,18 +45,18 @@ use the **fake** providers from `app/core/providers/`.
 
 A race test needs committed rows on separate connections, so the per-test rollback can't clean up
 after it. From T-5.1 a committed ledger row can never be deleted: the ledger refuses DELETE and
-TRUNCATE, and foreign keys into `users` are RESTRICT. `velora_test` is shared by every worktree on
-the machine (P-55). So a test that commits:
+TRUNCATE, and foreign keys into `users` are RESTRICT. Each run's database is its own and starts
+empty (P-55), but other tests in the same run commit too. So a test that commits:
 - **Makes its own users:** fresh men, never onboarded, on phone numbers `make_user` never generates.
-  It never deletes them, and never uses the owner's trigger bypass. Local `velora_test` keeps them
-  until `make infra-reset`; CI starts empty every run.
+  It never deletes them, and never uses the owner's trigger bypass. They last until the run's slot
+  is next taken, which recreates its database; CI starts empty every run.
 - **Scopes every assertion to the users it made.** Never a count of a whole table: such a test is
   right alone and wrong the moment anything else commits.
 - **Never commits a wallet that disagrees with its ledger.** T-9.9's reconciliation is global by
   design, so a test proving it catches a mismatch runs inside the rolled-back transaction.
-- **Breaks constraints only on a database of its own.** A task proving a guard by breaking it does
-  so on its own test database (`createdb`, then `TEST_DATABASE_URL`). A broken constraint hits every
-  session using the shared one, however well its assertions are scoped.
+- **Breaks constraints only on a database of its own.** Every run's is (P-55), so a guard broken to
+  prove a test catches it touches no other session, and the next run to take the slot starts
+  clean. A run pointed at a shared database by `TEST_DATABASE_URL` loses that.
 
 ## Fixtures (api)
 

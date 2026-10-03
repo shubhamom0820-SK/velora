@@ -1,7 +1,7 @@
 """The test harness.
 
 Every test that touches Postgres runs inside a transaction that is rolled back,
-on `velora_test`, never anything else. The app under test is built from explicit
+on this run's own test database, never anything else (P-55, `tests/infra.py`). The app under test is built from explicit
 test settings and shares that transaction.
 
 Every external service is its in-memory fake (`fake_providers`, D-028): the
@@ -27,6 +27,7 @@ import pytest
 import structlog
 from fastapi import FastAPI
 from httpx import ASGITransport, AsyncClient
+from sqlalchemy.engine import make_url
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession
 
 from alembic import command as alembic_command
@@ -34,6 +35,7 @@ from app.core.config import PUBLIC_TEST_KEYS
 from tests.infra import (
     INFRA_DOWN_REASON,
     INFRA_UP,
+    RUN_SLOT,
     TEST_DATABASE_URL,
     TEST_REDIS_URL,
     ActiveSession,
@@ -86,6 +88,16 @@ def pytest_configure(config: pytest.Config) -> None:
         )
 
 
+def pytest_report_header(config: pytest.Config) -> str:
+    """Which slot this run holds (P-55), so a report says where it ran."""
+    if RUN_SLOT is None:
+        return f"test slot: none ({INFRA_DOWN_REASON})"
+    return (
+        f"test slot {RUN_SLOT.number}: database {make_url(TEST_DATABASE_URL).database}, "
+        f"Redis database {RUN_SLOT.number}"
+    )
+
+
 def make_test_settings() -> Settings:
     """Explicit settings for the app under test — never read from `.env`."""
     return Settings(
@@ -103,7 +115,7 @@ def make_test_settings() -> Settings:
 
 @pytest.fixture(scope="session")
 async def test_engine() -> AsyncIterator[AsyncEngine]:
-    """One engine on `velora_test` for the whole run.
+    """One engine on this run's test database for the whole run.
 
     Migrated to head once, here; each test's writes are then rolled back.
     """

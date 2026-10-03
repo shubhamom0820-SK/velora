@@ -16,6 +16,7 @@ from httpx import ASGITransport, AsyncClient, Response
 from redis.asyncio import Redis
 from sqlalchemy import event, text
 from sqlalchemy.dialects.postgresql.asyncpg import AsyncAdapt_asyncpg_connection
+from sqlalchemy.engine import make_url
 from sqlalchemy.exc import DBAPIError
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker
 from sqlalchemy.pool import QueuePool
@@ -28,11 +29,10 @@ from app.core.security import E164, make_access_token
 from app.main import close_resources, create_app
 from app.modules.users import service as users_service
 from tests.conftest import make_test_settings
-from tests.infra import TEST_DATABASE_URL, requires_infra
+from tests.infra import TEST_DATABASE_URL, TEST_REDIS_URL, requires_infra
 from tests.keys import random_keys
 from tests.roundtrips import RoundTrips
 
-_TEST_DB_URL = "postgresql+asyncpg://velora:velora@127.0.0.1:5432/velora_test"
 _DEV_DB_URL = "postgresql+asyncpg://velora:velora@127.0.0.1:5432/velora"
 
 
@@ -56,8 +56,8 @@ async def test_get_session_uses_the_apps_database_not_the_global_one(
         Settings(
             _env_file=None,
             ENV="local",
-            DATABASE_URL=_TEST_DB_URL,
-            REDIS_URL="redis://127.0.0.1:6379/1",
+            DATABASE_URL=TEST_DATABASE_URL,
+            REDIS_URL=TEST_REDIS_URL,
             **random_keys(),  # type: ignore[arg-type]
         )
     )
@@ -77,12 +77,12 @@ async def test_get_session_uses_the_apps_database_not_the_global_one(
         await close_resources(app)
 
     assert response.status_code == 200
-    assert response.json() == {"database": "velora_test"}
+    assert response.json() == {"database": make_url(TEST_DATABASE_URL).database}
 
 
 # --- One connection per request (P-52) ------------------------------------------
 #
-# The app as production builds it: its own get_session and pool on velora_test,
+# The app as production builds it: its own get_session and pool on the test database,
 # no test transaction around it. Anything written is written for real, so the
 # one test that needs rows creates and deletes them itself.
 

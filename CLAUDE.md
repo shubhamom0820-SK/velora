@@ -102,10 +102,11 @@ That's Safari, not a bug. Test Safari on staging, which has HTTPS.
 
 **Never run `make infra-reset` without telling the founder first, and never while another session
 is testing.** Every worktree on this machine shares one Docker stack, so a reset drops every
-session's databases mid-run: `velora`, `velora_test`, MinIO and Redis. From T-5.1 it is also the
-only reset: the ledger refuses DELETE and TRUNCATE, so a user with Velas can't be removed any other
-way. To break a constraint on purpose, use a test database of your own (`createdb`, then
-`TEST_DATABASE_URL`; 06-TESTING), never the shared one.
+session's databases mid-run: `velora`, every test run's, MinIO and Redis. From T-5.1 it is also the
+only reset of `velora`: the ledger refuses DELETE and TRUNCATE, so a user with Velas can't be
+removed any other way. Tests need no reset: each run has a database and a Redis database of its
+own, created empty when it starts (P-55, 06-TESTING), so breaking a constraint to prove a test
+touches no other session.
 
 ## Golden rules — non-negotiable
 

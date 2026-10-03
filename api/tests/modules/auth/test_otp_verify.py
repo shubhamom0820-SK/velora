@@ -46,7 +46,7 @@ from app.modules.users import service as users_service
 from app.modules.users.models import User
 from app.modules.wallet.models import Wallet
 from tests.conftest import MakeUser, make_test_settings
-from tests.infra import TEST_DATABASE_URL, session_for_the_app
+from tests.infra import TEST_DATABASE_URL, TEST_REDIS_URL, session_for_the_app
 from tests.keys import random_keys
 
 pytestmark = pytest.mark.usefixtures("test_redis")
@@ -721,7 +721,7 @@ async def _client_for(
 
 _DEPLOYED: dict[str, Any] = {
     "DATABASE_URL": TEST_DATABASE_URL,
-    "REDIS_URL": "redis://127.0.0.1:6379/1",
+    "REDIS_URL": TEST_REDIS_URL,
     "CLIENT_IP_HEADER": "Fly-Client-IP",
     **random_keys(),
 }

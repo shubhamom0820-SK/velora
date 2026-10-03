@@ -17,6 +17,7 @@ from typing import Any
 
 import pytest
 from sqlalchemy import func, select, text
+from sqlalchemy.engine import make_url
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.clock import today_ist
@@ -140,13 +141,14 @@ async def test_a_local_address_to_an_unstamped_database_is_refused(
     no_writes: None,
 ) -> None:
     """A tunnel's case: ENV is local and the host is loopback, but the database
-    isn't the one `make infra-up` stamped. velora_test is never stamped."""
+    isn't the one `make infra-up` stamped. A test database is never stamped."""
     settings = make_test_settings()
     assert settings.DATABASE_URL == TEST_DATABASE_URL
     code, out, err = await run_main(settings)
     assert code == 2
     assert err.startswith(
-        "seed: refused. Database 'velora_test' isn't stamped as the local "
+        f"seed: refused. Database '{make_url(TEST_DATABASE_URL).database}' isn't "
+        "stamped as the local "
         "stack's. If it is the local stack's, run make infra-up, which stamps it"
     )
     assert out == ""

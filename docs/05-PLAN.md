@@ -1655,6 +1655,8 @@ Claude Code adds items here instead of doing unplanned work. Format:
   is fixed at `127.0.0.1:6379/1`. If T-1.20's CI runs Redis anywhere else, the harness reports the
   stack unreachable and CI hard-fails by design. Add the override alongside T-1.20. Found in review
   of T-1.5.
+  **Narrower since P-55:** each run's Redis database is its slot's, 2 to 15, so runs no longer share
+  one; the host is still fixed at `127.0.0.1:6379`, which is where CI runs Redis.
 - [ ] P-09 · Run gitleaks in CI — the pre-commit hook only protects clones that ran `make hooks`,
   and `git commit --no-verify` skips it. T-1.20's CI steps list ruff, mypy and pytest but not
   gitleaks, so nothing server-side enforces checklist E's "no secrets in repo". Add a
@@ -1666,13 +1668,17 @@ Claude Code adds items here instead of doing unplanned work. Format:
   robustly (absolute path or a wrapper that locates it) and test a commit from VS Code. Found in
   review of T-1.6.
   **Moved:** now a step in T-1.20 — tick this with T-1.20.
-- [ ] P-11 · Test DB stamped at a revision the checkout doesn't have — every task works on its own
+- [x] P-11 · Test DB stamped at a revision the checkout doesn't have — every task works on its own
   branch, and from T-1.8 each adds migrations. Run the tests on a branch with a new migration, switch
   to one without it, and `velora_test` still records that revision: every database test then errors
   with `ResolutionError: No such revision`. Happened for real during T-1.7. `velora_test` is
   disposable, so the harness should detect an unknown stamp and rebuild the schema (drop and
   recreate `public`, migrate to head) rather than fail. Until then, recover with
   `make infra-reset`. Found during T-1.7.
+  **Settled by P-55, 3 October 2026:** a run's database is dropped and created empty whenever the run
+  takes its slot, then migrated from nothing, so no stamp outlives the run that wrote it. P-55's
+  `test_a_slot_starts_empty_whatever_its_last_run_left` proves a previous run's committed table is
+  gone, and goes red when the drop is removed.
 - [x] P-12 · Drop `typing.Union` from the revision template — `api/alembic/script.py.mako` imports
   `Union`, the post-write ruff hook rewrites the annotations to `X | Y`, and T-1.7's F401 exemption
   for `alembic/versions/*` then keeps the now-unused import in every new revision. Write the
@@ -2347,7 +2353,7 @@ Claude Code adds items here instead of doing unplanned work. Format:
     behind a user row, since the keys are T-4.2's to define; T-4.5 adds its selfies. The job queue
     arrives with T-4.4, after T-4.2, so T-4.2 decides how the deletion runs until then.
   - The lines on T-4.2, T-4.5, T-8.6 and T-9.2 say what each inherits.
-- [ ] P-55 · Let two checkouts' test suites run at once. **Next: raised by the advisor on 3
+- [x] P-55 · Let two checkouts' test suites run at once. **Next: raised by the advisor on 3
   October 2026, on T-3.10's Needs line, the next task in the plan.** **Until it lands, a green local
   `make lint test` while another session is running is not evidence: only the CI run on the exact
   commit counts (D-044).** CI starts every run on its own services, and that is the only thing that
@@ -2369,6 +2375,25 @@ Claude Code adds items here instead of doing unplanned work. Format:
     redirected the same way (P-08), so a full run still clears another session's rate-limit keys.
 
   Found planning Sprint 5.
+  **Done, 3 October 2026** (ahead of T-3.10, at the direction of the advisor directing T-3.10 to
+  T-3.13, Claude in a separate chat): `tests/infra.py` gives each run a slot, 2 to 15, held for the
+  process's life by a Postgres advisory lock on a connection it keeps open, so a crashed or killed
+  run frees its slot when the connection closes. The slot is a database, `velora_slot<n>_test`, and
+  Redis database `<n>`, dropped, created empty and flushed when a run takes it. `TEST_DATABASE_URL`
+  still overrides the database. pytest's header names the slot (06-TESTING).
+  - **Before, on `main` at `d9e3c5d`:** one full run passed all 1,089 in 24.9 s; two started
+    together failed 45 and 42 (plus 3 errors), T-3.6's rule-15 log test among them. One of those
+    runs also failed a peer session's gate run that minute; it ran again, green, after.
+  - **After:** two full runs started together passed all 1,093 each; three passed all 1,093 each, on
+    slots 3, 4 and 2. One alone: 24.5 s, so no measurable cost.
+  - **`tests/test_run_slots.py`, four tests:** this run is on its own slot's database and Redis; a
+    second run taken beside it gets another slot and neither sees the other's keys or rows; a slot
+    starts empty whatever its last run left; a run killed by SIGKILL frees its slot.
+  - **Seven weakenings, each red on its intended assertion:** no lock (always the first slot), one
+    database for every slot, one Redis database for every slot, the database not recreated, Redis
+    not flushed, the lock released at once (a transaction lock), and the lock's connection closed
+    after taking it. Each ran with no bytecode on slots 13 to 15, so a broken harness couldn't
+    touch a peer's run; restored and checked by SHA-256. Settles P-11.
 - [ ] P-56 · Refuse a charge whose price changed after it was shown. **For T-7.1,** the first paid
   action a person taps. Worst case: a man sees "Open thread · 5 Velas" and is charged 6, because
   the price changed in between. The server still decides the price (rule 6), and `/terms` says

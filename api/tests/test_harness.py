@@ -11,6 +11,7 @@ import pytest
 from fastapi import Depends, FastAPI
 from httpx import AsyncClient
 from sqlalchemy import select, text
+from sqlalchemy.engine import make_url
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession
 
 from app.core import clock as clock_module
@@ -26,6 +27,7 @@ from app.modules.profiles.models import Profile
 from app.modules.users.models import User
 from tests.conftest import MakeUser
 from tests.infra import (
+    TEST_DATABASE_URL,
     ensure_test_database,
     infra_policy,
     session_for_the_app,
@@ -38,7 +40,9 @@ from tests.infra import (
 async def test_db_is_the_test_database(db: AsyncSession) -> None:
     result = await db.execute(text("select current_database()"))
 
-    assert result.scalar_one() == "velora_test"
+    name = result.scalar_one()
+    assert name == make_url(TEST_DATABASE_URL).database
+    assert name.endswith("_test")
 
 
 @pytest.mark.parametrize(

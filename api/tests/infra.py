@@ -1,32 +1,200 @@
-"""Test infrastructure: where the test database is, whether it is safe and
-reachable, and the transaction every test runs inside.
+"""Test infrastructure: where this run's test database and Redis are, whether
+they are safe and reachable, and the transaction every test runs inside.
 
 Deliberately imports nothing from `app`: conftest calls this *before* it has made
 the environment safe, and importing the app first would read settings early.
+
+**Importing it takes a run slot (P-55).** Every checkout on this machine shares
+one Postgres and one Redis. When two runs shared a database and a Redis
+database, they failed each other's tests: on 3 October 2026, two full runs
+started together failed 45 and 42 tests that pass alone. So each run holds a
+slot, 2 to 15, for as long as its process lives, and the slot gives it a
+database (`velora_slot<n>_test`) and a Redis database (`<n>`) nobody else uses.
+
+The slot is a Postgres advisory lock on a connection this module keeps open,
+so a run that crashes or is killed frees its slot when its connection closes:
+nothing to clean up, no lease to expire. Taking a slot drops its database,
+creates it empty and flushes its Redis database, so nothing a previous run
+left (committed ledger rows, a weakened constraint, a migration stamp from
+another branch) reaches this one.
 """
 
 from __future__ import annotations
 
+import asyncio
+import atexit
 import os
 import socket
-from collections.abc import AsyncIterator, Callable
+import threading
+from collections.abc import AsyncIterator, Callable, Coroutine, Sequence
 from contextlib import asynccontextmanager
+from dataclasses import dataclass
 from pathlib import Path
-from typing import Literal
+from typing import Any, Literal, TypeVar
 from urllib.parse import urlsplit
 
 import pytest
 from alembic.config import Config
+from redis.asyncio import Redis
+from sqlalchemy import text
 from sqlalchemy.engine import Connection, make_url
-from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession
-
-DEFAULT_TEST_DATABASE_URL = (
-    "postgresql+asyncpg://velora:velora@127.0.0.1:5432/velora_test"
+from sqlalchemy.ext.asyncio import (
+    AsyncConnection,
+    AsyncEngine,
+    AsyncSession,
+    create_async_engine,
 )
+from sqlalchemy.pool import NullPool
 
-# Test-only; not app config, so it lives here and in 06-TESTING.md, not in §11.
-TEST_DATABASE_URL = os.environ.get("TEST_DATABASE_URL", DEFAULT_TEST_DATABASE_URL)
-TEST_REDIS_URL = "redis://127.0.0.1:6379/1"
+# The local stack's servers (`make infra-up`). Test-only, not app config, so
+# they live here and in 06-TESTING.md, not in 02-ARCHITECTURE §11.
+LOCAL_POSTGRES_URL = "postgresql+asyncpg://velora:velora@127.0.0.1:5432/postgres"
+LOCAL_REDIS_URL = "redis://127.0.0.1:6379"
+
+# A database of your own instead of the slot's. It is still refused unless its
+# name ends in `_test`, and the run still takes a slot, for its Redis database.
+DATABASE_OVERRIDE = os.environ.get("TEST_DATABASE_URL")
+
+# Redis has 16 databases. 0 is `make dev`'s, and 1 is the test database every
+# checkout shared before P-55, which a branch cut before it still uses.
+SLOTS: Sequence[int] = range(2, 16)
+# The advisory lock's first key, meaning "a test run's slot"; the second is the
+# slot's number. Nothing else locks on it.
+SLOT_LOCK = 55
+
+T = TypeVar("T")
+
+
+@dataclass(frozen=True)
+class RunSlot:
+    number: int
+    database_url: str
+    redis_url: str
+
+
+def slot_database_url(server_url: str, number: int) -> str:
+    return (
+        make_url(server_url)
+        .set(database=f"velora_slot{number}_test")
+        .render_as_string(hide_password=False)
+    )
+
+
+def slot_redis_url(redis_url: str, number: int) -> str:
+    return f"{redis_url}/{number}"
+
+
+class SlotHolder:
+    """Holds one slot: a connection to the server, kept open on an event loop
+    of its own in a daemon thread. pytest's loop doesn't exist yet when this
+    module is imported, and the lock must outlive every loop the run makes.
+    When the process ends, the connection closes and Postgres frees the lock."""
+
+    def __init__(self) -> None:
+        self._loop = asyncio.new_event_loop()
+        threading.Thread(
+            target=self._loop.run_forever, name="test-run-slot", daemon=True
+        ).start()
+        self._engine: AsyncEngine | None = None
+        self._connection: AsyncConnection | None = None
+        self._released = False
+        self.slot: RunSlot | None = None
+
+    def _run(self, coroutine: Coroutine[Any, Any, T]) -> T:
+        return asyncio.run_coroutine_threadsafe(coroutine, self._loop).result(
+            timeout=60
+        )
+
+    def release(self) -> None:
+        """Free the slot now, as the process ending would."""
+        if self._released:
+            return
+        self._released = True
+        self._run(self._close())
+        self._loop.call_soon_threadsafe(self._loop.stop)
+
+    async def _close(self) -> None:
+        if self._connection is not None:
+            await self._connection.close()
+        if self._engine is not None:
+            await self._engine.dispose()
+
+    async def _take(
+        self,
+        server_url: str,
+        redis_url: str,
+        database_override: str | None,
+        slots: Sequence[int],
+        wait_s: float,
+    ) -> RunSlot:
+        self._engine = create_async_engine(
+            server_url, poolclass=NullPool, isolation_level="AUTOCOMMIT"
+        )
+        self._connection = connection = await self._engine.connect()
+        number = await _lock_a_slot(connection, slots, wait_s)
+        slot = RunSlot(
+            number,
+            database_override or slot_database_url(server_url, number),
+            slot_redis_url(redis_url, number),
+        )
+        if database_override is None:
+            name = make_url(slot.database_url).database
+            # FORCE ends connections a dead run's processes left behind.
+            await connection.execute(
+                text(f'drop database if exists "{name}" with (force)')
+            )
+            await connection.execute(text(f'create database "{name}"'))
+        redis = Redis.from_url(slot.redis_url)
+        try:
+            await redis.flushdb()
+        finally:
+            await redis.aclose()
+        return slot
+
+
+async def _lock_a_slot(
+    connection: AsyncConnection, slots: Sequence[int], wait_s: float
+) -> int:
+    loop = asyncio.get_running_loop()
+    deadline = loop.time() + wait_s
+    while True:
+        for number in slots:
+            locked = await connection.scalar(
+                text("select pg_try_advisory_lock(:lock, :slot)"),
+                {"lock": SLOT_LOCK, "slot": number},
+            )
+            if locked:
+                return number
+        if loop.time() >= deadline:
+            raise RuntimeError(
+                f"Every test slot ({', '.join(map(str, slots))}) is held by a "
+                "running test run (P-55). Wait for one to finish: a run that "
+                "crashed frees its slot as soon as Postgres sees its connection "
+                "close."
+            )
+        await asyncio.sleep(0.1)
+
+
+def acquire_run_slot(
+    *,
+    server_url: str = LOCAL_POSTGRES_URL,
+    redis_url: str = LOCAL_REDIS_URL,
+    database_override: str | None = None,
+    slots: Sequence[int] = SLOTS,
+    wait_s: float = 0,
+) -> SlotHolder:
+    """Take the first free slot of `slots`, waiting up to `wait_s` for one, and
+    empty its database and Redis database. Held until `release()` or the
+    process ends."""
+    holder = SlotHolder()
+    try:
+        holder.slot = holder._run(
+            holder._take(server_url, redis_url, database_override, slots, wait_s)
+        )
+    except BaseException:
+        holder.release()
+        raise
+    return holder
 
 
 def ensure_test_database(url: str) -> None:
@@ -70,10 +238,45 @@ def infra_policy(*, reachable: bool, ci: bool) -> InfraDecision:
     return "fail" if ci else "skip"
 
 
+def _server_url() -> str:
+    """The server whose slots this run takes: the override's, or the local stack's."""
+    if DATABASE_OVERRIDE is None:
+        return LOCAL_POSTGRES_URL
+    return (
+        make_url(DATABASE_OVERRIDE)
+        .set(database="postgres")
+        .render_as_string(hide_password=False)
+    )
+
+
+SERVER_URL = _server_url()
+
 # A bare TCP connect, deliberately not the app's own checks: a bug in
 # check_database() must fail its test, not skip it.
-INFRA_UP = _reachable(TEST_DATABASE_URL) and _reachable(TEST_REDIS_URL)
+INFRA_UP = _reachable(SERVER_URL) and _reachable(LOCAL_REDIS_URL)
 INFRA_DOWN_REASON = "Postgres or Redis not reachable — start them with `make infra-up`"
+
+RUN_SLOT_HOLDER = (
+    acquire_run_slot(server_url=SERVER_URL, database_override=DATABASE_OVERRIDE)
+    if INFRA_UP
+    else None
+)
+if RUN_SLOT_HOLDER is not None:
+    atexit.register(RUN_SLOT_HOLDER.release)
+RUN_SLOT = RUN_SLOT_HOLDER.slot if RUN_SLOT_HOLDER is not None else None
+
+# With nothing reachable every test that needs either skips, so these only have
+# to look like what they would have been: the first slot's.
+TEST_DATABASE_URL = (
+    RUN_SLOT.database_url
+    if RUN_SLOT is not None
+    else DATABASE_OVERRIDE or slot_database_url(SERVER_URL, SLOTS[0])
+)
+TEST_REDIS_URL = (
+    RUN_SLOT.redis_url
+    if RUN_SLOT is not None
+    else slot_redis_url(LOCAL_REDIS_URL, SLOTS[0])
+)
 
 requires_infra = pytest.mark.skipif(not INFRA_UP, reason=INFRA_DOWN_REASON)
 
