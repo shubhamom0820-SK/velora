@@ -7,11 +7,14 @@ from dataclasses import dataclass
 from datetime import date
 from uuid import UUID
 
+from redis.asyncio import Redis
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core import clock
+from app.core import clock, ratelimit
 from app.core.config import Settings
+from app.core.enums import UserStatus
+from app.core.errors import AppError
 from app.core.security import E164, encrypt_phone, hash_phone
 from app.modules.profiles.models import Profile
 from app.modules.users import repository
@@ -32,6 +35,37 @@ _REFERRAL_TRIES = 10
 class Account:
     user: User
     profile: Profile
+
+
+# `last_active_at` moves at most once a minute per user (03-SCHEMA): a write per
+# request would be one per swipe. A one-place window, so the clock moves it.
+ACTIVITY_WINDOW_S = 60
+
+
+async def user_for_request(
+    session: AsyncSession, redis: Redis, user_id: UUID
+) -> User | None:
+    """The user an access token names, as `deps.current_user` loads them on
+    every authenticated request: None if there is none any more (D-072
+    deletes an under-18 account while its token lives on), refused by status
+    (D-067), and noted as active, at most once a minute. Runs in its own short
+    transaction, so the route's service can open another."""
+    async with session.begin():
+        user = await repository.user_by_id(session, user_id)
+        if user is None:
+            return None
+        refuse_who_may_not_sign_in(user)
+        noted = await ratelimit.hit(
+            redis, "last_active", str(user.id), limit=1, window_s=ACTIVITY_WINDOW_S
+        )
+        if noted.allowed:
+            user.last_active_at = clock.now()
+    return user
+
+
+async def me_for(session: AsyncSession, user: User) -> Me:
+    async with session.begin():
+        return await me(session, user)
 
 
 async def get_user(session: AsyncSession, user_id: UUID) -> User:
@@ -99,6 +133,34 @@ async def create_account(
         referral_code=code,
     )
     return Account(user=user, profile=profile)
+
+
+# Who may sign in and use the API (D-067): an allowlist, so a status added
+# later can't until someone decides. Paused people may: pausing hides a
+# profile, not an account. Sign-in, refresh and every authenticated request
+# (deps.current_user) apply the same rule, so a ban takes effect at once.
+MAY_SIGN_IN = frozenset({UserStatus.ACTIVE, UserStatus.PAUSED})
+
+
+def refuse_who_may_not_sign_in(user: User) -> None:
+    """Banned and frozen accounts get their own codes; `deleted` can't happen
+    before T-9.6, which decides, so until then it's FORBIDDEN, like anything
+    else not on the list."""
+    if user.status in MAY_SIGN_IN:
+        return
+    if user.status is UserStatus.BANNED:
+        raise account_banned()
+    if user.status is UserStatus.FROZEN:
+        raise AppError(
+            "ACCOUNT_FROZEN",
+            "This account is frozen while we look into it.",
+            status=403,
+        )
+    raise AppError("FORBIDDEN", "This account can't sign in.", status=403)
+
+
+def account_banned() -> AppError:
+    return AppError("ACCOUNT_BANNED", "This account has been banned.", status=403)
 
 
 def age_on(dob: date, today: date) -> int:

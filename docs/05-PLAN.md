@@ -576,13 +576,19 @@ One migration per task, each with a working `downgrade()`. Build exactly `03-SCH
 - [x] **Commit:** `feat(auth): refresh rotation and logout [T-3.4]`
 
 ### T-3.5 · Current user
-- [ ] **Needs:** T-3.4
-- [ ] `deps.current_user` (decode JWT, load user, reject frozen → `ACCOUNT_FROZEN`, banned → `ACCOUNT_BANNED`, deleted → `FORBIDDEN`), `deps.onboarded_user` (also require `done`, else `ONBOARDING_INCOMPLETE` with `details.step`), and `deps.require_role()`, which reads the user row `current_user` loads anyway, never the token's `role`: a demotion takes effect at the next request (D-067).
-- [ ] 02-ARCHITECTURE §12's default limit, 300 a minute per user, goes in `current_user`, so every authenticated route inherits it.
-- [ ] **The 15-minute tail (D-067):** a revoked session's access token works until it expires. Bans and freezes are immediate anyway, since `current_user` loads the user; logout, a reuse attack and five wrong PINs (D-069) are not. Accepted, and read with D-069: the PIN lock is a deterrent, not protection.
-- [ ] `GET /v1/me` → `Me` (04-API): the age, never the date of birth, which no screen shows, and no phone number: data nothing displays isn't sent (D-067's discipline). Throttled `last_active_at` update (Redis key, once per 60 s).
-- [ ] **At `/done`:** D-067 becomes Locked.
-- [ ] **Commit:** `feat(users): current user and /me [T-3.5]`
+- [x] **Needs:** T-3.4
+- [x] `deps.current_user` (decode JWT, load user, reject frozen → `ACCOUNT_FROZEN`, banned → `ACCOUNT_BANNED`, deleted → `FORBIDDEN`), `deps.onboarded_user` (also require `done`, else `ONBOARDING_INCOMPLETE` with `details.step`), and `deps.require_role()`, which reads the user row `current_user` loads anyway, never the token's `role`: a demotion takes effect at the next request (D-067).
+- [x] 02-ARCHITECTURE §12's default limit, 300 a minute per user, goes in `current_user`, so every authenticated route inherits it.
+- [x] **The 15-minute tail (D-067):** a revoked session's access token works until it expires. Bans and freezes are immediate anyway, since `current_user` loads the user; logout, a reuse attack and five wrong PINs (D-069) are not. Accepted, and read with D-069: the PIN lock is a deterrent, not protection.
+- [x] `GET /v1/me` → `Me` (04-API): the age, never the date of birth, which no screen shows, and no phone number: data nothing displays isn't sent (D-067's discipline). Throttled `last_active_at` update (Redis key, once per 60 s).
+  **Built in `current_user`, not only `/me`:** "last active" has to mean any signed-in request, or
+  someone swiping without reloading would look away; the Redis key is a one-place window on
+  `core.clock`, so tests move it. `current_user` reads the user in a transaction of its own and
+  ends it, so a route's service can open another; a bare read would leave one open and every
+  `async with session.begin()` after it would fail. The who-may-sign-in allowlist moved to
+  `users.service`, one rule for sign-in, refresh and every request.
+- [x] **At `/done`:** D-067 becomes Locked.
+- [x] **Commit:** `feat(users): current user and /me [T-3.5]`
 
 ### T-3.6 · DOB, gender, seeking
 - [ ] **Needs:** T-3.5

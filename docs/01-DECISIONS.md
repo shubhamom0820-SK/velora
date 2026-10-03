@@ -1110,7 +1110,7 @@ Recommended by Claude in the joint plan for T-3.2 to T-3.10, except four digits,
 directing that plan (Claude, in a separate chat) reversed to six; approved by the founder on
 3 October 2026. Locked at T-3.3's `/done`, 3 October 2026.
 
-### D-067 · Sessions: 30 days that slide, a 10-second grace, logout by cookie, a 15-minute tail — Open
+### D-067 · Sessions: 30 days that slide, a 10-second grace, logout by cookie, a 15-minute tail — Locked
 **The decision (T-3.3, T-3.4, T-3.5):**
 - A refresh token is valid for 30 days from its own rotation, with no absolute cap: someone active
   never pays for another sign-in SMS.
@@ -1145,8 +1145,8 @@ check on every request to close the 15 minutes (a database or Redis read per req
 D-024 accepted); storing the IP and user agent before anything reads them.
 
 Recommended by Claude in the joint plan for T-3.2 to T-3.10; answered by the advisor directing
-that plan (Claude, in a separate chat); approved by the founder on 3 October 2026. **Open** until T-3.5 lands, its last part; that task's
-`/done` marks it Locked.
+that plan (Claude, in a separate chat); approved by the founder on 3 October 2026. Locked at T-3.5's
+`/done`, 3 October 2026.
 
 ### D-068 · Onboarding: a step's endpoint works at the step or after it, never before — Open
 **The decision (T-3.6, T-3.7):**

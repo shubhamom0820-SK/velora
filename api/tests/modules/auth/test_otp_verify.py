@@ -603,7 +603,7 @@ async def test_a_status_added_later_cant_sign_in(
     """Who may sign in is a list of who may (D-067). Taking paused off it, as
     if it were a status nobody had listed yet, refuses it: a list of who may
     not would let it through."""
-    monkeypatch.setattr(service, "MAY_SIGN_IN", frozenset({UserStatus.ACTIVE}))
+    monkeypatch.setattr(users_service, "MAY_SIGN_IN", frozenset({UserStatus.ACTIVE}))
     phone = await _with_status(make_user, db, UserStatus.PAUSED)
     otp = await _code_for(client, fake_providers, phone)
 

@@ -1,20 +1,27 @@
 """FastAPI dependencies shared across modules (02-ARCHITECTURE.md §2).
 
-`rate_limit` arrives first, with the waitlist (T-2.3); `current_user` and
-`require_role` follow with T-3.5.
+`rate_limit` arrived with the waitlist (T-2.3); `current_user`,
+`onboarded_user` and `require_role` with T-3.5.
 """
 
 from __future__ import annotations
 
 import ipaddress
 from collections.abc import Awaitable, Callable
+from typing import Annotated
 
-from fastapi import Request
+from fastapi import Depends, Request
 from redis.asyncio import Redis
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core import ratelimit
 from app.core.config import SOCKET_CLIENT_IP_ALLOWED_IN, Settings
+from app.core.db import get_session
+from app.core.enums import OnboardingStep, Role
 from app.core.errors import AppError
+from app.core.security import decode_access_token
+from app.modules.users import service as users_service
+from app.modules.users.models import User
 
 # The bucket for a request whose address can't be read. On Fly every request
 # arrives with the proxy's header, so one without it, or with a garbled one, came
@@ -133,5 +140,76 @@ def rate_limit(
                 status=429,
                 details={"retry_after_s": verdict.retry_after_s},
             )
+
+    return dependency
+
+
+# --- Who is asking (T-3.5) --------------------------------------------------------
+
+# 02-ARCHITECTURE §12's default: every authenticated route has it, through
+# current_user, keyed on the user rather than the address.
+USER_REQUESTS_PER_MINUTE = 300
+
+
+def _bearer_token(request: Request) -> str:
+    scheme, _, token = (request.headers.get("Authorization") or "").partition(" ")
+    if scheme.lower() != "bearer" or not token.strip():
+        raise AppError("AUTH_REQUIRED", "Sign in to continue.", status=401)
+    return token.strip()
+
+
+async def current_user(
+    request: Request, session: Annotated[AsyncSession, Depends(get_session)]
+) -> User:
+    """The signed-in user, loaded from the database on every request.
+
+    The token proves who; the row decides what they may do. A ban or freeze
+    therefore takes effect at the next request, and so does a change of role
+    (D-067). What doesn't: a revoked session's access token keeps working until
+    it expires, up to 15 minutes, after a logout, a reuse attack or five wrong
+    PINs (D-067, D-069). Accepted: closing it would mean a session read per
+    request.
+    """
+    claims = decode_access_token(_bearer_token(request), request.app.state.settings)
+    redis: Redis = request.app.state.redis
+    verdict = await ratelimit.hit(
+        redis, "user", str(claims.user_id), limit=USER_REQUESTS_PER_MINUTE, window_s=60
+    )
+    if not verdict.allowed:
+        raise AppError(
+            "RATE_LIMITED",
+            "Too many tries. Wait a moment and try again.",
+            status=429,
+            details={"retry_after_s": verdict.retry_after_s},
+        )
+    user = await users_service.user_for_request(session, redis, claims.user_id)
+    if user is None:
+        raise AppError("AUTH_REQUIRED", "Sign in to continue.", status=401)
+    return user
+
+
+async def onboarded_user(user: Annotated[User, Depends(current_user)]) -> User:
+    """A signed-in user who has finished onboarding; otherwise
+    `ONBOARDING_INCOMPLETE`, naming the step they're at (D-068)."""
+    if user.onboarding_step is not OnboardingStep.DONE:
+        raise AppError(
+            "ONBOARDING_INCOMPLETE",
+            "Finish setting up your profile first.",
+            status=403,
+            details={"step": user.onboarding_step.value},
+        )
+    return user
+
+
+def require_role(*roles: Role) -> Callable[..., Awaitable[User]]:
+    """A dependency allowing only users whose role, read from their row, is one
+    of `roles`. Never the token's `role`: a demotion takes effect at the next
+    request, not 15 minutes later (D-067)."""
+    allowed = frozenset(roles)
+
+    async def dependency(user: Annotated[User, Depends(current_user)]) -> User:
+        if user.role not in allowed:
+            raise AppError("FORBIDDEN", "You don't have access to this.", status=403)
+        return user
 
     return dependency

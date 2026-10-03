@@ -19,7 +19,6 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core import clock, ratelimit
 from app.core.config import Settings
-from app.core.enums import UserStatus
 from app.core.errors import AppError
 from app.core.providers.sms import SmsProvider, SmsRecipientNotAllowed
 from app.core.security import (
@@ -39,7 +38,6 @@ from app.modules.admin import service as admin_service
 from app.modules.auth import otp_store, repository
 from app.modules.auth.models import Session as SessionRow
 from app.modules.users import service as users_service
-from app.modules.users.models import User
 from app.modules.users.schemas import Me
 
 log = structlog.get_logger(__name__)
@@ -277,7 +275,7 @@ async def sign_in(session: AsyncSession, settings: Settings, phone: E164) -> New
         user, _created = await users_service.find_or_create_account(
             session, phone, settings
         )
-        _refuse_who_may_not_sign_in(user)
+        users_service.refuse_who_may_not_sign_in(user)
         await repository.insert_session(
             session,
             user_id=user.id,
@@ -295,30 +293,8 @@ async def sign_in(session: AsyncSession, settings: Settings, phone: E164) -> New
     )
 
 
-# Who may sign in (D-067): an allowlist, so a status added later can't until
-# someone decides. Paused people may: pausing hides a profile, not an account.
-MAY_SIGN_IN = frozenset({UserStatus.ACTIVE, UserStatus.PAUSED})
-
-
-def _refuse_who_may_not_sign_in(user: User) -> None:
-    """Banned and frozen accounts get their own codes; `deleted` can't happen
-    before T-9.6, which decides, so until then it's FORBIDDEN, like anything
-    else not on the list."""
-    if user.status in MAY_SIGN_IN:
-        return
-    if user.status is UserStatus.BANNED:
-        raise _account_banned()
-    if user.status is UserStatus.FROZEN:
-        raise AppError(
-            "ACCOUNT_FROZEN",
-            "This account is frozen while we look into it.",
-            status=403,
-        )
-    raise AppError("FORBIDDEN", "This account can't sign in.", status=403)
-
-
 def _account_banned() -> AppError:
-    return AppError("ACCOUNT_BANNED", "This account has been banned.", status=403)
+    return users_service.account_banned()
 
 
 # --- Refresh and logout (T-3.4) ---------------------------------------------------
@@ -369,7 +345,7 @@ async def _rotate(
     if current.expires_at <= now:
         raise _auth_required()
     user = await users_service.get_user(session, current.user_id)
-    _refuse_who_may_not_sign_in(user)
+    users_service.refuse_who_may_not_sign_in(user)
     new_token = new_refresh_token()
     successor = await repository.insert_session(
         session,
