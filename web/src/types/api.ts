@@ -237,6 +237,43 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/interests": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Interests
+         * @description Public, as 04-API marks it: a catalogue, nobody's data.
+         */
+        get: operations["list_interests_v1_interests_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/me/interests": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** Set Interests */
+        put: operations["set_interests_v1_me_interests_put"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/auth/otp/send": {
         parameters: {
             query?: never;
@@ -327,6 +364,24 @@ export interface components {
             slug: string;
             /** Label */
             label: string;
+        };
+        /**
+         * Interest
+         * @description One of the catalogue's interests (T-1.14). Every row has a slug and a
+         *     label, though the columns allow NULL until P-24.
+         */
+        Interest: {
+            /** Id */
+            id: number;
+            /** Slug */
+            slug: string;
+            /** Label */
+            label: string;
+        };
+        /** InterestsSet */
+        InterestsSet: {
+            /** Interest Ids */
+            interest_ids: number[];
         };
         /**
          * Me
@@ -859,6 +914,59 @@ export interface operations {
         requestBody: {
             content: {
                 "application/json": components["schemas"]["UsernameSet"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Me"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_interests_v1_interests_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Interest"][];
+                };
+            };
+        };
+    };
+    set_interests_v1_me_interests_put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["InterestsSet"];
             };
         };
         responses: {

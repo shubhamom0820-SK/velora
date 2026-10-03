@@ -1,5 +1,5 @@
 """Profiles: the onboarding steps that fill one in, from seeking (T-3.6) to
-name, places, about and username (T-3.7).
+name, places, about and username (T-3.7), and interests (T-3.8).
 
 Every step follows D-068's rule, `users.service.at_step`: it works at its
 step, advancing it, and after it, as an edit that doesn't advance; before it,
@@ -18,7 +18,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.enums import OnboardingStep, Seeking
 from app.core.errors import AppError, invalid_field, invalid_fields
 from app.modules.profiles import repository, rules
-from app.modules.profiles.schemas import Intent, UsernameAvailability
+from app.modules.profiles.schemas import Intent, Interest, UsernameAvailability
 from app.modules.users import service as users_service
 from app.modules.users.models import User
 from app.modules.users.schemas import Me
@@ -48,6 +48,41 @@ async def set_seeking(
         await repository.replace_intents(session, user.id, sorted(chosen))
         if advancing:
             users_service.advance_past(user, OnboardingStep.SEEKING)
+        return await users_service.me(session, user)
+
+
+# --- Interests (T-3.8) ----------------------------------------------------------------
+
+INTERESTS_PER_PROFILE = 5
+
+
+async def interests(session: AsyncSession) -> list[Interest]:
+    async with session.begin():
+        rows = await repository.interests(session)
+    return [Interest(id=row.id, slug=row.slug, label=row.label) for row in rows]
+
+
+async def set_interests(
+    session: AsyncSession, user: User, interest_ids: Sequence[int]
+) -> Me:
+    """Exactly 5 different interests from the catalogue (03-SCHEMA), replacing
+    the ones they had, in one transaction. The step comes after photos
+    (D-068), so until T-4.3 only a test reaches it."""
+    async with session.begin():
+        user = await users_service.locked_user(session, user.id)
+        advancing = users_service.at_step(user, OnboardingStep.INTERESTS)
+        chosen = set(interest_ids)
+        if len(chosen) != len(interest_ids):
+            raise invalid_field("interest_ids", "lists an interest twice")
+        if len(chosen) != INTERESTS_PER_PROFILE:
+            raise invalid_field(
+                "interest_ids", f"must be exactly {INTERESTS_PER_PROFILE}"
+            )
+        if await repository.known_interest_ids(session, chosen) != chosen:
+            raise invalid_field("interest_ids", "has an id that isn't an interest")
+        await repository.replace_interests(session, user.id, sorted(chosen))
+        if advancing:
+            users_service.advance_past(user, OnboardingStep.INTERESTS)
         return await users_service.me(session, user)
 
 

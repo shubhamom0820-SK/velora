@@ -1,5 +1,5 @@
 """The intent catalogue and the seeking step (T-3.6); name, places, about and
-username (T-3.7)."""
+username (T-3.7); the interest catalogue and the interests step (T-3.8)."""
 
 from __future__ import annotations
 
@@ -13,6 +13,8 @@ from app.core.deps import current_user, user_rate_limit
 from app.modules.profiles import service
 from app.modules.profiles.schemas import (
     Intent,
+    Interest,
+    InterestsSet,
     ProfilePatch,
     SeekingSet,
     UsernameAvailability,
@@ -79,3 +81,20 @@ async def set_username(
     session: Annotated[AsyncSession, Depends(get_session)],
 ) -> Me:
     return await service.set_username(session, user, body.username)
+
+
+@router.get("/interests")
+async def list_interests(
+    session: Annotated[AsyncSession, Depends(get_session)],
+) -> list[Interest]:
+    """Public, as 04-API marks it: a catalogue, nobody's data."""
+    return await service.interests(session)
+
+
+@router.put("/me/interests")
+async def set_interests(
+    body: InterestsSet,
+    user: Annotated[User, Depends(current_user)],
+    session: Annotated[AsyncSession, Depends(get_session)],
+) -> Me:
+    return await service.set_interests(session, user, body.interest_ids)

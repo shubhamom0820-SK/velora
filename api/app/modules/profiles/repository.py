@@ -8,7 +8,13 @@ from uuid import UUID
 from sqlalchemy import delete, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.modules.profiles.models import Intent, Profile, ProfileIntent
+from app.modules.profiles.models import (
+    Intent,
+    Interest,
+    Profile,
+    ProfileIntent,
+    ProfileInterest,
+)
 
 
 async def intents(session: AsyncSession) -> list[Intent]:
@@ -20,6 +26,29 @@ async def known_intent_ids(session: AsyncSession, ids: Collection[int]) -> set[i
     """Which of `ids` are in the catalogue."""
     rows = await session.scalars(select(Intent.id).where(Intent.id.in_(ids)))
     return set(rows)
+
+
+async def interests(session: AsyncSession) -> list[Interest]:
+    rows = await session.scalars(select(Interest).order_by(Interest.id))
+    return list(rows)
+
+
+async def known_interest_ids(session: AsyncSession, ids: Collection[int]) -> set[int]:
+    """Which of `ids` are in the catalogue."""
+    rows = await session.scalars(select(Interest.id).where(Interest.id.in_(ids)))
+    return set(rows)
+
+
+async def replace_interests(
+    session: AsyncSession, user_id: UUID, interest_ids: Collection[int]
+) -> None:
+    await session.execute(
+        delete(ProfileInterest).where(ProfileInterest.user_id == user_id)
+    )
+    session.add_all(
+        [ProfileInterest(user_id=user_id, interest_id=i) for i in interest_ids]
+    )
+    await session.flush()
 
 
 async def profile_of(session: AsyncSession, user_id: UUID) -> Profile:

@@ -731,10 +731,14 @@ One migration per task, each with a working `downgrade()`. Build exactly `03-SCH
 - [x] **Commit:** `feat(onboarding): profile basics and username [T-3.7]`
 
 ### T-3.8 · Interests
-- [ ] **Needs:** T-3.7
-- [ ] `GET /interests`; `PUT /me/interests` exactly 5 valid distinct ids → replace set in one tx.
-- [ ] The interests step comes after photos (D-068), so a real user reaches it only after T-4.3; tests set the step directly.
-- [ ] **Commit:** `feat(onboarding): interests [T-3.8]`
+- [x] **Needs:** T-3.7
+- [x] `GET /interests`; `PUT /me/interests` exactly 5 valid distinct ids → replace set in one tx.
+  **Built:** like seeking's: the user re-read `FOR UPDATE`, D-068's step rule, all different and all
+  in the catalogue, exactly 5 in the request's schema (the web's contract, read back from OpenAPI by
+  a test) and again in the service (03-SCHEMA). `GET /interests` is public, as 04-API marks it, with
+  no limit of its own: 24 rows of catalogue, nobody's data. A two-connection test proves the lock.
+- [x] The interests step comes after photos (D-068), so a real user reaches it only after T-4.3; tests set the step directly.
+- [x] **Commit:** `feat(onboarding): interests [T-3.8]`
 
 ### T-3.9 · PIN
 - [ ] **Needs:** T-3.5, and T-3.6's step rule (D-068), which the `pin` step follows

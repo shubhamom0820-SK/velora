@@ -8,9 +8,10 @@ from pydantic import BaseModel, Field, StringConstraints
 
 from app.core.enums import Seeking
 
-# `intents.id` is a smallint: an id past its range would otherwise reach the
-# database and fail there, a 500 for what is only a bad request.
+# `intents.id` and `interests.id` are smallints: an id past their range would
+# otherwise reach the database and fail there, a 500 for a bad request.
 IntentId = Annotated[int, Field(ge=1, le=32767)]
+InterestId = IntentId
 
 
 class Intent(BaseModel):
@@ -27,6 +28,21 @@ class SeekingSet(BaseModel):
     # 1 to 3, all different (D-041); the service checks they're all different
     # and all in the catalogue.
     intent_ids: Annotated[list[IntentId], Field(min_length=1, max_length=3)]
+
+
+class Interest(BaseModel):
+    """One of the catalogue's interests (T-1.14). Every row has a slug and a
+    label, though the columns allow NULL until P-24."""
+
+    id: int
+    slug: str
+    label: str
+
+
+class InterestsSet(BaseModel):
+    # Exactly 5 (03-SCHEMA); the service checks they're all different and all
+    # in the catalogue.
+    interest_ids: Annotated[list[InterestId], Field(min_length=5, max_length=5)]
 
 
 class ProfilePatch(BaseModel):
