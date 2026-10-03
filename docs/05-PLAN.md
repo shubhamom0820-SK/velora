@@ -1253,6 +1253,19 @@ committed rows.
   - every assertion scoped to their ids;
   - each run's database is its own, recreated when its slot is next taken (P-55); CI starts empty;
   - never the owner's trigger bypass.
+- [ ] **First, give `fresh_man`'s numbers a counter** (`tests/committed.py`, T-5.1). Today it is
+  `+9197` and 8 random digits: fine for T-5.1's two men, but nothing stops two of fifty colliding,
+  and a collision fails a 🔒 test that must never be flaky. The cost isn't the odds: a flaky
+  critical test teaches re-running instead of investigating, and that habit loses a real bug
+  later. A run pointed at its own database by `TEST_DATABASE_URL` keeps its men across runs (no
+  slot recreates it), so a counter alone must not restart into last run's numbers. At the
+  direction of the advisor directing Sprint 5, 3 October 2026, from T-5.1's report.
+- [ ] **Make P-64's gap announce itself.** In tests, `session_for_the_app` stands in for
+  `get_session`, so nothing a request does through the `client` fixture is ever published: a test
+  that reads events there sees none, and passes blind. Anything that tries to read published
+  events through `client` raises, with a message naming P-64 and pointing at the real
+  `get_session` (`tests/core/test_events.py`'s app). Tested both ways, and broken once. P-64's fix
+  itself stays with T-7.4. At the direction of the advisor directing Sprint 5, 3 October 2026.
 - [ ] **A dedicated 50-connection engine,** asserting 50 distinct backends. If Postgres runs out of
   connections, fail loudly; never skip.
 - [ ] **Prove the overlap by what the lock decides** (`f543b0d`): all 50 are inside open transactions
@@ -2569,6 +2582,14 @@ Claude Code adds items here instead of doing unplanned work. Format:
   and written in two statements would pass it whenever the eight happen not to overlap. T-3.7's
   username race isn't timing-based: it fails loudly if the two don't meet. At the direction of the
   advisor, 3 October 2026; found in T-3.6 and T-3.9.
+  **The standard's limit, found in T-5.1** (3 October 2026): with the lock in place, "waited alone"
+  is decided by the lock, so a green is the lock's word. A red is not as firm. Without the lock, the
+  test goes red only if the second call reaches its locked read inside the first's wait (1 s in
+  T-5.1's race); and with the forced overlap removed, T-5.1's race went red 4 of 4 times, but that
+  red depends on the scheduler: usually the first call reaches the lock before the second's
+  transaction is open, not always. So these tests are strong evidence, not proof, and a report
+  says "red in N of N" rather than "red". Making a lock race deterministic needs a fault-injection
+  point inside the lock, which the advisor judged not worth building today.
 - [ ] P-59 · Look-alike letters in first names, and the about field's link rule. **With T-9.5**,
   where moderation is built, or T-7.3 for the link rule. Worst case: impersonation by display
   name. First names take every script (T-3.7, D-068's answers), so "Ravi" spelt with U+0430, the Cyrillic
@@ -2636,3 +2657,15 @@ Claude Code adds items here instead of doing unplanned work. Format:
   hands them to a fixture to read. Also: T-7.4's "publishing helper `realtime.publish()` used by
   services" predates `core/events.py`; services queue events, and T-7.4 builds only the socket
   side (T-5.1's text). Found in T-5.1, at the direction of the advisor directing Sprint 5.
+  **T-5.4 adds a tripwire first:** reading published events through `client` raises, naming this
+  item, so the gap fails loudly until T-7.4 closes it.
+- [ ] P-65 · Make the deploy read `alembic_version` back after migrating. **Before the next task
+  whose commit carries a migration** (not settled where it goes; asked of the founder). Worst
+  case: a deploy reports a migration applied when the database is somewhere else, and the next
+  task builds on a schema staging doesn't have. Today the only witness is Alembic's own log in the
+  migrate job ("Running upgrade …"): the migrator reporting on itself. T-5.1's Done-when rested
+  on exactly that (deploy run 37131243030). Fix: `scripts/migrate-with-url`, which both deploys
+  run, reads `select version_num from alembic_version` on the same connection after the upgrade,
+  prints it, and fails unless it is the repo's single head (`alembic heads`). Test it in the
+  script's own test, a wrong database refused. At the direction of the advisor directing Sprint 5,
+  3 October 2026, after T-5.1.
