@@ -832,7 +832,7 @@ waits on the founder's decisions, so it is a task of its own, outside the sprint
 - [x] **Commit:** `feat(auth): pin lock [T-3.9]`
 
 ### T-3.10 · Web auth client
-- [ ] **Needs:** T-1.18, T-3.4, T-3.5 (`useMe()` reads `Me`) and T-3.9 (the lock reads `has_pin` and calls `/auth/pin/verify`)
+- [ ] **Needs:** T-1.18, T-3.4, T-3.5 (`useMe()` reads `Me`), T-3.9 (the lock reads `has_pin` and calls `/auth/pin/verify`), and **P-55**: until it lands, a local gate run beside another session proves nothing (raised by the advisor, 3 October 2026)
 - [ ] Access token in Zustand (memory only). On load, in the `(auth)` and `(app)` layouts only, call `/auth/refresh` once to restore a session, sending `X-CSRF` from this environment's CSRF cookie (D-055). Marketing pages never call the API: they stay static (Lighthouse, P-37).
 - [ ] Cookie names at build time: `next.config` maps `APP_ENV` to the suffix (production → `prod`, staging → `staging`, anything else under `next dev` → `local`); no new Vercel variable. The api client sends `credentials: "include"` on `/v1/auth/*` only, the refresh cookie's path. Until now it sends no credentials at all, so no cookie would arrive.
 - [ ] On any 401 `TOKEN_EXPIRED`: single-flight refresh, then retry the request once. Refreshes are serialised across tabs with the Web Locks API, so two tabs never rotate one token (D-067's 10-second grace covers what's left).
@@ -945,6 +945,9 @@ waits on the founder's decisions, so it is a task of its own, outside the sprint
 - [ ] **Needs:** T-4.1, T-3.5
 - [ ] `POST /photos/upload-url {kind, position?}` — public max 6 (positions 0–5), private max 6, selfie 1 active. Creates `photos` row `pending`, returns presigned PUT (image/jpeg|png|webp|heic, ≤ 8 MB).
 - [ ] `POST /photos/{id}/complete` — object exists and size ok → enqueue `moderate_photo` (public/private) or leave for `verify_selfie` (selfie).
+- [ ] **D-072 (P-54):** `photos` is kept by an under-18 refusal, on the claim that nobody has a row
+  before giving a dob. Refuse an upload URL before its step (D-068), or move `photos` to
+  `UNDERAGE_DELETES` with its objects deleted too; a test either way.
 - [ ] **Commit:** `feat(photos): upload url and completion [T-4.2]`
 
 ### T-4.3 · Manage photos
@@ -975,6 +978,9 @@ waits on the founder's decisions, so it is a task of its own, outside the sprint
 - [ ] `verify_selfie`: re-encode; `FaceMatchProvider.compare(selfie, approved_public_photos)`; similarity ≥ 85 and exactly one face → `approved`, `users.is_verified = true`; else `rejected` with reason. Max 5 attempts / day.
 - [ ] Selfies are never public and never shown to other users.
 - [ ] Extend `make seed` (T-1.15): an approved verification row, with a placeholder selfie in the private bucket, for every seeded user marked verified — 15: the test woman, and the prototype's 14 `v` profiles (7 women, 7 men). Ishita, Riya and Pooja stop at the selfie step, unverified, with no row: they're who this task verifies against (the advisor directing T-1.15, Claude in a separate chat, 3 October 2026).
+- [ ] **D-072 (P-54):** `verifications` is kept by an under-18 refusal, on the claim that nobody has a
+  row before giving a dob. Refuse a challenge before the selfie step (D-068), or move the table to
+  `UNDERAGE_DELETES` with the selfie's object deleted too; a test either way.
 - [ ] **Commit:** `feat(verification): selfie challenge and face match [T-4.5]`
 
 ### T-4.6 · Web photos step
@@ -1418,6 +1424,9 @@ committed rows.
 - [ ] **Needs:** T-8.2
 - [ ] `POST /referrals/apply {code}` only before onboarding `done`, not own code, once. Reward both (Velas from `app_config`) when the referee completes selfie verification or first purchase, whichever first; idempotent. `GET /referrals/me`. Apply looks a code up and never checks its format: the seed's three test accounts carry readable codes outside the generated one (T-3.3).
 - [ ] **A woman's referral reward is never Velas** (D-076): the database refuses any ledger row for her, and "Reward both" would otherwise reach every referred woman, since every woman verifies her selfie (D-008). Decide here what she gets instead, if anything, and write it down.
+- [ ] **D-072 (P-54):** a code applied before dob is set leaves a `referrals` row that stops an under-18
+  refusal's deletion, keeping the minor's account. Refuse `/referrals/apply` until dob is set, or
+  move `referrals` to `UNDERAGE_DELETES`; a test either way.
 - [ ] **Commit:** `feat(referrals): codes and rewards [T-8.6]`
 
 ### T-8.7 · Web store and checkout
@@ -1447,6 +1456,8 @@ committed rows.
 - [ ] Signals written as `fraud_events` by services: report received, contact-info masked, message rejected (abuse / solicitation), > 30 new threads in 24 h, identical first message to > 10 people, > 3 devices in 7 days, location jumps > 500 km in 1 h.
 - [ ] Sessions store no IP address or user agent (D-067), and "> 3 devices in 7 days" needs one of them. Add what this task needs here, with a line on `/privacy`, which lists neither today.
 - [ ] `recompute_fraud` worker: weighted sum with 7-day decay → `fraud_scores` + band. Actions: `shadow` → shown only to other shadowed users; `freeze` → status `frozen`, sessions revoked, admin notified. 3 reports from different users in 24 h → freeze immediately.
+- [ ] **D-072 (P-54):** record no `fraud_events` and score no user before dob is set (a location jump
+  can come first), or move both tables to `UNDERAGE_DELETES`; a test either way.
 - [ ] **Commit:** `feat(safety): fraud scoring and auto-freeze [T-9.2]`
 
 ### T-9.3 · Refund when a partner is banned
@@ -2304,8 +2315,29 @@ Claude Code adds items here instead of doing unplanned work. Format:
   `UNDERAGE_DELETES` (`api/app/modules/users/repository.py`) with a test. The same goes for any 🔐
   route that writes a row before dob: D-068's step rule already keeps photos (T-4.2) and the selfie
   (T-4.5) behind their steps. Found in T-3.6.
-- [ ] P-55 · Let two checkouts' test suites run at once. **Before the next time two sessions build
-  in parallel.** Worst case: a session sees tests fail that nothing in its change broke, and spends
+  **A test, not a note** (3 October 2026, at the advisor's direction): every table with a key to
+  `users` is now in exactly one of two lists in `users/repository.py`, `UNDERAGE_DELETES` or
+  `UNDERAGE_KEEPS`, each kept table with why a user at the dob step can't have a row there and
+  whose task writes it. A table added later fails CI, naming D-072, until it is classified; a
+  probe table proves it, and a kept table that cascades fails too.
+  **What the test can't catch, so this stays open.** Every table already exists: Sprint 1 created
+  the whole schema. So the risk is not a new table but a new writer to a kept one before dob is
+  set. Four tasks do that unless they're careful: T-4.2 (`photos`; its upload URL has no step
+  gate in its text), T-4.5 (`verifications`), T-8.6 (`referrals`, applied "before onboarding
+  done") and T-9.2 (`fraud_events` and `fraud_scores`). Each now carries a line saying so.
+  **Covering every table literally isn't possible:** `messages`, `reports`, `ledger_entries`,
+  `payments` and `audit_log` are never hard-deleted (rule 12), and the app role can't delete from
+  them (T-1.22). **Two ways to make the rest mechanical, the founder's call, since either changes
+  Locked D-072's mechanics:** (a) widen the deletion to every kept table rule 12 doesn't protect,
+  with the R2 objects behind `photos` and `verifications` deleted too, or the minor's images
+  outlive the account; or (b) a database guard refusing a row in a kept table for a user whose
+  dob is null: a migration, a lookup per insert on hot tables (swipes, messages), and an exception
+  for staff in `audit_log`, whose dob can be null (the seed's moderator).
+- [ ] P-55 · Let two checkouts' test suites run at once. **Next: raised by the advisor on 3
+  October 2026, on T-3.10's Needs line, the next task in the plan.** **Until it lands, a green local
+  `make lint test` while another session is running is not evidence: only the CI run on the exact
+  commit counts (D-044).** CI starts every run on its own services, and that is the only thing that
+  kept `main` safe on 3 October. Worst case: a session sees tests fail that nothing in its change broke, and spends
   an hour on them or "fixes" them. Seen on 3 October 2026: T-3.7's username rate-limit test and
   four of T-2.6's OTP rate-limit tests failed in the same minute, because both suites use
   `velora_test` and Redis db 1, and `test_redis` clears every `ratelimit:*` key, so each run wiped
@@ -2337,3 +2369,27 @@ Claude Code adds items here instead of doing unplanned work. Format:
   provisionally (08-DESIGN). The first task that needs a screen designed stops and asks, rather
   than inventing it from the prototype. Found planning Sprint 5, at the direction of the advisor
   directing it.
+- [ ] P-58 · Prove the T-3.x race tests' overlap by what the lock decides. **Before the next task
+  that leans on one of these locks.** Worst case: a lock removed by mistake and every test still
+  green, because the current tests are timing-based. Each waits up to a second for the other to
+  arrive and goes on alone if it doesn't. On a slow machine, code without the lock can pass:
+  a false green, worse than no test, since it buys confidence nobody earned. Bring them to T-5.4's
+  standard (`f543b0d`): every call inside an open transaction before any takes the lock,
+  asserted, then each records whether it waited alone, with no wait that a slow machine can run
+  out. Which ones: T-3.4's two refreshes at once, T-3.6's seeking, and T-3.8's interests (the same
+  pattern, mine). T-3.9's eight PIN tries prove the cap of five but not the overlap: a counter read
+  and written in two statements would pass it whenever the eight happen not to overlap. T-3.7's
+  username race isn't timing-based: it fails loudly if the two don't meet. At the direction of the
+  advisor, 3 October 2026; found in T-3.6 and T-3.9.
+- [ ] P-59 · Look-alike letters in first names, and the about field's link rule. **With T-9.5**,
+  where moderation is built, or T-7.3 for the link rule. Worst case: impersonation by display
+  name. First names take every script (T-3.7, D-068's answers), so "Ravi" spelt with U+0430, the Cyrillic
+  a, reads exactly as another user's "Ravi" on a card or in a chat list. First names aren't
+  unique, so this is impersonation by look, not by key. What stops it reaching the name people
+  share as a link: usernames are ASCII only (`^[a-z0-9._]{4,20}$`). **That rule is load-bearing,
+  not incidental**, said beside the regex and in 03-SCHEMA, with a test refusing look-alike
+  usernames; widening usernames to Unicode would reopen it. Options for first names: refuse mixed
+  scripts within a word, or flag them to moderation. In the same note, T-3.7's link heuristic in
+  about, Claude's rather than decided: it refuses ordinary prose run together with a lowercase
+  ending ("goa.in summer"), and misses "ravi dot com" and endings off its list. At the direction
+  of the advisor, 3 October 2026; found in T-3.7.

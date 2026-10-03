@@ -228,6 +228,18 @@ def test_the_brand_is_reserved_from_app_name_so_a_rename_moves_it(
     assert not rules.is_reserved("velora")
 
 
+@pytest.mark.parametrize(
+    "name",
+    ["r\u0430vi_k", "\u0440avi_k", "ravi_\uff4b", "ravi\u2024k"],
+    ids=["Cyrillic a", "Cyrillic r", "full-width k", "one-dot leader"],
+)
+def test_a_username_in_look_alike_letters_is_refused(name: str) -> None:
+    """Load-bearing (P-59): an @username reads as exactly one account's, which
+    a first name in look-alike letters doesn't."""
+    assert not name.isascii()
+    assert rules.username_problem(name.lower()) is not None
+
+
 @pytest.mark.parametrize("name", ["ravi", "ravi.k_99", "a" * 20, "____"])
 def test_a_username_in_the_format_is_accepted(name: str) -> None:
     assert rules.username_problem(name) is None

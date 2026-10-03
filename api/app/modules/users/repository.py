@@ -39,11 +39,11 @@ async def user_for_update(session: AsyncSession, user_id: UUID) -> User | None:
     return user
 
 
-# The tables a user can have rows in at the dob step: signup's four, and the
-# picks a later step makes. Nothing else is deleted with an account (D-072);
-# every other table's key to users is RESTRICT, so a row anywhere else makes
-# the deletion fail whole rather than take moderation or money records with it
-# (rule 12). A test holds every foreign key into users to exactly this split.
+# D-072: what an under-18 refusal does with each table that has a key to users.
+# A test holds every such key, every table, to exactly these two lists, so a
+# table added later fails CI, naming D-072, until someone decides which it is.
+#
+# Deleted with the account: signup's four, and the picks a later step makes.
 UNDERAGE_DELETES = (
     Session,
     NotificationPrefs,
@@ -52,6 +52,37 @@ UNDERAGE_DELETES = (
     ProfileInterest,
     Profile,
 )
+# Kept, each with why a user at the dob step can't have a row there. Their keys
+# are RESTRICT, so if one ever does, the deletion fails whole: a 500, and the
+# minor's account kept, the very thing D-072 exists to prevent (P-54). A claim
+# below is only as good as the task that writes the table: it is that task's to
+# keep true, or to move its table to the deletions with a test.
+UNDERAGE_KEEPS = {
+    "album_requests": "T-8.4, onboarded users only",
+    "audit_log": "rule 12; its key is the staff member acting",
+    "blocks": "T-9.1, onboarded users only",
+    "fraud_events": "T-9.2's signals; it must not record one before dob is set",
+    "fraud_scores": "T-9.2's worker; it must not score a user before dob is set",
+    "gift_sends": "T-8.9, onboarded users only; money",
+    "kudos": "T-8.5, onboarded users only",
+    "ledger_entries": "rule 12; money",
+    "liked_you_reveals": "T-6.7, onboarded users only; money",
+    "matches": "T-6.4, onboarded users only",
+    "message_unlocks": "T-7.9, onboarded users only; money",
+    "messages": "rule 12",
+    "notifications": "T-9.4, onboarded users only",
+    "payments": "rule 12; money",
+    "photos": "T-4.2, once its upload URL waits for the photos step: P-54",
+    "profile_views": "T-6.3, onboarded users only",
+    "push_subscriptions": "T-9.4, onboarded users only",
+    "referrals": "T-8.6, which applies a code during onboarding: P-54",
+    "refund_requests": "T-8.3, onboarded users only; money",
+    "reports": "rule 12",
+    "swipes": "T-6.4, onboarded users only",
+    "thread_clears": "T-7.8, onboarded users only",
+    "threads": "T-7.1, onboarded users only",
+    "verifications": "T-4.5, once its challenge waits for the selfie step: P-54",
+}
 
 
 async def delete_account(session: AsyncSession, user_id: UUID) -> None:

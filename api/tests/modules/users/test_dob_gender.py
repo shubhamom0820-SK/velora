@@ -465,13 +465,9 @@ async def test_only_the_sqlstate_maps_to_immutable_never_the_message(
 # --- D-072's deletion: exactly these tables, and never more ---------------------------
 
 
-async def test_every_key_into_users_is_deleted_with_an_account_or_restricts_it(
-    db: AsyncSession,
-) -> None:
-    """D-072 deletes six tables' rows and the user. Every other foreign key
-    into `users` must be RESTRICT (or NO ACTION): a row there then stops the
-    deletion whole. A CASCADE or SET NULL key would quietly take moderation or
-    money records with an account (rule 12)."""
+async def _d072_problems(db: AsyncSession) -> list[str]:
+    """Every way the tables keyed to `users`, read from the database, fail to
+    match D-072's two lists exactly."""
     rows = await db.execute(
         text(
             """
@@ -482,15 +478,72 @@ async def test_every_key_into_users_is_deleted_with_an_account_or_restricts_it(
         )
     )
     keys = {(str(table), str(rule)) for table, rule in rows}
-    cleared = {model.__tablename__ for model in users_repository.UNDERAGE_DELETES}
+    keyed = {table for table, _ in keys}
+    deleted = {model.__tablename__ for model in users_repository.UNDERAGE_DELETES}
+    kept = set(users_repository.UNDERAGE_KEEPS)
+    problems = []
+    if unclassified := sorted(keyed - deleted - kept):
+        problems.append(
+            f"D-072: {unclassified} hold a key to users. Add each to "
+            "UNDERAGE_DELETES (an under-18 refusal deletes its rows) or "
+            "UNDERAGE_KEEPS (with why a user at the dob step can't have one), in "
+            "api/app/modules/users/repository.py."
+        )
+    if both := sorted(deleted & kept):
+        problems.append(f"D-072: {both} are both deleted and kept")
+    if stale := sorted((deleted | kept) - keyed):
+        problems.append(f"D-072: {stale} are listed but hold no key to users")
+    if loose := sorted(t for t, rule in keys if t in kept and rule not in {"r", "a"}):
+        problems.append(
+            f"D-072: kept {loose} must be RESTRICT, or the deletion takes their "
+            "rows with the account (rule 12)"
+        )
+    return problems
 
-    assert cleared <= {table for table, _ in keys}
-    loose = sorted(
-        (table, rule)
-        for table, rule in keys
-        if table not in cleared and rule not in {"r", "a"}
+
+async def test_every_table_keyed_to_users_is_one_d072_deletes_or_one_it_keeps(
+    db: AsyncSession,
+) -> None:
+    """Every table with a key to `users` is in exactly one of D-072's two
+    lists, so a table added later fails here, naming D-072, until someone
+    decides whether an under-18 refusal deletes its rows. Kept tables' keys
+    are RESTRICT: a CASCADE or SET NULL would quietly take moderation or money
+    records with an account (rule 12)."""
+    assert await _d072_problems(db) == []
+
+
+async def test_a_new_table_keyed_to_users_fails_until_d072_names_it(
+    db: AsyncSession,
+) -> None:
+    """The check against the wrong thing: a table it has never seen. Created
+    inside the test's transaction, so it is rolled back with it."""
+    await db.execute(
+        text("create table d072_probe (user_id uuid not null references users (id))")
     )
-    assert loose == []
+
+    problems = await _d072_problems(db)
+
+    assert len(problems) == 1
+    assert problems[0].startswith("D-072: ['d072_probe'] hold a key to users.")
+
+
+async def test_a_kept_table_that_cascades_fails(
+    db: AsyncSession, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    await db.execute(
+        text(
+            "create table d072_probe (user_id uuid not null "
+            "references users (id) on delete cascade)"
+        )
+    )
+    monkeypatch.setitem(users_repository.UNDERAGE_KEEPS, "d072_probe", "a probe")
+
+    assert await _d072_problems(db) == [
+        (
+            "D-072: kept ['d072_probe'] must be RESTRICT, or the deletion takes their "
+            "rows with the account (rule 12)"
+        )
+    ]
 
 
 async def test_a_row_the_deletion_doesnt_clear_stops_it_whole(

@@ -134,6 +134,11 @@ def about_problem(about: str) -> str | None:
 
 # --- Usernames --------------------------------------------------------------------
 
+# ASCII only, and load-bearing: first names take every script, so a display
+# name can be spelt in look-alike letters (U+0430, Cyrillic, for a Latin "a")
+# and read as someone else's (P-59). The @username is the one name on a profile
+# that can't be. Widening this to Unicode reopens that, for the name people
+# share as a link (D-001).
 USERNAME = re.compile(r"[a-z0-9._]{4,20}")
 USERNAME_MAX = 20
 

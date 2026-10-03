@@ -107,7 +107,7 @@ Unique `(kind, value)`.
 |---|---|---|
 | user_id | uuid pk fk users | |
 | first_name | text | 1–30 chars |
-| username | citext unique | `^[a-z0-9._]{4,20}$` |
+| username | citext unique | `^[a-z0-9._]{4,20}$`. ASCII only, and load-bearing: first names take every script, so look-alike letters can copy a display name, but never an @username (P-59) |
 | about | text | 40–300 chars |
 | hometown | text | ≤ 40 |
 | city | text | ≤ 40 |
