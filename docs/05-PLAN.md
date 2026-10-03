@@ -618,7 +618,8 @@ waits on the founder's decisions, so it is a task of its own, outside the sprint
     the trial ends ("a month" is Claude's reading of the founder's "anywhere near it", approved).
   - **P-68, if REL-1's tag includes T-3.14.** App Check enforced on Authentication, proved by its
     effect, before the site is public for sign-in (the founder, 4 October 2026): it is what makes
-    an SMS flood need our web app rather than a script.
+    an SMS flood need our web app rather than a script. A backstop only: P-68 is the very next
+    task after T-3.14, since the exposure opens at T-3.14's first staging deploy.
 - [ ] `veloraapp.co.in` → Vercel prod; `api.veloraapp.co.in` → Fly prod app; SSL issued. Prod DB/Redis/R2 created but empty.
   **Moved from T-2.6** (the founder's re-scope, 3 October 2026). T-2.6 set up the GitHub
   environment, the Fly app and the Vercel project and its domains; what's left is the founder's,
@@ -1037,8 +1038,9 @@ exist yet. The batch is a chain, T-3.10 → T-3.11 → T-3.12 → T-3.13, each n
   one is needed after all, it says why before asking.
 - [ ] Firebase console: project created, Phone provider enabled, authorised domains =
   `veloraapp.co.in` + `staging.veloraapp.co.in` (the Done-when signs in there; on the Needs line),
-  billing alert set at a fixed rupee amount. **App Check is P-68 now,** its own item with its own
-  trigger, not this task's (the founder, 4 October 2026).
+  billing alert set at a fixed rupee amount. **App Check is P-68, the very next task after this
+  one** (the founder, 4 October 2026): this task's first staging deploy puts the web config in a
+  public bundle, on a hostname in public certificate logs, and P-68 closes what that opens.
   **Done by the founder, 3 October 2026:** project `velora-ic` (no Google Analytics, no Gemini in
   Firebase); Phone sign-in enabled; SMS region policy "Allow", India (IN) only; Blaze linked to a
   billing account; later the same day, the two authorised domains. **Not yet:** the budget alert.
@@ -2337,6 +2339,14 @@ Claude Code adds items here instead of doing unplanned work. Format:
   on httpx against MSG91's own documentation, with the DLT template, tested against a mocked
   transport, then prove it with one real SMS to the founder's own phone. D-064's local guard wraps
   it unchanged. Revisit D-066's limits and cap in the same task (P-0.5).
+  **And prove D-066's limits on the real provider, not only the fake** (the founder, 4 October
+  2026). They are the only SMS limits that are ours, and they bind only Path B: a Firebase SMS
+  never passes through our server (D-035, P-0.18). So far every one is proved against the fake
+  alone. The method is Claude's: with `Msg91Sms` wired, show each (5 per phone an hour, 20 per IP
+  an hour, 100 an hour per IPv6 /48, 10 per phone a day, the global daily cap) stopping the send
+  before MSG91 is called, by counting the requests MSG91's mocked transport receives; then once
+  for real, by MSG91's own delivery log: five codes reach the founder's phone in an hour, and the
+  sixth is refused before MSG91 is asked.
   **And make a banned number take as long as any other** (T-3.2): send answers a banned number
   exactly as any other but skips the SMS. With the fake, that costs nothing; with a real HTTP call
   to MSG91, a banned number would answer a few hundred milliseconds sooner, and a stopwatch would
@@ -2886,28 +2896,36 @@ Claude Code adds items here instead of doing unplanned work. Format:
   one dependency and no separate decision between them. Nothing is kept from a run, as in T-3.13:
   no traces, videos or screenshots. At the founder's direction, 3 October 2026, so that P-66's
   first use "has a name, not just a condition".
-- [ ] P-68 · Enforce App Check on Firebase Authentication, and prove it by its effect. **Before
-  the site is public for sign-in** (the founder, 4 October 2026): on REL-1's Needs line if
-  REL-1's tag includes T-3.14, and on T-9.15's; and before P-0.18's conversion, whose first step
-  it is. Worst case without it: the web config, public by design, ships in the bundle from T-3.14
-  on, and with it anyone can ask Firebase to send SMS from a script, needing only a solved
-  reCAPTCHA per send. A flood then spends the trial's credit, which ends the trial and stops
-  sign-in everywhere; once paid, it bills one person's card up to Firebase's fixed 3,000 a day
-  (P-0.18). App Check makes a flood need our web app, the strongest lever left (the founder),
-  since no console field caps SMS and our server's limits never see a Firebase send (D-035).
-  **The console work, the founder's** (Firebase's reCAPTCHA Enterprise provider page, read by
-  Claude on 4 October 2026):
+- [ ] P-68 · Enforce App Check on Firebase Authentication, and prove it by its effect. **The very
+  next task after T-3.14** (the founder, 4 October 2026), **for this reason, so nobody reorders it
+  as housekeeping:** the exposure opens at T-3.14's first staging deploy, not at REL-1. From that
+  deploy, staging's bundle carries the web config, the same project production uses, and
+  staging's hostname is in public certificate logs; waiting for REL-1 would leave it open for
+  however long REL-1 takes. (The logs, checked 4 October 2026: the certificates for
+  `staging.veloraapp.co.in` and `api.staging.veloraapp.co.in`, Let's Encrypt, 2 October 2026,
+  each carry the logs' signed timestamps, which a self-signed control doesn't.) It also gates REL-1 (if REL-1's tag includes T-3.14) and T-9.15 on
+  their Needs lines, and it is the first step of P-0.18's order.
+  **Needs:** T-3.14, and the founder's console work, done right before this task starts and not
+  earlier, so a registration made now can't drift before anything uses it (the founder,
+  4 October 2026; the steps from Firebase's reCAPTCHA Enterprise provider page, read by Claude on
+  4 October 2026):
   1. Google Cloud console, project `velora-ic`: enable the reCAPTCHA Enterprise API, and create a
      **Web** key for `veloraapp.co.in` and `staging.veloraapp.co.in`, with "Use checkbox
      challenge" left unselected.
   2. Firebase console, Security, App Check: register the web app with the reCAPTCHA Enterprise
      provider and that key. The token lifetime (30 minutes to 7 days) and the risk threshold
      (0.5) can stay at their defaults.
-  3. **Don't enforce yet.** Leave Authentication unenforced, which still collects metrics, until
-     the web sends tokens and the metrics show our own traffic passing; then enforce
-     Authentication. Enforced before the web sends tokens, it refuses every sign-in.
+  3. **Enforcement stays off** until this task's code is live and the metrics show our own
+     traffic passing. Authentication stays unenforced, which still collects metrics; then the
+     founder enforces it. Enforced before the web sends tokens, it refuses every sign-in.
   The key is public by design (`NEXT_PUBLIC_FIREBASE_*`, 02-ARCHITECTURE §11). Assessments above
   a no-cost quota are charged.
+  Worst case without it: the web config, public by design, ships in the bundle from T-3.14 on,
+  and with it anyone can ask Firebase to send SMS from a script, needing only a solved reCAPTCHA
+  per send. A flood then spends the trial's credit, which ends the trial and stops sign-in
+  everywhere; once paid, it bills one person's card up to Firebase's fixed 3,000 a day (P-0.18).
+  App Check makes a flood need our web app, the strongest lever left (the founder), since no
+  console field caps SMS and our server's limits never see a Firebase send (D-035).
   **The code, this item's:** `initializeAppCheck` with `ReCaptchaEnterpriseProvider` and
   `isTokenAutoRefreshEnabled: true` (the SDK doesn't refresh tokens by default), before the phone
   screen asks for a code. It widens the CSP for App Check's hosts the way T-3.14 does for
@@ -2919,7 +2937,9 @@ Claude Code adds items here instead of doing unplanned work. Format:
   still works. The switch alone proves nothing. Google's own API description says some services
   "require certain conditions to be met before they will work with App Check, such as requiring
   you to upgrade to a specific service tier", and until then enforcement "will have no effect".
-  Google's App Check pages list "Firebase Authentication (Preview)" with no such condition, but two
-  search summaries (not Google's pages) say Authentication's needs the Identity Platform upgrade.
-  **If it does,** the upgrade removes Firebase's 3,000-a-day ceiling (P-0.18): that trade-off goes
-  back to the founder before anything is upgraded. At the founder's direction, 4 October 2026.
+  Google's pages don't say whether Authentication is one of them; the test decides.
+  **If enforcement turns out to need the Identity Platform upgrade, don't take the upgrade: stop
+  and tell the founder** (the founder's hard instruction, 4 October 2026). The upgrade removes the
+  3,000-a-day ceiling, the only "how many" bound there is (P-0.18), and trading a known ceiling
+  for an unproven guard would leave us worse off than today. That decision has a cost on both
+  sides, so it is the founder's. At the founder's direction, 4 October 2026.
