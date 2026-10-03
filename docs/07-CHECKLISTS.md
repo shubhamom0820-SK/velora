@@ -60,7 +60,7 @@
 - [ ] Presigned URLs short-lived; private bucket never public; content-type and size enforced
 - [ ] Uploaded images re-encoded; EXIF gone
 - [ ] Rate limits active on OTP, swipes, messages, reports
-- [ ] Firebase App Check enforced; daily SMS quota and billing alert set; `/auth/firebase` throttled per IP and per phone; ID tokens single-use
+- [ ] Firebase App Check enforced, and a send-code request without an App Check token refused (P-68: by its effect, not the switch); billing alert set (it alerts, never caps); `velora-ic` still on plain Firebase Authentication, so Firebase's fixed 3,000 SMS a day still applies (no console field caps SMS: P-0.18); `/auth/firebase` throttled per IP and per phone; ID tokens single-use
 - [ ] No secrets in repo (gitleaks) or in the web bundle (grep build output for key prefixes)
 - [ ] Admin routes role-checked; every admin action in `audit_log`
 - [ ] CSP enforced; no `unsafe-eval`
@@ -70,10 +70,12 @@
 ## F. Before go-live (T-9.15)
 
 - [ ] **Before launch, and by 2 January 2027 whatever the go-live date: the Google Cloud billing
-      account converted from its free trial to paid, after the daily SMS cap is set** (P-0.18, in
-      that order), or sooner if the trial's credit runs out first. On that date Firebase Auth
-      stops and nobody signs in, staging or production, with nothing wrong in the code and no
-      deploy to blame. Budgets alert; they never cap. The cap is the SMS quota.
+      account converted from its free trial to paid, after App Check is enforced and proved by
+      its effect** (P-0.18, in that order; P-68), or sooner if the trial's credit runs out first.
+      On that date Firebase Auth stops and nobody signs in, staging or production, with nothing
+      wrong in the code and no deploy to blame. Budgets alert; they never cap. No console field
+      caps SMS: Firebase's fixed 3,000 a day is inherited, and only on plain Firebase
+      Authentication.
 - [ ] Legal pages reviewed by the founder (P-0.7), every legal fact filled in (D-053), Grievance Officer published
 - [ ] Sign-in works on 3 networks (Jio, Airtel, Vi) on the live provider; if using Path B, DLT template approved
 - [ ] Firebase App Check rejects a request from an unauthorised domain

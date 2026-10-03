@@ -321,6 +321,20 @@ both create the same session. Switch to MSG91 when DLT is approved, or when mont
 exceeds roughly ₹10,000 — whichever comes first. No user is affected: the phone number is the
 identity, not the provider.
 
+**Amended 4 October 2026 (the founder): there is no daily SMS cap to set.** The second
+mitigation above, "Firebase console quotas set to a sane daily SMS cap", assumed a console field,
+and so did the founder's first ordering of P-0.18 ("my assumption", the founder). The bullet
+stands as written, struck by this amendment. Google documents none an owner can set (read by
+Claude on 3 October 2026): Firebase's limits page gives plain Firebase Authentication a fixed
+3,000 verification SMS a day and 900 a minute per project, and Identity Platform's quotas page
+lists "No SMS/day limit" for a project with a billing instrument. `velora-ic` is on plain Firebase
+Authentication (the console offers SMS multi-factor authentication behind "Upgrade to enable",
+and the founder didn't take it; P-0.18), so its 3,000 a day is a ceiling inherited, not one we
+configured, and it goes if the project is ever upgraded. What bounds an SMS flood on this path is
+App Check (P-68, proved by its effect), the India-only region policy and Firebase's own fixed
+limits. This decision's own trade-off still holds: our server's limits don't apply, since the SMS
+is triggered from the browser. The billing alert stays, as an alert: budgets never cap.
+
 ### D-034 · Location — Locked
 Browser geolocation on onboarding, stored as a PostGIS point. Distances shown rounded to whole km,
 minimum "1 km". If permission is denied, the user picks their area from a seeded list of

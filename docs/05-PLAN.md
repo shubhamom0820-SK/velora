@@ -124,22 +124,27 @@ never done silently.
 - [ ] **P-0.5** MSG91 account; link DLT IDs; send one test SMS to yourself.
   **When this is done (D-066):** revisit the OTP send limits, the global daily cap and the ₹0.20
   price behind D-066's figures before Path B is switched on, and build P-46, the MSG91 client.
-- [ ] **P-0.12** Firebase: project, Phone provider on, App Check + reCAPTCHA Enterprise enforced, authorised domains, daily SMS quota cap, billing alert. Confirm the **real per-SMS price for IN** in the billing console and write it into D-035.
+- [ ] **P-0.12** Firebase: project, Phone provider on, App Check + reCAPTCHA Enterprise enforced (now P-68, proved by its effect), authorised domains, billing alert. Confirm the **real per-SMS price for IN** in the billing console and write it into D-035.
   **Never add a test phone number to a project production uses (D-065):** its fixed code signs anyone in as that number wherever the project's tokens are accepted, production included, and in India the number may be a real person's (D-064).
-  **The daily SMS cap: Google's docs don't show it can be set** (P-0.18, read 3 October 2026). Find where the console sets it before relying on it; it comes before the conversion (P-0.18, step 1).
+  **There is no daily SMS cap to set** (4 October 2026, at the founder's direction; the first text asked for one). Google documents no such field. While `velora-ic` stays on plain Firebase Authentication, which it is (P-0.18), Firebase's fixed 3,000 SMS a day per project is a ceiling inherited, not configured. What bounds a flood is App Check (P-68), with the region policy and those fixed limits (P-0.18).
 - [x] **P-0.13** Create the Google Cloud billing account and complete India's identity verification. **Owner: the founder, Shubham Kumar. Start: 3 October 2026. Due: 30 days after the account is created, when Google suspends an unverified Indian account; by 2 November 2026 if it's created on the start date.** Blocks T-3.14 (Firebase's Blaze plan bills to this account) and P-49's move (the Compute Engine VM does too). Started late, the 30-day clock is what stalls T-3.14.
   **How:** an Indian billing address means Google's mandatory identity verification. As an individual: PAN or e-Aadhaar through DigiLocker, and proof of address. As a business: a GST or Udyam certificate. **GST:** the advisor directing T-3.2 to T-3.10 says Velora has none, deliberately, below the threshold; P-0.2 still lists GST as unconfirmed, so the founder confirms it there. Without GST or a Udyam registration, it goes through as an individual.
   **If the payment method is refused** (AWS's was, P-0.6), write down exactly what Google said, as P-36 did for Fly, before trying anything else.
   **Closed 3 October 2026 (the founder):** Blaze is active, not just linked: the project shows "Blaze via Google Cloud free-of-charge trial", with ₹28,796.63 of credit valid until 2 January 2027. The ₹1,000 one-off payment is made, and India's tax info is submitted as an unregistered individual with PAN. The 30-day suspension clock is moot. **It leaves a worse-shaped risk in its place, dated: P-0.18,** the trial's end.
-- [ ] **P-0.18** Convert the Google Cloud billing account from its free trial to a paid billing account, **after the daily SMS cap is set, and before launch.** **Owner: the founder, Shubham Kumar. Due: before launch (REL-1 if its tag includes T-3.14, T-9.15 at the latest), and in any case before 2 January 2027, or before the trial's ₹28,796.63 of credit runs out if that comes first.** Recorded 3 October 2026, when P-0.13 closed.
+- [ ] **P-0.18** Convert the Google Cloud billing account from its free trial to a paid billing account, **after App Check is enforced and proved by its effect (P-68), and before launch.** **Owner: the founder, Shubham Kumar. Due: before launch (REL-1 if its tag includes T-3.14, T-9.15 at the latest), and in any case before 2 January 2027, or before the trial's ₹28,796.63 of credit runs out if that comes first.** Recorded 3 October 2026, when P-0.13 closed; rewritten 4 October 2026, when the daily SMS cap turned out not to be a setting.
   **Why** (the founder): on that date the trial ends, and unless the account has been converted by then, Firebase Auth stops and nobody can sign in, staging or production (they share `velora-ic`, D-065), with nothing wrong in the code and no deploy to blame. "This is exactly the kind of thing that is obvious in January and invisible in October." And the API must not move onto this account while it is a trial (P-49), since the trial's end would then stop the whole API, not just sign-in.
-  **In this order** (the founder, 3 October 2026). On the trial an SMS flood ends the trial: an outage, no bill. Converted, a flood costs money, bounded only by the daily SMS cap. Neither is acceptable on its own, so this isn't a choice between them: the cap is what makes either safe.
-  1. **Set the daily SMS cap first.** It is a prerequisite of the conversion, not a sibling: until it exists, converting hands an unbounded bill to one person's card, and staying on the trial lets a stranger take sign-in down for everyone.
-     **Unverified, and step 1 rests on it:** Google documents no daily SMS cap an owner can set (read by Claude on 3 October 2026). Firebase's limits page gives a fixed 3,000 verification SMS a day for Firebase Authentication without Identity Platform; Identity Platform's quotas page says a project with a billing instrument has "No SMS/day limit", and mentions changing a quota only by asking support, for a higher one. Find where the console sets the cap before relying on it. If nothing does, what serves as the cap is the founder's decision, made before converting.
+  **In this order** (the founder, 3 and 4 October 2026). On the trial an SMS flood ends the trial: an outage, no bill. Converted, a flood costs money. Neither is acceptable on its own, so something must bound a flood before converting to paid, and no console field does (below):
+  1. **App Check enforced on Authentication and proved by its effect, first** (P-68). It is a prerequisite of the conversion, not a sibling: it makes a flood need our web app rather than a script, the strongest lever left. Until then, converting hands one person's card a bill bounded only by Firebase's own limits, and staying on the trial lets a stranger take sign-in down for everyone.
   2. **Then convert, before launch, not at the deadline:** after launch, the trial's end is an outage with no warning and no deploy to blame.
-  **What a budget is:** budgets alert; they never cap (Google's budgets page). The cap is the SMS quota. A budget also counts cost after credits unless told otherwise, so on the trial it sees ₹0 (T-3.14's budget alert counts cost before credits).
+  **What bounds an SMS flood on this path, and what doesn't** (4 October 2026). Google documents no daily SMS cap an owner can set (read by Claude on 3 October 2026), so none of these is a number we chose:
+  - **Who can ask:** App Check (P-68), not set up yet.
+  - **Where to:** the SMS region policy, India only (set by the founder, T-3.14).
+  - **How many:** Firebase's fixed limits for plain Firebase Authentication: 3,000 verification SMS a day and 900 a minute per project; 50 a minute and 500 an hour per IP (Firebase's limits page). **A ceiling we inherit, not one we chose, and only while `velora-ic` stays on plain Firebase Authentication:** Identity Platform's quotas page lists "No SMS/day limit" for a project with a billing instrument. At D-035's $0.01 to $0.07 an SMS (the IN price still unconfirmed, P-0.12), 3,000 a day is $30 to $210 a day.
+  - **Not our server's limits:** the browser asks Google for the SMS (D-035). D-066's limits sit on Path B's send route, which staging and production don't serve (D-066's first rule), and T-3.14's throttle on `/v1/auth/firebase` counts token exchanges after the code is entered. Neither stands in front of a Firebase SMS.
+  - **Not a budget:** budgets alert; they never cap (Google's budgets page). A budget also counts cost after credits unless told otherwise, so on the trial it sees ₹0 (T-3.14's budget alert counts cost before credits).
+  **`velora-ic` is on plain Firebase Authentication** (established 4 October 2026). Its console offers SMS multi-factor authentication behind "Upgrade to enable", the Identity Platform upgrade, which the founder deliberately didn't take; and Firebase offers SMS MFA only after that upgrade: "If you've upgraded to Firebase Authentication with Identity Platform, you can add SMS multi-factor authentication". Read from the console and Google's docs, not from an API: this machine has no Google Cloud credentials. **If the project is ever upgraded, the picture changes** (the founder): the 3,000 a day goes, so this item's bound is re-derived before any upgrade, not after. P-68 may force that question, and says how.
   **Google's terms** (its Free Trial page, read by Claude on 3 October 2026): the trial account closes when 90 days pass or the credit is spent, whichever is first; "All resources you created during the trial are stopped"; and without an upgrade within a 30-day grace period they "are permanently deleted". Upgrading early keeps the remaining credit, usable within the original 90 days, and ends the trial's guarantee: "You will not be billed for any Google Cloud usage during your Free Trial."
-  **Where it is read:** dated, in 07-CHECKLISTS §F; on REL-1's Needs line if REL-1's tag includes T-3.14 or falls on or after 2 December 2026; on T-9.15's Needs line; and on P-49, which may not land on this account while it is a trial.
+  **Where it is read:** dated, in 07-CHECKLISTS §F; on REL-1's Needs line if REL-1's tag includes T-3.14 or falls on or after 2 December 2026; on T-9.15's Needs line; on P-49, which may not land on this account while it is a trial; and P-68 is its first step.
 - [ ] **P-0.14** Decide where the registered office is, before `v0.1.0`, production's first release (REL-1). **Blocks that release, not the build:** on REL-1's Needs line, since a registered office is a judgement no check can make. `/contact` publishes D-058's registered office, the founder's home in Hajipur, and from `v0.1.0` it is public, crawled and archived: once Google and archive.org hold the address, no later change removes it.
   **Why it's a decision** (the founder, 3 October 2026): a sole proprietorship must publish a registered address, but it needn't be where the founder sleeps. A virtual-office or registered-address service in India, roughly ₹1,000 to ₹2,000 a month, meets the same requirement with a commercial address. For a dating app, where some users will be angry at whoever banned them, the difference matters.
   **If it changes:** a new decision supersedes D-058's office, `REGISTERED_OFFICE` in `web/src/lib/legal.ts` changes (its guard test names D-058), and the court follows the office (D-058), so a new city means a new court line too.
@@ -600,8 +605,9 @@ waits on the founder's decisions, so it is a task of its own, outside the sprint
 - [ ] **Needs:** T-2.6; **P-0.14**, the registered office, a judgement no check can make; and
   **P-0.15** (Vercel Pro) and **P-0.16** (Supabase Pro), which the release gate also refuses
   without (D-075). From the tag on, the site is public, crawled and takes real sign-ups.
-  **And two that block only under their condition** (the founder, 3 October 2026), each condition
-  written beside it so nobody reads it as unconditional and blocks a release that doesn't need it:
+  **And three that block only under their condition** (the founder, 3 and 4 October 2026), each
+  condition written beside it so nobody reads it as unconditional and blocks a release that
+  doesn't need it:
   - **P-66, if REL-1's tag includes T-3.14.** That tag opens sign-in, into the Firebase user pool
     staging shares (T-3.14), which is acceptable only while there are no real users: REL-1 is what
     makes real users possible, not T-9.15. A tag without T-3.14 opens no sign-in and doesn't wait.
@@ -610,6 +616,9 @@ waits on the founder's decisions, so it is a task of its own, outside the sprint
     after launch that is an outage with no warning (the founder, 3 October 2026): a tag with
     T-3.14 is launch in that sense, as for P-66. The date covers the rest: a month or less before
     the trial ends ("a month" is Claude's reading of the founder's "anywhere near it", approved).
+  - **P-68, if REL-1's tag includes T-3.14.** App Check enforced on Authentication, proved by its
+    effect, before the site is public for sign-in (the founder, 4 October 2026): it is what makes
+    an SMS flood need our web app rather than a script.
 - [ ] `veloraapp.co.in` → Vercel prod; `api.veloraapp.co.in` → Fly prod app; SSL issued. Prod DB/Redis/R2 created but empty.
   **Moved from T-2.6** (the founder's re-scope, 3 October 2026). T-2.6 set up the GitHub
   environment, the Fly app and the Vercel project and its domains; what's left is the founder's,
@@ -1011,9 +1020,9 @@ exist yet. The batch is a chain, T-3.10 → T-3.11 → T-3.12 → T-3.13, each n
   `127.0.0.1`, since local builds sign in by Path B (D-081). The list held only `localhost` and
   the two `firebaseapp` defaults. **Done, 3 October 2026 (the founder):** both are in.
   **And the web app registered in `velora-ic`, with its config:** the build starts then.
-  **Done, 3 October 2026 (the founder):** registered, and the config is in. It isn't in the repo
-  (checked on `main` at `e28b3dc`), so the build session's first question is where it is; it goes
-  in the repo's env for the web, public by design (Keys, below).
+  **Done, 3 October 2026 (the founder):** registered. The founder holds the config and gives it to
+  the build session directly (4 October 2026); it goes in the repo's env for the web, public by
+  design (Keys, below).
 - [ ] **Not in T-3.10 to T-3.13's batch** (planned 3 October 2026): P-0.13's account didn't exist yet. When this task starts, switch D-081's Firebase builds from "sign-in isn't open yet" to the Firebase flow: make `signInOpen()` (`web/src/lib/sign-in-path.ts`) true for `firebase`, which moves `/login` and the landing page's waitlist heading together.
 - [ ] **New dependencies (approved, recorded in D-035):** api `firebase-admin`; web `firebase`.
 - [ ] **Keys (the founder, 3 October 2026):** "the Firebase web config is public by design and
@@ -1026,19 +1035,24 @@ exist yet. The batch is a chain, T-3.10 → T-3.11 → T-3.12 → T-3.13, each n
   2026, at the founder's direction: a document that says a secret is needed when it isn't gets the
   secret created and stored, and then a key that never had to exist is guarded. If this task finds
   one is needed after all, it says why before asking.
-- [ ] Firebase console: project created, Phone provider enabled, **App Check with reCAPTCHA
-  Enterprise enforced on Authentication**, authorised domains = `veloraapp.co.in` + `staging.veloraapp.co.in`
-  (the Done-when signs in there; on the Needs line), daily SMS quota capped, billing alert set at a fixed rupee amount.
+- [ ] Firebase console: project created, Phone provider enabled, authorised domains =
+  `veloraapp.co.in` + `staging.veloraapp.co.in` (the Done-when signs in there; on the Needs line),
+  billing alert set at a fixed rupee amount. **App Check is P-68 now,** its own item with its own
+  trigger, not this task's (the founder, 4 October 2026).
   **Done by the founder, 3 October 2026:** project `velora-ic` (no Google Analytics, no Gemini in
   Firebase); Phone sign-in enabled; SMS region policy "Allow", India (IN) only; Blaze linked to a
-  billing account; later the same day, the two authorised domains. **Not yet:** App Check
-  enforced, the daily SMS cap, the budget alert. The first plan text also listed a Vercel preview
-  and `localhost`: neither is needed (Needs line).
-  **The daily SMS cap comes first, before the first real SMS** (P-0.18's step 1: the cap, not the
-  budget, is what bounds an SMS flood). **Google's docs don't show it can be set** (P-0.18,
-  read 3 October 2026): with a billing instrument, Identity Platform documents "No SMS/day
-  limit". Find where the console sets it before relying on it; if nothing does, stop and ask the
-  founder, since what serves as the cap is the founder's decision.
+  billing account; later the same day, the two authorised domains. **Not yet:** the budget alert.
+  The first plan text also listed a Vercel preview and `localhost`: neither is needed (Needs
+  line), and a daily SMS quota cap, which isn't a setting at all (below).
+  **No console field caps SMS** (4 October 2026, at the founder's direction; the first text
+  assumed one). What bounds an SMS flood here (P-0.18 has the detail): App Check (P-68, not yet);
+  the region policy, India only; and Firebase's fixed limits for plain Firebase Authentication,
+  3,000 SMS a day and 900 a minute per project and 500 an hour per IP, **a ceiling inherited, not
+  one we chose, that holds only while `velora-ic` stays on plain Firebase Authentication,** as it
+  is. Our server's limits don't: the browser asks Google for the SMS (D-035), and this task's
+  throttle on `/v1/auth/firebase` counts token exchanges, not sends. **The founder deliberately
+  didn't take the Identity Platform upgrade, and this task doesn't either,** even where the
+  console offers a feature behind it: the upgrade removes the daily ceiling (P-0.18).
 - [ ] **A number outside India is refused by Firebase itself,** under that region policy, before any
   of our code runs. What the person sees then is a case this task handles and tests, not an
   accident. (The phone screen fixes +91, so it takes a pasted or edited number to get there.)
@@ -1834,7 +1848,7 @@ committed rows.
 - [ ] **Commit:** `docs(ops): backup and restore runbook [T-9.14]`
 
 ### T-9.15 · Go live
-- [ ] **Needs:** T-9.13, T-9.14, P-0.5, P-0.7, P-0.8, and **P-66**: until staging has a Firebase project of its own, its sign-ins land in production's user pool, which is not acceptable after launch (the founder, 3 October 2026, on T-3.14); and **P-0.18**: the billing account converted from its free trial, after the daily SMS cap is set, since after launch the trial's end is an outage with no warning (the founder, 3 October 2026)
+- [ ] **Needs:** T-9.13, T-9.14, P-0.5, P-0.7, P-0.8; **P-66**: until staging has a Firebase project of its own, its sign-ins land in production's user pool, which is not acceptable after launch (the founder, 3 October 2026, on T-3.14); **P-0.18**: the billing account converted from its free trial, after App Check (P-68), since after launch the trial's end is an outage with no warning (the founder, 3 October 2026); and **P-68**: App Check enforced on Authentication and proved by its effect, before the site is public for sign-in (the founder, 4 October 2026)
 - [ ] Production env: real SMS, real Razorpay live keys + webhook URL, real moderation and face match, VAPID keys. Run the pre-launch checklist in `07-CHECKLISTS.md`. Do one real ₹ purchase yourself and refund it, under D-076's rule 3: the refund reverses that purchase's Velas in the ledger in the same step (T-8.2), so money never goes back while its Velas stand.
 - [ ] **Write to the waitlist** (T-2.3): its copy promises to tell people when Velora opens near them. Nothing can send bulk email yet, so choose how before launch day, or the list is one we can't write to. A sending service is a new dependency and another processor `/privacy` must name, and its From address needs SPF and DKIM, like the mailboxes (P-0.3). B-14, a second city, writes to it again, by city.
   **DKIM before the first send, or the launch email goes to spam:** our DMARC record says
@@ -2872,3 +2886,40 @@ Claude Code adds items here instead of doing unplanned work. Format:
   one dependency and no separate decision between them. Nothing is kept from a run, as in T-3.13:
   no traces, videos or screenshots. At the founder's direction, 3 October 2026, so that P-66's
   first use "has a name, not just a condition".
+- [ ] P-68 · Enforce App Check on Firebase Authentication, and prove it by its effect. **Before
+  the site is public for sign-in** (the founder, 4 October 2026): on REL-1's Needs line if
+  REL-1's tag includes T-3.14, and on T-9.15's; and before P-0.18's conversion, whose first step
+  it is. Worst case without it: the web config, public by design, ships in the bundle from T-3.14
+  on, and with it anyone can ask Firebase to send SMS from a script, needing only a solved
+  reCAPTCHA per send. A flood then spends the trial's credit, which ends the trial and stops
+  sign-in everywhere; once paid, it bills one person's card up to Firebase's fixed 3,000 a day
+  (P-0.18). App Check makes a flood need our web app, the strongest lever left (the founder),
+  since no console field caps SMS and our server's limits never see a Firebase send (D-035).
+  **The console work, the founder's** (Firebase's reCAPTCHA Enterprise provider page, read by
+  Claude on 4 October 2026):
+  1. Google Cloud console, project `velora-ic`: enable the reCAPTCHA Enterprise API, and create a
+     **Web** key for `veloraapp.co.in` and `staging.veloraapp.co.in`, with "Use checkbox
+     challenge" left unselected.
+  2. Firebase console, Security, App Check: register the web app with the reCAPTCHA Enterprise
+     provider and that key. The token lifetime (30 minutes to 7 days) and the risk threshold
+     (0.5) can stay at their defaults.
+  3. **Don't enforce yet.** Leave Authentication unenforced, which still collects metrics, until
+     the web sends tokens and the metrics show our own traffic passing; then enforce
+     Authentication. Enforced before the web sends tokens, it refuses every sign-in.
+  The key is public by design (`NEXT_PUBLIC_FIREBASE_*`, 02-ARCHITECTURE §11). Assessments above
+  a no-cost quota are charged.
+  **The code, this item's:** `initializeAppCheck` with `ReCaptchaEnterpriseProvider` and
+  `isTokenAutoRefreshEnabled: true` (the SDK doesn't refresh tokens by default), before the phone
+  screen asks for a code. It widens the CSP for App Check's hosts the way T-3.14 does for
+  Firebase's, each with its reason (D-059).
+  Local and CI builds sign in by Path B (D-081), so they never meet App Check.
+  **Done when, by its effect, not the console's switch:** with enforcement on, a request to
+  Firebase Authentication's send-code endpoint without an App Check token is refused, and the
+  refusal's body names App Check, not a missing reCAPTCHA token; and sign-in from our own site
+  still works. The switch alone proves nothing. Google's own API description says some services
+  "require certain conditions to be met before they will work with App Check, such as requiring
+  you to upgrade to a specific service tier", and until then enforcement "will have no effect".
+  Google's App Check pages list "Firebase Authentication (Preview)" with no such condition, but two
+  search summaries (not Google's pages) say Authentication's needs the Identity Platform upgrade.
+  **If it does,** the upgrade removes Firebase's 3,000-a-day ceiling (P-0.18): that trade-off goes
+  back to the founder before anything is upgraded. At the founder's direction, 4 October 2026.
