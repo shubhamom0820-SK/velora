@@ -773,17 +773,41 @@ waits on the founder's decisions, so it is a task of its own, outside the sprint
 - [x] **Commit:** `feat(onboarding): interests [T-3.8]`
 
 ### T-3.9 · PIN
-- [ ] **Needs:** T-3.5, and T-3.6's step rule (D-068), which the `pin` step follows
-- [ ] `POST /auth/pin/set {pin, current_pin?}` → 204: 4 digits (D-012), refusing one digit four times, straight runs either way (0123…, 9876…), alternating pairs (1212) and the 20 most common PINs in DataGenetics' published study → `VALIDATION_ERROR` (D-069). Changing an existing PIN needs `current_pin`, except within 10 minutes of a fresh sign-in, read from `auth_time` (D-071); that is also "forgot PIN": sign out, sign in by OTP, set a new one. At the `pin` onboarding step, setting one advances to `selfie`.
-- [ ] `POST /me/pin/skip` → `Me`: moves `pin` → `selfie` (D-069).
-- [ ] `POST /auth/pin/verify {pin}` → 204, or `PIN_INVALID` with `details.attempts_left`. `pin_failed` goes up by one per wrong PIN, in one atomic update; a correct PIN resets it, and so does a fresh sign-in (add that to T-3.3's sign-in service). **At 5, every session of the user is revoked** → `SESSION_REVOKED`; each revoked session's access token still works for up to 15 minutes (D-067).
-- [ ] A stored hash `verify_pin` refuses (other parameters, unreadable) doesn't count against `pin_failed`: `PIN_INVALID` with `details.reset_required`, and the way out is the fresh sign-in above (D-069). `hash_pin`/`verify_pin` are T-3.1's (D-062).
-- [ ] The PIN endpoints: 10 a minute per user; each check holds 19 MiB for about 18 ms, two at once per process (D-062).
-- [ ] **What the lock doesn't do (D-069, with D-067):** it deters whoever picks up an unlocked phone; it protects nothing. The web keeps a working access token behind the lock screen, so the browser's devtools get past it, and five wrong PINs leave the revoked sessions' tokens working for up to 15 minutes. Never build on it as a security boundary.
-- [ ] The seed's test-woman PIN (`TEST_WOMAN_PIN` in `api/seed/data.py`, T-1.15) must stay valid under these rules; a test here checks it, so the seed doesn't break the day the rules land.
-- [ ] Tests: each refused shape, and 4829 accepted; a change without `current_pin` refused, and allowed within 10 minutes of sign-in; 5 wrong → every session revoked; a refused hash doesn't count and sets `reset_required`; skip advances; the rate limit.
-- [ ] **At `/done`:** D-069 becomes Locked.
-- [ ] **Commit:** `feat(auth): pin lock [T-3.9]`
+- [x] **Needs:** T-3.5, and T-3.6's step rule (D-068), which the `pin` step follows
+- [x] `POST /auth/pin/set {pin, current_pin?}` → 204: 4 digits (D-012), refusing one digit four times, straight runs either way (0123…, 9876…), alternating pairs (1212) and the 20 most common PINs in DataGenetics' published study → `VALIDATION_ERROR` (D-069). Changing an existing PIN needs `current_pin`, except within 10 minutes of a fresh sign-in, read from `auth_time` (D-071); that is also "forgot PIN": sign out, sign in by OTP, set a new one. At the `pin` onboarding step, setting one advances to `selfie`.
+  **Built:** the rule is `auth/pins.py`, which `make seed` checks its PIN against too. It refuses
+  exactly 118 of the 10,000 PINs, held so by a test over all of them: 10 one-digit, 14 runs, 90
+  alternating pairs, and 1004, 2000, 1122 and 2001, which only the study's list catches. The list is
+  the study's table, ranks 1 to 20, read from datagenetics.com on 3 October 2026. No problem's
+  wording holds a digit, so no error repeats a PIN, even one refused (rule 15). A change outside the
+  window with no `current_pin` is `VALIDATION_ERROR` on `current_pin`, not `PIN_INVALID`: no guess
+  was made. "Within 10 minutes" is `now - auth_time` under 10 minutes, so 10:00 is outside. A wrong
+  `current_pin` counts as a wrong PIN. Before the `pin` step, setting one is
+  `ONBOARDING_INCOMPLETE`; after it, a first PIN is set without advancing. The window is proved
+  with real tokens: fresh at 9 minutes, not at 11 though the token still works, not after a refresh
+  (it carries `auth_time`), fresh again after a new OTP sign-in. A new dependency,
+  `deps.access_claims`, hands a route the token's claims beside `current_user`.
+- [x] `POST /me/pin/skip` → `Me`: moves `pin` → `selfie` (D-069).
+- [x] `POST /auth/pin/verify {pin}` → 204, or `PIN_INVALID` with `details.attempts_left`. `pin_failed` goes up by one per wrong PIN, in one atomic update; a correct PIN resets it, and so does a fresh sign-in (add that to T-3.3's sign-in service). **At 5, every session of the user is revoked** → `SESSION_REVOKED`; each revoked session's access token still works for up to 15 minutes (D-067).
+  **Built:** the try is counted before the hash is checked, by one `UPDATE … WHERE pin_failed < 5
+  RETURNING`, committed on its own: tries made at once are each counted, and no more than five are
+  ever checked between resets (eight at once on eight connections: five checked, four
+  `PIN_INVALID`, four `SESSION_REVOKED`). Past five, nothing is checked, the right PIN included,
+  until a fresh sign-in. Verifying with no PIN set is `NOT_ALLOWED`.
+- [x] A stored hash `verify_pin` refuses (other parameters, unreadable) doesn't count against `pin_failed`: `PIN_INVALID` with `details.reset_required`, and the way out is the fresh sign-in above (D-069). `hash_pin`/`verify_pin` are T-3.1's (D-062).
+  **Built:** `check_pin` joins `core/security.py` and tells a match, a wrong PIN and a refused hash
+  apart; `verify_pin` is now `check_pin(...) is MATCH`, so T-3.1's tests hold it unchanged. D-062's
+  parameters around a body that won't decode are refused too. A refused hash gives its try back,
+  never below zero.
+- [x] The PIN endpoints: 10 a minute per user; each check holds 19 MiB for about 18 ms, two at once per process (D-062).
+  **Built:** one shared count for setting and verifying; skipping hashes nothing and isn't in it.
+- [x] **What the lock doesn't do (D-069, with D-067):** it deters whoever picks up an unlocked phone; it protects nothing. The web keeps a working access token behind the lock screen, so the browser's devtools get past it, and five wrong PINs leave the revoked sessions' tokens working for up to 15 minutes. Never build on it as a security boundary.
+  **Built:** a test pins the tail, so nobody mistakes the lock for protection: after five wrong
+  PINs the access token still reads `/me` at 14 minutes and is `TOKEN_EXPIRED` at 15.
+- [x] The seed's test-woman PIN (`TEST_WOMAN_PIN` in `api/seed/data.py`, T-1.15) must stay valid under these rules; a test here checks it, so the seed doesn't break the day the rules land.
+- [x] Tests: each refused shape, and 4829 accepted; a change without `current_pin` refused, and allowed within 10 minutes of sign-in; 5 wrong → every session revoked; a refused hash doesn't count and sets `reset_required`; skip advances; the rate limit.
+- [x] **At `/done`:** D-069 becomes Locked.
+- [x] **Commit:** `feat(auth): pin lock [T-3.9]`
 
 ### T-3.10 · Web auth client
 - [ ] **Needs:** T-1.18, T-3.4, T-3.5 (`useMe()` reads `Me`) and T-3.9 (the lock reads `has_pin` and calls `/auth/pin/verify`)

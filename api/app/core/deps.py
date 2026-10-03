@@ -1,7 +1,8 @@
 """FastAPI dependencies shared across modules (02-ARCHITECTURE.md §2).
 
 `rate_limit` arrived with the waitlist (T-2.3); `current_user`,
-`onboarded_user` and `require_role` with T-3.5; `user_rate_limit` with T-3.7.
+`onboarded_user` and `require_role` with T-3.5; `user_rate_limit` with T-3.7;
+`access_claims` with T-3.9.
 """
 
 from __future__ import annotations
@@ -19,7 +20,7 @@ from app.core.config import SOCKET_CLIENT_IP_ALLOWED_IN, Settings
 from app.core.db import get_session
 from app.core.enums import OnboardingStep, Role
 from app.core.errors import AppError
-from app.core.security import decode_access_token
+from app.core.security import AccessClaims, decode_access_token
 from app.modules.users import service as users_service
 from app.modules.users.models import User
 
@@ -188,12 +189,20 @@ async def current_user(
     return user
 
 
+def access_claims(request: Request) -> AccessClaims:
+    """The access token's claims, for a route that needs more than who is
+    asking: the PIN's 10-minute window reads `auth_time` (D-069, D-071). Used
+    beside `current_user`, which has checked the same token and loaded the
+    user; alone it would skip the user's own checks."""
+    return decode_access_token(_bearer_token(request), request.app.state.settings)
+
+
 def user_rate_limit(
     scope: str, *, limit: int, window_s: int
 ) -> Callable[..., Awaitable[None]]:
     """A dependency allowing `limit` requests per signed-in user per `window_s`
     seconds, for a route that needs less than `current_user`'s 300 a minute:
-    the username check's 30 (02-ARCHITECTURE §12)."""
+    the username check's 30 and the PIN's 10 (02-ARCHITECTURE §12)."""
 
     async def dependency(
         request: Request, user: Annotated[User, Depends(current_user)]

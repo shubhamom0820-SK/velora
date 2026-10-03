@@ -202,6 +202,37 @@ async def locked_user(session: AsyncSession, user_id: UUID) -> User:
     return user
 
 
+# --- The PIN's row (T-3.9): auth.service decides, these keep the count -----------
+
+
+async def take_pin_try(session: AsyncSession, user_id: UUID, limit: int) -> int | None:
+    return await repository.take_pin_try(session, user_id, limit)
+
+
+async def give_back_pin_try(session: AsyncSession, user_id: UUID) -> None:
+    await repository.give_back_pin_try(session, user_id)
+
+
+async def clear_pin_tries(session: AsyncSession, user_id: UUID) -> None:
+    await repository.clear_pin_tries(session, user_id)
+
+
+def store_pin(user: User, pin_hash: str) -> None:
+    """A new PIN starts with no wrong tries against it."""
+    user.pin_hash = pin_hash
+    user.pin_failed = 0
+
+
+async def skip_pin(session: AsyncSession, user: User) -> Me:
+    """`POST /me/pin/skip`: the PIN is optional, so its step can be passed
+    without one, moving `pin` to `selfie` (D-069); after the step, nothing to do."""
+    async with session.begin():
+        user = await locked_user(session, user.id)
+        if at_step(user, OnboardingStep.PIN):
+            advance_past(user, OnboardingStep.PIN)
+        return await me(session, user)
+
+
 # D-009: a hard 18+ gate, by age in IST today. A date further back than this is
 # a typo, not a person.
 ADULT_AGE = 18

@@ -1188,7 +1188,7 @@ Recommended by Claude in the joint plan for T-3.2 to T-3.10; answered by the adv
 that plan (Claude, in a separate chat); approved by the founder on 3 October 2026. Locked at T-3.7's
 `/done`, 3 October 2026.
 
-### D-069 · PIN: its rules, its reset, and what the lock doesn't do — Open
+### D-069 · PIN: its rules, its reset, and what the lock doesn't do — Locked
 **The decision (T-3.9):**
 - A PIN is 4 digits (D-012). Refused: one digit four times; straight runs either way (0123…,
   9876…); alternating pairs (1212); the 20 most common PINs in DataGenetics' published study. The
@@ -1217,8 +1217,15 @@ security later (the advisor).
 to be more); counting a refused hash as a wrong PIN (it would lock out someone whose hash format
 changed, with no way back).
 
+**How the count works (found building T-3.9):** a try is counted, and committed, before the PIN is
+checked, by a statement that refuses a sixth. So tries made at once are each counted, no more than
+five are ever checked between resets, and past five nothing is checked, the right PIN included,
+until a fresh sign-in. The lockout still locks nothing for fifteen minutes (above); it only stops
+the guessing.
+
 Recommended by Claude in the joint plan for T-3.2 to T-3.10; answered by the advisor directing
-that plan (Claude, in a separate chat); approved by the founder on 3 October 2026. **Open** until T-3.9 lands; its `/done` marks it Locked.
+that plan (Claude, in a separate chat); approved by the founder on 3 October 2026. Locked at T-3.9's
+`/done`, 3 October 2026.
 
 ### D-070 · Sign-in numbers are Indian mobiles only — Locked
 **Supersedes** D-061's "a number is normalised to E.164, +91 only (D-035)", and T-3.1's text for

@@ -74,3 +74,15 @@ async def revoke_family(
         )
         .values(revoked_at=at)
     )
+
+
+async def revoke_every_session(
+    session: AsyncSession, *, user_id: UUID, at: datetime
+) -> None:
+    """Revoke every live session of the user, every family: five wrong PINs
+    (D-069). Each one's access token still works for up to 15 minutes (D-067)."""
+    await session.execute(
+        update(Session)
+        .where(Session.user_id == user_id, Session.revoked_at.is_(None))
+        .values(revoked_at=at)
+    )

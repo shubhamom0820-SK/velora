@@ -44,3 +44,18 @@ class AccessToken(BaseModel):
     CSRF value arrive as cookies."""
 
     access_token: str
+
+
+# Four digits (D-012). Anything else is refused before it can count as a try.
+PinDigits = Annotated[str, StringConstraints(pattern=r"^[0-9]{4}$")]
+
+
+class PinSet(BaseModel):
+    pin: PinDigits
+    # Needed to change a PIN, except within 10 minutes of a fresh sign-in
+    # (D-069).
+    current_pin: PinDigits | None = None
+
+
+class PinVerify(BaseModel):
+    pin: PinDigits

@@ -297,12 +297,17 @@ TODAY = date(2026, 10, 3)
         (
             _with("test_woman", pin="1234"),
             SWIPES,
-            "test_woman: the PIN breaks T-3.9's rules",
+            "test_woman: the PIN is a straight run of digits (T-3.9)",
         ),
         (
             _with("test_woman", pin="7777"),
             SWIPES,
-            "test_woman: the PIN breaks T-3.9's rules",
+            "test_woman: the PIN is one digit four times (T-3.9)",
+        ),
+        (
+            _with("test_woman", pin="2001"),
+            SWIPES,
+            "test_woman: the PIN is one of the most common PINs (T-3.9)",
         ),
         (
             _with("moderator", gender=Gender.MALE),

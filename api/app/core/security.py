@@ -23,6 +23,7 @@ import re
 import secrets
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
+from enum import Enum
 from typing import Literal, NewType
 from uuid import UUID
 
@@ -30,7 +31,7 @@ import jwt
 import phonenumbers
 import structlog
 from argon2 import Parameters, PasswordHasher, Type, extract_parameters
-from argon2.exceptions import InvalidHashError, VerificationError
+from argon2.exceptions import InvalidHashError, VerificationError, VerifyMismatchError
 from cryptography.fernet import Fernet, MultiFernet
 from cryptography.hazmat.primitives import hashes
 from cryptography.hazmat.primitives.kdf.hkdf import HKDFExpand
@@ -332,19 +333,36 @@ async def hash_pin(pin: str, settings: Settings) -> str:
         return await asyncio.to_thread(_pin_hasher.hash, secret)
 
 
+class PinCheck(Enum):
+    """What checking a PIN against its stored hash found (D-069 tells the last
+    two apart: a wrong PIN counts against `pin_failed`, a refused hash doesn't)."""
+
+    MATCH = "match"
+    WRONG = "wrong"
+    # The stored hash can't be checked: D-062's parameters aren't its own, or it
+    # can't be read. No PIN would match it.
+    REFUSED = "refused"
+
+
 async def verify_pin(pin: str, stored: str, settings: Settings) -> bool:
-    """Whether `pin` is the PIN `stored` was made from.
+    """Whether `pin` is the PIN `stored` was made from: `check_pin`, with a
+    refused hash answered as a wrong PIN."""
+    return await check_pin(pin, stored, settings) is PinCheck.MATCH
+
+
+async def check_pin(pin: str, stored: str, settings: Settings) -> PinCheck:
+    """Check `pin` against `stored`.
 
     Only D-062's exact parameters are accepted. A stored hash made with any
     others, weaker or stronger, is refused, where argon2-cffi alone would verify
     it. A refused or unreadable hash is logged by its parameters, never the PIN
-    or the hash, and returns False, like a wrong PIN.
+    or the hash.
     """
     try:
         parameters = extract_parameters(stored)
     except InvalidHashError:
         log.warning("pin_hash_unreadable")
-        return False
+        return PinCheck.REFUSED
     if parameters != PIN_HASH_PARAMETERS:
         log.warning(
             "pin_hash_parameters_refused",
@@ -356,13 +374,18 @@ async def verify_pin(pin: str, stored: str, settings: Settings) -> bool:
             hash_len=parameters.hash_len,
             salt_len=parameters.salt_len,
         )
-        return False
+        return PinCheck.REFUSED
     secret = _peppered_pin(pin, settings)
     async with _pin_hash_slots:
         try:
-            return await asyncio.to_thread(_pin_hasher.verify, stored, secret)
+            await asyncio.to_thread(_pin_hasher.verify, stored, secret)
+        except VerifyMismatchError:
+            return PinCheck.WRONG
         except (VerificationError, InvalidHashError):
-            return False
+            # Parameters that read as D-062's around a body that doesn't.
+            log.warning("pin_hash_unreadable")
+            return PinCheck.REFUSED
+    return PinCheck.MATCH
 
 
 # The short codes people type share CODE_PEPPER, each use under its own key

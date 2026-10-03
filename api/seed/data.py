@@ -87,10 +87,9 @@ F, M = Gender.FEMALE, Gender.MALE
 MEN, WOMEN = Seeking.MEN, Seeking.WOMEN
 SELFIE = OnboardingStep.SELFIE
 
-# The test woman's PIN. Not 0000, 1234 or one digit four times (T-3.9's rules
-# as written), and none of the shapes a common-PIN blocklist catches first: no
-# run, no repeat, no year or date, no line on the keypad. T-3.9 must keep it
-# valid under whatever rules it adds; a test there checks it.
+# The test woman's PIN. None of the shapes a common-PIN blocklist catches first:
+# no run, no repeat, no year or date, no line on the keypad. T-3.9's rules
+# (D-069) allow it; a test there holds it so, and `make seed` checks it too.
 TEST_WOMAN_PIN = "4829"
 
 TEST_ACCOUNTS: tuple[Person, ...] = (

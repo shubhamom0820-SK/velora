@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from uuid import UUID
 
-from sqlalchemy import delete, exists, select
+from sqlalchemy import delete, exists, func, select, update
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -78,6 +78,40 @@ async def ban_phone_hash(session: AsyncSession, phone_hash: str, reason: str) ->
         insert(BannedIdentity)
         .values(kind=BanKind.PHONE_HASH, value=phone_hash, reason=reason)
         .on_conflict_do_nothing(index_elements=["kind", "value"])
+    )
+
+
+async def take_pin_try(session: AsyncSession, user_id: UUID, limit: int) -> int | None:
+    """Count one PIN try, if fewer than `limit` are counted, and return the new
+    count; None if `limit` already are. One statement, so tries made at once
+    are each counted once, and no more than `limit` are ever taken (D-069)."""
+    taken: int | None = await session.scalar(
+        update(User)
+        .where(User.id == user_id, User.pin_failed < limit)
+        .values(pin_failed=User.pin_failed + 1)
+        .returning(User.pin_failed)
+        .execution_options(synchronize_session=False)
+    )
+    return taken
+
+
+async def give_back_pin_try(session: AsyncSession, user_id: UUID) -> None:
+    """Uncount a try that turned out not to be a guess: the stored hash
+    couldn't be checked (D-069)."""
+    await session.execute(
+        update(User)
+        .where(User.id == user_id)
+        .values(pin_failed=func.greatest(User.pin_failed - 1, 0))
+        .execution_options(synchronize_session=False)
+    )
+
+
+async def clear_pin_tries(session: AsyncSession, user_id: UUID) -> None:
+    await session.execute(
+        update(User)
+        .where(User.id == user_id)
+        .values(pin_failed=0)
+        .execution_options(synchronize_session=False)
     )
 
 

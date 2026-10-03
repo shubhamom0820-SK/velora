@@ -1,4 +1,4 @@
-"""Sign-in routes (D-035).
+"""Sign-in routes (D-035), and the PIN lock (T-3.9).
 
 `otp_router` is Path B, MSG91's codes. `create_app()` mounts it only where
 `AUTH_PHONE_PROVIDER` allows (D-066); everywhere else its routes 404.
@@ -15,8 +15,17 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import Settings
 from app.core.db import get_session
-from app.core.deps import app_redis, app_settings, client_ipv6_48, rate_limit
+from app.core.deps import (
+    access_claims,
+    app_redis,
+    app_settings,
+    client_ipv6_48,
+    current_user,
+    rate_limit,
+    user_rate_limit,
+)
 from app.core.providers import Providers, get_providers
+from app.core.security import AccessClaims
 from app.modules.auth import service
 from app.modules.auth.cookies import (
     clear_session_cookies,
@@ -29,8 +38,11 @@ from app.modules.auth.schemas import (
     OtpSend,
     OtpSent,
     OtpVerify,
+    PinSet,
+    PinVerify,
     SignedIn,
 )
+from app.modules.users.models import User
 
 # 02-ARCHITECTURE §12, D-066: 20 sends an hour per client IP (an IPv6 /64), and
 # 100 an hour per IPv6 /48, which one cloud customer can fill with 65,536 /64s.
@@ -43,6 +55,12 @@ OTP_SEND_WINDOW_S = 60 * 60
 # The double-submit header (D-024): the web reads the CSRF cookie and sends it
 # back here, which a page on another site can't do.
 CSRF_HEADER = "X-CSRF"
+
+# D-069, 02-ARCHITECTURE §12: setting and checking a PIN share one limit, 10 a
+# minute per user. Each check holds 19 MiB for about 18 ms, two at once per
+# process (D-062), and five wrong ones lock the PIN anyway.
+PIN_CHECKS_PER_MINUTE = 10
+_pin_limit = Depends(user_rate_limit("pin", limit=PIN_CHECKS_PER_MINUTE, window_s=60))
 
 otp_router = APIRouter(prefix="/auth/otp", tags=["auth"])
 router = APIRouter(prefix="/auth", tags=["auth"])
@@ -133,3 +151,31 @@ async def logout(
 ) -> None:
     await service.logout(session, settings, **_credentials(request, settings))
     clear_session_cookies(response, settings)
+
+
+@router.post("/pin/set", status_code=204, dependencies=[_pin_limit])
+async def set_pin(
+    body: PinSet,
+    user: Annotated[User, Depends(current_user)],
+    claims: Annotated[AccessClaims, Depends(access_claims)],
+    session: Annotated[AsyncSession, Depends(get_session)],
+    settings: Annotated[Settings, Depends(app_settings)],
+) -> None:
+    await service.set_pin(
+        session,
+        settings,
+        user_id=user.id,
+        auth_time=claims.auth_time,
+        pin=body.pin,
+        current_pin=body.current_pin,
+    )
+
+
+@router.post("/pin/verify", status_code=204, dependencies=[_pin_limit])
+async def verify_pin(
+    body: PinVerify,
+    user: Annotated[User, Depends(current_user)],
+    session: Annotated[AsyncSession, Depends(get_session)],
+    settings: Annotated[Settings, Depends(app_settings)],
+) -> None:
+    await service.verify_pin(session, settings, user_id=user.id, pin=body.pin)

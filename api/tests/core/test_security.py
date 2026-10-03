@@ -40,6 +40,8 @@ from app.core.errors import AppError
 from app.core.security import (
     E164,
     PIN_HASH_PARAMETERS,
+    PinCheck,
+    check_pin,
     csrf_matches,
     decode_access_token,
     decrypt_phone,
@@ -728,6 +730,50 @@ async def test_a_refused_hash_is_logged_by_its_parameters_alone() -> None:
 )
 async def test_an_unreadable_stored_hash_is_false_never_an_error(stored: str) -> None:
     assert await verify_pin(PIN, stored, SETTINGS) is False
+
+
+# check_pin (T-3.9): what D-069 needs told apart. A wrong PIN counts against
+# `pin_failed`; a hash that can't be checked doesn't.
+
+
+async def test_check_pin_tells_a_match_a_wrong_pin_and_a_refused_hash_apart() -> None:
+    stored = await hash_pin(PIN, SETTINGS)
+
+    assert await check_pin(PIN, stored, SETTINGS) is PinCheck.MATCH
+    assert await check_pin("4822", stored, SETTINGS) is PinCheck.WRONG
+    assert await check_pin(PIN, _stored_with(profiles.CHEAPEST), SETTINGS) is (
+        PinCheck.REFUSED
+    )
+
+
+@pytest.mark.parametrize(
+    "stored",
+    [
+        "",
+        "abc",
+        "$2b$12$R9h/cIPz0gi.URNNX3kh2OPST9/PgBkqquzi.Ss7KIUgO2t0jWMUW",  # bcrypt
+        "$argon2id$v=19$m=19456,t=2,p=1$",
+        "$argon2id$v=19$m=19456,t=2,p=1$c2FsdHNhbHRzYWx0c2FsdA$aGFzaA",
+        # D-062's parameters exactly, around a body that won't decode.
+        "$argon2id$v=19$m=19456,t=2,p=1$c2FsdHNhbHRzYWx0c2FsdA$" + "!" * 43,
+    ],
+    ids=["empty", "text", "bcrypt", "truncated", "garbled", "undecodable body"],
+)
+async def test_an_unreadable_stored_hash_is_refused_not_wrong(stored: str) -> None:
+    """Even D-062's parameters around a body that isn't a hash: no PIN could
+    match it, so it is never a wrong guess."""
+    assert await check_pin(PIN, stored, SETTINGS) is PinCheck.REFUSED
+
+
+ANY_OTHER: dict[str, Parameters] = {**WEAKER, **NOT_WEAKER}
+
+
+@pytest.mark.parametrize("other", ANY_OTHER)
+async def test_any_other_parameters_are_refused_not_wrong(other: str) -> None:
+    stored = _stored_with(ANY_OTHER[other])
+
+    assert await check_pin(PIN, stored, SETTINGS) is PinCheck.REFUSED
+    assert await check_pin("0000", stored, SETTINGS) is PinCheck.REFUSED
 
 
 async def test_hashing_leaves_the_event_loop_running() -> None:

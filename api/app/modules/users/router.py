@@ -1,5 +1,5 @@
 """`GET /v1/me` (T-3.5): the signed-in user as the web sees them; the dob and
-gender onboarding steps (T-3.6)."""
+gender onboarding steps (T-3.6); skipping the PIN (T-3.9)."""
 
 from __future__ import annotations
 
@@ -41,3 +41,11 @@ async def set_gender(
     session: Annotated[AsyncSession, Depends(get_session)],
 ) -> Me:
     return await service.set_gender(session, user, body.gender)
+
+
+@router.post("/me/pin/skip")
+async def skip_pin(
+    user: Annotated[User, Depends(current_user)],
+    session: Annotated[AsyncSession, Depends(get_session)],
+) -> Me:
+    return await service.skip_pin(session, user)

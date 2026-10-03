@@ -1,5 +1,5 @@
 """Sign-in by phone (D-035). Path B's codes: send (T-3.2) and verify (T-3.3);
-and the session every path ends in (T-3.3).
+the session every path ends in (T-3.3); and the PIN lock (T-3.9).
 
 Every number is answered the same way and counts against the same limits,
 banned and unknown ones included: a ban surfaces only at verify (D-066). No
@@ -19,13 +19,17 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core import clock, ratelimit
 from app.core.config import Settings
-from app.core.errors import AppError
+from app.core.enums import OnboardingStep
+from app.core.errors import AppError, invalid_field
 from app.core.providers.sms import SmsProvider, SmsRecipientNotAllowed
 from app.core.security import (
     E164,
+    PinCheck,
+    check_pin,
     csrf_matches,
     hash_otp,
     hash_phone,
+    hash_pin,
     hash_token,
     make_access_token,
     new_csrf,
@@ -35,7 +39,7 @@ from app.core.security import (
     otp_matches,
 )
 from app.modules.admin import service as admin_service
-from app.modules.auth import otp_store, repository
+from app.modules.auth import otp_store, pins, repository
 from app.modules.auth.models import Session as SessionRow
 from app.modules.users import service as users_service
 from app.modules.users.schemas import Me
@@ -276,6 +280,9 @@ async def sign_in(session: AsyncSession, settings: Settings, phone: E164) -> New
             session, phone, settings
         )
         users_service.refuse_who_may_not_sign_in(user)
+        # A fresh sign-in is D-069's way back from a locked PIN: proof of the
+        # number, which is the account.
+        user.pin_failed = 0
         await repository.insert_session(
             session,
             user_id=user.id,
@@ -414,4 +421,133 @@ def _auth_required() -> AppError:
 def _session_revoked() -> AppError:
     return AppError(
         "SESSION_REVOKED", "You've been signed out. Sign in again.", status=401
+    )
+
+
+# --- The PIN lock (T-3.9) ---------------------------------------------------------
+#
+# What the lock doesn't do (D-069, with D-067): it deters whoever picks up an
+# unlocked phone; it protects nothing. The web keeps a working access token
+# behind the lock screen, and five wrong PINs revoke the sessions while each
+# one's access token works for up to 15 minutes more. Never build on it as a
+# security boundary.
+
+# Wrong PINs before every session is revoked (D-069).
+PIN_TRIES = 5
+# Within this long of a fresh sign-in, read from the token's `auth_time`
+# (D-071), a PIN changes without the current one: D-069's "forgot PIN" is sign
+# out, sign in by OTP, set a new one. Ten minutes on, it needs the current PIN.
+FRESH_SIGN_IN = timedelta(minutes=10)
+
+
+async def verify_pin(
+    session: AsyncSession, settings: Settings, *, user_id: uuid.UUID, pin: str
+) -> None:
+    """`POST /auth/pin/verify`: returns for the right PIN, raises otherwise."""
+    await _check_the_users_pin(session, settings, user_id=user_id, pin=pin)
+
+
+async def _check_the_users_pin(
+    session: AsyncSession, settings: Settings, *, user_id: uuid.UUID, pin: str
+) -> None:
+    """Check `pin` against the user's, counting the try first.
+
+    The try is counted and committed before the hash is checked, in one
+    statement that refuses a sixth: tries made at once are each counted, a
+    request that dies mid-check has still spent its try, and no more than five
+    are ever made between resets (D-069). The right PIN clears the count. A
+    stored hash `check_pin` refuses gives the try back: it wasn't a guess, and
+    the way out is a fresh sign-in (`reset_required`). At five, every session
+    of the user is revoked, and stays so for whatever is tried after.
+    """
+    async with session.begin():
+        user = await users_service.get_user(session, user_id)
+        stored = user.pin_hash
+        if stored is None:
+            raise AppError("NOT_ALLOWED", "You haven't set a PIN.", status=422)
+        tries = await users_service.take_pin_try(session, user_id, PIN_TRIES)
+        if tries is None:
+            await repository.revoke_every_session(
+                session, user_id=user_id, at=clock.now()
+            )
+    if tries is None:
+        raise _session_revoked()
+
+    outcome = await check_pin(pin, stored, settings)
+    if outcome is PinCheck.MATCH:
+        async with session.begin():
+            await users_service.clear_pin_tries(session, user_id)
+        return
+    if outcome is PinCheck.REFUSED:
+        async with session.begin():
+            await users_service.give_back_pin_try(session, user_id)
+        raise AppError(
+            "PIN_INVALID",
+            "Your PIN can't be checked. Sign in again to set a new one.",
+            status=401,
+            details={"reset_required": True},
+        )
+    if tries >= PIN_TRIES:
+        async with session.begin():
+            await repository.revoke_every_session(
+                session, user_id=user_id, at=clock.now()
+            )
+        raise _session_revoked()
+    raise AppError(
+        "PIN_INVALID",
+        "That PIN isn't right.",
+        status=401,
+        details={"attempts_left": PIN_TRIES - tries},
+    )
+
+
+async def set_pin(
+    session: AsyncSession,
+    settings: Settings,
+    *,
+    user_id: uuid.UUID,
+    auth_time: datetime,
+    pin: str,
+    current_pin: str | None,
+) -> None:
+    """`POST /auth/pin/set`: a first PIN, or a new one.
+
+    D-069's rules for what a PIN may be. A PIN already set changes only with
+    the current one, which counts as a try like any, unless this device's
+    session family signed in within 10 minutes (`auth_time`, D-071). At the
+    `pin` onboarding step setting one advances to `selfie`; before it, it is
+    `ONBOARDING_INCOMPLETE` (D-068).
+    """
+    problem = pins.pin_problem(pin)
+    if problem is not None:
+        raise invalid_field("pin", problem)
+    async with session.begin():
+        user = await users_service.locked_user(session, user_id)
+        users_service.at_step(user, OnboardingStep.PIN)
+        changing = user.pin_hash is not None
+    fresh = clock.now() - auth_time < FRESH_SIGN_IN
+    proven = False
+    if changing and not fresh:
+        if current_pin is None:
+            raise _current_pin_needed()
+        await _check_the_users_pin(session, settings, user_id=user_id, pin=current_pin)
+        proven = True
+
+    # ~18 ms of argon2, outside any transaction (D-062).
+    new_hash = await hash_pin(pin, settings)
+    async with session.begin():
+        user = await users_service.locked_user(session, user_id)
+        advancing = users_service.at_step(user, OnboardingStep.PIN)
+        # A PIN set by another request meanwhile needs the proof this one skipped.
+        if user.pin_hash is not None and not fresh and not proven:
+            raise _current_pin_needed()
+        users_service.store_pin(user, new_hash)
+        if advancing:
+            users_service.advance_past(user, OnboardingStep.PIN)
+
+
+def _current_pin_needed() -> AppError:
+    return invalid_field(
+        "current_pin",
+        "is needed to change your PIN, unless you signed in within 10 minutes",
     )

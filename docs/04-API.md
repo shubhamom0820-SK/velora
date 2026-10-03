@@ -180,7 +180,7 @@ Five tries a minute per client IP, invalid ones included → `RATE_LIMITED` (D-0
 | `UNDERAGE` | 422 | the account is deleted, only the number's hash kept (D-072) |
 | `IMMUTABLE_FIELD` | 422 | gender/dob change; a username after onboarding (D-068) |
 | `MESSAGE_REJECTED` | 422 | abuse or payment-solicitation filter; `details.rule` |
-| `NOT_ALLOWED` | 422 | man sending voice note, kudos too early, woman sending a gift |
+| `NOT_ALLOWED` | 422 | man sending voice note, kudos too early, woman sending a gift, verifying a PIN when none is set (D-069) |
 | `GIFT_LIMIT_REACHED` | 429 | free gifts used up today; `details.resets_at` |
 | `GIFT_COOLDOWN` | 429 | same gift to same person too soon; `details.retry_after_s` |
 | `SWIPE_LIMIT_REACHED` | 429 | daily cap |

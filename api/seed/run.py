@@ -13,7 +13,6 @@ from __future__ import annotations
 
 import hashlib
 import math
-import re
 import sys
 from collections.abc import KeysView, Mapping, Sequence
 from dataclasses import dataclass, field
@@ -32,6 +31,7 @@ from app.core.db import build_engine
 from app.core.enums import Gender, OnboardingStep, SwipeDirection, UserStatus
 from app.core.errors import AppError
 from app.core.security import hash_phone, hash_pin, normalize_phone
+from app.modules.auth import pins
 from app.modules.profiles import rules
 from app.modules.profiles.models import (
     Area,
@@ -117,9 +117,6 @@ async def require_local_marker(session: AsyncSession) -> None:
 
 # --- The data, checked against the rules before anything is written ----------
 
-_PIN = re.compile(r"[0-9]{4}")
-_PINS_REFUSED = frozenset({"0000", "1234"})  # T-3.9, as written
-
 
 def age_on(dob: date, today: date) -> int:
     return today.year - dob.year - ((today.month, today.day) < (dob.month, dob.day))
@@ -182,14 +179,9 @@ def _person_problems(person: Person, today: date) -> list[str]:
     if not person.phone.startswith(SEED_PHONE_PREFIX):
         problems.append(f"the phone must be in the seed's block, {SEED_PHONE_PREFIX}")
 
-    if person.pin is not None and (
-        not _PIN.fullmatch(person.pin)
-        or person.pin in _PINS_REFUSED
-        or len(set(person.pin)) == 1
-    ):
-        problems.append(
-            "the PIN breaks T-3.9's rules (4 digits, not 0000, 1234 or one digit)"
-        )
+    # T-3.9's rule itself (D-069), so the seeded PIN is one the API would take.
+    if person.pin is not None and (problem := pins.pin_problem(person.pin)):
+        problems.append(f"the PIN {problem} (T-3.9)")
 
     if person.step is OnboardingStep.DOB:
         asked_later = (
