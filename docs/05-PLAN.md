@@ -516,11 +516,26 @@ One migration per task, each with a working `downgrade()`. Build exactly `03-SCH
   **Waiting on the founder:** Supabase `velora-prod` and its two connection strings, Upstash
   `velora-prod`, the one-year Vercel token, the `api` record at Cloudflare, and production's four
   keys, once their second copy is decided.
-- [ ] **Releases from a tag, and only what staging proved (D-075):** `deploy-production.yml` runs
+- [x] **Releases from a tag, and only what staging proved (D-075):** `deploy-production.yml` runs
   on a `v*` tag; `scripts/release-gate` refuses unless the commit is on `main`, CI passed for it,
   and staging deployed it, matched by the run's name, which `deploy.yml` now sets; it reads the
   Vercel token's expiry and warns within 30 days; `scripts/release-gate-test` runs it against fakes
   in CI. The `production` environment deploys only from `v*` tags.
+  **Proved live, 3 October 2026, by Claude:**
+  - **The gate refuses a commit that isn't on `main`:** a throwaway tag, `v0.0.0-gate-check`, on
+    `c639832` (T-2.6's commit before it merged) ran the real workflow, run 37114027309. The gate
+    said "Not releasing c639832. It isn't on main: production takes only commits that merged
+    (D-075)", and every other job was skipped. The tag was deleted.
+  - **No branch can use the environment:** a temporary branch whose workflow targeted `production`
+    was stopped by GitHub before any step ran: "Branch "probe-production-env" is not allowed to
+    deploy to production due to environment protection rules." (run 37114072837). The branch was
+    deleted.
+  - **Staging names each run for its commit:** run 37114304214 is "Deploy staging 9667bbf…", and
+    passed, its web deployed with the token read from the environment and its smoke check's
+    canonical line passing.
+  - **The gate's tests:** 30 checks, passing in CI (run 37114146650). Four bugs planted in copies
+    of the gate each failed them: matching staging by its recorded commit, the token as an
+    argument, the 30-day boundary off by one, and no check for `main`.
 - [x] **Every build says which environment it's for (D-053's amendment):** `next build` refuses an
   `APP_ENV` outside local, ci, staging and production, and the smoke check compares the home page's
   canonical address with the site it checks. Proved 3 October 2026, before and after: with
@@ -543,10 +558,15 @@ One migration per task, each with a working `downgrade()`. Build exactly `03-SCH
   `www` and the project's `vercel.app` address answering 308 to the apex; MX, SPF, DKIM and DMARC
   unchanged at our nameservers after the apex record; Supabase's SQL checks all true, with no seed
   data; Lighthouse performance and accessibility from the SEO runs; and the gate refusing, live, a
-  throwaway tag on a commit that isn't on `main`.
+  throwaway tag on a commit that isn't on `main`. That last one is done already, on 3 October 2026
+  (run 37114027309, above).
 - [x] **HSTS, decided here with its own record (D-059).** Vercel sends `max-age=63072000` today. Whether to add `includeSubDomains` (every subdomain, staging included, HTTPS-only for two years) and whether to submit to the preload list is this task's decision, written down. Preload is close to irreversible: browsers hardcode it, and removal takes months. Never set in passing.
   **Decided: D-074.** `max-age=63072000; includeSubDomains`, set in `security-headers.ts`; never
-  preloaded before launch, because preload is effectively irreversible.
+  preloaded before launch, because preload is effectively irreversible. **Served on staging**
+  (deploy run 37114304214, read by Claude on 3 October 2026): exactly one such header on every
+  response checked (three pages, a 404 under the scripts' path, the share image and `robots.txt`),
+  with no second one from Vercel; the home page's security headers are exactly the six, plus
+  P-43's known wildcard.
 - [x] **Commit:** `chore(infra): production domains [T-2.6]`
 
 ---
