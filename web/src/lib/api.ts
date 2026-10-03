@@ -1,3 +1,4 @@
+import { csrfCookieName, readCookie } from "@/lib/auth-cookies";
 import { useSession } from "@/store/session";
 import type { paths } from "@/types/api";
 
@@ -56,6 +57,7 @@ type Options<O> = {
   query?: QueryParams<O>;
   body?: Body<O>;
   signal?: AbortSignal;
+  headers?: Readonly<Record<string, string>>;
 };
 
 /** What the API said went wrong: its error envelope (02-ARCHITECTURE §3), plus the HTTP status. */
@@ -141,13 +143,47 @@ type RawOptions = {
   query?: object;
   body?: unknown;
   signal?: AbortSignal;
+  headers?: Readonly<Record<string, string>>;
 };
+
+/**
+ * The refresh cookie's path (D-054): the only requests that carry cookies.
+ * Every other call sends none, said outright rather than left to `fetch`'s
+ * default.
+ */
+const AUTH_PATHS = "/v1/auth/";
+
+/** Authenticated by the refresh cookie and `X-CSRF`, never the access token (D-067). */
+const COOKIE_AUTHENTICATED: ReadonlySet<string> = new Set([
+  "/v1/auth/refresh",
+  "/v1/auth/logout",
+]);
+
+/**
+ * The answers that mean the session is over, not a wrong PIN or code: no valid
+ * token (401), or an account that may not sign in (403, D-067).
+ */
+const SESSION_GONE: ReadonlySet<string> = new Set([
+  "AUTH_REQUIRED",
+  "SESSION_REVOKED",
+  "TOKEN_EXPIRED",
+  "ACCOUNT_BANNED",
+  "ACCOUNT_FROZEN",
+]);
+
+/** The `X-CSRF` header the refresh and logout endpoints check (D-055). */
+export function csrfHeader(): Record<string, string> {
+  const value = readCookie(csrfCookieName());
+  return value === null ? {} : { "X-CSRF": value };
+}
 
 async function request(
   method: Method,
   path: string,
-  { params, query, body, signal }: RawOptions,
+  options: RawOptions,
+  retried = false,
 ): Promise<unknown> {
+  const { params, query, body, signal } = options;
   const url = new URL(apiBaseUrl() + fillPath(path, params));
   for (const [key, value] of Object.entries(query ?? {})) {
     for (const item of Array.isArray(value) ? value : [value]) {
@@ -157,7 +193,10 @@ async function request(
     }
   }
 
-  const headers: Record<string, string> = { Accept: "application/json" };
+  const headers: Record<string, string> = {
+    ...options.headers,
+    Accept: "application/json",
+  };
   const token = useSession.getState().accessToken;
   if (token) headers.Authorization = `Bearer ${token}`;
   if (body !== undefined) headers["Content-Type"] = "application/json";
@@ -169,11 +208,65 @@ async function request(
     headers,
     body: body === undefined ? undefined : JSON.stringify(body),
     signal,
+    credentials: path.startsWith(AUTH_PATHS) ? "include" : "omit",
   });
 
-  if (!response.ok) throw await toApiError(response);
+  if (!response.ok) {
+    const error = await toApiError(response);
+    if (!COOKIE_AUTHENTICATED.has(path)) {
+      // An expired token is renewed once and the request tried again; any
+      // other end of the session signs this tab out.
+      if (error.code === "TOKEN_EXPIRED" && !retried) {
+        await refreshAccessToken();
+        return request(method, path, options, true);
+      }
+      if (SESSION_GONE.has(error.code)) useSession.getState().signOut();
+    }
+    throw error;
+  }
   if (response.status === 204) return undefined;
   return response.json();
+}
+
+/** The Web Locks name every tab of this site queues refreshes under. */
+export const REFRESH_LOCK = "auth-refresh";
+
+let refreshing: Promise<string> | null = null;
+
+/**
+ * A new access token from the refresh cookie. One at a time in this tab (every
+ * caller shares the refresh in flight), and one at a time across tabs, under a
+ * Web Lock: two tabs must never present the same refresh token, or the second
+ * is reuse (D-067's 10-second grace covers only what slips through).
+ */
+export function refreshAccessToken(): Promise<string> {
+  refreshing ??= underRefreshLock(refreshOnce).finally(() => {
+    refreshing = null;
+  });
+  return refreshing;
+}
+
+async function underRefreshLock<T>(work: () => Promise<T>): Promise<T> {
+  const locks = typeof navigator === "undefined" ? undefined : navigator.locks;
+  // Every browser we support has Web Locks; without them, the grace covers it.
+  return locks ? await locks.request(REFRESH_LOCK, work) : work();
+}
+
+async function refreshOnce(): Promise<string> {
+  // Read inside the lock: a refresh in another tab may have just replaced it.
+  const headers = csrfHeader();
+  try {
+    const { access_token } = await api.post("/v1/auth/refresh", { headers });
+    useSession.getState().signIn(access_token);
+    return access_token;
+  } catch (error) {
+    // The API's answer that there's no session to restore. A network failure
+    // or a 5xx says nothing about the session, so it stays as it was.
+    if (error instanceof ApiError && error.status < 500) {
+      useSession.getState().signOut();
+    }
+    throw error;
+  }
 }
 
 function method<M extends Method>(m: M) {

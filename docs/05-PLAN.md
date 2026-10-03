@@ -839,17 +839,17 @@ Firebase's Blaze plan, which bills to the Google account P-0.13 creates, and tha
 exist yet. The batch is a chain, T-3.10 → T-3.11 → T-3.12 → T-3.13, each needing the last.
 
 ### T-3.10 · Web auth client
-- [ ] **Needs:** T-1.18, T-3.4, T-3.5 (`useMe()` reads `Me`), T-3.9 (the lock reads `has_pin` and calls `/auth/pin/verify`), and **P-55**: until it lands, a local gate run beside another session proves nothing (raised by the advisor, 3 October 2026)
-- [ ] Access token in Zustand (memory only). On load, in the `(auth)` and `(app)` layouts only, call `/auth/refresh` once to restore a session, sending `X-CSRF` from this environment's CSRF cookie (D-055). Marketing pages never call the API: they stay static (Lighthouse, P-37).
-- [ ] Cookie names at build time: `next.config` maps `APP_ENV` to the suffix, an allowlist (rule 16): `production` → `prod`, `staging` → `staging`, `local` and `ci` → `local` (T-3.13's E2E runs a production build against an API whose `ENV` is `local`), and `local` under `next dev` with `APP_ENV` unset. No new Vercel variable. The api client sends `credentials: "include"` on `/v1/auth/*` only, the refresh cookie's path. Until now it sends no credentials at all, so no cookie would arrive.
-- [ ] On any 401 `TOKEN_EXPIRED`: single-flight refresh, then retry the request once. Refreshes are serialised across tabs with the Web Locks API, so two tabs never rotate one token (D-067's 10-second grace covers what's left). Read the CSRF cookie inside the lock, after any refresh ahead of it has set new values.
-- [ ] `useMe()` query; `<OnboardingGate>` redirects to the user's step at its D-080 URL. This task builds D-080's slug map, with a placeholder page per step until T-3.11 and T-3.12 build the screens. `(app)` routes require `done`.
-- [ ] **When restoring the session fails** (decision 8): only a 401 sends you to `/login`. A network failure or a 5xx shows an error with Retry, because a phone losing signal mustn't look like being signed out.
-- [ ] **Who owns the frame** (decision 5; T-3.11 and T-5.6 carry the same line). This task owns what the `(auth)` and `(app)` layouts do: restore the session once per page load, apply the gates, and show the PIN lock. They draw nothing else but a full-screen loading or error state and the lock screen. T-3.11 owns the onboarding frame. T-5.6 adds the header and bottom nav inside the `(app)` layout, never replacing what this task put there. The root layout keeps `QueryProvider`, so P-37's smoke marker is untouched.
-- [ ] **PIN lock screen:** `PinPad` is a `ui/` primitive with a test and a `/dev/ui` entry (08-DESIGN §4); T-3.12 reuses it. The lock shows on load, and after 5 minutes hidden, if `has_pin`, wherever a session exists: onboarding and the app, never `/login`. A wrong PIN shows `attempts_left`; `SESSION_REVOKED` goes to `/login`; `reset_required` offers the way out below. A deterrent, not protection (D-069).
-- [ ] **Durations kept in the browser** (decision 9): the 5 minutes, and T-3.11's 400 ms before a username check, are named constants. That's a Checklist A exception, recorded here as T-2.1 recorded its copy: a deterrent the browser runs is not a limit the server enforces, and reading `app_config` would need a new public endpoint.
-- [ ] **A sign-out before T-9.8** (decision 7): `logout()` in the session layer, and two controls. "Forgot your PIN? Sign out" goes on the lock screen, D-069's way out. A quiet "Sign out" goes in the onboarding frame's top bar, which T-3.11 places. T-3.14's item 5 needs the second: its tester can't reach the PIN step before Sprint 4, because it comes after photos (D-068).
-- [ ] Local development at `127.0.0.1` only: `localhost:3000` → `127.0.0.1:8000` is cross-site, so the `Lax` refresh cookie silently isn't sent. Remove `localhost` from the local `CORS_ORIGINS` (`api/.env.example`, the test settings), so that mistake fails loudly. In CLAUDE.md's local sign-in paragraph, add that reason, and replace "expected, not yet observed" with what the Done-when below sees, dated.
+- [x] **Needs:** T-1.18, T-3.4, T-3.5 (`useMe()` reads `Me`), T-3.9 (the lock reads `has_pin` and calls `/auth/pin/verify`), and **P-55**: until it lands, a local gate run beside another session proves nothing (raised by the advisor, 3 October 2026)
+- [x] Access token in Zustand (memory only). On load, in the `(auth)` and `(app)` layouts only, call `/auth/refresh` once to restore a session, sending `X-CSRF` from this environment's CSRF cookie (D-055). Marketing pages never call the API: they stay static (Lighthouse, P-37).
+- [x] Cookie names at build time: `next.config` maps `APP_ENV` to the suffix, an allowlist (rule 16): `production` → `prod`, `staging` → `staging`, `local` and `ci` → `local` (T-3.13's E2E runs a production build against an API whose `ENV` is `local`), and `local` under `next dev` with `APP_ENV` unset. No new Vercel variable. The api client sends `credentials: "include"` on `/v1/auth/*` only, the refresh cookie's path. Until now it sends no credentials at all, so no cookie would arrive.
+- [x] On any 401 `TOKEN_EXPIRED`: single-flight refresh, then retry the request once. Refreshes are serialised across tabs with the Web Locks API, so two tabs never rotate one token (D-067's 10-second grace covers what's left). Read the CSRF cookie inside the lock, after any refresh ahead of it has set new values.
+- [x] `useMe()` query; `<OnboardingGate>` redirects to the user's step at its D-080 URL. This task builds D-080's slug map, with a placeholder page per step until T-3.11 and T-3.12 build the screens. `(app)` routes require `done`.
+- [x] **When restoring the session fails** (decision 8): only a 401 sends you to `/login`. A network failure or a 5xx shows an error with Retry, because a phone losing signal mustn't look like being signed out.
+- [x] **Who owns the frame** (decision 5; T-3.11 and T-5.6 carry the same line). This task owns what the `(auth)` and `(app)` layouts do: restore the session once per page load, apply the gates, and show the PIN lock. They draw nothing else but a full-screen loading or error state and the lock screen. T-3.11 owns the onboarding frame. T-5.6 adds the header and bottom nav inside the `(app)` layout, never replacing what this task put there. The root layout keeps `QueryProvider`, so P-37's smoke marker is untouched.
+- [x] **PIN lock screen:** `PinPad` is a `ui/` primitive with a test and a `/dev/ui` entry (08-DESIGN §4); T-3.12 reuses it. The lock shows on load, and after 5 minutes hidden, if `has_pin`, wherever a session exists: onboarding and the app, never `/login`. A wrong PIN shows `attempts_left`; `SESSION_REVOKED` goes to `/login`; `reset_required` offers the way out below. A deterrent, not protection (D-069).
+- [x] **Durations kept in the browser** (decision 9): the 5 minutes, and T-3.11's 400 ms before a username check, are named constants. That's a Checklist A exception, recorded here as T-2.1 recorded its copy: a deterrent the browser runs is not a limit the server enforces, and reading `app_config` would need a new public endpoint.
+- [x] **A sign-out before T-9.8** (decision 7): `logout()` in the session layer, and two controls. "Forgot your PIN? Sign out" goes on the lock screen, D-069's way out. A quiet "Sign out" goes in the onboarding frame's top bar, which T-3.11 places. T-3.14's item 5 needs the second: its tester can't reach the PIN step before Sprint 4, because it comes after photos (D-068).
+- [x] Local development at `127.0.0.1` only: `localhost:3000` → `127.0.0.1:8000` is cross-site, so the `Lax` refresh cookie silently isn't sent. Remove `localhost` from the local `CORS_ORIGINS` (`api/.env.example`, the test settings), so that mistake fails loudly. In CLAUDE.md's local sign-in paragraph, add that reason, and replace "expected, not yet observed" with what the Done-when below sees, dated.
 - [ ] **Done when, locally, in Chrome against `make dev`** (decision 10). This task has no phone screen, so sign in from the browser console, with the two requests T-3.11's screens will make. Then observe, on the wire (devtools' network and cookie panes), never inferred from a test:
   - a reload restores the session;
   - both cookies rotate, and the next refresh carries the new values;
@@ -859,8 +859,28 @@ exist yet. The batch is a chain, T-3.10 → T-3.11 → T-3.12 → T-3.13, each n
   - Safari, going through the same steps, loses the session at reload.
 
   This proves T-3.14's items 4 and 6, and parts of 1, 3 and 5, as mechanism. Nothing comes off T-3.14's list, which only staging can prove.
+  **Seen in Chrome 154 on 3 October 2026, all but Safari,** read from Chrome's own DevTools Protocol
+  network events, values only as SHA-256 prefixes (the script stays in the session's scratchpad: a
+  one-time observation, which T-3.13's E2E makes permanent):
+  - `/login` with nobody signed in: refresh 401, no CORS error.
+  - Sign-in from the console: verify set `refresh_local` (`HttpOnly; Secure; SameSite=lax;
+    Path=/v1/auth`, no `Domain`) and `csrf_local` (`Secure; Path=/`), and Chrome kept both over
+    plain `http://127.0.0.1`.
+  - A reload of `/discover`: refresh 200, sending exactly those values and `X-CSRF` equal to the
+    CSRF cookie; both cookies rotated; `/me` 200; the lock up (`test_woman` has a PIN).
+  - The next reload's refresh sent the rotated value, not the first.
+  - A wrong PIN: "Wrong PIN. 4 tries left."; the right one, 4829, opened it.
+  - Two tabs reloaded together: both refreshes 200, the second carrying the first's rotation (the
+    lock queued them), both tabs signed in; a third reload after them, 200.
+  - "Forgot your PIN? Sign out": logout 204, both cookies cleared with `Max-Age=0` on their own
+    paths, the jar empty, the tab on `/login`; the other tab's next reload, 401 and `/login`.
+  - **Still open: Safari.** Its remote automation is off on this Mac, so the founder runs it or
+    turns it on. Until then CLAUDE.md says Safari's behaviour is expected, not seen.
+  Found on the way: the local dev database was two migrations behind (T-3.2's cap, T-3.3's
+  `auth_time`), so OTP send answered 500 until `make migrate`; and that 500 reached Chrome as
+  "Failed to fetch", not the API's envelope (P-61).
 - [ ] **Done when, on staging, after deploy, with nobody signed in:** `/login` at `https://staging.veloraapp.co.in` calls refresh with credentials and gets `401 AUTH_REQUIRED`, not a CORS error. It is the first credentialed request staging has served: the leg T-3.14 would otherwise have to debug at the same time as Firebase.
-- [ ] **Commit:** `feat(web): auth session, refresh, route gates, pin lock [T-3.10]`
+- [x] **Commit:** `feat(web): auth session, refresh, route gates, pin lock [T-3.10]`
 
 ### T-3.11 · Web onboarding 1–7
 - [ ] **Needs:** T-3.10, T-3.7
@@ -2545,3 +2565,12 @@ Claude Code adds items here instead of doing unplanned work. Format:
   commit's subject beside its SHA. In `scripts/ci-gate-test`: an already-merged HEAD exits with the
   new code and says why; an explicit `main` still checks. At the direction of the advisor directing
   T-3.2 to T-3.10, 3 October 2026; found in P-54.
+- [ ] P-61 · Give the API's 500s their CORS headers. **Before T-9.12,** or sooner if a screen needs to
+  tell a crash from no signal. Worst case: a browser can't read the API's `INTERNAL` envelope at all,
+  so every 500 looks to the web exactly like a lost connection ("Failed to fetch"), and a bug in
+  production hides behind "check your connection". Starlette builds a 500 outside every middleware,
+  CORS's included; `errors.py` adds `nosniff` and `no-store` there (P-42) but not
+  `Access-Control-Allow-Origin`. Seen in T-3.10's Chrome check, when the dev database's missing
+  `otp_sms_daily_cap` made OTP send fail. The web copes today (a failed restore offers a retry, never
+  `/login`), so this is about seeing errors, not losing sessions. Add the CORS headers to the 500
+  for an allowed origin only, with a test that a disallowed origin still gets none. Found in T-3.10.

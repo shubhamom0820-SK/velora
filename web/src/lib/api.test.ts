@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import { useSession } from "@/store/session";
+import { resetSession, useSession } from "@/store/session";
 
 import { api, apiBaseUrl, ApiError } from "./api";
 
@@ -48,7 +48,7 @@ describe("api", () => {
     fetchMock.mockReset();
     vi.unstubAllGlobals();
     vi.unstubAllEnvs();
-    useSession.getState().clearSession();
+    resetSession();
   });
 
   it("GETs base URL + path and returns the parsed JSON", async () => {
@@ -67,7 +67,7 @@ describe("api", () => {
     await api.get("/healthz");
     expect(new Headers(sent().init.headers).has("Authorization")).toBe(false);
 
-    useSession.getState().setSession({ accessToken: "jwt-123", userId: "u1" });
+    useSession.getState().signIn("jwt-123");
     fetchMock.mockClear();
     await api.get("/healthz");
     expect(new Headers(sent().init.headers).get("Authorization")).toBe(
@@ -99,7 +99,7 @@ describe("api", () => {
       "VALIDATION_ERROR",
       { fields: [{ field: "dob", problem: "Field required" }] },
     ],
-    [401, "TOKEN_EXPIRED", undefined],
+    [401, "AUTH_REQUIRED", undefined],
     [402, "INSUFFICIENT_CREDITS", { required: 5, balance: 2 }],
     [503, "NOT_READY", { database: "ok", redis: "fail" }],
   ])(

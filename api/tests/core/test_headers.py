@@ -4,11 +4,13 @@
 from __future__ import annotations
 
 import pytest
+from dotenv import dotenv_values
 from fastapi import FastAPI
 from httpx import AsyncClient, Response
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.providers import FakeProviders
+from tests.infra import API_DIR
 
 pytestmark = pytest.mark.usefixtures("test_redis")
 
@@ -96,11 +98,64 @@ async def test_a_cors_preflight_carries_both(client: AsyncClient) -> None:
     response = await client.options(
         "/v1/waitlist",
         headers={
-            "Origin": "http://localhost:3000",
+            "Origin": "http://127.0.0.1:3000",
             "Access-Control-Request-Method": "POST",
         },
     )
 
     assert response.status_code == 200
-    assert response.headers["access-control-allow-origin"] == "http://localhost:3000"
+    assert response.headers["access-control-allow-origin"] == "http://127.0.0.1:3000"
     _assert_v1(response)
+
+
+# --- The local web's origin (T-3.10) ------------------------------------------------
+
+
+async def test_the_local_webs_credentialed_refresh_is_allowed(
+    client: AsyncClient,
+) -> None:
+    """What the web's refresh needs from a browser: its own origin echoed, never
+    `*`, with credentials, and `X-CSRF` allowed (D-055)."""
+    response = await client.options(
+        "/v1/auth/refresh",
+        headers={
+            "Origin": "http://127.0.0.1:3000",
+            "Access-Control-Request-Method": "POST",
+            "Access-Control-Request-Headers": "x-csrf",
+        },
+    )
+
+    assert response.status_code == 200
+    assert response.headers["access-control-allow-origin"] == "http://127.0.0.1:3000"
+    assert response.headers["access-control-allow-credentials"] == "true"
+    allowed = {
+        h.strip().lower()
+        for h in response.headers["access-control-allow-headers"].split(",")
+    }
+    assert "x-csrf" in allowed
+
+
+async def test_localhost_is_refused_so_the_cross_site_mistake_fails_loudly(
+    client: AsyncClient,
+) -> None:
+    """`localhost:3000` calling `127.0.0.1:8000` is cross-site, so the `Lax`
+    refresh cookie would silently not be sent. CORS refuses it instead, an
+    error in the console rather than a session that never restores."""
+    response = await client.options(
+        "/v1/auth/refresh",
+        headers={
+            "Origin": "http://localhost:3000",
+            "Access-Control-Request-Method": "POST",
+            "Access-Control-Request-Headers": "x-csrf",
+        },
+    )
+
+    assert response.status_code == 400
+    assert "access-control-allow-origin" not in response.headers
+
+
+def test_the_example_env_names_exactly_the_local_web() -> None:
+    """Parsed as a dotenv file, the way the API reads `.env`: exactly one origin."""
+    values = dotenv_values(API_DIR / ".env.example")
+
+    assert values["CORS_ORIGINS"] == "http://127.0.0.1:3000"

@@ -18,6 +18,28 @@ export const en = {
     login: "Sign in",
     discover: "Discover",
     admin: "Admin",
+    // An onboarding step whose screen isn't built yet (T-3.10 to T-3.12).
+    onboardingStep: "This step is coming next.",
+  },
+  // Restoring and ending a session (T-3.10).
+  session: {
+    signOut: "Sign out",
+    signOutFailed:
+      "We couldn't sign you out. Check your connection and try again.",
+    restoreFailedTitle: "We couldn't reach {app}",
+    restoreFailedBody: "Check your connection and try again.",
+  },
+  // The PIN lock (T-3.10, D-069): a deterrent, so its words don't promise more.
+  lock: {
+    title: "Enter your PIN",
+    locked: "{app} is locked",
+    wrongOne: "Wrong PIN. 1 try left.",
+    wrongMany: "Wrong PIN. {count} tries left.",
+    resetRequired:
+      "Your PIN can't be checked. Sign out, sign in again with your number, and set a new one.",
+    tooFast: "Too many tries. Wait a minute, then try again.",
+    failed: "We couldn't check your PIN. Check your connection and try again.",
+    forgot: "Forgot your PIN? Sign out",
   },
   // Thread and Knot are product nouns, not the brand: a rename changes {app}
   // and nothing else here (CLAUDE.md rule 17).
@@ -328,5 +350,7 @@ export const en = {
     verified: "Verified",
     errorTitle: "Something went wrong",
     retry: "Try again",
+    pinProgress: "{count} of {max} digits entered",
+    pinDelete: "Delete",
   },
 } as const;

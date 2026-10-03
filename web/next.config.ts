@@ -1,6 +1,10 @@
 import type { NextConfig } from "next";
-import { PHASE_PRODUCTION_BUILD } from "next/constants";
+import {
+  PHASE_DEVELOPMENT_SERVER,
+  PHASE_PRODUCTION_BUILD,
+} from "next/constants";
 
+import { authCookieSuffix } from "./src/lib/auth-cookies";
 import { assertKnownAppEnv } from "./src/lib/build-env";
 import { securityHeaders } from "./src/lib/security-headers";
 
@@ -36,8 +40,27 @@ export function buildsTheSite(
  * A build refuses an APP_ENV it doesn't know (T-2.6, build-env.ts): without one
  * the site builds as not-production, silently. `next dev`, `next start` and
  * `next typegen` need no APP_ENV.
+ *
+ * The auth cookies' suffix goes into the browser's code here, from APP_ENV
+ * (T-3.10, auth-cookies.ts). A build always has one, since it refused an
+ * unknown APP_ENV above; elsewhere it's empty, and nothing signs in.
+ */
+export function configFor(
+  phase: string,
+  env: Readonly<Record<string, string | undefined>> = process.env,
+): NextConfig {
+  if (buildsTheSite(phase)) assertKnownAppEnv(env);
+  const suffix = authCookieSuffix(env, {
+    dev: phase === PHASE_DEVELOPMENT_SERVER,
+  });
+  return { ...nextConfig, env: { AUTH_COOKIE_SUFFIX: suffix ?? "" } };
+}
+
+/**
+ * What Next calls, as `config(phase, { defaultConfig })`. The second argument
+ * is Next's, never the environment, so the environment is always the
+ * process's here; tests pass one to `configFor`.
  */
 export default function config(phase: string): NextConfig {
-  if (buildsTheSite(phase)) assertKnownAppEnv();
-  return nextConfig;
+  return configFor(phase);
 }

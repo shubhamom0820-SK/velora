@@ -95,14 +95,16 @@ git tag vX.Y.Z <commit> && git push origin vX.Y.Z   # release to production: onl
                  # (D-075, infra/PRODUCTION.md)
 ```
 
-**Local sign-in: Chrome, at `http://127.0.0.1`. Expected, not yet observed** (3 October 2026).
-Both auth cookies are `Secure` everywhere, locally too (D-067). Chrome is expected to keep a
-`Secure` cookie over plain `http://127.0.0.1` and Safari not to, so Safari would sign in and then
-lose the session at the next refresh or reload: Safari, not a bug, and tested on staging, which has
-HTTPS. None of this has been seen: no browser has signed in to the web yet. From T-3.3 until 3
-October 2026 this line said "Chrome or Firefox" as fact, written from documentation, and Firefox
-isn't even installed on this Mac. T-3.10 rewrites it from what Chrome and Safari actually do, dated;
-T-3.13 adds Firefox, through Playwright.
+**Local sign-in: Chrome, at `http://127.0.0.1`, never `localhost`.** Both auth cookies are `Secure`
+everywhere, locally too (D-067). **Seen in Chrome on 3 October 2026** (T-3.10, read from Chrome's
+own network events): it keeps both over plain `http://127.0.0.1`, sends them back on refresh,
+rotates them, and clears them at sign-out. `localhost` fails for a different reason:
+`localhost:3000` calling `127.0.0.1:8000` is cross-site, so the `Lax` refresh cookie isn't sent,
+and the API's local CORS refuses `localhost` so that mistake fails loudly. **Safari: expected to
+keep no `Secure` cookie over plain `http://127.0.0.1`, not yet seen** (its remote automation is
+off on this Mac); test Safari on staging, which has HTTPS. **Firefox: not yet seen** (not
+installed); T-3.13 runs it through Playwright. Until 3 October 2026 this line said "Chrome or
+Firefox" as fact, from documentation alone.
 
 **Never run `make infra-reset` without telling the founder first, and never while another session
 is testing.** Every worktree on this machine shares one Docker stack, so a reset drops every

@@ -1,6 +1,10 @@
 import { describe, expect, it } from "vitest";
 
-import config, { buildsTheSite, nextConfig } from "../../next.config";
+import config, {
+  buildsTheSite,
+  configFor,
+  nextConfig,
+} from "../../next.config";
 
 import { APP_ENVS, assertKnownAppEnv } from "./build-env";
 
@@ -82,12 +86,9 @@ describe("next.config runs the check for builds only", () => {
     "phase-production-server",
     "phase-test",
   ])("leaves %s alone, so next dev and next start need no APP_ENV", (phase) => {
-    const saved = process.env.APP_ENV;
-    delete process.env.APP_ENV;
-    try {
-      expect(config(phase)).toBe(nextConfig);
-    } finally {
-      if (saved !== undefined) process.env.APP_ENV = saved;
-    }
+    // Nothing refused; only the auth cookies' suffix is added (T-3.10).
+    const { env, ...rest } = configFor(phase, {});
+    expect(rest).toEqual(nextConfig);
+    expect(Object.keys(env ?? {})).toEqual(["AUTH_COOKIE_SUFFIX"]);
   });
 });

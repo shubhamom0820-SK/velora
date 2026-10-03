@@ -18,6 +18,7 @@ import { EmptyState } from "@/components/ui/EmptyState";
 import { ErrorState } from "@/components/ui/ErrorState";
 import { Field } from "@/components/ui/Field";
 import { Icon } from "@/components/ui/Icon";
+import { PinPad } from "@/components/ui/PinPad";
 import { Sheet } from "@/components/ui/Sheet";
 import { Skeleton } from "@/components/ui/Skeleton";
 import { Spinner } from "@/components/ui/Spinner";
@@ -52,6 +53,8 @@ export function UiGallery() {
   const [matches, setMatches] = useState(true);
   const [messages, setMessages] = useState(false);
   const [sheetOpen, setSheetOpen] = useState(false);
+  const [pin, setPin] = useState("");
+  const [chromePin, setChromePin] = useState("48");
 
   return (
     <main className="bg-bg mx-auto flex min-h-dvh max-w-130 flex-col gap-10 px-5 py-8 md:px-6">
@@ -188,6 +191,30 @@ export function UiGallery() {
           error="Tell us a little more"
           maxLength={500}
         />
+      </Section>
+
+      <Section title="PinPad">
+        <Row>
+          <PinPad
+            value={pin}
+            onChange={setPin}
+            onComplete={() => toast.show({ message: "PIN entered" })}
+          />
+          <div className="bg-chrome rounded-card p-6">
+            <PinPad
+              tone="chrome"
+              value={chromePin}
+              onChange={setChromePin}
+              onComplete={() => {}}
+            />
+          </div>
+          <PinPad
+            value="12"
+            onChange={() => {}}
+            onComplete={() => {}}
+            disabled
+          />
+        </Row>
       </Section>
 
       <Section title="Toggle">

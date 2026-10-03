@@ -58,7 +58,7 @@ for _key, _value in {
     "ENV": "local",
     # The repo's public test keys (D-060): valid here, refused outside local.
     **PUBLIC_TEST_KEYS,
-    "CORS_ORIGINS": "http://localhost:3000",
+    "CORS_ORIGINS": "http://127.0.0.1:3000",
 }.items():
     os.environ.setdefault(_key, _value)
 
@@ -105,7 +105,7 @@ def make_test_settings() -> Settings:
         ENV="local",
         DATABASE_URL=TEST_DATABASE_URL,
         REDIS_URL=TEST_REDIS_URL,
-        CORS_ORIGINS=["http://localhost:3000"],
+        CORS_ORIGINS=["http://127.0.0.1:3000"],
         **PUBLIC_TEST_KEYS,  # type: ignore[arg-type]
     )
 
