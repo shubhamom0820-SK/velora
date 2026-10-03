@@ -100,6 +100,13 @@ everywhere, locally too (D-067), and Safari keeps no `Secure` cookie over plain
 `http://127.0.0.1`, so it signs in and then loses the session at the next refresh or reload.
 That's Safari, not a bug. Test Safari on staging, which has HTTPS.
 
+**Never run `make infra-reset` without telling the founder first, and never while another session
+is testing.** Every worktree on this machine shares one Docker stack, so a reset drops every
+session's databases mid-run: `velora`, `velora_test`, MinIO and Redis. From T-5.1 it is also the
+only reset: the ledger refuses DELETE and TRUNCATE, so a user with Velas can't be removed any other
+way. To break a constraint on purpose, use a test database of your own (`createdb`, then
+`TEST_DATABASE_URL`; 06-TESTING), never the shared one.
+
 ## Golden rules — non-negotiable
 
 1. **One task at a time.** Only work on the task ID you were given from `docs/05-PLAN.md`.

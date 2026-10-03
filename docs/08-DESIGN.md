@@ -135,6 +135,13 @@ Chats list (Threads / Knots) · Conversation (knot bar, expired panel) · Wallet
 prices, history) · Store sheet · Checkout states (processing, failed) · You · Settings sheets
 (edit profile, notifications, privacy) · Lock screen ✦ · Notifications list.
 
+**The app's screens have no visual design yet, and the shell is provisional** (3 October 2026,
+P-57). The prototype shows each screen exists, but it isn't a design: it was wrong four times in
+Sprint 5's plan alone (the refund button, gift's direction, the price list, and "credits" for
+Velas). T-5.6 builds the header and bottom nav from it provisionally. They frame every screen in
+Sprints 6 and 7, so they're a one-way door. The first task that needs an app screen designed
+(T-6.5) stops and asks, rather than inventing it from the prototype.
+
 **Admin:** Dashboard · Reports queue · User detail · Moderation queue · Audit log (header ✦).
 
 ## 6. Copy voice

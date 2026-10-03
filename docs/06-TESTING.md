@@ -31,6 +31,23 @@ use the **fake** providers from `app/core/providers/`.
 - Postgres or Redis down: **skipped locally, listed by `-ra`; a hard failure when `CI` is
   set.** A missing database in CI must never pass quietly.
 
+### Tests that commit rows (from T-5.1)
+
+A race test needs committed rows on separate connections, so the per-test rollback can't clean up
+after it. From T-5.1 a committed ledger row can never be deleted: the ledger refuses DELETE and
+TRUNCATE, and foreign keys into `users` are RESTRICT. `velora_test` is shared by every worktree on
+the machine (P-55). So a test that commits:
+- **Makes its own users:** fresh men, never onboarded, on phone numbers `make_user` never generates.
+  It never deletes them, and never uses the owner's trigger bypass. Local `velora_test` keeps them
+  until `make infra-reset`; CI starts empty every run.
+- **Scopes every assertion to the users it made.** Never a count of a whole table: such a test is
+  right alone and wrong the moment anything else commits.
+- **Never commits a wallet that disagrees with its ledger.** T-9.9's reconciliation is global by
+  design, so a test proving it catches a mismatch runs inside the rolled-back transaction.
+- **Breaks constraints only on a database of its own.** A task proving a guard by breaking it does
+  so on its own test database (`createdb`, then `TEST_DATABASE_URL`). A broken constraint hits every
+  session using the shared one, however well its assertions are scoped.
+
 ## Fixtures (api)
 
 - `db` — session inside a transaction rolled back after each test.
@@ -57,13 +74,17 @@ use the **fake** providers from `app/core/providers/`.
 If any of these fails, nothing ships.
 
 1. **Wallet concurrency** (T-5.4): 50 parallel debits on 10 Velas → exactly 2 succeed.
-2. **Wallet idempotency** (T-5.4): same key 50× concurrently → one entry.
+2. **Wallet idempotency** (T-5.4): same key 50× concurrently → one entry, for debits and credits
+   alike; one event under two different keys → refused by the per-event index (D-077).
 3. **Webhook idempotency** (T-8.2): same capture 5× concurrently → credited once.
 4. **Webhook signature** (T-8.2): bad signature → no credit.
 5. **Ledger reconciliation** (T-9.9): `balance == sum(delta)` for every wallet.
 6. **Women never pay** (T-9.9): every paid action by a woman → zero ledger entries.
 6b. **Free gifts stay free** (T-8.9): a free gift creates a `gift_sends` row and **zero** ledger
     entries; a paid gift creates exactly one with the price from the `gifts` table.
+6c. **A woman has no ledger rows** (T-5.1, D-076): the database refuses any ledger row, and any
+    non-zero balance, for a user whose gender isn't `male`, including one with no gender yet.
+    Proved by breaking each trigger, and by turning each into a blacklist.
 7. **Age gate** (T-3.6): 17y364d refused, the account and everything attached deleted, and only
    the number's hash kept in `banned_identities` (D-072); exactly 18 today accepted.
 8. **Gender immutable** (T-1.16, T-3.6): second set → `IMMUTABLE_FIELD`; DB trigger also blocks.

@@ -65,7 +65,10 @@ session and never commit.
 - Auth: `Authorization: Bearer <access_jwt>` on every route except those marked public.
 - **Pagination:** cursor-based. Request `?cursor=<opaque>&limit=20` (max 50).
   Response `{ "items": [...], "next_cursor": "..." | null }`.
-- **Idempotency:** mutating money routes accept `Idempotency-Key` header; stored for 24h in Redis.
+- **Idempotency:** mutating money routes accept an `Idempotency-Key` header. The guarantee is the
+  ledger's own key in Postgres, permanent and namespaced by the wallet module (D-077); a client's
+  key only ever fills its event part. A Redis store, if a route builds one (T-8.1 or T-8.9), only
+  replays the earlier response. It is never what stops a double charge.
 - **Time:** ISO-8601 UTC strings.
 - **Error envelope** (every non-2xx):
 
@@ -210,7 +213,8 @@ Indexes that make this fast are listed in `03-SCHEMA.md`. Target: p95 < 80 ms at
 ## 9. Money flows
 
 **Spend (e.g. open a thread):**
-1. Service reads price from `action_prices` (cached 60 s).
+1. Service reads the price from `action_prices` inside the same transaction, with no cache, so it
+   charges the price as it is now (T-5.2).
 2. `async with db.begin():` → `wallet.debit(user, amount, reason, ref, idempotency_key)`
    locks the wallet row, checks balance, updates balance, inserts ledger entry.
 3. The thing being bought (thread row) is created **in the same transaction**. Either both happen

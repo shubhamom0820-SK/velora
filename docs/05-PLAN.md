@@ -146,7 +146,26 @@ never done silently.
   dating app holding women's photos and phone numbers, with Terms, Privacy and Refunds written
   in-house, needs a lawyer's review before launch (the advisor directing T-3.2 to T-3.10, Claude in
   a separate chat). When one is booked, record who and when here.
+  **Velas if Velora shuts down or is sold** (3 October 2026, D-076): paid Velas never expire and
+  are never refunded, so `/terms` needs a line on what happens to an unspent balance then. It goes
+  beside Privacy's missing section above, and is written when there is something honest to say.
+  D-076 is Claude's reading of RBI's text, not legal advice: show it to the lawyer too.
+- [ ] **P-0.17** A chartered accountant confirms how prepaid Velas are treated, **before the first real sale. Owner: the founder, Shubham Kumar. Trigger: Sprint 8, not launch:** it is on T-8.1's Needs line, so `/task` stops there. Recorded 3 October 2026, at the direction of the advisor directing Sprint 5 (Claude, in a separate chat).
+  **What the CA confirms:**
+  - **Revenue recognition:** unspent paid Velas are a liability until spent. They never expire and
+    are never refunded (D-050, D-076).
+  - **GST timing:** whether GST is due when Velas are sold or when they are spent.
+  - **Registration:** whether Velora must register for GST at all. The advisor directing T-3.2 to
+    T-3.10 says Velora has no GST registration, deliberately, below the threshold; P-0.2 and P-0.13
+    still list GST as unconfirmed.
+
+  **No CA is engaged today.** Neither Claude nor the advisor has read the GST law, and neither
+  makes any claim about it. Getting it wrong accrues quietly from the first sale and is expensive
+  to unwind. When one is engaged, record who and when here, beside P-0.7's lawyer.
 - [ ] **P-0.8** After T-2.2 is live: apply to Razorpay and Cashfree. Before applying, confirm each gateway's exact refund and cancellation-policy requirement against `/refunds` (D-050).
+  **A gateway's refund-policy requirement is answered by D-076's rule 3** (3 October 2026): money
+  goes back only for a payment with no Velas still standing against it. Never "refund unspent
+  Velas": that would be the cash withdrawal ¶2.1 of RBI's PPI Directions forbids.
 - [ ] **P-0.9** Buy a ₹10–12k Android phone for testing.
 - [ ] **P-0.10** 15 conversations with women aged 22–28 in the launch city about why they left their last dating app. Write findings in `docs/research.md`.
 - [ ] **P-0.11** Decide D-013 (city), D-014 (theme), confirm D-005 (packs).
@@ -998,39 +1017,180 @@ waits on the founder's decisions, so it is a task of its own, outside the sprint
 
 Built before discovery and chat because swipes, threads and unlocks all spend Velas.
 
+**Decisions:** D-076 (Velas stay a closed-system instrument: only men hold them) and D-077 (a ledger
+entry happens once), planned on 3 October 2026 with the advisor directing Sprint 5 (Claude, in a
+separate chat) and approved by the founder.
+
+**Order:** T-5.1 → T-5.4 → T-5.2 → T-5.3 → T-5.6 → T-5.5. T-5.4 proves T-5.1, so it follows
+straight after. T-5.1 to T-5.4 need only Sprint 1 and can run alongside Sprints 3 and 4. If two
+sessions both write a migration, the second to merge points its `down_revision` at the first's
+before merging (rule 11 untouched).
+
+**From T-5.1, `make infra-reset` is the only reset.** The first ledger row makes its user
+permanent: the ledger refuses DELETE and TRUNCATE, and foreign keys into `users` are RESTRICT.
+Starting over means `make infra-reset` (every volume: `velora`, `velora_test`, MinIO, Redis), then
+`make infra-up migrate seed`. That stack serves every worktree on the machine (`CLAUDE.md`). No
+migration ever writes a ledger row (rule 5), so no downgrade needs to delete one. Per-test rollback
+still works, since a rollback isn't a DELETE. Tests that commit rows follow 06-TESTING's rules for
+committed rows.
+
 ### T-5.1 · Wallet service
 - [ ] **Needs:** T-1.12, T-1.5, T-1.15
-- [ ] `wallet.service.debit(session, user_id, amount, reason, ref_type, ref_id, idempotency_key)` and `credit(...)`.
-- [ ] Inside the caller's transaction: `SELECT … FROM wallets WHERE user_id = :u FOR UPDATE` → check `balance >= amount` else raise `INSUFFICIENT_CREDITS {required, balance}` → update balance → insert `ledger_entries` with `balance_after`.
-- [ ] Idempotency: if `idempotency_key` already exists, return the existing entry and change nothing.
-- [ ] `amount <= 0` → programming error (raise, don't silently accept).
-- [ ] Publishes `wallet.updated` after commit (not before).
-- [ ] Extend `make seed` (T-1.15): credit the test man 60 through `credit(reason='admin_grant', idempotency_key='seed:test-man-credits')`, so a re-run changes nothing.
-- [ ] `make_user(credits=N)` (T-3.1) credits through `credit(reason='admin_grant')`; until then it refuses anything but 0, so no test writes a balance (rule 5).
+- [ ] Settles P-19: tick it at `/done`.
+- [ ] Two migrations, one change each (rule 11), with models to match:
+  1. **The ledger's shape (D-077).** Each reason has one direction: `(delta > 0) = (reason is a
+     credit)`, with `gift` a debit. Every reason except `admin_grant` needs a ref. Each reason has
+     exactly one `ref_type` (`admin_grant`'s ref is optional). A partial unique index on
+     `(user_id, reason, ref_type, ref_id)` covers every reason except `admin_grant` and
+     `thread_reopen`.
+  2. **Only men hold Velas (D-076).** One trigger function and two triggers refuse any
+     `ledger_entries` row, and any `wallets.balance` other than 0, for a user whose gender isn't
+     `male`. That is an allowlist, so a user with no gender is refused too.
+- [ ] `wallet/rules.py`: each reason's direction and `ref_type`. Bare `refund` is refused, in the
+  service only (D-077 says why the level differs from D-076's). The key is
+  `{user_id}:{reason}:{event}`, built here and never by callers. The event is the ref id, or an
+  event the caller names for `admin_grant` and `thread_reopen`.
+- [ ] `wallet.service.debit(...)` and `credit(...)`, in this order:
+  - refuse anything outside a transaction;
+  - the amount must be an `int`, not a `bool`, above 0;
+  - the reason must be used in its direction, and the ref must match the reason;
+  - `SELECT … FOR UPDATE` the wallet with the user's gender, and refuse anyone but a man;
+  - a repeat key with the same details returns the existing entry with `applied=False`; with
+    different details it raises;
+  - a debit needs `balance >= amount`, or raises `INSUFFICIENT_CREDITS {required, balance}` (402)
+    with a message naming no unit (rule 17);
+  - update the balance, and insert the entry with `balance_after`.
+
+  Both return `LedgerResult(entry, applied)`. They never catch a unique violation and carry on, and
+  nothing external runs under the lock.
+- [ ] `core/events.py`: events are queued on the session, kept on commit and dropped on rollback.
+  When the request ends, `get_session` publishes the request's committed events to Redis `user:{id}`
+  in 02-ARCHITECTURE §6's envelope. The publish is awaited, never fire-and-forget: a publish that
+  outlives its request fails where nobody is looking. A failed publish is logged and never fails the
+  request. The event here is `wallet.updated {balance}`. Callers outside a request (the seed)
+  publish nothing. T-7.4 builds the socket side.
+- [ ] **Seed (T-1.15):** credit the test man 60 through `credit(reason='admin_grant')` with a named
+  event, even if he already exists. That is the one exception to insert-only, written in the seed's
+  docstring and summary. A re-run changes nothing.
+- [ ] **`make_user(credits=N)` (T-3.1)** credits men through `credit(reason='admin_grant')`; anyone
+  else with credits raises. Rule 5: nothing writes a balance directly.
+- [ ] **Changes the guards force on existing tests:**
+  - `tests/test_schema.py`'s T-1.12 ledger tests get men and refs, and every CHECK test asserts its
+    constraint name, not just SQLSTATE 23514. Otherwise a new guard could make one pass for the
+    wrong reason (P-48's lesson, caught before it bit).
+  - `tests/seed/test_seed.py`'s ledger count, which counts every row in the database, is scoped to
+    the seeded people.
+  - `tests/test_harness.py`'s credits test.
+- [ ] **Tests:**
+  - **The gender guard both ways:** every `Gender` value and no gender, so only `male` may have rows
+    or a non-zero balance. Includes the case that motivated the allowlist: a user with no gender is
+    refused a credit, then chooses female, and holds nothing.
+  - **Directions:** every reason × both signs against the rules, "only these"; and the debit reasons
+    are exactly the priced actions plus `gift`.
+  - **Refs and keys:** the per-event index refuses one payment under two keys; `thread_reopen` and
+    `admin_grant` may repeat; two users with the same event both apply (P-19); a repeat gives
+    `applied=False`; the same key with different details raises; bare `refund` is refused.
+  - **`INSUFFICIENT_CREDITS`** writes nothing.
+  - **A two-connection race** (two debits of 5 on a balance of 5; two same-key credits), asserting
+    each waited alone at the lock (`f543b0d`).
+  - **Events:** published on commit only, nothing after a rollback, a failed publish logged.
+  - **The app role:** debit and credit as `velora_app`.
+  - **The seed and `make_user`.**
+  - **Rule 15:** no key, hash, PIN, token or phone number in a log or response, with the log tests
+    also run in shuffled order.
+- [ ] **Break every guard once, on a database of the task's own.** That is `velora_t51_test`, made
+  with `createdb` in the shared Postgres (never `infra-reset`), with `TEST_DATABASE_URL` pointed at
+  it. Breaking a constraint in the shared `velora_test` would hit every session using it, however
+  well its assertions are scoped. Break:
+  - each of D-077's six layers;
+  - each of D-076's two triggers, removed and also turned into a blacklist;
+  - the service checks;
+  - publish-before-commit;
+  - the seed's key.
+
+  Restore each byte for byte, proved by SHA-256. The report lists every weakening and its result.
+  The full `make test` still runs on `velora_test`.
+- [ ] **Done when:** the docs commit after `/done` names the staging deploy run that applied both
+  migrations.
 - [ ] **Commit:** `feat(wallet): row-locked debit and credit [T-5.1]`
+
+### T-5.4 · The concurrency test 🔒
+- [ ] **Needs:** T-5.1
+- [ ] Settles P-07: tick it at `/done`.
+- [ ] **Committed rows, never deleted** (the ledger refuses DELETE and TRUNCATE):
+  - fresh men each run, never onboarded, on numbers `make_user` never generates (T-5.1's helper);
+  - every assertion scoped to their ids;
+  - local `velora_test` keeps them until `make infra-reset`; CI starts empty;
+  - never the owner's trigger bypass. A database per run is P-55.
+- [ ] **A dedicated 50-connection engine,** asserting 50 distinct backends. If Postgres runs out of
+  connections, fail loudly; never skip.
+- [ ] **Prove the overlap by what the lock decides** (`f543b0d`): all 50 are inside open transactions
+  before any takes the lock (asserted). After the read, each waits up to 20 ms and records whether
+  it waited alone; with the lock, all 50 do.
+- [ ] **Debits:** credit a man 10, then fire 50 concurrent debits of 5. Exactly 2 succeed, 48 get
+  `INSUFFICIENT_CREDITS`, the balance is 0, there are 3 ledger rows (the credit and 2 debits), and
+  `sum(delta) == balance`.
+- [ ] **Keys:**
+  - the same key 50× concurrently, for debits and for credits: exactly 1 entry each;
+  - one payment credited under two different keys: the second is refused by D-077's index;
+  - two users with the same client key: both apply.
+- [ ] **Breaking runs:** `FOR UPDATE`, the repeat check, the unique key and the per-event index, one
+  at a time, each red, on the task's own database as in T-5.1.
+- [ ] This test must never be skipped or marked flaky. If it fails, stop everything.
+- [ ] **Commit:** `test(wallet): concurrency and idempotency [T-5.4]`
 
 ### T-5.2 · Prices
 - [ ] **Needs:** T-5.1
-- [ ] `pricing.service.price_for(user, action)` → 0 for women, else `action_prices` value (Redis cache 60 s). `GET /prices`.
-- [ ] Every paid action must call `price_for` — never a literal number in code (grep check in `/review`).
+- [ ] `pricing.service.price_for(user, action)`:
+  - women 0; men the `action_prices` value;
+  - no gender raises; an inactive row gives `NOT_ALLOWED`; a missing row is a 500; never 0 by
+    default;
+  - read fresh inside the debit's transaction, with no cache. P-47 puts any cache on the app, and
+    P-50 adds one only where something is measured slow.
+- [ ] `pricing.service.charge(...)` reads the price and debits only when it is above 0, since a
+  debit of 0 raises. A test allows `wallet.service.debit` to be called only from `charge` and from
+  gift sending (T-8.9, priced from `gifts`), so no literal price can reach it.
+- [ ] `GET /prices` (public): list prices for active actions only. Gifts aren't in it (`GET /gifts`).
 - [ ] **Commit:** `feat(pricing): server-side prices [T-5.2]`
 
 ### T-5.3 · Wallet endpoints
 - [ ] **Needs:** T-5.1
-- [ ] `GET /wallet`, `GET /wallet/ledger?cursor=` (human label per `reason` in the response).
+- [ ] `GET /wallet` → `{balance}`. `GET /wallet/ledger?cursor=` → `Page<LedgerEntry>`: `id`,
+  `delta`, `balance_after`, `reason`, `created_at`; never refs or the key. The web turns `reason`
+  into words from `en.ts` (D-033, P-26); the API doesn't.
+- [ ] Newest first by `(created_at, id)`. Entries from one transaction share `created_at`, so their
+  order is stable but arbitrary. The opaque cursor and the page type live in `core`, since this is
+  the first paginated endpoint.
+- [ ] Women get a balance of 0 and an empty list, not a refusal. No rate limit on these reads.
 - [ ] **Commit:** `feat(wallet): balance and history [T-5.3]`
 
-### T-5.4 · The concurrency test 🔒
-- [ ] **Needs:** T-5.1
-- [ ] Give a user 10 credits. Fire **50 concurrent** debits of 5 using separate DB connections (`asyncio.gather`). Assert exactly **2** succeed, 48 get `INSUFFICIENT_CREDITS`, final balance 0, exactly 2 ledger rows, and `sum(delta) == balance`.
-- [ ] Same with a repeated idempotency key: 50 concurrent calls → exactly 1 entry.
-- [ ] This test must never be skipped or marked flaky. If it fails, stop everything.
-- [ ] **Commit:** `test(wallet): concurrency and idempotency [T-5.4]`
+### T-5.6 · App shell
+- [ ] **Needs:** T-3.10
+- [ ] The `(app)` layout's header and bottom nav: Discover, Chats, Wallet and You, each a placeholder
+  route until its task. No Vibe (after beta, D-010). The wordmark comes from `APP_NAME`, never the
+  prototype's "Knot" (rule 17).
+- [ ] **Provisional (08-DESIGN):** no visual design exists for the app's screens, and the prototype
+  was wrong four times in Sprint 5's plan alone: the refund button, gift's direction, the price list
+  and "credits" for Velas. Build only what this task names; anything more waits on P-57.
+- [ ] **Commit:** `feat(web): app shell [T-5.6]`
 
 ### T-5.5 · Web wallet
-- [ ] **Needs:** T-5.3, T-3.10
-- [ ] Header balance pill (men) / "Free access" (women); wallet screen: black balance card, price list from `/prices`, ledger history (infinite scroll).
-- [ ] Global handler: any `INSUFFICIENT_CREDITS` → opens the store sheet (placeholder "coming soon" until T-8.7).
+- [ ] **Needs:** T-5.2, T-5.3, T-3.10, T-5.6
+- [ ] **The balance pill** (men), or "Free access" (women), sits in T-5.6's header.
+- [ ] **The wallet screen** has a black balance card, a price list from `/prices` and the ledger
+  history (infinite scroll). It follows the prototype with these departures, written into 08-DESIGN:
+  - no "Request a refund on unspent credits" and no "Unspent credits refundable within 7 days" (the
+    cash-out D-050 removed; D-076), just a quiet link to `/refunds`;
+  - the price list is `/prices`' seven actions plus "Tie the knot · Free" and "Messaging in a knot ·
+    Free". Not Wink, Boost, calls or "Gifts 20–500" (D-016's prices are 0, 2 and 4);
+  - "credits" becomes Velas (D-049), and the women's screen drops "calls" (after beta).
+- [ ] The pill reads one wallet query, refreshed after anything that spends or credits and when the
+  window regains focus. No polling; the socket arrives with T-7.12.
+- [ ] Global handler: any `INSUFFICIENT_CREDITS` from a mutation (the query client's mutation error
+  hook; queries never) opens the store sheet, a "coming soon" placeholder until T-8.7, with its open
+  state in Zustand.
+- [ ] Words for all 15 ledger reasons in `en.ts`, in a map typed from the generated enum, so a new
+  reason without words fails `tsc`.
 - [ ] **Commit:** `feat(web): wallet screen and balance pill [T-5.5]`
 
 ---
@@ -1061,7 +1221,7 @@ Built before discovery and chat because swipes, threads and unlocks all spend Ve
 
 
 ### T-6.5 · Web discover deck
-- [ ] **Needs:** T-6.2, T-6.4
+- [ ] **Needs:** T-6.2, T-6.4, and P-57: the app's screens have no visual design, so this task stops and asks before designing one rather than inventing it from the prototype
 - [ ] `useDiscover(feed, filters)` infinite query; keep 3 cards rendered; prefetch next page at 5 left.
 - [ ] Card with `@use-gesture/react` + `@react-spring/web`: drag with rotation, LIKE/PASS overlays by drag distance, fling threshold 100 px or velocity, up = super. Tap = open profile. Keyboard ← → ↑ on desktop.
 - [ ] Optimistic swipe: advance immediately, rollback + toast on error.
@@ -1185,8 +1345,9 @@ Built before discovery and chat because swipes, threads and unlocks all spend Ve
 # Sprint 8 — Payments, album, kudos, referrals (week 13)
 
 ### T-8.1 · Packs and orders
-- [ ] **Needs:** T-5.1, T-1.21
+- [ ] **Needs:** T-5.1, T-1.21, and P-0.17: a chartered accountant has confirmed how prepaid Velas are treated, before any real sale can happen
 - [ ] `GET /packs`: active packs for the user's price-test variant (`users.id` hash → A/B, stable). `POST /payments/orders {pack_id}` + `Idempotency-Key`: copy amount + `credits` from the pack, compute first-purchase bonus, create provider order, insert `payments` (`created`), return checkout params.
+- [ ] **A woman can't order Velas** → `NOT_ALLOWED` (D-076). The database would refuse her credit anyway; the route says so first, before she pays for something she could never use.
 - [ ] Fake provider: returns a fake order and exposes a local-only endpoint that simulates the webhook.
 - [ ] **Commit:** `feat(payments): packs and order creation [T-8.1]`
 
@@ -1203,17 +1364,20 @@ Built before discovery and chat because swipes, threads and unlocks all spend Ve
   strip, so a field Razorpay adds later stays out. Test: a payload with every payer field set is
   stored with exactly the allowlisted keys.
 - [ ] `GET /payments/{id}` for the client poll.
+- [ ] **Refunds and disputes made outside us** (D-076, rule 3): a refund done in Razorpay's dashboard, or a chargeback, must not leave the payment's Velas standing. Handle Razorpay's refund and dispute events by reversing those Velas in the ledger, in the same step. That needs a debit reason for the reversal, an enum addition decided here. If the Velas were spent, decide here what happens, and write it down.
 - [ ] Tests: same webhook delivered 5 times concurrently → credited once; bad signature → no credit; amount mismatch → no credit.
 - [ ] **Commit:** `feat(payments): verified idempotent webhook [T-8.2]`
 
 ### T-8.3 · Refund requests
 - [ ] **Needs:** T-8.2
 - [ ] `POST /refund-requests` for **broken transactions only** (D-050): a payment that went through without granting Velas, or a duplicate charge for one purchase. A change of mind isn't a claim — purchases are final. In MVP an admin resolves each claim: missing Velas are granted through `wallet.credit()` (idempotent on the payment), and a duplicate charge is refunded to the original payment method in the gateway and recorded (`payments.status = refunded`). This task defines the claim kinds and the `status` values.
+- [ ] **Missing Velas are granted with reason `purchase` (and `purchase_bonus`) and the webhook's own key** (D-077), never `admin_grant`: so a webhook arriving after the repair can't credit them a second time. Money goes back only under D-076's rule 3.
 - [ ] **Commit:** `feat(payments): refund requests [T-8.3]`
 
 ### T-8.4 · Private album
 - [ ] **Needs:** T-4.4, T-5.1
 - [ ] Requests (debit 5 for men, `credits_charged` stored), incoming list for owner, decide (grant → enqueue `watermark_album`; decline → `wallet.credit(refund_album_declined)`), revoke (delete watermarked copies, status `revoked`).
+- [ ] **A decline refunds only when `credits_charged > 0`.** A woman's request is free, `credit()` refuses an amount of 0, and the database refuses any ledger row for her (D-076).
 - [ ] `watermark_album`: for each private photo render a copy with the viewer's `@username` tiled diagonally at ~20% opacity.
 - [ ] `GET /users/{id}/album` → signed URLs of the viewer's copies only.
 - [ ] **Commit:** `feat(album): requests, grants, watermarking [T-8.4]`
@@ -1253,6 +1417,7 @@ Built before discovery and chat because swipes, threads and unlocks all spend Ve
 ### T-8.6 · Referrals
 - [ ] **Needs:** T-8.2
 - [ ] `POST /referrals/apply {code}` only before onboarding `done`, not own code, once. Reward both (Velas from `app_config`) when the referee completes selfie verification or first purchase, whichever first; idempotent. `GET /referrals/me`. Apply looks a code up and never checks its format: the seed's three test accounts carry readable codes outside the generated one (T-3.3).
+- [ ] **A woman's referral reward is never Velas** (D-076): the database refuses any ledger row for her, and "Reward both" would otherwise reach every referred woman, since every woman verifies her selfie (D-008). Decide here what she gets instead, if anything, and write it down.
 - [ ] **Commit:** `feat(referrals): codes and rewards [T-8.6]`
 
 ### T-8.7 · Web store and checkout
@@ -1299,6 +1464,7 @@ Built before discovery and chat because swipes, threads and unlocks all spend Ve
 ### T-9.5 · Admin panel
 - [ ] **Needs:** T-9.2
 - [ ] API: all `/admin/*` routes in `04-API.md`, `require_role(moderator)`; Vela grants and bans `admin` only; every call writes `audit_log`; viewing messages of a thread logs who looked and why (reason required).
+- [ ] **Vela grants (`/admin/users/{id}/credits`):** a grant can't reach a woman, because the database refuses it (D-076). A negative `delta`, an admin correction, has no ledger reason today, since `admin_grant` is a credit (D-077). Add a debit reason for it here, an enum addition.
 - [ ] Web `/admin`: metrics tiles, report queue with SLA timer (24 h), user search + detail (photos, reports, fraud signals, ledger, threads), moderation queue (approve/reject), actions with confirmation dialogs, audit log.
 - [ ] Web `/admin` renders only for `role in (moderator, admin)`, read through `useMe()`; anyone else
   gets the 404 page — replacing T-1.22's `next dev`-only gate (from P-30). **This gate is UX, not
@@ -1362,7 +1528,7 @@ Built before discovery and chat because swipes, threads and unlocks all spend Ve
 
 ### T-9.15 · Go live
 - [ ] **Needs:** T-9.13, T-9.14, P-0.5, P-0.7, P-0.8
-- [ ] Production env: real SMS, real Razorpay live keys + webhook URL, real moderation and face match, VAPID keys. Run the pre-launch checklist in `07-CHECKLISTS.md`. Do one real ₹ purchase yourself and refund it.
+- [ ] Production env: real SMS, real Razorpay live keys + webhook URL, real moderation and face match, VAPID keys. Run the pre-launch checklist in `07-CHECKLISTS.md`. Do one real ₹ purchase yourself and refund it, under D-076's rule 3: the refund reverses that purchase's Velas in the ledger in the same step (T-8.2), so money never goes back while its Velas stand.
 - [ ] **Write to the waitlist** (T-2.3): its copy promises to tell people when Velora opens near them. Nothing can send bulk email yet, so choose how before launch day, or the list is one we can't write to. A sending service is a new dependency and another processor `/privacy` must name, and its From address needs SPF and DKIM, like the mailboxes (P-0.3). B-14, a second city, writes to it again, by city.
   **DKIM before the first send, or the launch email goes to spam:** our DMARC record says
   `p=quarantine` (P-0.3), so mail that isn't authenticated as `veloraapp.co.in` is sent to spam.
@@ -1467,6 +1633,8 @@ Claude Code adds items here instead of doing unplanned work. Format:
   TRUNCATE, and `payments` refuses DELETE and TRUNCATE. Decide the cleanup in T-5.4, where the
   constraint is felt: a throwaway database per run, or fresh user ids per run (production never
   deletes from the ledger either).
+  **Folded into T-5.4, 3 October 2026; tick it there:** fresh men per run, never deleted, every
+  assertion scoped to them (06-TESTING). A database per run is P-55's.
 - [ ] P-08 · `TEST_REDIS_URL` override — `TEST_DATABASE_URL` can be overridden but the test Redis
   is fixed at `127.0.0.1:6379/1`. If T-1.20's CI runs Redis anywhere else, the harness reports the
   stack unreachable and CI hard-fails by design. Add the override alongside T-1.20. Found in review
@@ -1540,6 +1708,8 @@ Claude Code adds items here instead of doing unplanned work. Format:
   or, if the service reads a unique violation as "already applied", reported as paid when it wasn't.
   `wallet.service` must store a namespaced key, e.g. `{user_id}:{operation}:{client key}`.
   **Design into T-5.x.** Found in review of T-1.12.
+  **Folded into T-5.1, 3 October 2026; tick it there:** the key is `{user_id}:{reason}:{event}`,
+  built by the wallet module (D-077).
 - [ ] P-20 · Audit automated actions as a system user — ruled in T-1.13: `audit_log.actor_id` is
   NOT NULL, because null could not tell "the system did it" from "a bug forgot to set it", and the
   system user is created when auto-freeze first needs it, by T-9.2. T-9.2's text says neither that
@@ -1944,7 +2114,8 @@ Claude Code adds items here instead of doing unplanned work. Format:
       cash value and can't be transferred (D-050), and a gift moves no Velas to its recipient
       (D-016): a closed-system prepaid instrument, which RBI's PPI FAQ (question 7, 22 November
       2022) says is "not classified as a payment system requiring approval / authorisation by RBI
-      and are, therefore, not regulated or supervised by RBI".
+      and are, therefore, not regulated or supervised by RBI". **D-076 (3 October 2026)** tests the
+      design against each condition of that exemption, and records what keeps Velas inside it.
     - **The closest call is `payments.raw_webhook`** (T-8.2), which keeps Razorpay's verified payload:
       it can carry the payer's email, phone and UPI ID, all in RBI's own list of payment data. As
       written, the directive binds Razorpay, not us; storing less (ids, amount, status) removes the
@@ -2142,3 +2313,27 @@ Claude Code adds items here instead of doing unplanned work. Format:
   with the same unique values (`make_user`'s serial phone numbers) wait on each other. Give each run
   its own Redis database or key prefix and its own test database (by worktree, or by a run id),
   with a test that two runs can't see each other's keys. Found in T-3.7.
+  **From T-5.1, two more reasons** (3 October 2026):
+  - Committed ledger rows can't be deleted: the ledger refuses DELETE and TRUNCATE, and foreign
+    keys into `users` are RESTRICT. So a shared `velora_test` collects them until
+    `make infra-reset`, and a database per run would end that.
+  - A task that breaks a constraint to prove a test catches it hits every session using the
+    database, however well its assertions are scoped. T-5.1 and T-5.4 avoid this with a database
+    of their own (`createdb`, pointed at by `TEST_DATABASE_URL`). Redis database 1 can't be
+    redirected the same way (P-08), so a full run still clears another session's rate-limit keys.
+
+  Found planning Sprint 5.
+- [ ] P-56 · Refuse a charge whose price changed after it was shown. **For T-7.1,** the first paid
+  action a person taps. Worst case: a man sees "Open thread · 5 Velas" and is charged 6, because
+  the price changed in between. The server still decides the price (rule 6), and `/terms` says
+  prices can change. But charging more than the screen said is the kind of surprise that ends
+  trust in a paid product. The client sends the price it showed, and the server refuses with
+  `PRICE_CHANGED` if it differs: the value is compared, never used. Deferred from T-5.2, which reads
+  prices fresh with no cache. Found planning Sprint 5 (decision 22, with the advisor directing it).
+- [ ] P-57 · The app's screens have no visual design. **Before T-6.5,** on its Needs line. Worst
+  case: every screen in Sprints 6 and 7 is framed by a shell and built from a prototype that was
+  wrong four times in Sprint 5's plan alone, and a one-way door gets designed by accident: the
+  refund button, gift's direction, the price list and "credits" for Velas. T-5.6 builds the shell
+  provisionally (08-DESIGN). The first task that needs a screen designed stops and asks, rather
+  than inventing it from the prototype. Found planning Sprint 5, at the direction of the advisor
+  directing it.

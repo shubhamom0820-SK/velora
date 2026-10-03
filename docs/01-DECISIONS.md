@@ -19,6 +19,8 @@ closed-testing requirement, instant updates, shareable `velora.app/@username` li
 ### D-002 · Women free, men pay credits — Locked
 **Why:** the core supply/demand balance of the product. No payout programme for women.
 **Rejected:** paying women per message (creates fake-engagement incentives).
+**Noted 3 October 2026:** this decision is load-bearing for the PPI exemption. Any Vela that reaches
+a woman is a payment between people, so none ever may (D-076).
 
 ### D-003 · Threads and Knots — Locked
 Every conversation opens as a **Thread** that expires 24h after opening. Both people tapping
@@ -90,6 +92,8 @@ Six gifts, sendable **from a woman's profile** by men. Two are free, two cost 2 
 
 **Rejected:** gifts that unlock private photos or messaging (that would make permanence buyable,
 against D-003), and gifts sent anonymously (a gift with no name is a harassment vector).
+**Noted 3 October 2026:** a gift debits its sender and credits nobody, and `gift` is a debit-only
+ledger reason (D-076, D-077).
 
 ### D-007 · Kudos, not reviews — Locked
 After a few messages the sender may pick one of four fixed positive notes. It goes privately to
@@ -597,6 +601,8 @@ against D-003's principle that permanence is granted, never bought.
 and cancellation policy for merchant approval; P-0.8 confirms each gateway's exact requirement.
 **Supersedes** T-8.3's earlier plan to refund unspent credits within 7 days of purchase: T-8.3 now
 handles broken-transaction claims only. Decided by the founder on 1 October 2026.
+**Noted 3 October 2026:** money goes back only for a payment with no Velas still standing against
+it (D-076, rule 3).
 
 ### D-051 · What deleting an account erases, and what it keeps — Locked
 **Erased:** the profile, photos, private album and everything else other people can see of the
@@ -1426,6 +1432,157 @@ Needs line on the release (REL-1).
 **What the gate guards against:** mistakes, such as a tag on the wrong commit, an unpaid plan or
 an expired token. A `v*` tag runs the workflow and the scripts at its own commit, so anyone who
 can push tags could change them. Only the founder and his sessions can.
+
+### D-076 · Velas stay a closed-system prepaid instrument — Locked
+**The position.** In RBI's terms, Velas are a closed-system prepaid payment instrument (PPI), which
+RBI neither regulates nor supervises. That holds only while four things stay true. Velas buy only
+Velora's own services. They can't be turned into money. They can't move between accounts. And no
+woman ever holds any. This entry is what keeps those true.
+
+**The text.** RBI's Master Directions on PPIs, 2021, as updated to 30 September 2026
+(`rbi.org.in/Scripts/BS_ViewMasDirections.aspx?id=12156`, read 3 October 2026), ¶2.1: "Closed
+System PPIs : These PPIs are issued by an entity for facilitating the purchase of goods and
+services from that entity only and do not permit cash withdrawal. These instruments cannot be used
+for payment or settlement for third party services. The issuance or operation of such instruments
+is not classified as a payment system requiring approval / authorisation by RBI and are, therefore,
+not regulated or supervised by RBI." ¶2.8 makes funds transfer a feature only Full-KYC PPIs carry.
+On Small PPIs: "Funds transfer or cash withdrawal from such PPIs shall not be permitted." On
+Full-KYC PPIs: "These PPIs shall be used for purchase of goods and services, funds transfer or cash
+withdrawal." The Payment and Settlement Systems Act, 2007, s.2(1)(i), as RBI's own PSS FAQ (Q9,
+`rbi.org.in/Scripts/FAQView.aspx?Id=73`) quotes it, defines a payment system as "a system that
+enables payment to be effected between a payer and a beneficiary, involving clearing, payment or
+settlement service or all of them". Q10: under section 4, "no person other than the Reserve Bank
+can operate or commence a payment system unless authorized by the Reserve Bank". The Act's own text
+wasn't fetched (India Code timed out), so it is quoted through RBI's FAQ.
+
+**Why a transfer breaks the exemption for Velora, and why the general rule doesn't.** ¶2.1 says
+nothing about transfers between users. On its words, a shop's gift card handed to a friend who
+spends it in the same shop is still closed-system: the friend still buys only from the issuer. So
+"a transfer between users breaks the exemption" is not a general rule, and this entry doesn't claim
+it. Velora differs for one reason: **a woman can buy nothing with Velas.** Every price is 0 for her
+(D-002, D-004), so a Vela in her hands buys nothing from Velora. Its only use there would be
+payment between people. That is "payment or settlement for third party services" (¶2.1), payment
+"between a payer and a beneficiary" (s.2(1)(i)), and "funds transfer" (¶2.8). **So D-002 is
+load-bearing for the exemption.** Women paying nothing is exactly what makes any Vela that reaches
+a woman a payment between people. "Fixing" D-002 generously, by letting a man send a woman Velas,
+rewarding women in Velas, or paying women out for gifts they receive, takes Velora outside ¶2.1
+and into operating a payment system without RBI's authorisation (s.4). D-002's rejected
+alternative, payouts to women, now carries that weight too.
+
+**The rules.**
+1. **A woman has no ledger rows at all.** She is never credited, and never debited, because every
+   price is 0 for her. **The database enforces it** (T-5.1): it refuses any `ledger_entries` row,
+   and any `wallets.balance` other than 0, for a user whose gender isn't `male`. That is an
+   allowlist. A user with no gender yet can't be credited and then choose female: T-1.9's
+   immutability trigger stops a gender changing once set, not a first choice made after a credit.
+   **Why the database and not the service:** this is the one invariant in the system with legal
+   consequence. Any other rule here that breaks is a bug. This one breaking is Velora operating an
+   unauthorised payment system. A service check holds only while every writer goes through the
+   service. A migration, a repair script, an admin tool or a future task writing the ledger
+   directly would bypass it, and nothing would go red. The service may refuse first, for a clear
+   error, but the database is the guarantee, and the thing tested by breaking it. Consequences:
+   T-8.1 refuses a woman's order; T-8.6 decides what a woman gets for a referral, and it is never
+   Velas; T-9.5's grants can't reach her.
+2. **Every ledger reason has one direction** (D-077). `gift` is a debit. A gift is a service the
+   man buys from Velora, and nothing ever credits its recipient.
+3. **Money goes back to a payment method only for a payment with no Velas still standing against
+   it:** either none were granted (D-050's duplicate charge, which T-8.2 never credits), or the
+   same step reverses them in the ledger. A balance is never refunded, spent or unspent. T-8.2
+   handles Razorpay's refund and dispute events, T-8.3's repairs follow this rule, and so does
+   T-9.15's live test. If a gateway asks for a refund policy (P-0.8), the answer is this rule,
+   never "refund unspent Velas".
+4. **The prototype's wallet screen offers the cash-out D-050 removed:** "Request a refund on unspent
+   credits" and "Unspent credits refundable within 7 days." Neither is ever built (T-5.5,
+   08-DESIGN).
+5. **Never add any of these without reopening this entry:** a transfer between accounts; a gift
+   that credits its recipient; a payout to anyone; a refund of a balance; Velas accepted for
+   anything but Velora's own services.
+
+**Expiry is not an RBI question.** ¶13 (one-year minimum validity, warnings in the 45 days before
+expiry, and ¶13.3's three-year bar on moving expired balances to profit and loss) governs PPIs under
+the Directions, and ¶2.1 puts closed systems outside them. Velas never expire anyway (D-050). **The
+obligation is ours:** paid Velas that never expire and are never refunded are an open-ended promise
+of service. That matters if Velora shuts down or is sold (P-0.7), and in the accounts: when GST is
+due on a prepaid balance, and how unspent paid Velas are carried (P-0.17, a chartered accountant).
+
+**What this reading is.** Claude's reading of the primary texts on 3 October 2026, at the direction
+of the advisor directing Sprint 5 (Claude, in a separate chat). It is not legal advice, and no
+lawyer has read it (P-0.7 has none booked).
+
+**Rejected:**
+- **"Inter-user transfers break the exemption" as a flat rule:** the advisor's first framing, which
+  ¶2.1's text doesn't support (above). The narrower argument is the one that holds, and the one to
+  keep.
+- **A service-level check for rule 1:** Claude's first recommendation, overruled by the advisor. The
+  ledger's reason directions, which carry no legal weight, were already enforced in both the
+  service and the database (D-077). The highest-stakes rule can't have weaker enforcement than a
+  lower-stakes one.
+- **Letting women hold promotional Velas** (referrals, grants): harmless alone, but the precondition
+  for a transfer, and a woman who bought them would pay for nothing she could use, with no refund
+  under D-050.
+
+Approved by the founder on 3 October 2026.
+
+### D-077 · A ledger entry happens once — Locked
+**How a double credit is made impossible, not just unlikely:** six layers. Each is proved by
+breaking it and watching a test go red (T-5.1; T-5.4 and T-8.2 at scale).
+1. **One row per key.** `ledger_entries.idempotency_key` is UNIQUE (T-1.12).
+2. **One key per event.** The wallet module builds every key as `{user_id}:{reason}:{event}`. The
+   event is the id of whatever justifies the entry: for a purchase, the `payments` row; for an album
+   refund, the request; for a ban refund, the original debit. A key never comes from a random value,
+   the clock or a raw client header. A client's `Idempotency-Key` only ever fills the event part.
+   So webhook retries, concurrent deliveries and T-8.3's manual repair all compute the same key.
+   (This settles P-19.)
+3. **One row per event, even if a key is built wrong.** A partial unique index on
+   `(user_id, reason, ref_type, ref_id)` covers every reason except `admin_grant` and
+   `thread_reopen`, which legitimately repeat. Every reason except `admin_grant` requires a ref.
+   **Each reason has exactly one `ref_type`, pinned in the database too**, because the index is
+   only as good as `ref_type` being right, and a code-only rule holds just until the next writer.
+   So a credit naming a payment can only be `purchase` or `purchase_bonus`, and T-8.3's repair
+   uses the webhook's own reason and key.
+4. **Repeats are read correctly.** The wallet row lock makes one user's money operations take
+   turns. Under READ COMMITTED (Postgres's default, kept), the repeat check runs after the lock is
+   granted, so it sees the first call's committed row and returns it. The same key with different
+   details raises: returning the earlier entry silently would hide the bug that reused the key. The
+   service never catches a unique violation and carries on: the transaction aborts, balance update
+   included. `debit()` and `credit()` return the entry and whether it was newly applied.
+5. **The payment side is anchored too.** `payments.provider_payment_id` is unique, and a paid
+   payment must have one (T-1.12). The webhook marks the payment paid and credits it in one
+   transaction.
+6. **Each layer is proved,** by forced overlap and breaking runs. T-5.1 breaks each layer once,
+   with a two-connection race test for layer 4. T-5.4 then shows 50 same-key calls give one row,
+   and T-8.2 that five concurrent deliveries give one credit.
+
+**Around it:**
+- **Each reason has one direction,** checked in the service and by a database CHECK. `gift` is a
+  debit.
+- **The bare `refund` reason is refused, in the service only,** until a task gives it a meaning.
+  Nothing writes it, and its name reads as money. **Why the service is enough here, when D-076's
+  gender rule is in the database:** the gender rule's failure is a regulatory position, while
+  `refund`'s worst case is a confusingly named credit, which the direction CHECK already keeps a
+  credit. The level follows the stakes, as in the next paragraph.
+- **Transactions:** both functions run only inside the caller's transaction and refuse otherwise. A
+  transaction locks one wallet, or several in `user_id` order. Nothing external runs while a wallet
+  is locked.
+- **No status check:** the wallet never checks user status. A frozen man's captured payment must
+  still be credited.
+
+**Detected, not prevented: a balance written outside the service.** The app role can update
+`wallets`, as it must, and T-9.9's reconciliation (`balance == sum(delta)`) catches a balance that
+disagrees with its ledger. That is weaker than D-076's rule 1 **on purpose**. An inconsistent
+balance is a bug we can repair, from the ledger, which is append-only and complete. A woman holding
+Velas is a regulatory position we can never un-break. Preventing the first would take a trigger
+checking each balance against the ledger at commit, plus a sequence column, because two entries from
+one transaction share `created_at`. That isn't worth building for a repairable bug.
+
+**Rejected:**
+- The caller's raw key: P-19's collision between users.
+- The key alone, with no per-event index: two code paths can spell one event two ways.
+- Returning an earlier entry for a reused key with different details.
+- A deferred balance trigger (above).
+
+Directed by the advisor directing Sprint 5 (Claude, in a separate chat). Approved by the founder on
+3 October 2026.
 
 ---
 
