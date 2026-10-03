@@ -1679,11 +1679,13 @@ Claude Code adds items here instead of doing unplanned work. Format:
   email check via `capfd`, which can miss a logger bound to an earlier stream); both now use a new
   `captured_logs` fixture whose probes, through structlog and the stdlib, must arrive, and each goes
   red when a leak is planted.
-- [ ] P-49 · Decide where the API runs, with today's numbers. **Before Sprint 6**, whose discovery
-  pays the cost below several times per request. Worst case if it stays: every authenticated
-  request costs seconds before any work, in an app whose complaint driver is lag (09-RESEARCH C7).
-  - **Why it's in Singapore (D-048, P-36):** Fly retired Mumbai (`bom`) on 25 September 2026 and
-    refused new machines there. **Still true:** on 3 October 2026 Fly's own region list (flyctl
+- [ ] P-49 · Colocate the API and the database, and decide which city. **Before Sprint 6**, whose
+  discovery pays the split below several times per request. Worst case if it stays: every
+  authenticated request costs seconds before any work, in an app whose complaint driver is lag
+  (09-RESEARCH C7). The user's own hop is one round trip; the API's to the database are a dozen or
+  more per request. Putting the two in one city fixes that whichever city it is.
+  - **Why the API is in Singapore (D-048, P-36):** Fly retired Mumbai (`bom`) on 25 September 2026
+    and refused new machines there. **Still true:** on 3 October 2026 Fly's own region list (flyctl
     0.4.110) has 17 regions and none in India.
   - **Measured from the staging machine, 3 October 2026,** through the app's own engine and Redis
     client: 165.6 ms per Postgres round trip (D-048 had 165), 165 ms per Redis command, 2,865 ms to
@@ -1696,25 +1698,67 @@ Claude Code adds items here instead of doing unplanned work. Format:
   - **Round trips per endpoint,** counted locally by a proxy that delays every packet, and matched
     against each endpoint's statement log: OTP send about 14, verify for a new account about 25,
     refresh about 9, `GET /me` about 17. At 165 ms that is 2.3 s, 4.1 s, 1.5 s and 2.8 s of server
-    time, before the user's own round trip to Singapore (153 ms from the founder's machine, against
-    58 ms to AWS Mumbai). `current_user` alone is about 8 round trips (two Redis scripts, a
-    checkout's ping, BEGIN, the user's row, COMMIT), 1.3 s; a route's first query brings a second
-    checkout's ping, BEGIN and COMMIT: about 2 s before the route's own queries.
-  - **Fewer round trips (P-50) helps but doesn't remove it:** `/me` could drop from about 17 to 4
-    or 5, about 0.7 s from Singapore; sign-up from about 25 to about 9, about 1.5 s. A floor of
-    roughly half a second per request stays, and discovery pays it per query.
-  - **An API in Mumbai deletes it:** the same city as Supabase (`ap-south-1`) and Upstash, so a round
-    trip is about a millisecond (an estimate, not measured: no machine there). `/me`'s 17 round trips
-    would cost tens of milliseconds unoptimised.
-  - **The options D-048 deferred:** AWS `ap-south-1` (App Runner, or ECS on Fargate) and Google
-    Cloud Run `asia-south1`. Each needs WebSockets checked (D-025), `deploy.yml` and
-    `infra/STAGING.md` rewritten, secrets moved and the smoke check repointed, and a decision
-    superseding D-048's region (and D-023's).
-  - **Not decided here:** the founder decides; this is the measurement. If the API moves, that is a
-    task of its own, done before Sprint 6 builds on these numbers.
+    time. `current_user` alone is about 8 round trips, 1.3 s. P-52 and P-53 take `/me` to about 11
+    round trips, still about 1.8 s split as it is.
+  - **The same city, measured:** from the staging machine in Singapore, a TCP connect to Supabase's
+    Singapore endpoint takes 6.9 ms (AWS Singapore 4.0 ms); to its Mumbai endpoint, the control, 171
+    ms, which matches the query round trip above. **The user's hop,** from the founder's machine:
+    Singapore 92 ms (153 ms an hour earlier, through curl: the routes vary), Mumbai 54 to 58 ms.
+  - **Option A, both in Mumbai.** A round trip of about a millisecond (an estimate: no machine there
+    to measure from), so `/me` costs about 70 ms in all. It means leaving Fly for the API. **AWS
+    `ap-south-1` may not be open to us:** the account's payment method failed verification (P-0.6),
+    which also holds up Rekognition (T-4.5). **Google Cloud Run `asia-south1`** is the realistic
+    one: it rides the Google billing account Firebase needs anyway (P-0.12, not done yet). Either
+    needs WebSockets checked (D-025), `deploy.yml` and `infra/STAGING.md` rewritten, secrets moved,
+    the smoke check repointed, and `/privacy`'s "handled by our servers in Singapore" changed.
+  - **Option B, both in Singapore.** Keeps Fly: a new Supabase project in `ap-southeast-1` and Upstash
+    in Singapore, by dump and restore. A round trip of about 5 to 7 ms, so `/me` costs about 150 to
+    230 ms in all, one user hop slower than A, a hop paid once per request rather than per query.
+    **It is the cheapest it will ever be:** staging's database holds the schema, the reference data
+    and test waitlist rows, and no users (the seed runs only locally, D-064); nothing is live. Every
+    sprint makes it dearer.
+  - **What decides whether B is on the table: residency.** Claude's reading of the primary texts
+    on 3 October 2026, not legal advice:
+    - **D-048's reason was our promise, not the law.** In its words: "Postgres (Supabase) and Redis
+      (Upstash) stay in **Mumbai**, so Indian users' data stays in India. Moving it out would take a
+      new decision, after the DPDP session (P-0.7)." Its amendment: "'Data stays in India' was our
+      own promise, not a legal requirement." And: "Moving the database after launch, with live user
+      data, is not [cheap]. Keeping it in Mumbai is what keeps the India option open."
+    - **DPDP requires no localisation of ordinary personal data.** Section 16(1) lets the Central
+      Government "by notification, restrict the transfer of personal data ... to such country or
+      territory outside India as may be so notified": a blacklist, and none has been notified as
+      far as Claude found (the repo's last check was September 2026; P-0.7 re-checks). Section 16(2)
+      keeps any stricter sectoral law. Rule 15 of the DPDP Rules, 2025 allows transfers, subject to
+      requirements the Government may set about making data available to a foreign State. Both
+      take effect on 13 May 2027. **The one localisation lever is Rule 13, for Significant Data
+      Fiduciaries,** who can be made to keep specified data in India. Velora isn't one; designation
+      weighs volume and sensitivity, and a dating app's data is sensitive, so at scale it could be.
+      Then data in Singapore might have to come home, at that day's price.
+    - **RBI's payment-data storage directive doesn't reach us as a merchant.** The circular of 6
+      April 2018, per RBI's own FAQ (questions 1 and 2), binds payment system providers RBI
+      authorises and the "service providers, intermediaries, payment gateways, third party vendors
+      and other entities" they engage for payment services: Razorpay, not its merchants.
+    - **The Vela ledger isn't payment system data.** Velas buy only Velora's own services, have no
+      cash value and can't be transferred (D-050), and a gift moves no Velas to its recipient
+      (D-016): a closed-system prepaid instrument, which RBI's PPI FAQ (question 7, 22 November
+      2022) says is "not classified as a payment system requiring approval / authorisation by RBI
+      and are, therefore, not regulated or supervised by RBI".
+    - **The closest call is `payments.raw_webhook`** (T-8.2), which keeps Razorpay's verified payload:
+      it can carry the payer's email, phone and UPI ID, all in RBI's own list of payment data. As
+      written, the directive binds Razorpay, not us; storing less (ids, amount, status) removes the
+      question. A design point for T-8.2 whichever city is chosen.
+    - **The binding constraint is our own published page.** `/privacy` says the profile, messages,
+      Velas, payment records and our encrypted copy of each number are "stored in Mumbai, India",
+      and waitlist emails too. Option B changes that page in the same task, before any data moves.
+    - **No lawyer is scheduled.** P-0.7 is the founder's own review ("no lawyer at this stage", 1
+      October 2026), though D-048 calls it "the DPDP session" and P-36 "the DPDP lawyer session". So
+      B is the founder's call on our own promise, unless he books a lawyer first.
+  - **Not decided here.** The founder decides; this is the measurement and the reading. Whichever
+    city, the move is a task of its own, done before Sprint 6 builds on these numbers, and a decision
+    superseding D-048 (and D-023's region).
 
   Found reviewing T-3.2 to T-3.5, at the direction of the advisor directing them (Claude, in a
-  separate chat).
+  separate chat), who added option B and the residency question.
 - [ ] P-50 · Cut the round trips every request pays. **Before Sprint 6 adds routes on
   `current_user`; worth doing wherever the API runs.** Worst case without it: the fixed cost in P-49
   multiplies with every route that inherits it. Measured on 3 October 2026 (P-49's method):
@@ -1734,6 +1778,9 @@ Claude Code adds items here instead of doing unplanned work. Format:
   change that adds one goes red.
 
   Found reviewing T-3.2 to T-3.5.
+  **Split, 3 October 2026:** the first two items are our own waste, worth fixing whatever P-49
+  decides, so they are P-52 (the second checkout) and P-53 (the ping), done now. The rest waits for
+  P-49's answer.
 - [ ] P-51 · Decide what a banned number is told. **In T-9.5, where bans are written, or T-9.6.**
   Worst case: a person barred by mistake, or a minor's family, has no way to learn why sign-in stopped
   working, or that grievance@ exists, which the IT Rules' grievance obligations (D-052) assume.
@@ -1743,3 +1790,24 @@ Claude Code adds items here instead of doing unplanned work. Format:
   grievance@. Whether Path B's silence is acceptable is this task's question.
 
   Found reviewing T-3.2 to T-3.5, at the direction of the advisor directing them.
+- [ ] P-52 · One connection per request: stop the second checkout T-3.5 added. **Now, before
+  T-3.6.** Worst case left: every authenticated request checks out twice and pays the liveness ping
+  twice, about 990 ms on staging, in every environment, colocated or not. `current_user` reads the
+  user in a transaction of its own and ends it, so the route's service can begin another (T-3.5),
+  and a session bound to the engine hands its connection back at every commit, so the service
+  checks out again. The fix: the request's session checks out one connection at its first query and
+  keeps it until the request ends, so later transactions reuse it; a request that never reaches the
+  database, a bad token say, still checks out nothing. Proved on the real `get_session` by counting
+  pool checkouts, failing with the old session.
+
+  Split from P-50, at the direction of the advisor directing T-3.2 to T-3.10.
+- [ ] P-53 · Make the liveness ping cheap. **Now, before T-3.6.** Worst case left: `pool_pre_ping`
+  costs three round trips on every checkout, about 495 ms on staging (D-048 priced it at 165):
+  asyncpg's ping wraps `;` in BEGIN and ROLLBACK for PgBouncer's transaction mode, which we don't
+  use (staging connects direct, `infra/STAGING.md`). The fix: no ping for a connection used in the
+  last 30 seconds; one idle longer is pinged, and if dead, replaced before the request sees it; and
+  the pool hands out its newest connection first, so a quiet pool keeps reusing a warm one. Proved
+  by counting the round trips a request makes, and by killing an idle connection's backend and
+  seeing the next request succeed.
+
+  Split from P-50, at the direction of the advisor directing T-3.2 to T-3.10.
