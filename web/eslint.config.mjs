@@ -25,6 +25,26 @@ const eslintConfig = defineConfig([
       ],
     },
   },
+  // zod only through src/lib/zod.ts, which turns its eval probe off: production's
+  // CSP reports the probe as a violation (T-3.11).
+  {
+    files: ["src/**/*.{js,jsx,mjs,ts,tsx}"],
+    ignores: ["src/lib/zod.ts"],
+    rules: {
+      "no-restricted-imports": [
+        "error",
+        {
+          paths: [
+            {
+              name: "zod",
+              message:
+                "Import z from @/lib/zod, which sets jitless: production's CSP reports zod's eval probe (T-3.11).",
+            },
+          ],
+        },
+      ],
+    },
+  },
   // Override default ignores of eslint-config-next.
   globalIgnores([
     // Default ignores of eslint-config-next:

@@ -7,4 +7,7 @@
 export const queryKeys = {
   health: () => ["health"] as const,
   me: () => ["me"] as const,
+  intents: () => ["intents"] as const,
+  usernameAvailable: (username: string) =>
+    ["usernames", username, "available"] as const,
 };

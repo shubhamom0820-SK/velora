@@ -7,8 +7,14 @@
  * and that error will look like the new feature's bug rather than this
  * policy's. The tasks that will need it, each with the same line in the plan:
  *
- *   T-3.11  Re-examine script-src 'unsafe-inline': the first user-supplied text
- *           renders. Again at T-6.5, the first other people's text.
+ *   T-3.11  Re-examined script-src 'unsafe-inline' and kept it (D-059, amended
+ *           3 October 2026): the onboarding screens render only the user's own
+ *           text, back to them, and the server allows only letters in a name
+ *           and [a-z0-9._] in a username, so the worst is self-XSS behind
+ *           React's escaping. Re-examine it when a screen first renders
+ *           another user's text: T-6.5 today, sooner if a screen gets there
+ *           first. Nonces scoped to (auth) and (app) would leave marketing
+ *           static.
  *   T-3.14  Firebase phone sign-in: Google's script and connect hosts, and
  *           frame-src for reCAPTCHA.
  *   T-4.6   Photos: connect-src for R2's upload endpoint; img-src for the CDN
@@ -70,8 +76,9 @@ export function contentSecurityPolicy(env: BuildEnv = process.env): string {
     // 'unsafe-inline': Next writes its page data as inline scripts on every
     // page; without it the waitlist form never hydrates (T-2.5's trial).
     // Nonces would render every page per request, spending the performance
-    // margin. Justified while no user-supplied text renders: re-examined at
-    // T-3.11, and at T-6.5 (D-059).
+    // margin. Kept at T-3.11, where the only user text on screen is the
+    // user's own; re-examined when a screen first renders another user's
+    // (D-059's amendment, T-6.5 today).
     `script-src 'self' 'unsafe-inline'${dev ? " 'unsafe-eval'" : ""}`,
     ...(dev
       ? ["style-src 'self' 'unsafe-inline'", "img-src 'self' data:"]

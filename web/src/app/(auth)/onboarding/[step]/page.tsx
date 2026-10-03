@@ -1,6 +1,6 @@
-import { SignOutButton } from "@/components/session/SignOutButton";
-import { t } from "@/i18n/t";
+import { OnboardingScreen } from "@/components/onboarding/OnboardingScreen";
 import { onboardingSlugs } from "@/lib/onboarding";
+import { siteUrl } from "@/lib/site";
 
 /** Only D-080's slugs exist; any other is a 404. */
 export const dynamicParams = false;
@@ -9,12 +9,12 @@ export function generateStaticParams() {
   return onboardingSlugs().map((step) => ({ step }));
 }
 
-/** Placeholder until T-3.11 and T-3.12 build each step's screen. */
-export default function OnboardingStepPage() {
-  return (
-    <main className="bg-bg text-ink flex min-h-dvh flex-col items-center justify-center gap-6 p-6">
-      <h1 className="text-title-1">{t("placeholder.onboardingStep")}</h1>
-      <SignOutButton />
-    </main>
-  );
+/** Each onboarding step's screen (T-3.11, T-3.12). */
+export default async function OnboardingStepPage({
+  params,
+}: PageProps<"/onboarding/[step]">) {
+  const { step } = await params;
+  // The site's own host, for the username's page (`<host>/@name`): read here,
+  // at build time, where APP_ENV is.
+  return <OnboardingScreen slug={step} host={new URL(siteUrl()).host} />;
 }

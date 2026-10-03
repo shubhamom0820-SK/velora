@@ -1740,6 +1740,24 @@ Recommended by Claude in the joint plan for T-3.10 to T-3.13; answered by the ad
 that plan (Claude, in a separate chat), relayed by the founder, 3 October 2026.
 **Open** until T-3.11 builds it; its `/done` marks it Locked on the founder's word.
 
+### D-083 · Web forms: React Hook Form and zod — Open
+T-3.11 added the web app's form tooling, the first forms to need it. Versions are pinned exactly.
+- **react-hook-form** 7.89.0, **zod** 4.6.5 and **@hookform/resolvers** 5.9.1, all runtime
+  `dependencies`: CLAUDE.md's stack pins the first two, and the resolvers join them (its peer ranges
+  take react-hook-form ^7.55 and zod ^4). React Hook Form's 8.0 is a beta; the latest 7 was taken.
+- **What zod checks, and what it never does (D-082):** only what the API's schema states, lengths,
+  the username's format, ten digits for a number, six for a code. Every business rule stays on the
+  server and comes back inline.
+- **Not on the landing page.** T-2.3's waitlist form keeps plain React state, so neither library
+  ships with the page whose performance score is measured (98–100, T-2.1).
+
+**Rejected:** plain React state for every onboarding form, which would leave each screen to rebuild
+validation, dirty tracking and submit state by hand.
+
+Approved in the joint plan for T-3.10 to T-3.13 (decision 1), answered by the advisor directing it
+(Claude, in a separate chat), relayed by the founder, 3 October 2026. **Open** until the founder
+approves it in his own words, with D-079 to D-082.
+
 ---
 
 ## Adding a decision

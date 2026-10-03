@@ -883,27 +883,53 @@ exist yet. The batch is a chain, T-3.10 → T-3.11 → T-3.12 → T-3.13, each n
 - [x] **Commit:** `feat(web): auth session, refresh, route gates, pin lock [T-3.10]`
 
 ### T-3.11 · Web onboarding 1–7
-- [ ] **Needs:** T-3.10, T-3.7
-- [ ] **New dependencies, the first forms to use them, approved** (decision 1): web `react-hook-form` and `zod`, with `@hookform/resolvers` to join them, pinned exactly. Record them in `01-DECISIONS.md` under the next free number at install (rule 4). CLAUDE.md pins them, but nothing has installed them: T-2.3's waitlist form uses plain React state on purpose, because two form libraries for one email field would spend the landing page's performance score (98–100, T-2.1).
-- [ ] **The CSP's `'unsafe-inline'` stays** (D-059's amendment of 3 October 2026): write its reason in `security-headers.ts`'s comment. Its trigger, a screen first rendering another user's text, is D-059's to watch.
-- [ ] **Screens**, at D-080's URLs, built only from what 08-DESIGN's list of the prototype's errors leaves trusted:
+- [x] **Needs:** T-3.10, T-3.7
+- [x] **New dependencies, the first forms to use them, approved** (decision 1): web `react-hook-form` and `zod`, with `@hookform/resolvers` to join them, pinned exactly. Record them in `01-DECISIONS.md` under the next free number at install (rule 4). CLAUDE.md pins them, but nothing has installed them: T-2.3's waitlist form uses plain React state on purpose, because two form libraries for one email field would spend the landing page's performance score (98–100, T-2.1).
+- [x] **The CSP's `'unsafe-inline'` stays** (D-059's amendment of 3 October 2026): write its reason in `security-headers.ts`'s comment. Its trigger, a screen first rendering another user's text, is D-059's to watch.
+- [x] **Screens**, at D-080's URLs, built only from what 08-DESIGN's list of the prototype's errors leaves trusted:
   - phone and code at `/login`: the code in 6 boxes, from the new `OtpInput` primitive (08-DESIGN §4), with paste, `autocomplete="one-time-code"`, and a resend timer from `resend_after_s`;
   - birthday (D-079): a native date input, a confirm step, no age check in the browser, and a final screen after `UNDERAGE`;
   - gender, with the lock warning;
   - looking-for: seeking plus 1–3 intents, labelled from `en.ts` by id (P-26);
   - name, hometown and city;
   - username: a check 400 ms after typing stops, showing `<site>/@name` with the host from `site.ts`, never a hard-coded domain.
-- [ ] **The onboarding frame** (decision 5; T-3.10 and T-5.6 carry the same line): `src/components/onboarding/StepFrame`, from the prototype's `Step`: back arrow, 12-segment progress, title, body, footer, 520 px. It's for onboarding only; T-4.6 and T-4.7 reuse it. It holds T-3.10's quiet "Sign out". Back arrows follow D-080.
-- [ ] **Which path signs in** (D-081): Path B where `APP_ENV` is `local` or `ci`. On a Firebase build, until T-3.14, `/login` says sign-in isn't open yet and links to the waitlist. Remove "web" from `AUTH_PHONE_PROVIDER`'s row in 02-ARCHITECTURE §11.
-- [ ] **Each screen:**
+- [x] **The onboarding frame** (decision 5; T-3.10 and T-5.6 carry the same line): `src/components/onboarding/StepFrame`, from the prototype's `Step`: back arrow, 12-segment progress, title, body, footer, 520 px. It's for onboarding only; T-4.6 and T-4.7 reuse it. It holds T-3.10's quiet "Sign out". Back arrows follow D-080.
+- [x] **Which path signs in** (D-081): Path B where `APP_ENV` is `local` or `ci`. On a Firebase build, until T-3.14, `/login` says sign-in isn't open yet and links to the waitlist. Remove "web" from `AUTH_PHONE_PROVIDER`'s row in 02-ARCHITECTURE §11.
+- [x] **Each screen:**
   - submit is disabled until the input has the schema's shape, and nothing more (D-082);
   - server errors show inline, from `ApiError.code` via `en.ts`;
   - loading and error states (rule 14);
   - `ACCOUNT_BANNED`, `ACCOUNT_FROZEN` and `FORBIDDEN` at sign-in get one neutral line, "This account can't sign in.", with a link to `/contact`, which lists grievance@ (decision 16). P-51 may change it.
 - [ ] **Copy** (decision 4): every new string is drafted from wording already in `en.ts` (/terms, /privacy) and the decisions, and listed in this task's plan for the founder's approval.
-- [ ] **No inline `style=`.** Production's CSP has no `style-src 'unsafe-inline'`, so a progress width or a counter set inline works under `next dev` and is blocked everywhere else (P-41's lesson). Use classes only.
-- [ ] The consent line naming Google moved to T-3.14 (D-081): on Path B, Google sends nothing.
-- [ ] **Commit:** `feat(web): onboarding steps 1-7 [T-3.11]`
+- [x] **No inline `style=`.** Production's CSP has no `style-src 'unsafe-inline'`, so a progress width or a counter set inline works under `next dev` and is blocked everywhere else (P-41's lesson). Use classes only.
+- [x] The consent line naming Google moved to T-3.14 (D-081): on Path B, Google sends nothing.
+- [x] **Proved, 3 October 2026:**
+  - **Tests:** 31 vitest tests for the screens and 6 for `OtpInput`, and the suites pass in 8 shuffled
+    orders (`--sequence.shuffle`).
+  - **31 guards broken one at a time, each red, each restored by SHA-256:** a browser age check, a
+    browser-computed age, no confirm step, "Change it" sending, the number in a URL (D-079, D-080);
+    a Firebase build showing the form, staging signing in by code, any path value believed (D-081);
+    a letters rule and a reserved-name list in the browser (D-082); a stale sign-in, `Me` uncached,
+    tries left unsaid, no way to a person, under 18 not ending the session, a hard-coded domain, a
+    check per keystroke, no lowercasing, an inline style, a back arrow on the birthday, the wrong
+    back arrow on the name, +91 unstripped, a code offered at once, paste unspread, Backspace not
+    going back, letters kept, the waitlist anchor gone, Send enabled early; and zod not `jitless`,
+    its import unrestricted, `Me` stale at once.
+  - **Two escaped at first and were fixed:** the number in the URL passed because jsdom keeps one
+    URL per file, so an earlier test had already leaked it (each test now starts at `/` and asserts
+    the digits are absent); and a paste into an empty box spreads without the paste handler, which
+    matters only for a box already holding a digit (now tested).
+  - **In Chrome 154 against a production build (`next start`, the strict CSP),** through the real
+    screens: a new number signed in by code, then birthday, gender, looking-for, name and username,
+    arriving at `/onboarding/about`. No URL held the number; the username's page read
+    `127.0.0.1:3000/@…`, the build's own host. **The first run found a CSP violation,
+    `script-src eval`: zod 4's `new Function` probe,** reported by the browser though zod catches
+    the throw (zod's own comment says so). Fixed by `jitless`, set once in `src/lib/zod.ts`, with
+    ESLint refusing `"zod"` anywhere else; the rerun had none, and a planted inline style was
+    caught, so the detector is live. The same run showed `/me` fetched again on every step, 7 extra
+    round trips (1.8 to 3 s each on staging today, P-49); `useMe` now keeps a written `Me` fresh for
+    60 s (`ME_FRESH_FOR_MS`, a Checklist A exception like T-3.10's), and the rerun made none.
+- [x] **Commit:** `feat(web): onboarding steps 1-7 [T-3.11]`
 
 ### T-3.12 · Web onboarding 8, 10, 11
 - [ ] **Needs:** T-3.11, T-3.8, T-3.9

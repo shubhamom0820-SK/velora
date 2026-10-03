@@ -18,6 +18,7 @@ import { EmptyState } from "@/components/ui/EmptyState";
 import { ErrorState } from "@/components/ui/ErrorState";
 import { Field } from "@/components/ui/Field";
 import { Icon } from "@/components/ui/Icon";
+import { OtpInput } from "@/components/ui/OtpInput";
 import { PinPad } from "@/components/ui/PinPad";
 import { Sheet } from "@/components/ui/Sheet";
 import { Skeleton } from "@/components/ui/Skeleton";
@@ -54,6 +55,7 @@ export function UiGallery() {
   const [messages, setMessages] = useState(false);
   const [sheetOpen, setSheetOpen] = useState(false);
   const [pin, setPin] = useState("");
+  const [otp, setOtp] = useState("");
   const [chromePin, setChromePin] = useState("48");
 
   return (
@@ -191,6 +193,24 @@ export function UiGallery() {
           error="Tell us a little more"
           maxLength={500}
         />
+      </Section>
+
+      <Section title="OtpInput">
+        <div className="flex max-w-90 flex-col gap-4">
+          <OtpInput label="Code" value={otp} onChange={setOtp} />
+          <OtpInput
+            label="Wrong code"
+            value="12345"
+            onChange={() => {}}
+            invalid
+          />
+          <OtpInput
+            label="Checking"
+            value="123456"
+            onChange={() => {}}
+            disabled
+          />
+        </div>
       </Section>
 
       <Section title="PinPad">

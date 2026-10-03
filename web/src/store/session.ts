@@ -28,9 +28,17 @@ type SessionState = {
    * the person isn't asked for a PIN as well.
    */
   lockDecided: boolean;
+  /**
+   * Why the last session ended, when the screen must say so: `underage`, the
+   * date of birth the API refused, which deleted the account (D-072). Gone at
+   * the next reload, like the session.
+   */
+  farewell: "underage" | null;
   signIn: (accessToken: string, options?: { fresh?: boolean }) => void;
   /** Forget the session in this tab. The API's side is `logout()`. */
   signOut: () => void;
+  /** The API refused the date of birth and deleted the account (D-079, D-072). */
+  endForUnderage: () => void;
   setRestoreFailed: (failed: boolean) => void;
   setLocked: (locked: boolean) => void;
   setLockDecided: () => void;
@@ -42,6 +50,7 @@ const SIGNED_OUT = {
   restoreFailed: false,
   locked: false,
   lockDecided: false,
+  farewell: null,
 } as const;
 
 /** Who is signed in, for this tab only. The api client reads the token from here. */
@@ -51,6 +60,7 @@ export const useSession = create<SessionState>()((set) => ({
   restoreFailed: false,
   locked: false,
   lockDecided: false,
+  farewell: null,
   signIn: (accessToken, options) =>
     set((state) => ({
       accessToken,
@@ -59,6 +69,7 @@ export const useSession = create<SessionState>()((set) => ({
       lockDecided: state.lockDecided || options?.fresh === true,
     })),
   signOut: () => set(SIGNED_OUT),
+  endForUnderage: () => set({ ...SIGNED_OUT, farewell: "underage" }),
   setRestoreFailed: (restoreFailed) => set({ restoreFailed }),
   setLocked: (locked) => set({ locked }),
   setLockDecided: () => set({ lockDecided: true }),

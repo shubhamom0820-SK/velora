@@ -6,6 +6,7 @@ import {
 
 import { authCookieSuffix } from "./src/lib/auth-cookies";
 import { assertKnownAppEnv } from "./src/lib/build-env";
+import { signInPathFor } from "./src/lib/sign-in-path";
 import { securityHeaders } from "./src/lib/security-headers";
 
 export const nextConfig: NextConfig = {
@@ -41,19 +42,25 @@ export function buildsTheSite(
  * the site builds as not-production, silently. `next dev`, `next start` and
  * `next typegen` need no APP_ENV.
  *
- * The auth cookies' suffix goes into the browser's code here, from APP_ENV
- * (T-3.10, auth-cookies.ts). A build always has one, since it refused an
- * unknown APP_ENV above; elsewhere it's empty, and nothing signs in.
+ * The auth cookies' suffix (T-3.10, auth-cookies.ts) and the sign-in path
+ * (D-081, sign-in-path.ts) go into the browser's code here, from APP_ENV. A
+ * build always has both, since it refused an unknown APP_ENV above; elsewhere
+ * they're empty, and nothing signs in.
  */
 export function configFor(
   phase: string,
   env: Readonly<Record<string, string | undefined>> = process.env,
 ): NextConfig {
   if (buildsTheSite(phase)) assertKnownAppEnv(env);
-  const suffix = authCookieSuffix(env, {
-    dev: phase === PHASE_DEVELOPMENT_SERVER,
-  });
-  return { ...nextConfig, env: { AUTH_COOKIE_SUFFIX: suffix ?? "" } };
+  const dev = phase === PHASE_DEVELOPMENT_SERVER;
+  return {
+    ...nextConfig,
+    env: {
+      AUTH_COOKIE_SUFFIX: authCookieSuffix(env, { dev }) ?? "",
+      // D-081: which way this build signs people in, from APP_ENV too.
+      SIGN_IN_PATH: signInPathFor(env, { dev }) ?? "",
+    },
+  };
 }
 
 /**

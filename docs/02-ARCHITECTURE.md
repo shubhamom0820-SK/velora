@@ -264,7 +264,7 @@ that person in the last 7 days → `wallet.credit(reason=refund_banned_partner)`
 | `CORS_ORIGINS` | api | comma list, exact origins |
 | `COOKIE_DOMAIN` | api | the readable CSRF cookie's domain (D-055): `veloraapp.co.in` in production, `staging.veloraapp.co.in` on staging. The refresh cookie has none: host-only on the API (D-054) |
 | `CLIENT_IP_HEADER` | api | the header the platform's proxy puts the client's IP in, for per-IP rate limits: `Fly-Client-IP` on Fly. Empty only where `ENV` is `local`, which reads the socket (D-056) |
-| `AUTH_PHONE_PROVIDER` | api, web | `firebase` \| `msg91` \| `fake` |
+| `AUTH_PHONE_PROVIDER` | api | `firebase` \| `msg91` \| `fake`. The web never reads it: a build signs in by the path its `APP_ENV` names, Path B where it's `local` or `ci`, Firebase on `staging` and `production` (D-081) |
 | `FIREBASE_PROJECT_ID`, `FIREBASE_SERVICE_ACCOUNT_JSON` | api | token verification |
 | `NEXT_PUBLIC_FIREBASE_*` | web | apiKey, authDomain, projectId, appId, App Check site key — public by design |
 | `SMS_PROVIDER` | api | `msg91` \| `fake` (`fake` locally) |

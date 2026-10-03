@@ -12,6 +12,8 @@ import { WaitlistForm } from "./WaitlistForm";
 export function WaitlistBox() {
   return (
     <section
+      // /login's "Join the waitlist" lands here while sign-in is closed (D-081).
+      id="waitlist"
       aria-labelledby="waitlist-title"
       className="mx-auto max-w-130 px-6 pb-10"
     >

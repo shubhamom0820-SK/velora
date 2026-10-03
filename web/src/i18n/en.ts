@@ -29,6 +29,139 @@ export const en = {
     restoreFailedTitle: "We couldn't reach {app}",
     restoreFailedBody: "Check your connection and try again.",
   },
+  // Sign-in and onboarding (T-3.11, T-3.12). Drafted from the prototype where
+  // 08-DESIGN's list of its errors leaves it trusted, and from /terms and the
+  // decisions where it doesn't; approved by the founder at review.
+  onboarding: {
+    progress: "Step {step} of {total}",
+    back: "Back",
+    continue: "Continue",
+    phone: {
+      title: "What's your number?",
+      sub: "We'll text a code to confirm it. Your number is never shown on your profile.",
+      label: "Mobile number",
+      prefix: "+91",
+      placeholder: "98765 43210",
+      send: "Send code",
+    },
+    code: {
+      title: "Enter the code",
+      sub: "Sent to +91 {phone}.",
+      label: "The 6-digit code",
+      verify: "Verify",
+      resendIn: "Send a new code in {seconds}s",
+      resend: "Send a new code",
+      changeNumber: "Change number",
+    },
+    // D-081: a Firebase build before T-3.14, instead of a form that can't work.
+    closed: {
+      title: "Sign-in isn't open yet",
+      body: "{app} is getting ready. Leave your email and we'll tell you when it opens.",
+      waitlist: "Join the waitlist",
+    },
+    birthday: {
+      title: "When were you born?",
+      sub: "{app} is strictly 18+.",
+      label: "Date of birth",
+      confirmTitle: "Is this right?",
+      confirmBody:
+        "You were born on {date}. Your date of birth can't be changed once it's saved.",
+      confirm: "Yes, that's right",
+      edit: "Change it",
+      answered: "You're {age}. Your date of birth can't be changed.",
+    },
+    // D-072, worded as /terms and /privacy put it.
+    underage: {
+      title: "You need to be 18 to use {app}",
+      body: "We've deleted what you gave us. We keep only a hashed copy of your phone number, so it can't sign up again.",
+    },
+    gender: {
+      title: "I am a",
+      sub: "This can't be changed later. It decides how the app works for you.",
+      man: "Man",
+      manNote: "You'll buy Velas to open threads",
+      woman: "Woman",
+      womanNote: "Everything is free, always",
+      lock: "Locked permanently after signup. This is what keeps fake accounts out.",
+      answeredMan: "You signed up as a man. This can't be changed.",
+      answeredWoman: "You signed up as a woman. This can't be changed.",
+    },
+    lookingFor: {
+      title: "Who are you here to meet?",
+      showMe: "Show me",
+      women: "Women",
+      men: "Men",
+      everyone: "Everyone",
+      intents: "I'm looking for",
+      intentsHelp: "Pick up to 3.",
+    },
+    name: {
+      title: "Name and hometown",
+      sub: "Both places matter: people connect over hometowns as much as neighbourhoods.",
+      firstName: "First name",
+      firstNamePlaceholder: "Rohit",
+      hometown: "Hometown, where you're from",
+      hometownPlaceholder: "Amritsar",
+      city: "Where you live now",
+      cityPlaceholder: "Phagwara",
+    },
+    username: {
+      title: "Pick a username",
+      sub: "This becomes your public page. Share it and anyone can find you.",
+      label: "Username",
+      placeholder: "rohit_a",
+      help: "4 to 20 of a–z, 0–9, dots and underscores.",
+      page: "Your page: {url}",
+      checking: "Checking…",
+      available: "That one's free.",
+      taken: "That one's taken.",
+      suggestion: "Try {name}",
+    },
+  },
+  // What the API's error codes say on screen (T-3.11). A code the screen
+  // doesn't expect falls back to `unknown`.
+  apiErrors: {
+    unknown: "Something went wrong. Try again.",
+    network: "We couldn't reach {app}. Check your connection and try again.",
+    invalid: "Check what you entered.",
+    phoneNotSupported: "Only Indian mobile numbers can sign in for now.",
+    rateLimited: "Too many tries. Wait a moment, then try again.",
+    providerUnavailable:
+      "We couldn't send a code just now. Try again in a few minutes.",
+    otpInvalidOne: "That code isn't right. 1 try left.",
+    otpInvalidMany: "That code isn't right. {count} tries left.",
+    otpExpired: "That code has expired. Send a new one.",
+    otpTooMany: "Too many wrong codes. Wait a while, then send a new one.",
+    // Decision 16: neutral, with a way to reach a person. P-51 may change it.
+    cantSignIn: "This account can't sign in.",
+    contact: "Contact us",
+    immutable: "This can't be changed now.",
+    usernameTaken: "That username is taken.",
+    fields: {
+      phone: "Enter a 10-digit Indian mobile number.",
+      otp: "Enter the 6-digit code.",
+      dob: "Enter a real date of birth.",
+      first_name: "Use letters only, with single spaces.",
+      hometown: "Use up to 40 characters.",
+      city: "Use up to 40 characters.",
+      username: "Use 4 to 20 of a–z, 0–9, dots and underscores.",
+      intent_ids: "Pick 1 to 3.",
+    },
+  },
+  // The intents catalogue, by id (P-25, D-041). The screen shows these, never the
+  // database's label (P-26), which stays the fallback for an id not listed here.
+  intents: {
+    "1": "Something serious",
+    "2": "Long term",
+    "3": "Situationship",
+    "4": "Casual dating",
+    "5": "Just one night",
+    "6": "No strings attached",
+    "7": "Open relationship",
+    "8": "Discreet",
+    "9": "Friendship",
+    "10": "Go with the flow",
+  },
   // The PIN lock (T-3.10, D-069): a deterrent, so its words don't promise more.
   lock: {
     title: "Enter your PIN",
@@ -352,5 +485,6 @@ export const en = {
     retry: "Try again",
     pinProgress: "{count} of {max} digits entered",
     pinDelete: "Delete",
+    otpDigit: "Digit {n} of {total}",
   },
 } as const;

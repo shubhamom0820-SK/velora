@@ -153,6 +153,28 @@ describe("the app's gate (T-3.10)", () => {
   });
 });
 
+describe("Me stays fresh after a write puts it in the cache", () => {
+  it("opens a screen without asking /me again", async () => {
+    const api_ = fakeApi({});
+    const client = new QueryClient({
+      defaultOptions: { queries: { retry: false } },
+    });
+    client.setQueryData(["me"], me("done"));
+    useSession.getState().signIn("t", { fresh: true });
+
+    render(
+      <QueryClientProvider client={client}>
+        <AppGate>
+          <Secret />
+        </AppGate>
+      </QueryClientProvider>,
+    );
+
+    expect(await screen.findByText("Behind the gate")).toBeInTheDocument();
+    expect(api_.calls).toHaveLength(0);
+  });
+});
+
 describe("onboarding's gate (T-3.10, D-080)", () => {
   it("sends a step ahead of the person's back to theirs", async () => {
     nav.pathname = "/onboarding/name";

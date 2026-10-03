@@ -89,6 +89,9 @@ describe("next.config runs the check for builds only", () => {
     // Nothing refused; only the auth cookies' suffix is added (T-3.10).
     const { env, ...rest } = configFor(phase, {});
     expect(rest).toEqual(nextConfig);
-    expect(Object.keys(env ?? {})).toEqual(["AUTH_COOKIE_SUFFIX"]);
+    expect(Object.keys(env ?? {})).toEqual([
+      "AUTH_COOKIE_SUFFIX",
+      "SIGN_IN_PATH",
+    ]);
   });
 });
