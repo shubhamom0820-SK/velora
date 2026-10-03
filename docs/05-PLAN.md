@@ -123,6 +123,7 @@ never done silently.
 - [ ] **P-0.4** DLT (needed only to move off Firebase later — start it anyway, it is slow): entity → header → OTP template `{#var#} is your Velora verification code. Valid for 5 minutes. Do not share it.`
 - [ ] **P-0.5** MSG91 account; link DLT IDs; send one test SMS to yourself.
 - [ ] **P-0.12** Firebase: project, Phone provider on, App Check + reCAPTCHA Enterprise enforced, authorised domains, daily SMS quota cap, billing alert. Confirm the **real per-SMS price for IN** in the billing console and write it into D-035.
+  **Never add a test phone number to a project production uses (D-065):** its fixed code signs anyone in as that number wherever the project's tokens are accepted, production included, and in India the number may be a real person's (D-064).
 - [x] **P-0.6** Create accounts: GitHub, Supabase (Mumbai), Upstash, Cloudflare (R2 on), Fly.io (paid plan for `bom`), Vercel, Sentry, Sightengine, AWS (Rekognition, `ap-south-1`).
   **Ticked with three still to set up**, none needed before Sprint 4: Sightengine (T-4.4), AWS for
   Rekognition (T-4.5 — signed up, but its payment method failed verification) and Sentry (T-9.12).
@@ -213,13 +214,18 @@ One migration per task, each with a working `downgrade()`. Build exactly `03-SCH
 - [x] **Commit:** `feat(db): reference data [T-1.14]`
 
 ### T-1.15 · Dev seed
-- [ ] **Needs:** T-1.14, T-3.1
-- **Why T-3.1:** phone numbers are hashed and encrypted with its `core/security.py`, so the seeded test accounts are the ones login finds. Parts that need later code live in those tasks: placeholder photos in T-4.4, verification rows in T-4.5, the test man's 60 Velas in T-5.1 (rule 5).
-- [ ] `make seed` (local only — refuses unless `ENV` is `local`; an allowlist, so an environment added later can't pass by default): the 20 prototype profiles (`docs/prototype/`, the `P` array), each with the rows signup creates (T-3.3), onboarding done, `is_verified` where the prototype has `v`, and a location at its neighbourhood's centroid (`area_id`; `city` Bengaluru, `hometown` from `from`); prototype women seek men and men seek women. 3 of the women — the prototype's `likedYou`: Ananya, Meera, Riya — like the test man. A test man (`+91 90000 00001`, `test_man`, seeking women), a test woman (`+91 90000 00002`, `test_woman`, seeking men, verified), and a moderator (`+91 90000 00003`, onboarding not started, so not in discovery).
-- [ ] Interests: each profile keeps its 3 prototype tags plus 2 drafted by Claude from its `about` text; Kavya's "Carnatic" (not in the catalogue) is replaced. Intents: the prototype's value mapped — `serious` → Something serious, `longterm` → Long term, `short` → Casual dating, `chat` → Go with the flow — then roughly a third get a 2nd intent and a few a 3rd, fitting their `about`, so D-041's 1–3 and any-overlap filter run on real data. Show the founder all 20 (interests and the intent spread) before `/done`. The data file's note says the additions were drafted by Claude from the prototype's about text and reviewed by the founder.
-- [ ] The seed's output never contains a phone number (rule 15).
-- [ ] **Done when:** `make seed` twice doesn't duplicate.
-- [ ] **Commit:** `chore(dev): seed script [T-1.15]`
+- [x] **Needs:** T-1.14, T-3.1
+- **Why T-3.1:** every number goes through its `normalize_phone`, `hash_phone` and `encrypt_phone`, and the test woman's PIN through `hash_pin`, with the keys the local API reads, so login finds the seeded accounts. Parts that need later code live in those tasks: placeholder photos in T-4.4, verification rows in T-4.5, the test man's 60 Velas in T-5.1 (rule 5).
+- [x] `make seed` runs `api/seed/`, which writes only when three independent facts hold, each an allowlist (rule 16, D-064): `ENV` is `local`; `DATABASE_URL`'s host is loopback; and the database itself carries the marker `make infra-up` stamps on it (`infra/postgres/stamp-local.sql`). The first two are checked before connecting; the marker is the connection's first read. A tunnel makes staging's database answer on `localhost`, and only the marker catches that. The seed lives outside `app/`: `.dockerignore` keeps it out of the image, and CI checks the image has none.
+- [x] The 20 prototype profiles (`docs/prototype/`, the `P` array), each with the four rows `make_user` writes (users, profiles, wallets at 0, notification_prefs), a location scattered inside its neighbourhood, never on the centroid, so nobody is 0 m from anyone (`area_id`; within 750 m, derived from the username so every run is the same, and nearer its own centroid than any other area's; `city` Bengaluru until P-38, `hometown` from `from`), `users.created_at` from `joined`; women seek men, men seek women. Onboarding done, except Ishita, Riya and Pooja (the prototype's unverified women), who stop at the selfie step, unverified, so T-4.5 has women to verify; every onboarded woman is verified (D-008), and the men where the prototype has `v` (7). The profile flags (`show_kudos` from `showKudos`; `hide_age`, `hide_distance`, `show_gifts`, `is_hidden`) each take both values across the 20.
+- [x] Swipes, never a like both ways, so no match: Ananya (a super-like, free for women), Meera and Tanvi like the test man (Tanvi's was Riya's in the prototype); Arjun and Rohan like the test woman. The test man passes on Diya and Nandini, and the test woman on Kabir, so their decks show that a profile already swiped doesn't come back.
+- [x] A test man (`+91 90000 00001`, `test_man`, seeking women) and a test woman (`+91 90000 00002`, `test_woman`, seeking men, verified, a PIN), both onboarded at Koramangala; a moderator (`+91 90000 00003`, onboarding not started, so not in discovery). The 20 profiles take `+91 90000 00101`–`00120`. India reserves no fictional range, so these may be real people's numbers: T-3.2 and T-3.14 keep any OTP to them on the machine (D-064, D-065).
+- [x] Interests: each profile keeps its 3 prototype tags plus 2 drafted by Claude from its `about` text; Kavya's "Carnatic" (not in the catalogue) is replaced. Intents: the prototype's value mapped — `serious` → Something serious, `longterm` → Long term, `short` → Casual dating, `chat` → Go with the flow — then roughly a third get a 2nd intent and a few a 3rd, fitting their `about`, so D-041's 1–3 and any-overlap filter run on real data. Show the founder all 20 (interests, the intent spread and the profile flags) before `/done`. The data file's note says the additions were drafted by Claude from the prototype's about text and reviewed by the founder.
+- [x] The data is checked against the rules before anything is written: age 18 or over in IST, 5 distinct catalogue interests, 1–3 distinct intents, an about with no URL or phone number, every onboarded woman verified, swipes only between onboarded people, each pair once, and never a like both ways.
+- [x] Running it again changes nothing: people are found by phone hash and never updated, in one transaction. Start over with `make infra-reset`, then `make infra-up migrate seed`; never a targeted delete, which the ledger refuses from T-5.1.
+- [x] The seed's output never contains a phone number (rule 15).
+- [x] **Done when:** `make seed` twice doesn't duplicate; `ENV` staging and production, a remote host and a loopback address to an unstamped database are each refused before a row is written (tests, 🔒); the test man's number, typed as people type it, finds him through `normalize_phone` and `hash_phone`.
+- [x] **Commit:** `chore(dev): seed script [T-1.15]`
 
 ### T-1.16 · Schema tests
 - [-] **Needs:** T-1.13, T-1.5
@@ -517,7 +523,8 @@ One migration per task, each with a working `downgrade()`. Build exactly `03-SCH
 - [ ] **Needs:** T-3.1
 - [ ] This is Path B (MSG91, used after DLT approval). Build it behind `AUTH_PHONE_PROVIDER`; the launch path is T-3.14.
 - [ ] `POST /v1/auth/otp/send`. Normalise phone → reject if in `banned_identities` (respond generic, don't reveal). Rate limits per `02-ARCHITECTURE.md §12`. Generate 4-digit code, store `otp:{phone_hash}` = keyed HMAC of the code under `CODE_PEPPER`'s `otp/v1` key, not argon2 (D-063), + attempts 0, TTL 300 s; resend lock 45 s. Send via `SmsProvider`.
-- [ ] Tests: happy path; resend too soon → `RATE_LIMITED`; 6th send in an hour → `RATE_LIMITED`; banned → 200 but no SMS sent.
+- [ ] **A seeded number never gets a real SMS (T-1.15, D-064).** India reserves no fictional range, so the seed's `+91 90000 00xxx` numbers may be real people's. Where `ENV` is local, a real `SmsProvider` sends only to numbers a developer lists in a local allowlist setting, empty by default; any other number is refused before the provider is called, so neither a seeded number nor a typo reaches a stranger.
+- [ ] Tests: happy path; resend too soon → `RATE_LIMITED`; 6th send in an hour → `RATE_LIMITED`; banned → 200 but no SMS sent; locally, with `SMS_PROVIDER=msg91` and a seeded number, no HTTP request is made.
 - [ ] **Commit:** `feat(auth): send otp [T-3.2]`
 
 ### T-3.3 · OTP verify and signup
@@ -527,6 +534,7 @@ One migration per task, each with a working `downgrade()`. Build exactly `03-SCH
 - [ ] Create session (family), set the refresh cookie (`refresh_prod`, `refresh_staging`, `refresh_local`; `HttpOnly; Secure; SameSite=Lax; Path=/v1/auth`, no `Domain`: host-only on the API, D-054), set the readable CSRF cookie (`csrf_prod`, `csrf_staging`, `csrf_local`), scoped to `COOKIE_DOMAIN`, return `{access_token, user: Me}`. Both names come from `ENV` with no fallback (D-055).
 - [ ] Set staging's `COOKIE_DOMAIN` to `staging.veloraapp.co.in` in `infra/fly.api.toml` (P-33 leaves it unset).
 - [ ] Refuse if user status `banned`.
+- [ ] Point `make_user` (T-3.1) and `make seed` (T-1.15) at this find-or-create service: both write these four rows by hand until now. The seed's referral codes (`TESTMAN`, `ANANYAD`: the username in capitals) follow whatever format this task picks.
 - [ ] Tests: new user creates all 4 rows; existing user doesn't duplicate; banned → `ACCOUNT_BANNED`; the refresh cookie has no `Domain`; both cookies' names follow `ENV`.
 - [ ] **Commit:** `feat(auth): verify otp and create account [T-3.3]`
 
@@ -570,6 +578,7 @@ One migration per task, each with a working `downgrade()`. Build exactly `03-SCH
 ### T-3.9 · PIN
 - [ ] **Needs:** T-3.5
 - [ ] `POST /auth/pin/set` (4 digits, not `0000`/`1234`/all-same), `POST /auth/pin/verify` (5 fails → revoke all sessions, `SESSION_REVOKED`). Skippable in onboarding.
+- [ ] The seed's test-woman PIN (`TEST_WOMAN_PIN` in `api/seed/data.py`, T-1.15) must stay valid under whatever rules this adds, a common-PIN blocklist included. A test here checks it, so the seed doesn't break the day the rules land.
   `hash_pin`/`verify_pin` are T-3.1's (D-062). `verify_pin` returns False both for a wrong PIN and
   for a stored hash it refuses (other parameters, unreadable), logging only the latter; whether that
   counts against `pin_failed` is this task's call.
@@ -617,10 +626,19 @@ One migration per task, each with a working `downgrade()`. Build exactly `03-SCH
   `auth/invalid-phone-number`, `auth/code-expired`.
 - [ ] Sign the user out of Firebase immediately after the exchange — we keep our own session.
 - [ ] **Widen the CSP here, deliberately (D-059).** T-2.5's policy allows no outside script, connect or frame host, so Firebase's SDK and its reCAPTCHA check fail at sign-in until this task adds exactly the Google hosts Firebase documents (`script-src`, `connect-src`, `frame-src`), each with its reason in `web/src/lib/security-headers.ts`. A CSP error at sign-in is this line, not a Firebase bug.
+- [ ] **Seeded numbers and test numbers (D-064, D-065).** Firebase sends its code from the
+  browser, so no server guard can stop a text to a seeded number (`+91 90000 00xxx`, T-1.15)
+  when the local web runs on Firebase. Locally, seeded users sign in on
+  `AUTH_PHONE_PROVIDER=fake`; this task decides how the local web keeps a seeded number from
+  reaching Firebase. A Firebase test number signs anyone in as that number wherever its project's
+  tokens are accepted, so it never goes in a project production uses.
 - [ ] Tests: forged token rejected; expired rejected; reused token rejected; non-Indian number
   rejected; banned phone rejected; a valid token creates exactly one user.
 - [ ] **Done when:** on staging, sign in at `https://staging.veloraapp.co.in` with a Firebase
-  test phone number (fixed code, no SMS, no cost), reload, and the session is still there,
+  test phone number (fixed code, no SMS, no cost) in a Firebase project production doesn't use
+  (D-065). As first written, the number lived in the one project P-0.12 sets up, which would let
+  its code sign anyone into production too. This task picks the way out: a Firebase project for
+  staging alone, or the founder's own phone. Then reload, and the session is still there,
   restored by `/auth/refresh`. This is the first real sign-in staging can do (D-045 allows only
   real providers there), so it is the first proof that P-33's subdomains carry the refresh cookie.
   Until it passes, P-33 is believed, not proven.
@@ -629,7 +647,7 @@ One migration per task, each with a working `downgrade()`. Build exactly `03-SCH
 ### T-3.13 · E2E signup
 - [ ] **Needs:** T-3.12
 - [ ] Playwright against local stack with `AUTH_PHONE_PROVIDER=fake` (OTP read from a test-only endpoint enabled only when `ENV=local`): new man reaches the photos step; under-18 is refused and can't retry with the same number.
-- [ ] One staging run against the real Firebase path using a Firebase **test phone number** (fixed code, no SMS sent, no cost).
+- [ ] One staging run against the real Firebase path using a Firebase **test phone number** (fixed code, no SMS sent, no cost), only from a Firebase project production doesn't use (D-065), as T-3.14 settles.
 - [ ] **Commit:** `test(e2e): signup flow [T-3.13]`
 
 ---
@@ -669,7 +687,7 @@ One migration per task, each with a working `downgrade()`. Build exactly `03-SCH
 - [ ] Sightengine: turn on deleting each image right after its check, so photos don't stay on its
   servers in the US and Europe — `/privacy` says they're deleted there (D-048).
 - [ ] Tests with the fake provider for approve and each reject path; test that output has no EXIF.
-- [ ] Extend `make seed` (T-1.15): an approved public photo at position 0 for every onboarded seeded user — a placeholder from the prototype's `c1`/`c2` gradient, re-encoded like any upload and stored through `StorageProvider`. Re-running creates no duplicates.
+- [ ] Extend `make seed` (T-1.15): an approved public photo at position 0 for every seeded user past the photos step (everyone but the moderator, including the three women at the selfie step) — a placeholder from the prototype's `c1`/`c2` gradient, re-encoded like any upload and stored through `StorageProvider`. Re-running creates no duplicates.
 - [ ] **Commit:** `feat(worker): photo moderation pipeline [T-4.4]`
 
 ### T-4.5 · Selfie verification
@@ -677,7 +695,7 @@ One migration per task, each with a working `downgrade()`. Build exactly `03-SCH
 - [ ] `POST /verification/challenge` → random pose from a list (turn left, turn right, look up, smile) stored on the row. `POST /verification/{id}/submit {photo_id}` → enqueue `verify_selfie`.
 - [ ] `verify_selfie`: re-encode; `FaceMatchProvider.compare(selfie, approved_public_photos)`; similarity ≥ 85 and exactly one face → `approved`, `users.is_verified = true`; else `rejected` with reason. Max 5 attempts / day.
 - [ ] Selfies are never public and never shown to other users.
-- [ ] Extend `make seed` (T-1.15): an approved verification row, with a placeholder selfie in the private bucket, for every seeded user marked verified — the test woman and the prototype's 14 `v` profiles.
+- [ ] Extend `make seed` (T-1.15): an approved verification row, with a placeholder selfie in the private bucket, for every seeded user marked verified — 15: the test woman, and the prototype's 14 `v` profiles (7 women, 7 men). Ishita, Riya and Pooja stop at the selfie step, unverified, with no row: they're who this task verifies against (the advisor directing T-1.15, Claude in a separate chat, 3 October 2026).
 - [ ] **Commit:** `feat(verification): selfie challenge and face match [T-4.5]`
 
 ### T-4.6 · Web photos step
@@ -709,6 +727,7 @@ One migration per task, each with a working `downgrade()`. Build exactly `03-SCH
 - [ ] **Needs:** T-3.5, and **P-38** (the seeded areas are still Bengaluru's; D-013 is Phagwara)
 - [ ] `PUT /me/location` accepts `{lat,lng}` (must be inside India bounding box) or `{area_id}` (uses centroid). `GET /areas?city=`.
 - [ ] Web: onboarding asks permission once with a clear reason; on deny → area picker. Location refreshed on app open if > 6 h old.
+- [ ] The seed (T-1.15) gives each profile both its `area_id` and a location scattered near that area's centroid, as if it had shared its position. If `{lat,lng}` here leaves `area_id` empty, or sets it some other way, make the seed match.
 - [ ] **Allow location here (D-059):** T-2.5's Permissions-Policy has `geolocation=()`, so the browser refuses the position without ever asking until this task makes it `geolocation=(self)`. Until then everyone silently lands on the area picker.
 - [ ] **Commit:** `feat(profiles): location [T-4.10]`
 
@@ -1304,6 +1323,10 @@ Claude Code adds items here instead of doing unplanned work. Format:
   opens "Trained in Carnatic vocal since I was six", and T-1.15 has to replace her "Carnatic" tag.
   Adding it is a data migration; existing ids stay fixed, so it would take id 25. Found while
   planning T-1.15.
+  **Reconsider the catalogue with the city, not before it** (the advisor directing T-1.15,
+  Claude in a separate chat): once P-38 moves
+  the launch city to Phagwara, Carnatic stops fitting anyway, and Punjabi music is the gap that
+  matters there. Until then, the seed's Kavya carries Indie music in its place.
 - [x] P-28 · Test that `theme-color` equals `--chrome` — `<meta name="theme-color">` can't read a
   CSS variable, so `web/src/styles/theme-color.ts` holds the literal `#141113`: the one documented
   exception to rule 14 (08-DESIGN §1). The day `--chrome` changes in `tokens.css`, that copy drifts
@@ -1452,6 +1475,19 @@ Claude Code adds items here instead of doing unplanned work. Format:
   The registered office is in Hajipur, and that's deliberate (D-058): these areas stay
   Phagwara's, the launch city. Don't make the two agree; a test in `legal.test.ts` says why.
 
+  **The migration must fail with a message, not a bare foreign-key error (from T-1.15).** On a
+  seeded dev database, 22 profiles point at Bengaluru areas (`area_id`, `on delete restrict`),
+  so removing those areas raises a restrict violation that says nothing about why. Before it
+  removes anything, the migration counts profiles whose area it would remove and, if there are
+  any, stops with a message naming the fix: on a dev database that's the seed, so `make
+  infra-reset`, then `make infra-up migrate seed` once `api/seed/data.py` has moved. Anywhere
+  else it's real users, whose areas need moving, not deleting. Move the seed in the same task:
+  its 14 localities, `AREA_CITY` in `api/seed/run.py`, and the about texts that name Bengaluru
+  or places near it (Ananya's, Sanya's, Siddharth's), for the founder to review.
+  `SCATTER_RADIUS_M` (750 m) is under half the gap between Bengaluru's two closest centroids; a
+  test fails if any profile lands nearer another area's centroid, so check it against Phagwara's.
+  Reconsider the interests catalogue in the same task (P-27): Punjabi music is the gap there.
+
   Found while planning T-2.2.
 - [ ] P-39 · Delete the Firebase user right after sign-in. **After T-3.14 works plainly.** Worst
   case without it: every user's phone number sits in Firebase's records in the United States for
@@ -1502,3 +1538,16 @@ Claude Code adds items here instead of doing unplanned work. Format:
   inclusion check can never find a header we didn't want.
 
   Found in T-2.5's Done-when.
+- [ ] P-45 · Decide whether `normalize_phone` accepts only mobile numbers. **Decide in T-3.2.**
+  Worst case: T-3.2 pays for an SMS, and spends the sender's rate-limit slots, on a number that
+  can't receive one. `normalize_phone` (T-3.1) checks that a number is valid, not what type it
+  is, so it accepts landlines (`+91 22 2222 2222`), toll-free 1800 numbers and the 140 series
+  (libphonenumber 9.0.40 types them `FIXED_LINE`, `TOLL_FREE` and `UAN`; checked by Claude, 3
+  October 2026). Sign-in needs an SMS-capable number. Requiring `PhoneNumberType.MOBILE` would
+  refuse them up front, with a test each way; Firebase's path (T-3.14) may already refuse them,
+  which is worth checking before duplicating it.
+
+  P-44 is skipped on purpose: the advisor directing T-1.15 (Claude, in a separate chat) recalls
+  it as T-3.1's PIN pepper, closed there, though no file or commit in the repo names it. Never give the number to anything else.
+
+  Found while planning T-1.15.

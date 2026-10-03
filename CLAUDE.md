@@ -47,7 +47,8 @@ velora/
     app/modules/<name>/ router.py service.py repository.py schemas.py models.py
     app/workers/        ARQ tasks + cron
     alembic/            migrations
-    tests/              mirrors app/
+    seed/               make seed: dev data, local stack only, never in the image (D-064)
+    tests/              mirrors app/ (and seed/)
   web/                  Next.js app (App Router, TypeScript strict, Tailwind v4)
   infra/                docker-compose.yml, fly.api.toml, STAGING.md (the deploy runbook)
   scripts/              ci-gate, with-tools, staging-smoke, check-image-no-env, migrate-with-url
@@ -74,11 +75,11 @@ reference for its APIs, which differ from older versions.
 ## Commands
 
 ```
-make infra-up    # docker: postgres+postgis, redis, minio   (make infra-down to stop)
+make infra-up    # docker: postgres+postgis, redis, minio; stamps the dev db as local   (make infra-down to stop)
 make infra-reset # stop the stack and DROP all data volumes (clean database)
 make dev         # infra + api + web on 127.0.0.1 (worker joins with T-4.4)
 make worker      # ARQ worker only
-make seed        # dev data: 20 profiles, test users (local only)
+make seed        # dev data: 20 profiles, test users (local only; a re-run changes nothing, infra-reset starts over)
 make test        # api pytest + web vitest   (test-api / test-web for one side)
 make lint        # ruff + mypy + eslint + tsc --noEmit + prettier check   (lint-api / lint-web)
 make hooks       # install the git pre-commit hooks (once per clone)

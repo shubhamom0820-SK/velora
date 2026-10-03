@@ -466,8 +466,9 @@ Unique ignores case (citext). No format check in the database: T-2.3 validates i
 - `gifts` — 6 rows (D-016)
 - `action_prices`, `credit_packs`, `app_config` — from D-004 / D-005 / §8
 - `areas` — 40 neighbourhoods for the launch city
-- **dev only** (`make seed`): the 20 prototype profiles (10 women, 10 men) with photos,
-  a moderator account, and a man with 60 Velas for testing.
+- **dev only** (`make seed`, T-1.15): the 20 prototype profiles (10 women, 10 men), a test man,
+  a test woman and a moderator, written only to the local stack's database (D-064). Their photos
+  arrive with T-4.4, verification rows with T-4.5, and the test man's 60 Velas with T-5.1.
 
 The reference data is two data migrations — T-1.14's, and P-25's for intents — with every insert
 `ON CONFLICT DO NOTHING`: re-running them changes nothing and never resets a value tuned since.

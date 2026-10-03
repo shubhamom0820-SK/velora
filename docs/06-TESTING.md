@@ -72,6 +72,9 @@ If any of these fails, nothing ships.
 15. **Refresh reuse** (T-3.4): replaying a rotated refresh token revokes the family.
 16. **Firebase token** (T-3.14): forged, expired, wrong-audience and already-used ID tokens are all
     rejected; a non-`+91` number never creates a user.
+17. **The dev seed stays local** (T-1.15): `ENV` staging and production, a database on another
+    host, and a local address to a database `make infra-up` didn't stamp are each refused before
+    a row is written (D-064).
 
 A test in this list is marked `@pytest.mark.critical`; CI runs them first and fails fast.
 

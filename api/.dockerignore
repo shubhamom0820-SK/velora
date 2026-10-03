@@ -18,3 +18,8 @@ __pycache__
 
 # Not needed to run the API.
 tests
+
+# The dev seed (T-1.15, D-064): fake users, and phone numbers that may be real
+# people's. Code that isn't in the image can't run in production, whatever a
+# bug does to ENV. CI checks the built image has no /app/seed.
+seed

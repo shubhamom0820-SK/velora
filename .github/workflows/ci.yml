@@ -173,6 +173,17 @@ jobs:
             exit 1
           fi
 
+      # T-1.15, D-064: the dev seed writes fake users, with phone numbers that may
+      # be real people's. api/.dockerignore keeps it out, so no bug in its guards
+      # can run it in production. Finding /app/app/main.py first proves the check
+      # looked inside the API image, not at some image where nothing is anywhere.
+      - name: No dev seed in the image
+        run: |
+          docker run --rm --entrypoint sh "$IMAGE" -c '
+            test -f /app/app/main.py || { echo "::error::No /app/app/main.py: this is not the API image."; exit 1; }
+            if test -e /app/seed; then echo "::error::/app/seed is in the image: api/.dockerignore must exclude seed."; exit 1; fi
+            echo "No dev seed in the image."'
+
       - name: Serves /healthz, hides its schema outside local
         run: |
           # Outside local, Redis must be rediss:// (TLS); it's never reached here.

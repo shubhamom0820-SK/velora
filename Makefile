@@ -10,9 +10,12 @@ help: ## List the available targets
 	@echo "Velora — make targets:"
 	@grep -E '^[a-z][a-zA-Z0-9_-]*:.*?## ' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*?## "}; {printf "  %-15s %s\n", $$1, $$2}'
 
-infra-up: ## Start docker: postgres+postgis, redis, minio
+infra-up: ## Start docker: postgres+postgis, redis, minio; stamp the dev database as local
 	$(COMPOSE) up -d --wait db redis minio
 	$(COMPOSE) run --rm minio-init
+	@# The dev seed writes only to a database carrying this stamp (T-1.15, D-064).
+	@# psql runs inside the container, so this reaches no other database.
+	$(COMPOSE) exec -T db sh -c 'psql -v ON_ERROR_STOP=1 -q -U "$$POSTGRES_USER" -d "$$POSTGRES_DB"' < infra/postgres/stamp-local.sql
 
 infra-down: ## Stop the docker stack, keeping data
 	$(COMPOSE) down
@@ -31,8 +34,8 @@ dev: ## Run infra + api + web, all on 127.0.0.1 (worker joins with T-4.4)
 worker: ## Run the ARQ worker only [T-4.4]
 	@echo "not yet — T-4.4"
 
-seed: ## Dev data: 20 profiles, test users (local only) [T-1.15]
-	@echo "not yet — T-1.15"
+seed: ## Dev data, local only: 20 profiles, 3 test accounts (re-run changes nothing)
+	cd api && uv run python -m seed
 
 test: test-api test-web ## api pytest + web vitest (CI runs each half as its own job)
 

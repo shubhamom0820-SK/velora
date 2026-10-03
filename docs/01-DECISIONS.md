@@ -972,6 +972,89 @@ codes.
 which would be another secret with the same life, where one key with two labels keeps the uses
 apart. Decided by the founder on 3 October 2026; T-3.2 builds it.
 
+### D-064 · The dev seed writes only to the local stack's database, on numbers that may be real — Locked
+**The decision:** `make seed` (T-1.15) writes the prototype's 20 profiles and three test accounts
+only when three independent facts hold, each an allowlist (rule 16), all before a row is written:
+1. `ENV` is `local`;
+2. `DATABASE_URL`'s host is `127.0.0.1`, `localhost` or `::1`;
+3. the database itself carries the marker `make infra-up` stamps on it: a `COMMENT ON DATABASE`
+   from `infra/postgres/stamp-local.sql`, run through psql inside the compose container, so it
+   can reach no other database. `velora_test` is never stamped.
+
+And the code isn't in the API image. It lives in `api/seed/`, outside `app/`;
+`api/.dockerignore` excludes it, and CI checks the built image has no `/app/seed`.
+
+**Why the database is asked, not just its address** (added by the advisor, 3 October 2026):
+an SSH tunnel makes staging's database answer on `localhost:5432`, which passes the first two.
+Only the local stack's database was stamped by `make infra-up`. A mistaken run is 23 rows today;
+from T-5.1 the ledger refuses DELETE and TRUNCATE, so it would become permanent pollution of a
+shared database, with phone numbers that may be real people's. Proved on 3 October 2026 by
+Claude: pointed at `localhost:5433`, a second PostgreSQL server standing in for a tunnel, the
+seed refused before its first write.
+
+**Why out of the image:** code that isn't in the image can't run in production, whatever a bug
+does to `ENV`. That beats any runtime guard.
+
+**The numbers: India reserves no fictional range.** Claude found none on 3 October 2026, with
+this caveat: Wikipedia's list of national fictional ranges covers nine countries and regions, and
+India isn't among them, but the 2003 National Numbering Plan itself couldn't be read (dot.gov.in
+answered 403 and its mirror timed out). Nor can a number `normalize_phone` accepts be known to be
+dead. Its validity check is libphonenumber's, whose Indian mobile pattern (9.0.40) lists the 6, 7
+and 8 series range by allocated range and takes the 9 series whole. So the seed's numbers, `+91
+90000 00001`–`00003` for the test accounts and `00101`–`00120` for the profiles, may each belong
+to someone. The guarantee lives in code instead: where `ENV` is local, T-3.2 sends a real SMS
+only to numbers a developer lists, and T-3.14 keeps seeded numbers off Firebase's browser path
+(D-065). The seed never prints a number.
+
+**Reset is `make infra-reset`, never a targeted delete.** From T-5.1 on, the ledger refuses one
+(T-1.12), and the only way round it is the owner's trigger bypass that T-1.22 took away from the
+app. `infra-reset` can only touch local Docker volumes, whatever `DATABASE_URL` says. A second
+run is insert-only: people are found by phone hash and never updated.
+
+**Rejected:**
+- Refusing only where `ENV` is production: a blacklist, which staging passes.
+- The host check alone, which a tunnel passes.
+- The seed inside `app/`, guarded by `ENV` alone.
+- Landline, toll-free or 140 numbers: `normalize_phone` accepts them, but they're real lines, and
+  real users sign up with mobiles (P-45).
+- Numbers that can't be valid, such as `+91 00000 00001`, which are certainly dead but are rows
+  `normalize_phone` can't produce: data that doesn't match what the app makes.
+- A denylist of the seed's numbers in every environment's SMS provider: a real owner of one could
+  never get a code in production.
+- A targeted reset (above).
+
+Decided on 3 October 2026 by an advisor directing T-1.15: Claude, in a separate chat, not the
+founder. Approved by the founder on 3 October 2026.
+
+### D-065 · Firebase test phone numbers never go in a project production uses — Locked
+**The fact, in Firebase's own words** (its "Test with fictional phone numbers" documentation,
+read by Claude on 3 October 2026): "When you provide the fictional phone number and send the
+verification code, no actual SMS is sent. Instead, you need to provide the previously configured
+verification code to complete the sign in." And: "The ID token minted during this process has
+the same signature as a real phone number user."
+
+**What follows (Claude's reading):** T-3.14's API checks a Firebase token's signature against
+Google's keys and its audience against our project, so it can't tell a test number's token from
+a real one. In a project production accepts tokens from, a test number and its code sign anyone
+who has them into production as that number. Firebase's own advice is to "store these numbers
+securely and to continuously recycle them": a secret that grants a production login, and nothing
+fails when it leaks. In India it's worse, because no number is known to be fictional (D-064).
+Firebase "does not allow you to set existing phone numbers used by real users as test numbers",
+but it can only check the users it already has. A real owner signing up would get no SMS, only a
+prompt for a code someone else holds.
+
+**The decision:** a test phone number goes only in a Firebase project whose tokens production's
+API never accepts. As first written, T-3.14's Done-when and T-3.13's staging run used one in the
+single project P-0.12 sets up, which production shares. T-3.14 picks the way out: a Firebase
+project for staging alone, whose different `FIREBASE_PROJECT_ID` production refuses as an
+audience, or the founder's own phone.
+
+**Rejected:** test numbers in the shared project with the code kept secret (above).
+
+The finding is Claude's, from Firebase's documentation. An advisor directing T-1.15 (Claude, in
+a separate chat, not the founder) had it recorded as a decision on 3 October 2026, and the
+founder approved it the same day.
+
 ---
 
 ## Adding a decision

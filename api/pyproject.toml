@@ -63,7 +63,7 @@ extend-select = [
 [tool.mypy]
 python_version = "3.12"
 strict = true
-files = ["app", "tests", "alembic"]
+files = ["app", "tests", "alembic", "seed"]
 # Ships inside pydantic: types model and Settings constructors properly.
 plugins = ["pydantic.mypy"]
 

@@ -1,7 +1,8 @@
 # Local development stack for Velora. Stands in for the managed services used in
 # staging and production: Supabase Postgres, Upstash Redis and Cloudflare R2.
 #
-#   make infra-up      start everything and wait until healthy
+#   make infra-up      start everything, wait until healthy, and stamp the dev
+#                      database as local (the dev seed writes nowhere else, D-064)
 #   make infra-down    stop, keeping the data volumes
 #   make infra-reset   stop and DROP the data volumes
 #
