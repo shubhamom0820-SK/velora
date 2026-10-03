@@ -693,6 +693,31 @@ One migration per task, each with a working `downgrade()`. Build exactly `03-SCH
   restored by `/auth/refresh`. This is the first real sign-in staging can do (D-045 allows only
   real providers there), so it is the first proof that P-33's subdomains carry the refresh cookie.
   Until it passes, P-33 is believed, not proven.
+- [ ] **This is the first time any of Sprint 3's session machinery runs outside a test process.**
+  T-3.3's cookies, T-3.4's rotation and logout, T-3.5's `current_user` and P-42's headers have been
+  proved only in-process against the local stack: staging runs `firebase`, so Path B answers 404
+  there, and nothing has signed in on it. So T-3.14 is not just Firebase sign-in, and its Done-when
+  must prove each of these in a real browser against staging, observed on the wire (devtools'
+  network and cookie panes), never inferred from a green test:
+  1. **The refresh cookie crosses P-33's subdomains.** Set by `api.staging.veloraapp.co.in` as
+     `refresh_staging` with no `Domain` (host-only, D-054), kept by the browser, and sent back on
+     `/v1/auth/refresh` when the page at `staging.veloraapp.co.in` calls it with
+     `credentials: "include"`: a reload restores the session.
+  2. **The CSRF cookie's `Domain` works.** `csrf_staging`, scoped to `staging.veloraapp.co.in`
+     (D-055), is readable by the page there and sent back as `X-CSRF`, and refresh accepts it.
+  3. **`Secure` cookies are kept by real browsers over HTTPS**: Chrome, Firefox and Safari. Safari
+     can't be tested locally (D-067, CLAUDE.md), so staging is its only proof.
+  4. **Rotation in the browser:** a refresh replaces both cookies, and the next refresh uses the
+     new values, not the old ones.
+  5. **Logout clears both cookies in the browser** (the clearing cookies must match each cookie's
+     path and domain, or the browser keeps the originals), and a reload lands on `/login`.
+  6. **Two tabs reloaded together both stay signed in** (T-3.10's Web Locks, D-067's 10-second
+     grace), and neither signs the other out.
+  7. **P-42's headers on a signed-in response:** `Cache-Control: no-store` and
+     `X-Content-Type-Options: nosniff` on `/v1/me`.
+  And expect it slow while the API is in Singapore: about 4 s for a first sign-in, about 3 s per
+  `/me`, measured as round trips (P-49, P-50). Slow is not failed; record the times beside the
+  result.
 - [ ] **Commit:** `feat(auth): firebase phone sign-in [T-3.14]`
 
 ### T-3.13 · E2E signup
@@ -1654,3 +1679,67 @@ Claude Code adds items here instead of doing unplanned work. Format:
   email check via `capfd`, which can miss a logger bound to an earlier stream); both now use a new
   `captured_logs` fixture whose probes, through structlog and the stdlib, must arrive, and each goes
   red when a leak is planted.
+- [ ] P-49 · Decide where the API runs, with today's numbers. **Before Sprint 6**, whose discovery
+  pays the cost below several times per request. Worst case if it stays: every authenticated
+  request costs seconds before any work, in an app whose complaint driver is lag (09-RESEARCH C7).
+  - **Why it's in Singapore (D-048, P-36):** Fly retired Mumbai (`bom`) on 25 September 2026 and
+    refused new machines there. **Still true:** on 3 October 2026 Fly's own region list (flyctl
+    0.4.110) has 17 regions and none in India.
+  - **Measured from the staging machine, 3 October 2026,** through the app's own engine and Redis
+    client: 165.6 ms per Postgres round trip (D-048 had 165), 165 ms per Redis command, 2,865 ms to
+    open a connection, and 993 ms, six round trips, for a pooled request that runs one select
+    (checkout, BEGIN, the select, COMMIT). **The per-checkout liveness ping is three of those round
+    trips, not one:** asyncpg's ping runs BEGIN, `;` and ROLLBACK, about 495 ms on staging. D-048
+    priced it at 165 ms, and it's Locked, so the correction lives here. Cross-checked on staging
+    itself: `/readyz` (one pooled checkout and select, and a Redis ping) answers 1.1 s after
+    `/healthz`, 6.6 round trips' worth.
+  - **Round trips per endpoint,** counted locally by a proxy that delays every packet, and matched
+    against each endpoint's statement log: OTP send about 14, verify for a new account about 25,
+    refresh about 9, `GET /me` about 17. At 165 ms that is 2.3 s, 4.1 s, 1.5 s and 2.8 s of server
+    time, before the user's own round trip to Singapore (153 ms from the founder's machine, against
+    58 ms to AWS Mumbai). `current_user` alone is about 8 round trips (two Redis scripts, a
+    checkout's ping, BEGIN, the user's row, COMMIT), 1.3 s; a route's first query brings a second
+    checkout's ping, BEGIN and COMMIT: about 2 s before the route's own queries.
+  - **Fewer round trips (P-50) helps but doesn't remove it:** `/me` could drop from about 17 to 4
+    or 5, about 0.7 s from Singapore; sign-up from about 25 to about 9, about 1.5 s. A floor of
+    roughly half a second per request stays, and discovery pays it per query.
+  - **An API in Mumbai deletes it:** the same city as Supabase (`ap-south-1`) and Upstash, so a round
+    trip is about a millisecond (an estimate, not measured: no machine there). `/me`'s 17 round trips
+    would cost tens of milliseconds unoptimised.
+  - **The options D-048 deferred:** AWS `ap-south-1` (App Runner, or ECS on Fargate) and Google
+    Cloud Run `asia-south1`. Each needs WebSockets checked (D-025), `deploy.yml` and
+    `infra/STAGING.md` rewritten, secrets moved and the smoke check repointed, and a decision
+    superseding D-048's region (and D-023's).
+  - **Not decided here:** the founder decides; this is the measurement. If the API moves, that is a
+    task of its own, done before Sprint 6 builds on these numbers.
+
+  Found reviewing T-3.2 to T-3.5, at the direction of the advisor directing them (Claude, in a
+  separate chat).
+- [ ] P-50 · Cut the round trips every request pays. **Before Sprint 6 adds routes on
+  `current_user`; worth doing wherever the API runs.** Worst case without it: the fixed cost in P-49
+  multiplies with every route that inherits it. Measured on 3 October 2026 (P-49's method):
+  - `pool_pre_ping` costs three round trips per checkout. Recycle connections by age instead
+    (`pool_recycle` below Supabase's and Fly's idle timeouts) and retry a request once on a dropped
+    connection: about 495 ms a checkout on staging.
+  - **T-3.5 doubled the checkouts:** `current_user` reads the user in a transaction of its own (so a
+    service's `async with session.begin()` can follow), and a committed `AsyncSession` hands its
+    connection back, so the service checks out again and pays the ping again. One checkout per
+    request (bind the request's session to one connection) keeps T-3.5's reason and drops the second.
+  - `Me` is four selects after the user row (profile, balance, intents, interests); one query does it.
+  - The rate limit and the activity throttle are two Redis scripts per request; one script does both.
+  - Sign-up: one query for the ban and the user lookup, the referral code drawn by insert-and-retry
+    instead of a check first, the four rows in one statement, no reads back after insert, and the
+    code's peek, read and use as one Redis script: about 25 round trips to about 9.
+  Each with a test that counts round trips (the delay proxy, or statement and command counts), so a
+  change that adds one goes red.
+
+  Found reviewing T-3.2 to T-3.5.
+- [ ] P-51 · Decide what a banned number is told. **In T-9.5, where bans are written, or T-9.6.**
+  Worst case: a person barred by mistake, or a minor's family, has no way to learn why sign-in stopped
+  working, or that grievance@ exists, which the IT Rules' grievance obligations (D-052) assume.
+  D-073 records what happens today: on Path B, a number in `banned_identities` is answered like any
+  other and its codes simply stop arriving, with no message. On Path A, Firebase's own SMS still
+  arrives and the exchange answers `ACCOUNT_BANNED`, which the web can turn into copy naming
+  grievance@. Whether Path B's silence is acceptable is this task's question.
+
+  Found reviewing T-3.2 to T-3.5, at the direction of the advisor directing them.

@@ -1300,6 +1300,34 @@ soft gate, which would supersede D-009 and the published pages.
 The deletion is the advisor's answer 42, approved by the founder; keeping the hash is the founder's
 own decision, both on 3 October 2026. **Open** until T-3.6 lands; its `/done` marks it Locked.
 
+### D-073 · On Path B a banned number's codes stop arriving, with no message — Open
+**The fact, built in T-3.2 and T-3.3:** a number whose hash is in `banned_identities` (D-009's
+under-18 refusal, D-072, and whatever bans T-9.5 writes) gets exactly the answer any other number
+gets from `/v1/auth/otp/send`, and nothing is sent (D-066). A code is stored for it all the same,
+never sent, so a wrong guess at verify is answered as anyone's is.
+
+**What follows (the advisor's reading, checked against the code):** the banned person never holds a valid code, so T-3.3's
+`ACCOUNT_BANNED` for a banned number never fires in the normal flow; only a guess of the six-digit
+code reaches it, at one in a million a try and ten tries a day. D-066's "a ban surfaces only at
+verify, once the person has proven they hold the number" therefore never happens on Path B: they
+can't prove it. D-066 is Locked and isn't edited for that; this entry is the record of it, as
+D-072's note is for D-032's unreachable exclusion.
+
+**What a banned person experiences on Path B:** codes simply stop arriving. No message, no error,
+nothing that names the ban or points to grievance@.
+
+**Not on Path A, the launch path:** Firebase sends its SMS from the browser whatever our list says
+(T-3.14), so the person holds a valid token, and the exchange, which reuses T-3.3's sign-in
+service, answers `ACCOUNT_BANNED`. A user whose account is banned by status, with no
+`banned_identities` row, gets codes on both paths and `ACCOUNT_BANNED` at sign-in.
+
+**Not decided here:** whether Path B's silence is acceptable, and what a banned person should be
+told. That is P-51's, for T-9.5 or T-9.6, not T-3.x's.
+
+The behaviour is Claude's, built in T-3.2; the advisor directing T-3.2 to T-3.10 (Claude, in a
+separate chat) named its consequence and asked for this record, 3 October 2026. **Open** until
+P-51 decides.
+
 ---
 
 ## Adding a decision
