@@ -197,9 +197,14 @@ async def test_two_seeking_writes_at_once_take_turns(
 ) -> None:
     """On two connections, as two workers would be. Each waits, once it holds
     the user, for the other to hold them too, up to a second: so without the
-    row lock both replace the set at once, each deleting only what was there
-    before, and the user ends with both sets. With the lock the second can't
-    hold the user until the first commits, and its set replaces the first's.
+    row lock both hold at once, both replace the set, each deleting only what
+    was there before, and the user ends with both sets. With the lock the
+    second can't hold the user until the first commits, so the first waits its
+    whole second alone, and the second's set replaces the first's.
+
+    What is asserted is what the lock decides, never the order the event loop
+    happens to resume the two in: once the first commits, Postgres hands the
+    second its row before the first's coroutine runs again, as often as not.
     Written for real, so it cleans up after itself."""
     settings = make_test_settings()
     phone = normalize_phone(f"+9198{uuid.uuid4().int % 10**8:08d}")
@@ -213,21 +218,20 @@ async def test_two_seeking_writes_at_once_take_turns(
     user_id = account.user.id
 
     held = 0
+    waited_alone = 0
     both_hold = asyncio.Event()
-    order: list[str] = []
     real_locked_user = users_service.locked_user
 
     async def locked_user_once_both_hold(session: AsyncSession, uid: Any) -> User:
-        nonlocal held
+        nonlocal held, waited_alone
         user = await real_locked_user(session, uid)
         held += 1
-        order.append("held")
         if held == 2:
             both_hold.set()
         try:
             await asyncio.wait_for(both_hold.wait(), timeout=1)
         except TimeoutError:
-            pass
+            waited_alone += 1
         return user
 
     monkeypatch.setattr(users_service, "locked_user", locked_user_once_both_hold)
@@ -238,7 +242,6 @@ async def test_two_seeking_writes_at_once_take_turns(
             assert user is not None
             await session.commit()
             await service.set_seeking(session, user, Seeking.WOMEN, [intent_id])
-            order.append("committed")
 
     try:
         await asyncio.gather(attempt(1), attempt(2))
@@ -265,6 +268,8 @@ async def test_two_seeking_writes_at_once_take_turns(
                 )
             await conn.execute(text("delete from users where id = :u"), {"u": user_id})
 
-    # The second held the user only after the first had committed.
-    assert order == ["held", "committed", "held", "committed"]
+    # Both held the user, never both at once: the first waited its second
+    # alone, and the second, holding it after the first committed, didn't wait.
+    assert (held, waited_alone) == (2, 1)
+    # One set replaced the other; without the lock the user keeps both.
     assert left in ([1], [2])
