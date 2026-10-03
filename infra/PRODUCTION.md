@@ -248,10 +248,11 @@ staging and production at once.**
 - **Authentication: plain Firebase Authentication, not Identity Platform.** The upgrade removes the
   3,000 SMS a day ceiling, the only "how many" bound there is (P-0.18). Never take it without the
   founder, and re-derive P-0.18's bound before, not after.
-- **Sign-in method → Phone: enabled.** **Turning it off makes the sign-in screen lie.** Firebase then
-  refuses every number with `auth/operation-not-allowed`, the same code it gives a number outside
-  India, and the web can't tell the two apart: every Indian user would be told "Only Indian mobile
-  numbers can sign in for now", their number blamed for our switch (T-3.14, its check 8b). It can't
+- **Sign-in method → Phone: enabled.** **Turning it off makes the sign-in screen lie.** (the
+  advisor's wording, relayed by the founder) Firebase then refuses every number with
+  `auth/operation-not-allowed`, the same code it gives a number outside India, and the web can't
+  tell the two apart: every Indian user would be told "Only Indian mobile numbers can sign in for
+  now", their number blamed for our switch (T-3.14, its check 8b). It can't
   be fixed in code, so it is fixed here: never switch phone sign-in off while `/login` is open.
   Close sign-in in the web first, by a deploy, then the switch.
 - **SMS region policy: Allow, India (IN) only.** A number from anywhere else is refused before any

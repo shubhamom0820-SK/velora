@@ -606,9 +606,10 @@ waits on the founder's decisions, so it is a task of its own, outside the sprint
 - [ ] **Needs:** T-2.6; **P-0.14**, the registered office, a judgement no check can make; and
   **P-0.15** (Vercel Pro) and **P-0.16** (Supabase Pro), which the release gate also refuses
   without (D-075). From the tag on, the site is public, crawled and takes real sign-ups.
-  **And three found building T-3.14, each with no condition** (at the founder's direction,
-  4 October 2026: "before REL-1" written only on an item, and not here, is a prerequisite nobody
-  reads, as P-65's and P-66's were):
+  **And three found building T-3.14, each with no condition** (at the direction of the advisor
+  directing T-3.14, Claude in a separate chat, relayed by the founder, 4 October 2026: "before
+  REL-1" written only on an item, and not here, is a prerequisite nobody reads, as P-65's and
+  P-66's were):
   - **P-70:** the phone screen says it takes Indian mobile numbers only, before anything is typed.
     It protects a person who isn't our user: today a foreign number's own ten digits, behind the
     fixed +91, send a code to a stranger in India, every time its owner tries.
@@ -3020,6 +3021,8 @@ Claude Code adds items here instead of doing unplanned work. Format:
   App Check (P-68) is the lever against scripts. Prove it by its effect: the same call without a
   referrer is refused, naming the restriction, and staging still signs in. Not before T-3.14's
   staging check: a restriction set wrong refuses every sign-in, and that check has 5 SMS an hour.
+  At the direction of the advisor directing T-3.14 (Claude, in a separate chat), relayed by the
+  founder, 4 October 2026.
 
   Found building T-3.14.
 - [ ] P-70 · Stop a number from outside India being texted as an Indian one. **Before REL-1** (on
@@ -3034,7 +3037,8 @@ Claude Code adds items here instead of doing unplanned work. Format:
   Velora works with Indian mobile numbers only, in Phagwara to start, so nobody reaches the point
   of sending a code to a stranger. T-3.14's copy for a number Firebase refuses stays as the
   backstop, not the fix: the screen never sends a number that isn't +91, so only devtools reaches
-  it. At the founder's direction, 4 October 2026.
+  it. At the direction of the advisor directing T-3.14 (Claude, in a separate chat), relayed by the
+  founder, 4 October 2026.
 
   Found building T-3.14.
 - [ ] P-71 · Name reCAPTCHA on `/privacy`. **Before REL-1** (on its Needs line). Worst case:
@@ -3044,7 +3048,8 @@ Claude Code adds items here instead of doing unplanned work. Format:
   `/privacy` names Google only for sending the code and handling the number. A published page that
   says less than the product does is the same failure as switching on Google Analytics would have
   been. One line in its section on Google; its list of processors already names Google. It goes in
-  P-0.7's review too, and to a lawyer when there is one (none is engaged, P-0.7). At the founder's
-  direction, 4 October 2026.
+  P-0.7's review too, and to a lawyer when there is one (none is engaged, P-0.7). At the direction
+  of the advisor directing T-3.14 (Claude, in a separate chat), relayed by the founder, 4 October
+  2026.
 
   Found building T-3.14.
