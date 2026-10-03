@@ -90,6 +90,11 @@ make types       # regenerate web/src/types/api.ts from OpenAPI
 make e2e         # Playwright
 ```
 
+**Local sign-in needs Chrome or Firefox, at `http://127.0.0.1`.** Both auth cookies are `Secure`
+everywhere, locally too (D-067), and Safari keeps no `Secure` cookie over plain
+`http://127.0.0.1`, so it signs in and then loses the session at the next refresh or reload.
+That's Safari, not a bug. Test Safari on staging, which has HTTPS.
+
 ## Golden rules — non-negotiable
 
 1. **One task at a time.** Only work on the task ID you were given from `docs/05-PLAN.md`.

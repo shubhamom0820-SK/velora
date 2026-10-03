@@ -4,9 +4,9 @@ Order matters: every check that can refuse runs before a row is written. The
 two checks on settings run before anything connects. The marker check is the
 first statement on the connection. The whole seed is one transaction.
 
-Every phone number goes through `normalize_phone`, `hash_phone` and
-`encrypt_phone`, and the PIN through `hash_pin`, with the keys the local API
-reads, so login finds these accounts exactly as it finds anyone else.
+Every account is created by signup's own service (`users.service`, T-3.3),
+with the keys the local API reads, and the PIN goes through `hash_pin`, so
+sign-in finds these accounts exactly as it finds anyone else.
 """
 
 from __future__ import annotations
@@ -31,13 +31,7 @@ from app.core.config import Settings, get_settings
 from app.core.db import build_engine
 from app.core.enums import Gender, OnboardingStep, SwipeDirection, UserStatus
 from app.core.errors import AppError
-from app.core.security import (
-    encrypt_phone,
-    hash_phone,
-    hash_pin,
-    normalize_phone,
-)
-from app.modules.notifications.models import NotificationPrefs
+from app.core.security import hash_phone, hash_pin, normalize_phone
 from app.modules.profiles.models import (
     Area,
     Intent,
@@ -47,8 +41,8 @@ from app.modules.profiles.models import (
     ProfileInterest,
 )
 from app.modules.swipes.models import Swipe
+from app.modules.users import service as users_service
 from app.modules.users.models import User
-from app.modules.wallet.models import Wallet
 from seed.data import PEOPLE, SWIPES, Person, SeedSwipe
 
 # --- The three checks: each an allowlist (rule 16, D-064) ---------------------
@@ -338,25 +332,20 @@ async def write_seed(
                     "make infra-up migrate seed."
                 )
 
-        user = User(
-            phone_hash=phone_hash,
-            phone_enc=encrypt_phone(phone, settings),
-            gender=person.gender,
-            dob=person.dob,
-            role=person.role,
-            status=UserStatus.ACTIVE,
-            onboarding_step=person.step,
-            is_verified=person.verified,
-            pin_hash=None
-            if person.pin is None
-            else await hash_pin(person.pin, settings),
-            referral_code=re.sub(
-                r"[^a-z0-9]", "", person.username or person.key
-            ).upper(),
-            created_at=now - timedelta(days=person.joined_days_ago),
+        account = await users_service.create_account(
+            session, phone, settings, referral_code=person.referral_code
         )
-        session.add(user)
-        await session.flush()
+        user, profile = account.user, account.profile
+        user.gender = person.gender
+        user.dob = person.dob
+        user.role = person.role
+        user.status = UserStatus.ACTIVE
+        user.onboarding_step = person.step
+        user.is_verified = person.verified
+        user.pin_hash = (
+            None if person.pin is None else await hash_pin(person.pin, settings)
+        )
+        user.created_at = now - timedelta(days=person.joined_days_ago)
         user_ids[person.key] = user.id
 
         area_id = area_ids[person.area] if person.area is not None else None
@@ -367,28 +356,22 @@ async def write_seed(
             location = func.ST_Project(
                 centroid.scalar_subquery(), metres, func.radians(bearing)
             )
-        session.add(
-            Profile(
-                user_id=user.id,
-                first_name=person.first_name,
-                username=person.username,
-                about=person.about,
-                hometown=person.hometown,
-                city=AREA_CITY if area_id is not None else None,
-                area_id=area_id,
-                location=location,
-                location_updated_at=None if location is None else now,
-                seeking=person.seeking,
-                is_hidden=person.is_hidden,
-                hide_age=person.hide_age,
-                hide_distance=person.hide_distance,
-                show_kudos=person.show_kudos,
-                show_gifts=person.show_gifts,
-            )
-        )
+        profile.first_name = person.first_name
+        profile.username = person.username
+        profile.about = person.about
+        profile.hometown = person.hometown
+        profile.city = AREA_CITY if area_id is not None else None
+        profile.area_id = area_id
+        profile.location = location
+        profile.location_updated_at = None if location is None else now
+        profile.seeking = person.seeking
+        profile.is_hidden = person.is_hidden
+        profile.hide_age = person.hide_age
+        profile.hide_distance = person.hide_distance
+        profile.show_kudos = person.show_kudos
+        profile.show_gifts = person.show_gifts
         session.add_all(
-            [Wallet(user_id=user.id), NotificationPrefs(user_id=user.id)]
-            + [
+            [
                 ProfileInterest(user_id=user.id, interest_id=interest_ids[label])
                 for label in person.interests
             ]

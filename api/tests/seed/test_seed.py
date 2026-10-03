@@ -379,6 +379,24 @@ async def test_the_test_man_is_found_as_login_will_find_him(
     assert user.gender is Gender.MALE and profile.seeking is Seeking.WOMEN
 
 
+async def test_test_accounts_keep_readable_codes_and_profiles_get_generated_ones(
+    db: AsyncSession, seeded: run.SeedReport
+) -> None:
+    """T-3.3: the test accounts' fixed codes, everyone else's from signup."""
+    fixed = {"test_man": "TESTMAN", "test_woman": "TESTWOMAN", "moderator": "MODERATOR"}
+    generated = set()
+    for person in PEOPLE:
+        user = await _user(db, person.phone)
+        if person.key in fixed:
+            assert user.referral_code == fixed[person.key]
+        else:
+            assert re.fullmatch(
+                r"[23456789ABCDEFGHJKMNPQRSTVWXYZ]{8}", user.referral_code
+            )
+            generated.add(user.referral_code)
+    assert len(generated) == len(PEOPLE) - 3
+
+
 async def test_only_the_test_woman_has_a_pin_and_it_verifies(
     db: AsyncSession, seeded: run.SeedReport
 ) -> None:

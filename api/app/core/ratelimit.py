@@ -105,3 +105,12 @@ async def peek(
     if int(allowed) == 1:
         return Verdict(allowed=True, retry_after_s=0)
     return Verdict(allowed=False, retry_after_s=max(1, ceil(int(wait_ms) / 1000)))
+
+
+async def used(redis: Redis, scope: str, bucket: str, *, window_s: int) -> int:
+    """How many hits `bucket` has inside `scope`'s window now."""
+    now_ms = int(clock.now().timestamp() * 1000)
+    count = await redis.zcount(
+        key_for(scope, bucket), now_ms - window_s * 1000 + 1, "+inf"
+    )
+    return int(count)

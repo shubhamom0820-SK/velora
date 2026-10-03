@@ -74,6 +74,40 @@ async def discard_code(redis: Redis, phone_hash: str) -> None:
     await redis.delete(code_key(phone_hash))
 
 
+# KEYS[1] the code; ARGV[1] the hash the caller checked. Deletes the code only if
+# it is still that one, so of two requests presenting the right code at once,
+# one signs in and the other finds it gone; and a code a resend replaced in the
+# meantime is never consumed by the old one.
+_CONSUME = """
+if redis.call('HGET', KEYS[1], 'h') == ARGV[1] then
+  return redis.call('DEL', KEYS[1])
+end
+return 0
+"""
+
+# KEYS[1] the code. One more wrong try, unless the code has gone (expired,
+# consumed or replaced): then -1, and nothing is created.
+_WRONG_TRY = """
+if redis.call('EXISTS', KEYS[1]) == 1 then
+  return redis.call('HINCRBY', KEYS[1], 'a', 1)
+end
+return -1
+"""
+
+
+async def consume_code(redis: Redis, phone_hash: str, code_hash: str) -> bool:
+    """Use the code up, if it is still `code_hash`. True for exactly one caller."""
+    script = redis.register_script(_CONSUME)
+    return int(await script(keys=[code_key(phone_hash)], args=[code_hash])) == 1
+
+
+async def add_wrong_try(redis: Redis, phone_hash: str) -> int | None:
+    """The code's wrong tries after this one, or None if the code has gone."""
+    script = redis.register_script(_WRONG_TRY)
+    tries = int(await script(keys=[code_key(phone_hash)]))
+    return None if tries < 0 else tries
+
+
 async def count_send(redis: Redis, day: date) -> int:
     """Count one more code sent on `day` and return the day's total."""
     key = sent_key(day)

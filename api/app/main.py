@@ -16,6 +16,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from app.core.config import Settings, get_settings
 from app.core.db import build_engine, build_sessionmaker
 from app.core.errors import register_error_handlers
+from app.core.headers import SecurityHeadersMiddleware
 from app.core.logging import RequestIDMiddleware, configure_logging
 from app.core.providers import build_providers
 from app.core.redis import build_redis
@@ -81,6 +82,10 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             allow_headers=["*"],
             expose_headers=["X-Request-ID"],
         )
+
+    # nosniff everywhere and no-store on /v1 (P-42). Added last, so it is the
+    # outermost: it sees every response, CORS's own preflight answers included.
+    app.add_middleware(SecurityHeadersMiddleware)
 
     register_error_handlers(app)
 

@@ -298,6 +298,9 @@ secret is left empty. Real secret values are never committed.
   (T-3.14), R2 and the CDN (T-4.6), the camera (T-4.7), location (T-4.10), the microphone
   (T-7.11), WebSockets (T-7.12), Razorpay (T-8.7), Sentry (T-9.12) and analytics (T-10.2). This
   line changes with each.
+- API headers (`app/core/headers.py`, P-42): `X-Content-Type-Options: nosniff` on every
+  response and `Cache-Control: no-store` on every `/v1` response, 500s and CORS preflights
+  included: a sign-in carries an access token, and `/me` on, one person's data.
 - Rate limits (Redis, sliding window):
 
 | Route group | Limit |

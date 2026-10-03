@@ -543,19 +543,25 @@ One migration per task, each with a working `downgrade()`. Build exactly `03-SCH
 - [x] **Commit:** `feat(auth): send otp [T-3.2]`
 
 ### T-3.3 · OTP verify and signup
-- [ ] **Needs:** T-3.2, and the **cookie scope settled**, because this task sets the first cookies and its tests would lock in a wrong scope. Settled 2 October 2026: the refresh cookie is host-only on the API (D-054), and both cookies are named for their environment (D-055)
-- [ ] `POST /v1/auth/otp/verify {phone, otp}`. Wrong code → attempts+1, `OTP_INVALID` with `details.attempts_left`; 5th wrong → delete key, `OTP_TOO_MANY`; no code stored (expired, or never sent) → `OTP_EXPIRED`. Correct → delete key. A phone at 10 wrong codes in 24 hours → `OTP_TOO_MANY` (D-066).
-- [ ] Find user by `phone_hash`, or create in **one transaction**: `users` (+ referral code), `profiles`, `wallets` (0), `notification_prefs`. A referral code is 8 characters of Crockford base32 without 0, O, 1, I or L, in capitals, drawn again on a collision.
-- [ ] Who may sign in (D-067): `banned` → `ACCOUNT_BANNED`; `frozen` → `ACCOUNT_FROZEN`; `paused` may; `deleted` can't occur before T-9.6 and gets `FORBIDDEN` until T-9.6 decides.
-- [ ] Create session (family), valid 30 days from each rotation, storing no IP address or user agent (D-067). Set the refresh cookie (`refresh_prod`, `refresh_staging`, `refresh_local`; `HttpOnly; Secure; SameSite=Lax; Path=/v1/auth`, no `Domain`: host-only on the API, D-054), and the readable CSRF cookie (`csrf_prod`, `csrf_staging`, `csrf_local`): `new_csrf()`'s value, `Secure; SameSite=Lax; Path=/`, `Domain` from `COOKIE_DOMAIN` (host-only where that's empty, locally), 30 days. Return `{access_token, user: Me}`. Both names come from `ENV` with no fallback (D-055), and both cookies are `Secure` locally too (D-067).
-- [ ] **D-071: access tokens gain `auth_time`,** the session family's sign-in time. Update T-3.1's test of the claim set to the new exact set; never loosen it to "at least these".
-- [ ] **P-42, moved here:** a middleware in `create_app()` adds `X-Content-Type-Options: nosniff` to every response and `Cache-Control: no-store` to every `/v1` response, verify's included, since it carries an access token. Tests read both off real responses.
-- [ ] Set staging's `COOKIE_DOMAIN` to `staging.veloraapp.co.in` in `infra/fly.api.toml` (P-33 leaves it unset).
-- [ ] Point `make_user` (T-3.1) and `make seed` (T-1.15) at this find-or-create service: both write these four rows by hand until now. The 20 prototype profiles get generated referral codes. The three test accounts keep fixed, readable ones, `TESTMAN`, `TESTWOMAN` and `MODERATOR`: test accounts may be special, and looking up a random code every time is the friction the seed exists to remove (T-8.6 looks codes up and never checks their format).
-- [ ] CLAUDE.md: say why Safari can't sign in locally. It keeps no `Secure` cookie over plain `http://127.0.0.1`, so local sign-in needs Chrome or Firefox; Safari is tested on staging, which has HTTPS (D-067). Written down, the hour isn't lost later.
-- [ ] Tests: new user creates all 4 rows; existing user doesn't duplicate; banned → `ACCOUNT_BANNED`; frozen → `ACCOUNT_FROZEN`; `OTP_INVALID` carries `attempts_left`; 10 wrong codes in 24 hours → `OTP_TOO_MANY`; the refresh cookie has no `Domain`; both cookies' names follow `ENV`; both are `Secure`; the referral code's format; the access token carries `auth_time`; P-42's two headers; sessions keep no IP address or user agent.
-- [ ] **At `/done`:** D-066 and D-071 become Locked; tick P-42.
-- [ ] **Commit:** `feat(auth): verify otp and create account [T-3.3]`
+- [x] **Needs:** T-3.2, and the **cookie scope settled**, because this task sets the first cookies and its tests would lock in a wrong scope. Settled 2 October 2026: the refresh cookie is host-only on the API (D-054), and both cookies are named for their environment (D-055)
+- [x] `POST /v1/auth/otp/verify {phone, otp}`. Wrong code → attempts+1, `OTP_INVALID` with `details.attempts_left`; 5th wrong → delete key, `OTP_TOO_MANY`; no code stored (expired, or never sent) → `OTP_EXPIRED`. Correct → delete key. A phone at 10 wrong codes in 24 hours → `OTP_TOO_MANY` (D-066).
+  **Built:** the try that reaches either limit, the code's fifth or the number's tenth that day,
+  is the one answered `OTP_TOO_MANY`; `attempts_left` is the nearer of the two, so it never
+  promises tries the number's lock would refuse. The right code is used up atomically (it must
+  still be the code that was checked), so it signs in once.
+- [x] Find user by `phone_hash`, or create in **one transaction**: `users` (+ referral code), `profiles`, `wallets` (0), `notification_prefs`. A referral code is 8 characters of Crockford base32 without 0, O, 1, I or L, in capitals, drawn again on a collision.
+- [x] Who may sign in (D-067): `banned` → `ACCOUNT_BANNED`; `frozen` → `ACCOUNT_FROZEN`; `paused` may; `deleted` can't occur before T-9.6 and gets `FORBIDDEN` until T-9.6 decides.
+- [x] Create session (family), valid 30 days from each rotation, storing no IP address or user agent (D-067). Set the refresh cookie (`refresh_prod`, `refresh_staging`, `refresh_local`; `HttpOnly; Secure; SameSite=Lax; Path=/v1/auth`, no `Domain`: host-only on the API, D-054), and the readable CSRF cookie (`csrf_prod`, `csrf_staging`, `csrf_local`): `new_csrf()`'s value, `Secure; SameSite=Lax; Path=/`, `Domain` from `COOKIE_DOMAIN` (host-only where that's empty, locally), 30 days. Return `{access_token, user: Me}`. Both names come from `ENV` with no fallback (D-055), and both cookies are `Secure` locally too (D-067).
+- [x] **D-071: access tokens gain `auth_time`,** the session family's sign-in time. Update T-3.1's test of the claim set to the new exact set; never loosen it to "at least these".
+  **Stored as `sessions.auth_time`** (D-071), a new column T-3.4 copies at each rotation: the
+  family's first session is revoked by then, and the only index on `sessions` is partial.
+- [x] **P-42, moved here:** a middleware in `create_app()` adds `X-Content-Type-Options: nosniff` to every response and `Cache-Control: no-store` to every `/v1` response, verify's included, since it carries an access token. Tests read both off real responses.
+- [x] Set staging's `COOKIE_DOMAIN` to `staging.veloraapp.co.in` in `infra/fly.api.toml` (P-33 leaves it unset).
+- [x] Point `make_user` (T-3.1) and `make seed` (T-1.15) at this find-or-create service: both write these four rows by hand until now. The 20 prototype profiles get generated referral codes. The three test accounts keep fixed, readable ones, `TESTMAN`, `TESTWOMAN` and `MODERATOR`: test accounts may be special, and looking up a random code every time is the friction the seed exists to remove (T-8.6 looks codes up and never checks their format).
+- [x] CLAUDE.md: say why Safari can't sign in locally. It keeps no `Secure` cookie over plain `http://127.0.0.1`, so local sign-in needs Chrome or Firefox; Safari is tested on staging, which has HTTPS (D-067). Written down, the hour isn't lost later.
+- [x] Tests: new user creates all 4 rows; existing user doesn't duplicate; banned → `ACCOUNT_BANNED`; frozen → `ACCOUNT_FROZEN`; `OTP_INVALID` carries `attempts_left`; 10 wrong codes in 24 hours → `OTP_TOO_MANY`; the refresh cookie has no `Domain`; both cookies' names follow `ENV`; both are `Secure`; the referral code's format; the access token carries `auth_time`; P-42's two headers; sessions keep no IP address or user agent.
+- [x] **At `/done`:** D-066 and D-071 become Locked; tick P-42.
+- [x] **Commit:** `feat(auth): verify otp and create account [T-3.3]`
 
 ### T-3.4 · Refresh and logout
 - [ ] **Needs:** T-3.3, and **P-33** (staging's web and API on one site, or the refresh cookie can't flow there)
@@ -1554,7 +1560,7 @@ Claude Code adds items here instead of doing unplanned work. Format:
   the spacing scale (08-DESIGN §3), and check the page shows no CSP violation.
 
   Found in T-2.5.
-- [ ] P-42 · Security headers on the API's responses. **Before T-3.5's `/me`, the first
+- [x] P-42 · Security headers on the API's responses. **Before T-3.5's `/me`, the first
   authenticated response a browser can cache.** Worst case: a browser or shared cache keeps one
   person's `/me`, threads or messages and shows them later (a shared phone, the back button), or a
   browser sniffs a JSON body as HTML. The web's headers (D-059) cover only the web; the API on Fly
@@ -1563,7 +1569,7 @@ Claude Code adds items here instead of doing unplanned work. Format:
   with tests that read both off real responses, a public one and an authenticated one. Low urgency
   until then.
   **Moved:** now a step in T-3.3, since its verify is the first response to carry an access token,
-  earlier than `/me` — tick this with T-3.3.
+  earlier than `/me` — tick this with T-3.3. **Done in T-3.3.**
 
   Found in T-2.5.
 - [ ] P-43 · Decide `Access-Control-Allow-Origin` on the web's own responses. **Before any

@@ -71,6 +71,9 @@ class Person:
     show_kudos: bool = True
     show_gifts: bool = True
     pin: str | None = None
+    # Only the three test accounts keep one of their own, readable and fixed;
+    # everyone else gets signup's generated code (T-3.3).
+    referral_code: str | None = None
 
 
 @dataclass(frozen=True)
@@ -94,6 +97,7 @@ TEST_ACCOUNTS: tuple[Person, ...] = (
     Person(
         key="test_man",
         phone="+919000000001",
+        referral_code="TESTMAN",
         gender=M,
         dob=date(1998, 6, 1),
         first_name="Test man",
@@ -108,6 +112,7 @@ TEST_ACCOUNTS: tuple[Person, ...] = (
     Person(
         key="test_woman",
         phone="+919000000002",
+        referral_code="TESTWOMAN",
         gender=F,
         dob=date(2000, 9, 20),
         verified=True,
@@ -125,6 +130,7 @@ TEST_ACCOUNTS: tuple[Person, ...] = (
     Person(
         key="moderator",
         phone="+919000000003",
+        referral_code="MODERATOR",
         role=Role.MODERATOR,
         step=OnboardingStep.DOB,
     ),

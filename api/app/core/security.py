@@ -158,7 +158,9 @@ def _phone_problem(problem: str) -> AppError:
 # isn't one (D-060).
 ACCESS_TOKEN_TTL = timedelta(minutes=15)
 _JWT_ALGORITHM = "HS256"
-_ACCESS_CLAIMS = ("sub", "role", "aud", "iat", "exp")
+# Exactly these (D-060, D-071): `auth_time` is when the session's family signed
+# in, carried unchanged through every refresh.
+_ACCESS_CLAIMS = ("sub", "role", "aud", "iat", "exp", "auth_time")
 _jwt = jwt.PyJWT(options={"enforce_minimum_key_length": True})
 
 
@@ -167,14 +169,19 @@ class AccessClaims:
     user_id: UUID
     role: Role
     expires_at: datetime
+    auth_time: datetime
 
 
-def make_access_token(user_id: UUID, role: Role, settings: Settings) -> str:
+def make_access_token(
+    user_id: UUID, role: Role, settings: Settings, *, auth_time: datetime
+) -> str:
     """A signed JWT for `Authorization: Bearer`, good for 15 minutes.
 
     `aud` is the environment. Separate `JWT_SECRET`s already keep staging's
     tokens out of production; this keeps them out even if a secret is ever
-    copied across (D-055's reasoning, D-060).
+    copied across (D-055's reasoning, D-060). `auth_time` is when the session's
+    family signed in, OpenID Connect's claim for it: D-069's PIN reset reads it
+    to know a sign-in is fresh, without a database read (D-071).
     """
     issued_at = clock.now()
     payload = {
@@ -183,6 +190,7 @@ def make_access_token(user_id: UUID, role: Role, settings: Settings) -> str:
         "aud": settings.ENV,
         "iat": int(issued_at.timestamp()),
         "exp": int((issued_at + ACCESS_TOKEN_TTL).timestamp()),
+        "auth_time": int(auth_time.timestamp()),
     }
     return _jwt.encode(payload, _jwt_key(settings), algorithm=_JWT_ALGORITHM)
 
@@ -211,8 +219,9 @@ def decode_access_token(token: str, settings: Settings) -> AccessClaims:
         )
     except jwt.InvalidTokenError:
         raise _auth_required() from None
-    expires = payload["exp"]
-    if type(expires) is not int:  # not a float, and not a bool, which is an int
+    expires, auth_time = payload["exp"], payload["auth_time"]
+    # Whole seconds: not a float, and not a bool, which is an int.
+    if type(expires) is not int or type(auth_time) is not int:
         raise _auth_required()
     if clock.now().timestamp() >= expires:
         raise AppError("TOKEN_EXPIRED", "Your session has expired.", status=401)
@@ -222,7 +231,10 @@ def decode_access_token(token: str, settings: Settings) -> AccessClaims:
     except (TypeError, ValueError):
         raise _auth_required() from None
     return AccessClaims(
-        user_id=user_id, role=role, expires_at=datetime.fromtimestamp(expires, UTC)
+        user_id=user_id,
+        role=role,
+        expires_at=datetime.fromtimestamp(expires, UTC),
+        auth_time=datetime.fromtimestamp(auth_time, UTC),
     )
 
 

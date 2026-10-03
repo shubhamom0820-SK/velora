@@ -8,7 +8,7 @@ from __future__ import annotations
 
 from typing import Annotated
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Response
 from redis.asyncio import Redis
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -17,7 +17,8 @@ from app.core.db import get_session
 from app.core.deps import app_redis, app_settings, client_ipv6_48, rate_limit
 from app.core.providers import Providers, get_providers
 from app.modules.auth import service
-from app.modules.auth.schemas import OtpSend, OtpSent
+from app.modules.auth.cookies import set_session_cookies
+from app.modules.auth.schemas import OtpSend, OtpSent, OtpVerify, SignedIn
 
 # 02-ARCHITECTURE §12, D-066: 20 sends an hour per client IP (an IPv6 /64), and
 # 100 an hour per IPv6 /48, which one cloud customer can fill with 65,536 /64s.
@@ -59,3 +60,23 @@ async def send_otp(
         session, redis, providers.sms, settings, raw_phone=body.phone
     )
     return OtpSent(resend_after_s=resend_after_s)
+
+
+@otp_router.post("/verify")
+async def verify_otp(
+    body: OtpVerify,
+    response: Response,
+    session: Annotated[AsyncSession, Depends(get_session)],
+    redis: Annotated[Redis, Depends(app_redis)],
+    settings: Annotated[Settings, Depends(app_settings)],
+) -> SignedIn:
+    signed_in = await service.verify_code(
+        session, redis, settings, raw_phone=body.phone, code=body.otp
+    )
+    set_session_cookies(
+        response,
+        settings,
+        refresh_token=signed_in.refresh_token,
+        csrf=signed_in.csrf,
+    )
+    return SignedIn(access_token=signed_in.access_token, user=signed_in.me)

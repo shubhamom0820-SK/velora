@@ -58,6 +58,7 @@ for _key, _value in {
 
 from redis.asyncio import Redis
 
+from app.core import clock as core_clock
 from app.core.clock import today_ist
 from app.core.config import Settings
 from app.core.db import build_engine, get_session
@@ -65,18 +66,11 @@ from app.core.enums import Gender, OnboardingStep, Role, Seeking, UserStatus
 from app.core.providers import FakeProviders
 from app.core.ratelimit import KEY_PREFIX as RATE_LIMIT_KEY_PREFIX
 from app.core.redis import build_redis
-from app.core.security import (
-    encrypt_phone,
-    hash_phone,
-    make_access_token,
-    normalize_phone,
-)
+from app.core.security import make_access_token, normalize_phone
 from app.main import close_resources, create_app
 from app.modules.auth.otp_store import KEY_PREFIX as OTP_KEY_PREFIX
-from app.modules.notifications.models import NotificationPrefs
-from app.modules.profiles.models import Profile
+from app.modules.users import service as users_service
 from app.modules.users.models import User
-from app.modules.wallet.models import Wallet
 
 
 def pytest_configure(config: pytest.Config) -> None:
@@ -183,9 +177,9 @@ def make_user(db: AsyncSession) -> MakeUser:
     """A user as signup and onboarding leave them, and an access token the `app`
     fixture accepts: `user, token = await make_user(gender="female")`.
 
-    It writes the four rows signup creates (users, profiles, wallets at 0,
-    notification_prefs). The phone goes through normalize, hash and encrypt, so
-    a test finds the user exactly as login will.
+    Signup's own service writes the four rows (users, profiles, wallets at 0,
+    notification_prefs; T-3.3), so a test finds the user exactly as sign-in
+    will. The token's `auth_time` is now: a fresh sign-in (D-071).
 
     - `onboarded=True`: step `done`, 25 or so, the profile filled in, seeking the
       other gender. No interests, intents or photos: their tasks extend this.
@@ -221,22 +215,16 @@ def make_user(db: AsyncSession) -> MakeUser:
 
         serial = next(_user_serial)
         phone = normalize_phone(f"+9198{serial:08d}")
-        user = User(
-            phone_hash=hash_phone(phone, settings),
-            phone_enc=encrypt_phone(phone, settings),
-            gender=gender,
-            dob=date(today_ist().year - 25, 1, 1),
-            role=Role.USER,
-            status=UserStatus.ACTIVE,
-            onboarding_step=OnboardingStep.DONE
-            if onboarded
-            else OnboardingStep.SEEKING,
-            is_verified=verified,
-            referral_code=f"TEST{serial:06d}",
+        account = await users_service.create_account(db, phone, settings)
+        user, profile = account.user, account.profile
+        user.gender = gender
+        user.dob = date(today_ist().year - 25, 1, 1)
+        user.role = Role.USER
+        user.status = UserStatus.ACTIVE
+        user.onboarding_step = (
+            OnboardingStep.DONE if onboarded else OnboardingStep.SEEKING
         )
-        db.add(user)
-        await db.flush()
-        profile = Profile(user_id=user.id)
+        user.is_verified = verified
         if onboarded:
             profile.first_name = "Test"
             profile.username = f"user{serial}"
@@ -244,12 +232,12 @@ def make_user(db: AsyncSession) -> MakeUser:
             profile.hometown = "Phagwara"
             profile.city = "Phagwara"
             profile.seeking = Seeking.WOMEN if gender is Gender.MALE else Seeking.MEN
-        db.add_all(
-            [profile, Wallet(user_id=user.id), NotificationPrefs(user_id=user.id)]
-        )
         await db.flush()
         await db.refresh(user)
-        return user, make_access_token(user.id, user.role, settings)
+        token = make_access_token(
+            user.id, user.role, settings, auth_time=core_clock.now()
+        )
+        return user, token
 
     return factory
 

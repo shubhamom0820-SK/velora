@@ -30,6 +30,11 @@ primary_region = "sin"
   # redirects here, so this is the one origin. Never velora-staging.vercel.app:
   # that's another company's site (infra/STAGING.md).
   CORS_ORIGINS = "https://staging.veloraapp.co.in"
+  # The readable CSRF cookie's Domain (D-055): the staging web's host, so its
+  # pages can read it and send it back as X-CSRF. Never veloraapp.co.in, which
+  # would reach production. The refresh cookie has no Domain: host-only on this
+  # API (D-054).
+  COOKIE_DOMAIN = "staging.veloraapp.co.in"
   # Per-IP rate limits read the client's address from the header Fly's proxy
   # sets, never X-Forwarded-For, which the client writes (D-056).
   CLIENT_IP_HEADER = "Fly-Client-IP"

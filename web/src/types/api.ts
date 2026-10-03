@@ -84,10 +84,32 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/auth/otp/verify": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Verify Otp */
+        post: operations["verify_otp_v1_auth_otp_verify_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
+        /**
+         * Gender
+         * @enum {string}
+         */
+        Gender: "male" | "female";
         /** HTTPValidationError */
         HTTPValidationError: {
             /** Detail */
@@ -102,6 +124,66 @@ export interface components {
              */
             status: "ok";
         };
+        /**
+         * Me
+         * @description The age, never the date of birth, and no phone number: no screen shows
+         *     either, so neither leaves the server (D-067's discipline).
+         */
+        Me: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            role: components["schemas"]["Role"];
+            status: components["schemas"]["UserStatus"];
+            onboarding_step: components["schemas"]["OnboardingStep"];
+            gender: components["schemas"]["Gender"] | null;
+            /** Age */
+            age: number | null;
+            /** Is Verified */
+            is_verified: boolean;
+            /** Has Pin */
+            has_pin: boolean;
+            /** Referral Code */
+            referral_code: string;
+            /** Balance */
+            balance: number;
+            profile: components["schemas"]["MeProfile"];
+        };
+        /** MeProfile */
+        MeProfile: {
+            /** First Name */
+            first_name: string | null;
+            /** Username */
+            username: string | null;
+            /** About */
+            about: string | null;
+            /** Hometown */
+            hometown: string | null;
+            /** City */
+            city: string | null;
+            seeking: components["schemas"]["Seeking"] | null;
+            /** Intent Ids */
+            intent_ids: number[];
+            /** Interest Ids */
+            interest_ids: number[];
+            /** Is Hidden */
+            is_hidden: boolean;
+            /** Hide Age */
+            hide_age: boolean;
+            /** Hide Distance */
+            hide_distance: boolean;
+            /** Show Kudos */
+            show_kudos: boolean;
+            /** Show Gifts */
+            show_gifts: boolean;
+        };
+        /**
+         * OnboardingStep
+         * @enum {string}
+         */
+        OnboardingStep: "dob" | "gender" | "seeking" | "profile" | "username" | "about" | "photos" | "interests" | "pin" | "selfie" | "done";
         /** OtpSend */
         OtpSend: {
             /** Phone */
@@ -115,6 +197,13 @@ export interface components {
         OtpSent: {
             /** Resend After S */
             resend_after_s: number;
+        };
+        /** OtpVerify */
+        OtpVerify: {
+            /** Phone */
+            phone: string;
+            /** Otp */
+            otp: string;
         };
         /** ReadinessChecks */
         ReadinessChecks: {
@@ -139,6 +228,31 @@ export interface components {
             status: "ok";
             checks: components["schemas"]["ReadinessChecks"];
         };
+        /**
+         * Role
+         * @enum {string}
+         */
+        Role: "user" | "moderator" | "admin";
+        /**
+         * Seeking
+         * @enum {string}
+         */
+        Seeking: "women" | "men" | "everyone";
+        /**
+         * SignedIn
+         * @description A sign-in's body. The refresh token and CSRF value go in cookies, never
+         *     here: the refresh token is HttpOnly, out of the page's reach (D-024).
+         */
+        SignedIn: {
+            /** Access Token */
+            access_token: string;
+            user: components["schemas"]["Me"];
+        };
+        /**
+         * UserStatus
+         * @enum {string}
+         */
+        UserStatus: "active" | "paused" | "frozen" | "banned" | "deleted";
         /** ValidationError */
         ValidationError: {
             /** Location */
@@ -276,6 +390,39 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["OtpSent"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    verify_otp_v1_auth_otp_verify_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["OtpVerify"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SignedIn"];
                 };
             };
             /** @description Validation Error */

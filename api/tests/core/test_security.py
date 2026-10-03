@@ -302,7 +302,7 @@ def test_the_time_inside_the_token_comes_from_core_clock(clock: ModuleType) -> N
     assert fernet.extract_timestamp(token) == int(clock.now().timestamp())
 
 
-# --- Access tokens (D-024, D-060) --------------------------------------------------
+# --- Access tokens (D-024, D-060, D-071) ---------------------------------------------
 
 USER_ID = UUID("0b6e0e5e-1a7b-4c1e-9d2a-3f4b5c6d7e8f")
 JWT_KEY = bytes.fromhex(PUBLIC_TEST_KEYS["JWT_SECRET"])
@@ -319,6 +319,7 @@ def _claims(**changes: Any) -> dict[str, Any]:
         "aud": "local",
         "iat": issued,
         "exp": issued + 900,
+        "auth_time": issued - 60,
     }
     claims.update(changes)
     return {k: v for k, v in claims.items() if v is not None}
@@ -339,20 +340,29 @@ def _with_role_changed(token: str) -> str:
     return ".".join([header, edited.rstrip(b"=").decode(), signature])
 
 
+# When the session's family signed in: a few minutes before any token below.
+SIGNED_IN = datetime(2026, 10, 3, 9, 30, tzinfo=UTC)
+
+
+def _token(role: Role = Role.USER, auth_time: datetime = SIGNED_IN) -> str:
+    return make_access_token(USER_ID, role, SETTINGS, auth_time=auth_time)
+
+
 def test_a_token_round_trips() -> None:
-    claims = decode_access_token(
-        make_access_token(USER_ID, Role.MODERATOR, SETTINGS), SETTINGS
-    )
+    claims = decode_access_token(_token(Role.MODERATOR), SETTINGS)
 
     assert claims.user_id == USER_ID
     assert claims.role is Role.MODERATOR
+    assert claims.auth_time == SIGNED_IN
 
 
 def test_a_token_carries_exactly_these_claims(clock: ModuleType) -> None:
+    """D-071 superseded D-060's five claims with these six: the set is still
+    exact, never "at least these"."""
     clock.freeze(datetime(2030, 6, 1, 12, 0, tzinfo=UTC))
     issued = int(clock.now().timestamp())
 
-    token = make_access_token(USER_ID, Role.USER, SETTINGS)
+    token = _token()
 
     assert jwt.get_unverified_header(token) == {"alg": "HS256", "typ": "JWT"}
     assert jwt.decode(token, options={"verify_signature": False}) == {
@@ -361,7 +371,19 @@ def test_a_token_carries_exactly_these_claims(clock: ModuleType) -> None:
         "aud": "local",
         "iat": issued,
         "exp": issued + 15 * 60,
+        "auth_time": int(SIGNED_IN.timestamp()),
     }
+
+
+def test_auth_time_is_the_sign_in_not_the_token(clock: ModuleType) -> None:
+    """A token minted at a refresh, hours after sign-in, keeps the sign-in's
+    time: that's what tells D-069's PIN reset a sign-in is fresh."""
+    clock.freeze(SIGNED_IN + timedelta(hours=5))
+
+    claims = decode_access_token(_token(), SETTINGS)
+
+    assert claims.auth_time == SIGNED_IN
+    assert claims.expires_at == SIGNED_IN + timedelta(hours=5, minutes=15)
 
 
 @pytest.mark.parametrize("issued_at", INSTANTS, ids=["past", "future"])
@@ -369,7 +391,7 @@ def test_a_token_lasts_fifteen_minutes_by_core_clock(
     clock: ModuleType, issued_at: datetime
 ) -> None:
     clock.freeze(issued_at)
-    token = make_access_token(USER_ID, Role.USER, SETTINGS)
+    token = _token(auth_time=issued_at)
 
     clock.advance(timedelta(minutes=14, seconds=59))
     assert decode_access_token(token, SETTINGS).expires_at == issued_at + timedelta(
@@ -383,9 +405,7 @@ def test_a_token_lasts_fifteen_minutes_by_core_clock(
 
 
 FORGERIES: dict[str, Callable[[], str]] = {
-    "payload edited after signing": lambda: _with_role_changed(
-        make_access_token(USER_ID, Role.USER, SETTINGS)
-    ),
+    "payload edited after signing": lambda: _with_role_changed(_token()),
     "signed with another secret": lambda: _sign(
         _claims(), key=bytes.fromhex(random_keys()["JWT_SECRET"])
     ),
@@ -397,8 +417,14 @@ FORGERIES: dict[str, Callable[[], str]] = {
     "no aud": lambda: _sign(_claims(aud=None)),
     "no iat": lambda: _sign(_claims(iat=None)),
     "no exp": lambda: _sign(_claims(exp=None)),
+    "no auth_time": lambda: _sign(_claims(auth_time=None)),
     "exp a float": lambda: _sign(_claims(exp=float(_claims()["exp"]))),
     "exp a bool": lambda: _sign(_claims(exp=True)),
+    "auth_time a float": lambda: _sign(
+        _claims(auth_time=float(_claims()["auth_time"]))
+    ),
+    "auth_time a string": lambda: _sign(_claims(auth_time="2026-10-03T09:30:00Z")),
+    "auth_time a bool": lambda: _sign(_claims(auth_time=True)),
     "sub not a user id": lambda: _sign(_claims(sub="not-a-uuid")),
     "role not a role": lambda: _sign(_claims(role="superuser")),
     "garbage": lambda: "not.a.token",

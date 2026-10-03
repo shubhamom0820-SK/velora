@@ -3,7 +3,9 @@
 from __future__ import annotations
 
 import re
+import tomllib
 from pathlib import Path
+from urllib.parse import urlsplit
 
 import pytest
 import yaml  # type: ignore[import-untyped]
@@ -435,3 +437,46 @@ def test_ci_publishes_exactly_the_refused_keys() -> None:
         assert re.fullmatch(r"[0-9a-f]+", value), f"{name} isn't lowercase hex"
         assert len(value) == len(expected), f"{name} is {len(value)} characters"
         assert value == expected, f"{name} isn't the refused test key"
+
+
+# --- Staging's own settings, as fly.api.toml sets them (T-3.3) -----------------
+
+FLY_API_TOML = Path(__file__).resolve().parents[2] / "infra" / "fly.api.toml"
+
+
+def _fly_env() -> dict[str, str]:
+    with FLY_API_TOML.open("rb") as f:
+        env: dict[str, str] = tomllib.load(f)["env"]
+    return env
+
+
+def test_stagings_csrf_cookie_reaches_its_web_and_never_production() -> None:
+    """Parsed, not matched as text. The CSRF cookie's Domain must cover the
+    staging web's host, the one CORS allows, so its pages can read it; and
+    must sit under staging's name, so it never reaches production (D-055)."""
+    env = _fly_env()
+    domain = env["COOKIE_DOMAIN"]
+    [origin] = env["CORS_ORIGINS"].split(",")
+    web_host = urlsplit(origin).hostname or ""
+
+    assert domain == "staging.veloraapp.co.in"
+    assert web_host == domain or web_host.endswith("." + domain)
+    assert domain.endswith(".veloraapp.co.in")
+
+
+def test_stagings_env_block_passes_settings() -> None:
+    """Everything fly.api.toml sets, plus secrets shaped as Fly holds them,
+    starts: a value there that Settings refuses would stop the deploy."""
+    values = {
+        "DATABASE_URL": "postgresql+asyncpg://app:x@db.example:5432/postgres",
+        "REDIS_URL": "rediss://default:x@redis.example:6379/0",
+        **random_keys(),
+        **_fly_env(),
+    }
+
+    settings = Settings(_env_file=None, **values)  # type: ignore[arg-type]
+
+    assert (settings.ENV, settings.COOKIE_DOMAIN) == (
+        "staging",
+        "staging.veloraapp.co.in",
+    )

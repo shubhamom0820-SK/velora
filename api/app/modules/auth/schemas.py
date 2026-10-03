@@ -6,6 +6,8 @@ from typing import Annotated
 
 from pydantic import BaseModel, StringConstraints
 
+from app.modules.users.schemas import Me
+
 # Room for any way a person types an Indian number ("0091 (98765) 43210"), and
 # short enough that nothing long reaches the parser.
 PHONE_INPUT_MAX = 32
@@ -20,3 +22,18 @@ class OtpSent(BaseModel):
     different answer would make this endpoint a ban checker."""
 
     resend_after_s: int
+
+
+class OtpVerify(BaseModel):
+    phone: Annotated[str, StringConstraints(max_length=PHONE_INPUT_MAX)]
+    # Exactly six digits (D-066). Anything else is refused before it can count
+    # as a wrong try.
+    otp: Annotated[str, StringConstraints(pattern=r"^[0-9]{6}$")]
+
+
+class SignedIn(BaseModel):
+    """A sign-in's body. The refresh token and CSRF value go in cookies, never
+    here: the refresh token is HttpOnly, out of the page's reach (D-024)."""
+
+    access_token: str
+    user: Me

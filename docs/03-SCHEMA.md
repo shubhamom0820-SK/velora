@@ -80,9 +80,10 @@ Indexes: `(status, last_active_at desc)`.
 | user_id | uuid fk users on delete cascade | |
 | family_id | uuid not null | rotation family |
 | token_hash | text not null unique | SHA-256 of refresh token |
-| user_agent | text | truncated 200 |
-| ip | inet | |
-| expires_at | timestamptz not null | |
+| user_agent | text | stays empty: nothing reads it, and `/privacy` doesn't list it (D-067) |
+| ip | inet | stays empty, likewise (D-067) |
+| expires_at | timestamptz not null | 30 days from this session's own rotation (D-067) |
+| auth_time | timestamptz not null | when the family signed in, copied unchanged at each rotation: every access token's `auth_time` (D-071) |
 | revoked_at | timestamptz null | |
 | replaced_by | uuid null | next session in the family |
 

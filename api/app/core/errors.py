@@ -19,6 +19,8 @@ from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
+from app.core.headers import security_headers
+
 log = structlog.get_logger(__name__)
 
 # Status codes FastAPI/Starlette raise on their own, mapped onto our codes so a
@@ -105,9 +107,12 @@ async def _handle_unexpected(request: Request, exc: Exception) -> JSONResponse:
     the logging middleware, so reporting is a one-line addition.
     """
     log.exception("unhandled_exception", exc_type=type(exc).__name__)
+    # Starlette builds this response outside every middleware, so it carries
+    # the API's security headers only if it adds them itself (P-42).
     return JSONResponse(
         status_code=500,
         content=envelope("INTERNAL", "Something went wrong on our end."),
+        headers=security_headers(request.url.path),
     )
 
 

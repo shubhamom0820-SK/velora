@@ -1055,7 +1055,7 @@ The finding is Claude's, from Firebase's documentation. An advisor directing T-1
 a separate chat, not the founder) had it recorded as a decision on 3 October 2026, and the
 founder approved it the same day.
 
-### D-066 · Path B codes: six digits, served only where chosen, with a ceiling in rupees — Open
+### D-066 · Path B codes: six digits, served only where chosen, with a ceiling in rupees — Locked
 **The decision (T-3.2, T-3.3):**
 - `/v1/auth/otp/send` and `/v1/auth/otp/verify` are served only where `AUTH_PHONE_PROVIDER` is
   `msg91` or `fake`, an allowlist (rule 16). Everywhere else they 404, so staging and production,
@@ -1108,7 +1108,7 @@ cap being hit.
 
 Recommended by Claude in the joint plan for T-3.2 to T-3.10, except four digits, which the advisor
 directing that plan (Claude, in a separate chat) reversed to six; approved by the founder on
-3 October 2026. **Open** until T-3.3 lands, its last part; that task's `/done` marks it Locked.
+3 October 2026. Locked at T-3.3's `/done`, 3 October 2026.
 
 ### D-067 · Sessions: 30 days that slide, a 10-second grace, logout by cookie, a 15-minute tail — Open
 **The decision (T-3.3, T-3.4, T-3.5):**
@@ -1243,7 +1243,7 @@ Recommended by Claude in the joint plan for T-3.2 to T-3.10; answered by the adv
 that plan (Claude, in a separate chat); approved by the founder on 3 October 2026. Locked at T-3.2's
 `/done`, 3 October 2026.
 
-### D-071 · Access tokens carry the sign-in time, `auth_time` — Open
+### D-071 · Access tokens carry the sign-in time, `auth_time` — Locked
 **Supersedes** D-060's "exactly `sub`, `role`, `aud`, `iat` and `exp`". From T-3.3, access tokens
 carry exactly those and `auth_time`: when this device's session family signed in, by OTP or
 Firebase, carried unchanged through every refresh (T-3.4).
@@ -1255,8 +1255,15 @@ request. `auth_time` is OpenID Connect's claim for exactly that.
 loosened to "at least these", and `decode_access_token` requires `auth_time` like the rest. Until
 T-3.3 lands, D-060's claim set governs.
 
+**Where it lives (found building T-3.3):** on the session row, `sessions.auth_time`, which a
+refresh copies to the new session unchanged. The opaque refresh token can't carry it, and the
+family's first session can't be found again cheaply: it is rotated, so revoked, and the only index
+on `sessions` is partial (`revoked_at IS NULL`), so every refresh would scan the table. One
+additive migration, on a table nothing had written to yet.
+
 Recommended by Claude in the joint plan for T-3.2 to T-3.10; answered by the advisor directing
-that plan (Claude, in a separate chat); approved by the founder on 3 October 2026. **Open** until T-3.3 lands; its `/done` marks it Locked.
+that plan (Claude, in a separate chat); approved by the founder on 3 October 2026. Locked at T-3.3's
+`/done`, 3 October 2026.
 
 ### D-072 · An under-18 refusal deletes the account and keeps only the number's hash — Open
 **The decision (T-3.6):** `UNDERAGE` deletes, in the transaction that refuses the date, the user

@@ -372,8 +372,9 @@ async def test_sessions_are_deleted_with_their_user(db: AsyncSession) -> None:
     user = await _user(db)
     await db.execute(
         text(
-            "insert into sessions (user_id, family_id, token_hash, expires_at) "
-            "values (:u, gen_random_uuid(), 'tok', now() + interval '1 day')"
+            "insert into sessions (user_id, family_id, token_hash, expires_at, "
+            "auth_time) values (:u, gen_random_uuid(), 'tok', "
+            "now() + interval '1 day', now())"
         ),
         {"u": user.id},
     )
@@ -384,6 +385,20 @@ async def test_sessions_are_deleted_with_their_user(db: AsyncSession) -> None:
         text("select count(*) from sessions where user_id = :u"), {"u": user.id}
     )
     assert remaining == 0
+
+
+async def test_a_session_without_its_sign_in_time_is_refused(db: AsyncSession) -> None:
+    """Every access token carries `auth_time` from its session (D-071)."""
+    user = await _user(db)
+
+    state = await _rejected(
+        db,
+        "insert into sessions (user_id, family_id, token_hash, expires_at) "
+        "values (:u, gen_random_uuid(), 'tok', now() + interval '1 day')",
+        {"u": user.id},
+    )
+
+    assert state == NOT_NULL_VIOLATION
 
 
 async def test_a_user_with_a_profile_cannot_be_deleted(db: AsyncSession) -> None:
