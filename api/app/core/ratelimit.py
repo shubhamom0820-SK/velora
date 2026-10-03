@@ -68,3 +68,40 @@ async def hit(
     if int(allowed) == 1:
         return Verdict(allowed=True, retry_after_s=0)
     return Verdict(allowed=False, retry_after_s=max(1, ceil(int(wait_ms) / 1000)))
+
+
+# KEYS[1] the window; ARGV now (ms), window (ms), limit. Like _HIT, but records
+# nothing: {1, 0} when a hit would be allowed, {0, ms until it would be} if not.
+_PEEK = """
+local key = KEYS[1]
+local now_ms = tonumber(ARGV[1])
+local window_ms = tonumber(ARGV[2])
+local limit = tonumber(ARGV[3])
+redis.call('ZREMRANGEBYSCORE', key, '-inf', now_ms - window_ms)
+if redis.call('ZCARD', key) < limit then
+  return {1, 0}
+end
+local oldest = redis.call('ZRANGE', key, -limit, -limit, 'WITHSCORES')
+return {0, tonumber(oldest[2]) + window_ms - now_ms}
+"""
+
+
+async def peek(
+    redis: Redis, scope: str, bucket: str, *, limit: int, window_s: int
+) -> Verdict:
+    """Whether `bucket` has room under `scope`'s limit, recording nothing.
+
+    For a count kept by one route and enforced by another: verify records each
+    wrong sign-in code with `hit`, and send refuses a phone at the limit with
+    this (D-066). When it's full, the wait is until enough entries leave for a
+    place to open: the limit-th newest, not the oldest, if a window ever holds
+    more than `limit`.
+    """
+    now_ms = int(clock.now().timestamp() * 1000)
+    script = redis.register_script(_PEEK)
+    allowed, wait_ms = await script(
+        keys=[key_for(scope, bucket)], args=[now_ms, window_s * 1000, limit]
+    )
+    if int(allowed) == 1:
+        return Verdict(allowed=True, retry_after_s=0)
+    return Verdict(allowed=False, retry_after_s=max(1, ceil(int(wait_ms) / 1000)))

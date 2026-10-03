@@ -28,7 +28,7 @@ from app.core.providers.moderation import (
 )
 from app.core.providers.payments import FakePayments, PaymentsProvider, RazorpayPayments
 from app.core.providers.push import FakePush, PushProvider, WebPush
-from app.core.providers.sms import FakeSms, Msg91Sms, SmsProvider
+from app.core.providers.sms import FakeSms, Msg91Sms, SmsProvider, guard_real_sms
 from app.core.providers.storage import FakeStorage, S3Storage, StorageProvider
 
 
@@ -67,9 +67,13 @@ class FakeProviders:
 
 def build_providers(settings: Settings) -> Providers:
     """The providers `settings` selects. A fake SMS echoes codes to the
-    terminal: fakes only ever run locally (D-045)."""
+    terminal: fakes only ever run locally (D-045). A real SMS provider texts
+    only `SMS_LOCAL_ALLOWED_TO`'s numbers outside staging and production
+    (D-064)."""
     return Providers(
-        sms=FakeSms(echo=True) if settings.SMS_PROVIDER == "fake" else Msg91Sms(),
+        sms=FakeSms(echo=True)
+        if settings.SMS_PROVIDER == "fake"
+        else guard_real_sms(Msg91Sms(), settings),
         payments=FakePayments()
         if settings.PAYMENTS_PROVIDER == "fake"
         else RazorpayPayments(),

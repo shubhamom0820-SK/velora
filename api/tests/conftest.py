@@ -72,6 +72,7 @@ from app.core.security import (
     normalize_phone,
 )
 from app.main import close_resources, create_app
+from app.modules.auth.otp_store import KEY_PREFIX as OTP_KEY_PREFIX
 from app.modules.notifications.models import NotificationPrefs
 from app.modules.profiles.models import Profile
 from app.modules.users.models import User
@@ -258,19 +259,22 @@ def make_user(db: AsyncSession) -> MakeUser:
 
 @pytest.fixture
 async def test_redis() -> AsyncIterator[Redis]:
-    """The test Redis, with no rate-limit windows left over from another test.
+    """The test Redis, with no rate-limit windows or sign-in codes left over
+    from another test.
 
     Rate limits outlive a request by design, so without this the sixth test to
     post from the same address in a minute would fail for a reason it never
-    chose. Cleared before and after.
+    chose; a day's count of codes sent would run into the cap the same way.
+    Cleared before and after.
     """
     if not INFRA_UP:
         pytest.skip(INFRA_DOWN_REASON)
     client = build_redis(TEST_REDIS_URL)
 
     async def clear() -> None:
-        async for key in client.scan_iter(match=f"{RATE_LIMIT_KEY_PREFIX}*"):
-            await client.delete(key)
+        for prefix in (RATE_LIMIT_KEY_PREFIX, OTP_KEY_PREFIX):
+            async for key in client.scan_iter(match=f"{prefix}*"):
+                await client.delete(key)
 
     await clear()
     try:

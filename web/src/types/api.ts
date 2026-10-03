@@ -67,6 +67,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/auth/otp/send": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Send Otp */
+        post: operations["send_otp_v1_auth_otp_send_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -84,6 +101,20 @@ export interface components {
              * @constant
              */
             status: "ok";
+        };
+        /** OtpSend */
+        OtpSend: {
+            /** Phone */
+            phone: string;
+        };
+        /**
+         * OtpSent
+         * @description The same for every number, banned or unknown included (D-066): a
+         *     different answer would make this endpoint a ban checker.
+         */
+        OtpSent: {
+            /** Resend After S */
+            resend_after_s: number;
         };
         /** ReadinessChecks */
         ReadinessChecks: {
@@ -212,6 +243,39 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["WaitlistJoined"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    send_otp_v1_auth_otp_send_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["OtpSend"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OtpSent"];
                 };
             };
             /** @description Validation Error */

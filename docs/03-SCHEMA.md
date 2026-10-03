@@ -446,7 +446,9 @@ trace is exactly the person with admin access (T-1.13).
 ### app_config  (key/value, cached 60 s)
 `key text pk, value jsonb not null, updated_at`. Seeds: `swipe_daily_limit_men=50`,
 `discovery_radius_km=25`, `thread_hours=24`, `mask_first_n_messages=20`, `kudos_min_messages=6`,
-`gift_free_daily_limit=3`, `gift_same_recipient_cooldown_h=24`.
+`gift_free_daily_limit=3`, `gift_same_recipient_cooldown_h=24`; and, by its own data migration
+(T-3.2), `otp_sms_daily_cap=500`: the most Path B sign-in codes sent in one IST day across every
+number, ₹100 a day at D-035's unconfirmed ₹0.20 an SMS (D-066).
 Two settings are also promised in copy, in `web/src/i18n/en.ts`, written out because copy is a
 promise, not a computation. Change the copy with the setting:
 - `thread_hours`: the landing page ("Threads last a day", "24-hour", T-2.1), `/terms` ("lasts

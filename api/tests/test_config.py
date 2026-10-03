@@ -25,6 +25,7 @@ _ALL_VARS = [
     "CLIENT_IP_HEADER",
     "AUTH_PHONE_PROVIDER",
     "SMS_PROVIDER",
+    "SMS_LOCAL_ALLOWED_TO",
     "PAYMENTS_PROVIDER",
     "MODERATION_PROVIDER",
     "FACEMATCH_PROVIDER",
@@ -238,6 +239,50 @@ def test_no_validation_error_echoes_a_value() -> None:
     assert "ENV" in message
     assert "hunter2-jwt" not in message
     assert "input_value" not in message
+
+
+# --- Locally, a real SMS provider texts only listed numbers (D-064, D-066) -----
+
+
+def test_nobody_is_listed_by_default() -> None:
+    assert _settings().SMS_LOCAL_ALLOWED_TO == ()
+
+
+def test_listed_numbers_are_normalised_however_typed() -> None:
+    settings = _settings(SMS_LOCAL_ALLOWED_TO="98765 43210, +91 98123-45678,")
+
+    assert settings.SMS_LOCAL_ALLOWED_TO == ("+919876543210", "+919812345678")
+
+
+@pytest.mark.parametrize(
+    "listed",
+    ["98765 43210,12345", "98765 43210,+44 20 7946 0958", "98765 43210,1800 123 4567"],
+    ids=["not a number", "not Indian", "not a mobile"],
+)
+def test_a_listed_number_normalize_phone_refuses_stops_startup_unechoed(
+    listed: str,
+) -> None:
+    message = _error(SMS_LOCAL_ALLOWED_TO=listed)
+
+    assert "SMS_LOCAL_ALLOWED_TO" in message
+    assert "entry 2 isn't an Indian mobile number" in message
+    for typed in listed.split(","):
+        assert typed.strip() not in message
+    assert "9876543210" not in message
+
+
+@pytest.mark.parametrize("env", ["staging", "production"])
+def test_the_list_outside_local_refuses_to_start(env: str) -> None:
+    message = _error(ENV=env, **{**_DEPLOYED, "SMS_LOCAL_ALLOWED_TO": "98765 43210"})
+
+    assert f"ENV={env} cannot set SMS_LOCAL_ALLOWED_TO" in message
+    assert "look like protection it isn't (D-066)" in message
+    assert "9876543210" not in message
+
+
+@pytest.mark.parametrize("env", ["staging", "production"])
+def test_outside_local_an_empty_list_is_fine(env: str) -> None:
+    assert _settings(ENV=env, **_DEPLOYED).SMS_LOCAL_ALLOWED_TO == ()
 
 
 # --- Per-IP limits read the proxy's header outside local (D-056) ---------------

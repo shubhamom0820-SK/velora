@@ -1,6 +1,6 @@
 """Reference data (T-1.14): the catalogues match D-004, D-005, D-016 and
 03-SCHEMA.md §8, and seeding twice changes nothing. P-25 adds the intents
-catalogue (D-041), tested the same way.
+catalogue (D-041), and T-3.2 the OTP daily cap (D-066), tested the same way.
 
 Expected values are written out here, not read from the migration, so a wrong
 value in the migration fails a test instead of agreeing with itself.
@@ -25,7 +25,7 @@ COUNTS = {
     "action_prices": 7,
     "credit_packs": 5,
     "gifts": 6,
-    "app_config": 7,
+    "app_config": 8,
     "interests": 24,
     "areas": 40,
 }
@@ -176,6 +176,8 @@ async def test_app_config_seeds(db: AsyncSession) -> None:
         "kudos_min_messages": 6,
         "gift_free_daily_limit": 3,
         "gift_same_recipient_cooldown_h": 24,
+        # T-3.2, D-066: at most ₹100 a day of Path B SMS at ₹0.20 each.
+        "otp_sms_daily_cap": 500,
     }
 
 
@@ -348,3 +350,49 @@ async def test_intents_downgrade_removes_the_seeds(test_engine: AsyncEngine) -> 
         await run_alembic(test_engine, command.upgrade, "head")
 
     assert left == 0
+
+
+# --- T-3.2: the OTP daily cap (D-066) -------------------------------------------
+
+OTP_CAP_REVISION = _revision("89b155534dcf")
+
+
+async def test_seeding_the_otp_cap_again_keeps_a_tuned_value(db: AsyncSession) -> None:
+    await db.execute(
+        text("update app_config set value = '200' where key = 'otp_sms_daily_cap'")
+    )
+
+    for statement in OTP_CAP_REVISION.reference_data():
+        await db.execute(statement)
+
+    rows = await db.execute(
+        text("select value::int from app_config where key = 'otp_sms_daily_cap'")
+    )
+    assert rows.scalars().all() == [200]
+
+
+async def test_the_otp_cap_downgrade_removes_exactly_its_key(
+    test_engine: AsyncEngine,
+) -> None:
+    try:
+        await run_alembic(
+            test_engine, command.downgrade, OTP_CAP_REVISION.down_revision
+        )
+        async with test_engine.connect() as connection:
+            keys = set(
+                (await connection.execute(text("select key from app_config")))
+                .scalars()
+                .all()
+            )
+    finally:
+        await run_alembic(test_engine, command.upgrade, "head")
+
+    assert keys == {
+        "swipe_daily_limit_men",
+        "discovery_radius_km",
+        "thread_hours",
+        "mask_first_n_messages",
+        "kudos_min_messages",
+        "gift_free_daily_limit",
+        "gift_same_recipient_cooldown_h",
+    }

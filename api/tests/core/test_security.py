@@ -25,6 +25,7 @@ from typing import Any
 from uuid import UUID
 
 import jwt
+import phonenumbers
 import pytest
 from argon2 import Parameters, PasswordHasher, Type, extract_parameters, profiles
 from argon2.exceptions import VerifyMismatchError
@@ -43,13 +44,16 @@ from app.core.security import (
     decode_access_token,
     decrypt_phone,
     encrypt_phone,
+    hash_otp,
     hash_phone,
     hash_pin,
     hash_token,
     make_access_token,
     new_csrf,
+    new_otp_code,
     new_refresh_token,
     normalize_phone,
+    otp_matches,
     verify_pin,
 )
 from tests.infra import TEST_DATABASE_URL, TEST_REDIS_URL
@@ -138,6 +142,77 @@ def test_anything_but_a_valid_number_is_a_validation_error_on_phone(junk: str) -
     assert error.details == {
         "fields": [{"field": "phone", "problem": "isn't a valid phone number"}]
     }
+
+
+# D-070: signing in sends an SMS, so only an Indian number that can receive one
+# signs in. libphonenumber 9.0.40 types each of these as the comment says.
+
+
+@pytest.mark.parametrize(
+    "cant_receive_sms",
+    [
+        "+91 22 2222 2222",  # a Mumbai landline: FIXED_LINE
+        "011 2345 6789",  # a Delhi landline, typed with its trunk 0: FIXED_LINE
+        "1800 123 4567",  # toll-free: TOLL_FREE
+        "140 123 4567",  # the 140 series: UAN
+        "+91 1860 123 4567",  # shared cost: SHARED_COST
+        "+91 1861 123 456789",  # premium rate: PREMIUM_RATE
+    ],
+)
+def test_an_indian_number_that_cant_receive_an_sms_is_refused(
+    cant_receive_sms: str,
+) -> None:
+    error = _expect_error(lambda: normalize_phone(cant_receive_sms))
+
+    assert (error.code, error.status) == ("VALIDATION_ERROR", 400)
+    assert error.message == "Some of the information sent was not valid."
+    assert error.details == {
+        "fields": [{"field": "phone", "problem": "isn't a mobile number"}]
+    }
+
+
+def test_a_number_libphonenumber_cant_place_as_landline_or_mobile_signs_in() -> None:
+    """Much of the 7 and 8 series overlaps landline area codes, and the library
+    answers FIXED_LINE_OR_MOBILE: it can't tell. Refusing those would turn away
+    real mobiles, so they're accepted (D-070). This is the library's own example
+    of the type for India."""
+    ambiguous = "+91 74104 10123"
+    parsed = phonenumbers.parse(ambiguous, "IN")
+    assert (
+        phonenumbers.number_type(parsed)
+        == phonenumbers.PhoneNumberType.FIXED_LINE_OR_MOBILE
+    )
+
+    assert normalize_phone(ambiguous) == "+917410410123"
+
+
+def test_exactly_two_of_indias_number_types_sign_in() -> None:
+    """Only these, checked over every type India's metadata has: a list of the
+    types refused would wave through one nobody listed."""
+    accepted = set()
+    for type_ in vars(phonenumbers.PhoneNumberType).values():
+        if not isinstance(type_, int):
+            continue
+        example = phonenumbers.example_number_for_type("IN", type_)
+        if example is None:
+            continue
+        typed = phonenumbers.format_number(example, phonenumbers.PhoneNumberFormat.E164)
+        try:
+            normalize_phone(typed)
+        except AppError:
+            continue
+        accepted.add(phonenumbers.number_type(example))
+
+    assert accepted == {
+        phonenumbers.PhoneNumberType.MOBILE,
+        phonenumbers.PhoneNumberType.FIXED_LINE_OR_MOBILE,
+    }
+
+
+def test_a_foreign_landline_is_not_supported_rather_than_not_a_mobile() -> None:
+    error = _expect_error(lambda: normalize_phone("+44 20 7946 0958"))
+
+    assert error.code == "PHONE_NOT_SUPPORTED"
 
 
 def test_the_phone_hash_is_hmac_sha256_keyed_by_phone_pepper() -> None:
@@ -685,3 +760,110 @@ async def test_at_most_two_hashes_run_at_once(monkeypatch: pytest.MonkeyPatch) -
     await asyncio.gather(*(verify_pin(PIN, s, SETTINGS) for s in stored))
 
     assert most == 2
+
+
+# --- OTP codes (D-063, D-066) ---------------------------------------------------------
+
+PHONE_HASH = "b6abc7c4fd16d1195a8a568aba1818a8ab17911e805421be43063bc5906779ba"
+CODE = "042917"
+
+
+def test_a_code_is_six_digits_drawn_from_secrets_with_leading_zeros_kept(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    drawn: list[int] = []
+
+    def fake_randbelow(n: int) -> int:
+        drawn.append(n)
+        return 42
+
+    monkeypatch.setattr(secrets, "randbelow", fake_randbelow)
+
+    assert new_otp_code() == "000042"
+    assert drawn == [1_000_000]
+
+
+def test_a_thousand_codes_are_all_six_digits() -> None:
+    codes = [new_otp_code() for _ in range(1000)]
+
+    assert all(re.fullmatch(r"[0-9]{6}", code) for code in codes)
+    # 1,000 draws from a million collide about half a time on average.
+    assert len(set(codes)) >= 995
+
+
+def test_the_otp_hash_is_hmac_sha256_of_the_number_hash_and_code() -> None:
+    # K=$(printf 'otp/v1\001' | openssl dgst -sha256 -hmac cccccccccccccccccccccccccccccccc)
+    # printf '%s:%s' <PHONE_HASH> 042917 | openssl dgst -sha256 -mac HMAC -macopt hexkey:$K
+    assert hash_otp(PHONE_HASH, CODE, SETTINGS) == (
+        "1e3e2dd445aebcc396c5908f3230f6b22cdfa04ae56cf7c18cb575b0473ea5d6"
+    )
+
+
+def test_an_otp_hash_is_never_a_pin_hash_and_the_reverse() -> None:
+    """D-063: one pepper, two labels, so neither use's hash stands in for the
+    other's. The same message under the `pin` key (computed with openssl, as
+    above, with pin/v1) is a different value, and the PIN's own HMAC of the
+    same digits, which argon2 wraps, is another."""
+    under_pin_label = "bb7b39eb13bdea579665b4efc6eb6ccb906b1ca0670ce55b3a92a22a2150aaaf"
+    otp_hash = hash_otp(PHONE_HASH, CODE, SETTINGS)
+
+    assert otp_hash != under_pin_label
+    assert otp_hash != security._peppered_pin(CODE, SETTINGS).hex()
+    assert not otp_matches(PHONE_HASH, CODE, under_pin_label, SETTINGS)
+
+
+async def test_an_otp_hash_never_verifies_as_a_stored_pin_and_the_reverse() -> None:
+    pin_hash = await hash_pin(CODE, SETTINGS)
+    otp_hash = hash_otp(PHONE_HASH, CODE, SETTINGS)
+
+    assert await verify_pin(CODE, otp_hash, SETTINGS) is False
+    assert otp_matches(PHONE_HASH, CODE, pin_hash, SETTINGS) is False
+
+
+def test_a_code_stored_for_one_number_never_matches_another() -> None:
+    other = hash_phone(E164("+919812345678"), SETTINGS)
+    stored = hash_otp(PHONE_HASH, CODE, SETTINGS)
+
+    assert hash_otp(other, CODE, SETTINGS) != stored
+    assert otp_matches(other, CODE, stored, SETTINGS) is False
+
+
+def test_another_code_pepper_gives_another_otp_hash() -> None:
+    other = _settings(CODE_PEPPER=random_keys()["CODE_PEPPER"])
+    stored = hash_otp(PHONE_HASH, CODE, SETTINGS)
+
+    assert otp_matches(PHONE_HASH, CODE, stored, other) is False
+
+
+def test_the_right_code_matches_and_any_other_doesnt() -> None:
+    stored = hash_otp(PHONE_HASH, CODE, SETTINGS)
+
+    assert otp_matches(PHONE_HASH, CODE, stored, SETTINGS) is True
+    for wrong in ("042918", "42917", "0429170", "", "tökén"):
+        assert otp_matches(PHONE_HASH, wrong, stored, SETTINGS) is False
+    assert otp_matches(PHONE_HASH, CODE, "", SETTINGS) is False
+
+
+def test_the_otp_comparison_is_constant_time(monkeypatch: pytest.MonkeyPatch) -> None:
+    compared: list[tuple[bytes, bytes]] = []
+    real = hmac.compare_digest
+
+    def spy(a: bytes, b: bytes) -> bool:
+        compared.append((a, b))
+        return real(a, b)
+
+    monkeypatch.setattr(hmac, "compare_digest", spy)
+    stored = hash_otp(PHONE_HASH, CODE, SETTINGS)
+
+    assert otp_matches(PHONE_HASH, CODE, stored, SETTINGS) is True
+    assert compared == [(stored.encode(), stored.encode())]
+
+
+@pytest.mark.parametrize(
+    "not_a_phone_hash",
+    ["+919876543210", PHONE_HASH.upper(), PHONE_HASH[:-1], PHONE_HASH + ":0"],
+    ids=["a phone number", "capitals", "too short", "with a colon"],
+)
+def test_only_hash_phones_output_is_taken(not_a_phone_hash: str) -> None:
+    with pytest.raises(ValueError, match="phone hash"):
+        hash_otp(not_a_phone_hash, CODE, SETTINGS)

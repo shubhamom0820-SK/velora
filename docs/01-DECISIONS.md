@@ -1212,7 +1212,7 @@ changed, with no way back).
 Recommended by Claude in the joint plan for T-3.2 to T-3.10; answered by the advisor directing
 that plan (Claude, in a separate chat); approved by the founder on 3 October 2026. **Open** until T-3.9 lands; its `/done` marks it Locked.
 
-### D-070 · Sign-in numbers are Indian mobiles only — Open
+### D-070 · Sign-in numbers are Indian mobiles only — Locked
 **Supersedes** D-061's "a number is normalised to E.164, +91 only (D-035)", and T-3.1's text for
 `normalize_phone`. From T-3.2, `normalize_phone` also refuses a valid Indian number that isn't a
 mobile: landlines, toll-free 1800 numbers and the 140 series (P-45), as `VALIDATION_ERROR` on
@@ -1227,8 +1227,21 @@ the exact error for each case, with the non-mobile cases added; never loosened. 
 quietly widened is worse than one openly replaced (the advisor). Until T-3.2 lands, D-061's
 sentence governs.
 
+**What "a mobile" means in code (found building T-3.2):** libphonenumber's type is `MOBILE` or
+`FIXED_LINE_OR_MOBILE`, an allowlist; everything else India's metadata has is refused:
+`FIXED_LINE`, `TOLL_FREE` (1800), `UAN` (the 140 series), `SHARED_COST` (1860) and `PREMIUM_RATE`.
+`FIXED_LINE_OR_MOBILE` is the library saying it can't tell, and it isn't rare. Of 200,000 random
+valid numbers in each series, Claude measured with 9.0.40 on 3 October 2026: 33% of the 7 series and
+38% of the 8 series came back `FIXED_LINE_OR_MOBILE` (the 6 series 0.08%, the 9 series none). The
+library's own `FIXED_LINE` example for India is one of them. Those are shares of the numbering
+plan, not of real subscribers, but requiring `MOBILE` alone, as P-45 first suggested, would turn
+away real mobiles in exactly those ranges, which this decision never meant: it refuses numbers that
+aren't mobiles, not numbers the library can't place. A test checks that exactly these two of India's
+types sign in, so a type added later is refused until someone decides.
+
 Recommended by Claude in the joint plan for T-3.2 to T-3.10; answered by the advisor directing
-that plan (Claude, in a separate chat); approved by the founder on 3 October 2026. **Open** until T-3.2 lands; its `/done` marks it Locked.
+that plan (Claude, in a separate chat); approved by the founder on 3 October 2026. Locked at T-3.2's
+`/done`, 3 October 2026.
 
 ### D-071 · Access tokens carry the sign-in time, `auth_time` — Open
 **Supersedes** D-060's "exactly `sub`, `role`, `aud`, `iat` and `exp`". From T-3.3, access tokens

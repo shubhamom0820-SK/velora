@@ -522,18 +522,25 @@ One migration per task, each with a working `downgrade()`. Build exactly `03-SCH
 - [x] **Commit:** `feat(auth): security primitives [T-3.1]`
 
 ### T-3.2 · OTP send
-- [ ] **Needs:** T-3.1
-- [ ] This is Path B (MSG91, used after DLT approval); the launch path is T-3.14. `/v1/auth/otp/send` and `/v1/auth/otp/verify` are served only where `AUTH_PHONE_PROVIDER` is `msg91` or `fake`, an allowlist (rule 16); everywhere else they 404, so staging and production, on `firebase`, can't send a Path B SMS at all (D-066).
-- [ ] `POST /v1/auth/otp/send {phone}` → `{resend_after_s}`. Normalise the phone; if its hash is in `banned_identities`, answer exactly as for any other number and send nothing. Generate a **6-digit** code (D-066), store `otp:{phone_hash}` = keyed HMAC of the code under `CODE_PEPPER`'s `otp/v1` key, not argon2 (D-063), + attempts 0, TTL 300 s; resend lock 45 s. Send via `SmsProvider`.
-- [ ] `hash_otp` and its constant-time check join `core/security.py` beside the PIN's, under the `otp/v1` label T-3.1 reserved: HMAC over the number's hash and the code (D-063).
-- [ ] Limits (D-066, 02-ARCHITECTURE §12): 5 sends per phone an hour, 20 per IP an hour, 100 an hour per IPv6 /48, 10 per phone a day, and a global daily cap, `app_config.otp_sms_daily_cap`, a new key seeded at 500 by a new data migration (rule 11; list it in 03-SCHEMA §8). At the cap: `503 PROVIDER_UNAVAILABLE`, with a warning logged at 50%, which has nowhere to land until T-9.12 (D-066 records the gap). A banned or unknown number counts against every limit exactly as any other, and a phone at D-066's 10 wrong codes in 24 hours gets `RATE_LIMITED` here (T-3.3's verify keeps that count; T-3.2's test sets it directly).
-- [ ] **The worst case if the limits are wrong** (D-066, at D-035's unconfirmed ₹0.20 an SMS): with only the first two limits, ₹40,000 an hour from 10,000 rented IPs, and ₹2.6 lakh an hour from one cloud IPv6 /48. With the cap, ₹100 a day. Revisit at P-0.5, when MSG91 goes live.
-- [ ] **D-070: `normalize_phone` refuses a number that isn't a mobile** (landline, toll-free 1800, the 140 series), as `VALIDATION_ERROR` on `phone` ("isn't a mobile number"), which settles P-45. Update T-3.1's tests to the new rule, still asserting the exact error for each case; never loosen them.
-- [ ] **A seeded number never gets a real SMS (T-1.15, D-064).** India reserves no fictional range, so the seed's `+91 90000 00xxx` numbers may be real people's. Where `ENV` is local, a real `SmsProvider` is called only for numbers in `SMS_LOCAL_ALLOWED_TO` (comma-separated, each passing `normalize_phone` at startup, empty by default); any other number gets `503 PROVIDER_UNAVAILABLE` naming the setting, before the provider is called, and its stored code is discarded. Settings refuse the setting outside local, where it would look like protection it isn't. Add it to 02-ARCHITECTURE §11 and `api/.env.example`.
-- [ ] `Msg91Sms` stays a stub that **raises** when called, never a fake success: a stub that reports success means "code sent" with no SMS, found only when a real user waits at an empty inbox (D-066). A test holds it to raising. The real client is P-46, after P-0.4 and P-0.5.
-- [ ] Tests: happy path, with a 6-digit code; resend too soon → `RATE_LIMITED`; 6th send in an hour → `RATE_LIMITED`; each of D-066's other limits; the global cap → `503 PROVIDER_UNAVAILABLE`; banned → the same 200 and no SMS; unknown → the same 200; a landline, a toll-free and a 140 number → `VALIDATION_ERROR`; 404 where `AUTH_PHONE_PROVIDER` is `firebase`; locally, with a real provider configured, a seeded number never reaches it (a recording stand-in proves it, since `Msg91Sms` has no HTTP client to watch until P-46); `Msg91Sms` raises.
-- [ ] **At `/done`:** D-070 becomes Locked; tick P-45.
-- [ ] **Commit:** `feat(auth): send otp [T-3.2]`
+- [x] **Needs:** T-3.1
+- [x] This is Path B (MSG91, used after DLT approval); the launch path is T-3.14. `/v1/auth/otp/send` and `/v1/auth/otp/verify` are served only where `AUTH_PHONE_PROVIDER` is `msg91` or `fake`, an allowlist (rule 16); everywhere else they 404, so staging and production, on `firebase`, can't send a Path B SMS at all (D-066).
+- [x] `POST /v1/auth/otp/send {phone}` → `{resend_after_s}`. Normalise the phone; if its hash is in `banned_identities`, answer exactly as for any other number and send nothing. Generate a **6-digit** code (D-066), store `otp:{phone_hash}` = keyed HMAC of the code under `CODE_PEPPER`'s `otp/v1` key, not argon2 (D-063), + attempts 0, TTL 300 s; resend lock 45 s. Send via `SmsProvider`.
+  **Built:** a banned number's code is stored too, never sent, so a wrong guess at verify gets the
+  same `OTP_INVALID` as anyone's and the ban stays invisible to whoever doesn't hold the number.
+  The 300 s and the resend lock run on `core.clock` (the stored expiry, a one-place window), so
+  tests move them; Redis's TTL only clears the key.
+- [x] `hash_otp` and its constant-time check join `core/security.py` beside the PIN's, under the `otp/v1` label T-3.1 reserved: HMAC over the number's hash and the code (D-063).
+- [x] Limits (D-066, 02-ARCHITECTURE §12): 5 sends per phone an hour, 20 per IP an hour, 100 an hour per IPv6 /48, 10 per phone a day, and a global daily cap, `app_config.otp_sms_daily_cap`, a new key seeded at 500 by a new data migration (rule 11; list it in 03-SCHEMA §8). At the cap: `503 PROVIDER_UNAVAILABLE`, with a warning logged at 50%, which has nowhere to land until T-9.12 (D-066 records the gap). A banned or unknown number counts against every limit exactly as any other, and a phone at D-066's 10 wrong codes in 24 hours gets `RATE_LIMITED` here (T-3.3's verify keeps that count; T-3.2's test sets it directly).
+- [x] **The worst case if the limits are wrong** (D-066, at D-035's unconfirmed ₹0.20 an SMS): with only the first two limits, ₹40,000 an hour from 10,000 rented IPs, and ₹2.6 lakh an hour from one cloud IPv6 /48. With the cap, ₹100 a day. Revisit at P-0.5, when MSG91 goes live.
+- [x] **D-070: `normalize_phone` refuses a number that isn't a mobile** (landline, toll-free 1800, the 140 series), as `VALIDATION_ERROR` on `phone` ("isn't a mobile number"), which settles P-45. Update T-3.1's tests to the new rule, still asserting the exact error for each case; never loosen them.
+  **Built as `MOBILE` or `FIXED_LINE_OR_MOBILE`, nothing else** (D-070): libphonenumber can't place
+  a third or more of the 7 and 8 series as landline or mobile, and requiring `MOBILE` would refuse real
+  mobiles there. Shared-cost (1860) and premium-rate numbers are refused too.
+- [x] **A seeded number never gets a real SMS (T-1.15, D-064).** India reserves no fictional range, so the seed's `+91 90000 00xxx` numbers may be real people's. Where `ENV` is local, a real `SmsProvider` is called only for numbers in `SMS_LOCAL_ALLOWED_TO` (comma-separated, each passing `normalize_phone` at startup, empty by default); any other number gets `503 PROVIDER_UNAVAILABLE` naming the setting, before the provider is called, and its stored code is discarded. Settings refuse the setting outside local, where it would look like protection it isn't. Add it to 02-ARCHITECTURE §11 and `api/.env.example`.
+- [x] `Msg91Sms` stays a stub that **raises** when called, never a fake success: a stub that reports success means "code sent" with no SMS, found only when a real user waits at an empty inbox (D-066). A test holds it to raising. The real client is P-46, after P-0.4 and P-0.5.
+- [x] Tests: happy path, with a 6-digit code; resend too soon → `RATE_LIMITED`; 6th send in an hour → `RATE_LIMITED`; each of D-066's other limits; the global cap → `503 PROVIDER_UNAVAILABLE`; banned → the same 200 and no SMS; unknown → the same 200; a landline, a toll-free and a 140 number → `VALIDATION_ERROR`; 404 where `AUTH_PHONE_PROVIDER` is `firebase`; locally, with a real provider configured, a seeded number never reaches it (a recording stand-in proves it, since `Msg91Sms` has no HTTP client to watch until P-46); `Msg91Sms` raises.
+- [x] **At `/done`:** D-070 becomes Locked; tick P-45.
+- [x] **Commit:** `feat(auth): send otp [T-3.2]`
 
 ### T-3.3 · OTP verify and signup
 - [ ] **Needs:** T-3.2, and the **cookie scope settled**, because this task sets the first cookies and its tests would lock in a wrong scope. Settled 2 October 2026: the refresh cookie is host-only on the API (D-054), and both cookies are named for their environment (D-055)
@@ -1572,7 +1579,7 @@ Claude Code adds items here instead of doing unplanned work. Format:
   inclusion check can never find a header we didn't want.
 
   Found in T-2.5's Done-when.
-- [ ] P-45 · Decide whether `normalize_phone` accepts only mobile numbers. **Decide in T-3.2.**
+- [x] P-45 · Decide whether `normalize_phone` accepts only mobile numbers. **Decide in T-3.2.**
   Worst case: T-3.2 pays for an SMS, and spends the sender's rate-limit slots, on a number that
   can't receive one. `normalize_phone` (T-3.1) checks that a number is valid, not what type it
   is, so it accepts landlines (`+91 22 2222 2222`), toll-free 1800 numbers and the 140 series
@@ -1580,7 +1587,7 @@ Claude Code adds items here instead of doing unplanned work. Format:
   October 2026). Sign-in needs an SMS-capable number. Requiring `PhoneNumberType.MOBILE` would
   refuse them up front, with a test each way; Firebase's path (T-3.14) may already refuse them,
   which is worth checking before duplicating it.
-  **Decided:** D-070, mobiles only, built in T-3.2 — tick this with T-3.2.
+  **Decided:** D-070, mobiles only, built in T-3.2 — tick this with T-3.2. **Done in T-3.2.**
 
   P-44 is skipped on purpose: the advisor directing T-1.15 (Claude, in a separate chat) recalls
   it as T-3.1's PIN pepper, closed there, though no file or commit in the repo names it. Never
@@ -1593,5 +1600,26 @@ Claude Code adds items here instead of doing unplanned work. Format:
   on httpx against MSG91's own documentation, with the DLT template, tested against a mocked
   transport, then prove it with one real SMS to the founder's own phone. D-064's local guard wraps
   it unchanged. Revisit D-066's limits and cap in the same task (P-0.5).
+  **And make a banned number take as long as any other** (T-3.2): send answers a banned number
+  exactly as any other but skips the SMS. With the fake, that costs nothing; with a real HTTP call
+  to MSG91, a banned number would answer a few hundred milliseconds sooner, and a stopwatch would
+  tell whoever asks whether a number is banned. Send the SMS off the request (an ARQ job, or a
+  background task) so every number's answer takes the same time, or pad to it; and keep T-3.2's
+  `503` for D-064's local refusal, which happens before anything is sent.
 
   Found while planning T-3.2 to T-3.10.
+- [ ] P-47 · Give `app_config` its 60-second cache. **With T-6.4**, the first hot path to read a
+  setting (the men's daily swipe limit, on every swipe). Worst case without it: a database read
+  per request for a value that changes a few times a year. T-3.2's reader
+  (`admin.service.config_int`) reads fresh, on purpose for now: its one caller, OTP send's daily
+  cap, is rate-limited, and fresh means a lowered cap applies at once. A cache must be per app
+  (`app.state`), not per process, or tests that tune a setting would read another test's value.
+  Found in T-3.2.
+- [ ] P-48 · Make `structlog.testing.capture_logs` see every log line in tests. Worst case: a test
+  that nothing secret is logged (rule 15) passes having captured nothing. structlog caches a
+  logger at first use against the processor list configured then, and every `create_app()` calls
+  `configure_logging()`, which installs a new list; `capture_logs` edits only the current one, so
+  a logger first used in an earlier test escapes it. T-3.2's tests swap in a fresh logger and
+  assert they saw the event they expect; T-3.1's PIN-hash log test relies on test order. Fix at
+  the root: configure logging once per process, or keep one processor list and change it in place.
+  Found in T-3.2.

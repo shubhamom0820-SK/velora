@@ -1,11 +1,12 @@
-"""Security primitives: phone numbers, access and refresh tokens, PINs, CSRF.
+"""Security primitives: phone numbers, access and refresh tokens, PINs, CSRF,
+OTP codes.
 
 Every primitive is a vetted library's (D-060): phonenumbers parses numbers,
 `hmac` and `hashlib` hash, `secrets` draws tokens, PyJWT signs and checks access
 tokens, argon2-cffi hashes PINs and cryptography's Fernet encrypts. What this
-module adds is policy only: India only, which key does what, the token's claims,
-expiry read from `core.clock` (rule 7), and exactly one accepted set of argon2
-parameters.
+module adds is policy only: Indian mobiles only, which key does what, the
+token's claims, expiry read from `core.clock` (rule 7), and exactly one accepted
+set of argon2 parameters.
 
 The keys are hex in `Settings`, checked at startup; outside local, the repo's
 own test keys are refused (`config.PUBLIC_TEST_KEYS`). Nothing here logs a
@@ -49,15 +50,28 @@ E164 = NewType("E164", str)
 
 _INDIA = 91
 _E164_INDIA = re.compile(r"\+91[0-9]+")
+# Signing in sends an SMS, so only a number that can receive one signs in
+# (D-070): an allowlist of types, so a type India adds later is refused until
+# someone decides. FIXED_LINE_OR_MOBILE is libphonenumber saying it can't tell:
+# much of the 7 and 8 series overlaps landline area codes, and refusing those
+# would turn away real mobiles. Refused: FIXED_LINE, TOLL_FREE (1800), UAN (the
+# 140 series), SHARED_COST (1860) and PREMIUM_RATE.
+_SMS_CAPABLE = frozenset(
+    {
+        phonenumbers.PhoneNumberType.MOBILE,
+        phonenumbers.PhoneNumberType.FIXED_LINE_OR_MOBILE,
+    }
+)
 
 
 def normalize_phone(raw: str) -> E164:
-    """An Indian number in E.164 (`+919876543210`), or the reason it isn't one.
+    """An Indian mobile number in E.164 (`+919876543210`), or why it isn't one.
 
     Takes what people type: spaces, dashes, a leading 0 or 91, Devanagari
     digits. A valid number from anywhere else is `PHONE_NOT_SUPPORTED` (D-035);
     anything that isn't a valid number, or carries an extension, is
-    `VALIDATION_ERROR` on `phone`. Neither error repeats the number.
+    `VALIDATION_ERROR` on `phone`, and so is a valid Indian number that can't
+    receive an SMS (D-070). No error repeats the number.
     """
     try:
         number = phonenumbers.parse(raw, "IN")
@@ -71,6 +85,8 @@ def normalize_phone(raw: str) -> E164:
             "Only Indian (+91) numbers can sign up for now.",
             status=422,
         )
+    if phonenumbers.number_type(number) not in _SMS_CAPABLE:
+        raise _phone_problem("isn't a mobile number")
     return E164(phonenumbers.format_number(number, phonenumbers.PhoneNumberFormat.E164))
 
 
@@ -123,13 +139,15 @@ def _require_e164(phone: str) -> None:
 
 
 def _not_a_phone_number() -> AppError:
+    return _phone_problem("isn't a valid phone number")
+
+
+def _phone_problem(problem: str) -> AppError:
     return AppError(
         "VALIDATION_ERROR",
         "Some of the information sent was not valid.",
         status=400,
-        details={
-            "fields": [{"field": "phone", "problem": "isn't a valid phone number"}]
-        },
+        details={"fields": [{"field": "phone", "problem": problem}]},
     )
 
 
@@ -337,7 +355,7 @@ async def verify_pin(pin: str, stored: str, settings: Settings) -> bool:
 
 # The short codes people type share CODE_PEPPER, each use under its own key
 # derived from it, so a PIN's hash and an OTP's can never stand in for each
-# other: "pin" here, "otp" for T-3.2's codes (D-063). The labels carry no brand
+# other: "pin" for PINs, "otp" for sign-in codes (D-063). The labels carry no brand
 # name, since renaming the brand must never change a key (rule 17).
 CodePurpose = Literal["pin", "otp"]
 
@@ -351,3 +369,41 @@ def _code_key(settings: Settings, purpose: CodePurpose) -> bytes:
 
 def _peppered_pin(pin: str, settings: Settings) -> bytes:
     return hmac.new(_code_key(settings, "pin"), pin.encode(), hashlib.sha256).digest()
+
+
+# --- OTP codes, Path B (D-063, D-066) ------------------------------------------------
+
+# Six digits (D-066): with 10 wrong codes a day allowed per phone, four would
+# give a determined guesser about a 30% chance at one person's account in a
+# year; six give about 0.4%.
+OTP_DIGITS = 6
+_PHONE_HASH = re.compile(r"[0-9a-f]{64}")
+
+
+def new_otp_code() -> str:
+    """A sign-in code: six digits from `secrets`, leading zeros kept."""
+    return f"{secrets.randbelow(10**OTP_DIGITS):0{OTP_DIGITS}d}"
+
+
+def hash_otp(phone_hash: str, code: str, settings: Settings) -> str:
+    """A code's stored form: HMAC-SHA256 over the number's hash and the code,
+    under CODE_PEPPER's `otp` key, as hex (D-063).
+
+    Not argon2: on an unauthenticated endpoint that would let one cheap request
+    cost us 19 MiB and ~18 ms. A code's protection is its 5 tries and 5 minutes;
+    the pepper, kept off Redis and the database, means a leak of either reveals
+    no code. The number's hash is in the message, so a code stored for one
+    number never matches another's, and only `hash_phone`'s output is taken, so
+    the message can't be read two ways.
+    """
+    if not _PHONE_HASH.fullmatch(phone_hash):
+        raise ValueError("expected a phone hash, as hash_phone returns it")
+    message = f"{phone_hash}:{code}".encode()
+    return hmac.new(_code_key(settings, "otp"), message, hashlib.sha256).hexdigest()
+
+
+def otp_matches(phone_hash: str, code: str, stored: str, settings: Settings) -> bool:
+    """Whether `code` is the one `stored` was made from, compared in constant
+    time."""
+    expected = hash_otp(phone_hash, code, settings)
+    return hmac.compare_digest(expected.encode(), stored.encode())

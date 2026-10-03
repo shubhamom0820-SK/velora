@@ -19,11 +19,16 @@ from app.core.errors import register_error_handlers
 from app.core.logging import RequestIDMiddleware, configure_logging
 from app.core.providers import build_providers
 from app.core.redis import build_redis
+from app.modules.auth.router import otp_router
 from app.modules.health.router import router as health_router
 from app.modules.waitlist.router import router as waitlist_router
 
 APP_NAME = "Velora"  # One constant, so a rename stays cheap (D-015).
 SCHEMA_SERVED_IN: frozenset[str] = frozenset({"local"})
+# Path B's sign-in routes (/v1/auth/otp/*) are served only for these providers:
+# an allowlist (rule 16, D-066). Everywhere else they 404, so staging and
+# production, on firebase, can't be made to send a Path B SMS at all.
+OTP_SERVED_FOR: frozenset[str] = frozenset({"msg91", "fake"})
 
 
 async def close_resources(app: FastAPI) -> None:
@@ -96,6 +101,8 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     # Probes at the root, unversioned; product routers go under /v1.
     app.include_router(health_router)
     app.include_router(waitlist_router, prefix="/v1")
+    if settings.AUTH_PHONE_PROVIDER in OTP_SERVED_FOR:
+        app.include_router(otp_router, prefix="/v1")
 
     return app
 

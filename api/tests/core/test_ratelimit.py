@@ -96,3 +96,34 @@ async def test_the_key_expires_with_its_window(
 
     ttl_ms = await test_redis.pttl(ratelimit.key_for("test", "203.0.113.7"))
     assert 0 < ttl_ms <= 60_000
+
+
+# --- peek: room left, recording nothing (D-066's wrong-code count) ------------
+
+
+async def _peek(redis: Redis) -> ratelimit.Verdict:
+    return await ratelimit.peek(redis, "test", "203.0.113.7", limit=5, window_s=60)
+
+
+async def test_peek_records_nothing(test_redis: Redis, clock: ModuleType) -> None:
+    clock.freeze(START)
+    for _ in range(10):
+        assert await _peek(test_redis) == ratelimit.Verdict(True, 0)
+
+    assert await _hits(test_redis, 6) == [True, True, True, True, True, False]
+
+
+async def test_peek_sees_a_full_window_and_when_it_opens(
+    test_redis: Redis, clock: ModuleType
+) -> None:
+    clock.freeze(START)
+    await _hits(test_redis, 1)
+    clock.advance(timedelta(seconds=20))
+    await _hits(test_redis, 3)
+    assert await _peek(test_redis) == ratelimit.Verdict(True, 0)
+
+    await _hits(test_redis, 1)
+
+    assert await _peek(test_redis) == ratelimit.Verdict(False, 40)
+    clock.advance(timedelta(seconds=40))
+    assert await _peek(test_redis) == ratelimit.Verdict(True, 0)

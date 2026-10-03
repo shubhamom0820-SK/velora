@@ -8,7 +8,7 @@ import pytest
 from starlette.requests import Request
 
 from app.core.config import Settings
-from app.core.deps import UNKNOWN_CLIENT, bucket_for, client_bucket
+from app.core.deps import UNKNOWN_CLIENT, bucket_for, client_bucket, client_ipv6_48
 from tests.infra import TEST_DATABASE_URL, TEST_REDIS_URL
 from tests.keys import random_keys
 
@@ -99,3 +99,33 @@ def test_outside_local_the_socket_is_never_read() -> None:
 )
 def test_bucket_for(raw: str | None, bucket: str) -> None:
     assert bucket_for(raw) == bucket
+
+
+# --- The IPv6 /48 a request came from (D-066) ---------------------------------
+
+
+@pytest.mark.parametrize(
+    ("raw", "network"),
+    [
+        ("2001:db8:abcd:12::1", "2001:db8:abcd::/48"),
+        ("2001:db8:abcd:ffff:ffff:ffff:ffff:ffff", "2001:db8:abcd::/48"),
+        ("2001:db8:abce::1", "2001:db8:abce::/48"),
+        (" 2001:db8:abcd:12::1 ", "2001:db8:abcd::/48"),
+        ("203.0.113.7", None),  # IPv4 has no /48: its limit is the address's
+        ("::ffff:203.0.113.7", None),  # nor does IPv4 written as IPv6
+        ("not-an-address", None),
+        (None, None),
+    ],
+)
+def test_client_ipv6_48(raw: str | None, network: str | None) -> None:
+    headers = {} if raw is None else {"Fly-Client-IP": raw}
+
+    assert client_ipv6_48(_request(_FLY, headers)) == network
+
+
+def test_the_48_comes_from_the_proxy_header_never_forwarded_for() -> None:
+    request = _request(
+        _FLY, {"Fly-Client-IP": "2001:db8:abcd::1", "X-Forwarded-For": "2001:db8:9::1"}
+    )
+
+    assert client_ipv6_48(request) == "2001:db8:abcd::/48"

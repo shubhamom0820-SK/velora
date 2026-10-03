@@ -114,6 +114,31 @@ async def test_client_sees_what_the_test_wrote_without_committing(
     assert response.json() == {"v": "seen"}
 
 
+async def test_a_route_opens_its_own_transaction_after_the_test_wrote(
+    db: AsyncSession, app: FastAPI, client: AsyncClient
+) -> None:
+    """Services open their own transaction, as on a fresh request's session.
+    A write through `db` left one open on the shared session, and begin()
+    refused until the harness ended it (found in T-3.2)."""
+    await db.execute(text("create table harness_begin (v text)"))
+    await db.execute(text("insert into harness_begin values ('seen')"))
+
+    @app.get("/v1/_test/begin")
+    async def _begin(
+        session: Annotated[AsyncSession, Depends(get_session)],
+    ) -> dict[str, str]:
+        async with session.begin():
+            v = (
+                await session.execute(text("select v from harness_begin"))
+            ).scalar_one()
+        return {"v": v}
+
+    response = await client.get("/v1/_test/begin")
+
+    assert response.status_code == 200
+    assert response.json() == {"v": "seen"}
+
+
 async def test_a_route_cannot_reach_the_database_without_the_db_fixture(
     app: FastAPI, client: AsyncClient
 ) -> None:

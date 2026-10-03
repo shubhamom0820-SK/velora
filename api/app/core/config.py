@@ -57,6 +57,14 @@ PUBLIC_TEST_KEYS: Mapping[str, str] = MappingProxyType(
     }
 )
 TEST_KEYS_ALLOWED_IN: frozenset[str] = frozenset({"local"})
+# Where a real SMS provider may text any number: an allowlist (rule 16, D-064).
+# India reserves no fictional range, so the seed's numbers may be real people's;
+# everywhere else, local and any environment named later, a real provider is
+# called only for the numbers in SMS_LOCAL_ALLOWED_TO, which is empty by default.
+REAL_SMS_TO_ANYONE_IN: frozenset[str] = frozenset({"staging", "production"})
+# Where SMS_LOCAL_ALLOWED_TO may be set: an allowlist again. Anywhere else it
+# would look like protection it isn't (D-066).
+SMS_LOCAL_ALLOWED_TO_ALLOWED_IN: frozenset[str] = frozenset({"local"})
 _HEX = re.compile(r"[0-9a-fA-F]+")
 PROVIDER_SETTINGS = (
     "AUTH_PHONE_PROVIDER",
@@ -115,6 +123,11 @@ class Settings(BaseSettings):
 
     # --- SMS (Path B) ---
     SMS_PROVIDER: SmsProvider = "fake"
+    # Locally, the only numbers a real SMS provider is called for: comma-
+    # separated, each normalised at startup, empty by default (D-064, D-066).
+    # Refused outside local. Holds normalize_phone's output, so the guard
+    # compares like with like.
+    SMS_LOCAL_ALLOWED_TO: Annotated[tuple[str, ...], NoDecode] = ()
     MSG91_AUTH_KEY: str = ""
     MSG91_TEMPLATE_ID: str = ""
     MSG91_SENDER_ID: str = ""
@@ -239,6 +252,53 @@ class Settings(BaseSettings):
         if len({bytes.fromhex(key) for key in v}) != len(v):
             raise ValueError("lists the same key more than once")
         return v
+
+    @field_validator("SMS_LOCAL_ALLOWED_TO", mode="before")
+    @classmethod
+    def _numbers_allowed_an_sms(cls, v: object) -> object:
+        """Each number through `normalize_phone`, so `98765 43210` and
+        `+919876543210` are the same entry. A number it refuses fails startup,
+        named by its place in the list, never echoed (rule 15)."""
+        if isinstance(v, str):
+            entries: list[object] = list(v.split(","))
+        elif isinstance(v, list | tuple):
+            entries = list(v)
+        else:
+            return v
+        # Imported here: security imports this module for Settings.
+        from app.core.errors import AppError
+        from app.core.security import normalize_phone
+
+        numbers: list[str] = []
+        for place, raw in enumerate(entries, start=1):
+            if isinstance(raw, str) and not raw.strip():
+                continue  # a trailing comma, or the empty default
+            try:
+                if not isinstance(raw, str):
+                    raise TypeError
+                numbers.append(normalize_phone(raw))
+            except (AppError, TypeError):
+                raise ValueError(
+                    f"entry {place} isn't an Indian mobile number; list mobile "
+                    "numbers separated by commas"
+                ) from None
+        return tuple(numbers)
+
+    @model_validator(mode="after")
+    def _sms_allowlist_only_where_allowed(self) -> Settings:
+        """Refuse `SMS_LOCAL_ALLOWED_TO` outside where it means something.
+
+        Elsewhere a real provider texts any number (`REAL_SMS_TO_ANYONE_IN`), so
+        a list there would read as a guard that guards nothing (D-066).
+        """
+        if self.ENV in SMS_LOCAL_ALLOWED_TO_ALLOWED_IN or not self.SMS_LOCAL_ALLOWED_TO:
+            return self
+        raise ValueError(
+            f"ENV={self.ENV} cannot set SMS_LOCAL_ALLOWED_TO: it limits who a real "
+            "SMS provider texts only where ENV is "
+            f"{', '.join(sorted(SMS_LOCAL_ALLOWED_TO_ALLOWED_IN))}, and here it would "
+            "look like protection it isn't (D-066). Remove it."
+        )
 
     @model_validator(mode="after")
     def _fakes_only_where_allowed(self) -> Settings:

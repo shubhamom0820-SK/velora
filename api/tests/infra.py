@@ -115,12 +115,20 @@ class ActiveSession:
 async def session_for_the_app() -> AsyncIterator[AsyncSession]:
     """Stands in for `get_session` in tests: the `db` fixture's session, or a
     loud refusal — a test that forgets `db` must not write for real."""
-    if ActiveSession.session is None:
+    session = ActiveSession.session
+    if session is None:
         raise RuntimeError(
             "This test reached the database without the `db` fixture. Request "
             "`db` so its writes are rolled back."
         )
-    yield ActiveSession.session
+    # A real request starts on a fresh session with no transaction open, and a
+    # service opens its own (`async with session.begin()`). A test that wrote
+    # through `db` first leaves one open, and begin() would refuse; end it, as
+    # a new request would find it. Here a commit only releases a savepoint:
+    # the test's outer transaction still rolls everything back.
+    if session.in_transaction():
+        await session.commit()
+    yield session
 
 
 API_DIR = Path(__file__).resolve().parent.parent
