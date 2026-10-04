@@ -59,7 +59,7 @@ _REAL_PROVIDERS = {
     "SMS_PROVIDER": "msg91",
     "PAYMENTS_PROVIDER": "razorpay",
     "MODERATION_PROVIDER": "sightengine",
-    "FACEMATCH_PROVIDER": "rekognition",
+    "FACEMATCH_PROVIDER": "sface",
     "STORAGE_PROVIDER": "s3",
     "PUSH_PROVIDER": "webpush",
 }

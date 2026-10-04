@@ -247,7 +247,7 @@ jobs:
             -e JWT_SECRET -e PHONE_PEPPER -e PHONE_ENC_KEY -e CODE_PEPPER -e CLIENT_IP_HEADER=Fly-Client-IP \
             -e AUTH_PHONE_PROVIDER=firebase -e FIREBASE_PROJECT_ID=velora-ic \
             -e SMS_PROVIDER=msg91 -e PAYMENTS_PROVIDER=razorpay \
-            -e MODERATION_PROVIDER=sightengine -e FACEMATCH_PROVIDER=rekognition \
+            -e MODERATION_PROVIDER=sightengine -e FACEMATCH_PROVIDER=sface \
             -e STORAGE_PROVIDER=s3 -e PUSH_PROVIDER=webpush \
             -e R2_ACCOUNT_ID=82f9b26266ddb6b491a623971f87d3c7 -e R2_ACCESS_KEY_ID=ci \
             -e R2_SECRET_ACCESS_KEY=ci -e R2_BUCKET_PUBLIC=velora-staging-public \
@@ -294,7 +294,7 @@ jobs:
             -e JWT_SECRET -e PHONE_PEPPER -e PHONE_ENC_KEY -e CODE_PEPPER \
             -e AUTH_PHONE_PROVIDER=firebase -e FIREBASE_PROJECT_ID=velora-ic \
             -e SMS_PROVIDER=msg91 -e PAYMENTS_PROVIDER=razorpay \
-            -e MODERATION_PROVIDER=sightengine -e FACEMATCH_PROVIDER=rekognition \
+            -e MODERATION_PROVIDER=sightengine -e FACEMATCH_PROVIDER=sface \
             -e STORAGE_PROVIDER=s3 -e PUSH_PROVIDER=webpush \
             -e R2_ACCOUNT_ID=82f9b26266ddb6b491a623971f87d3c7 -e R2_ACCESS_KEY_ID=ci \
             -e R2_SECRET_ACCESS_KEY=ci -e R2_BUCKET_PUBLIC=velora-staging-public \

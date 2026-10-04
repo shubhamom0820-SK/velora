@@ -9,7 +9,9 @@ from typing import Protocol
 
 @dataclass(frozen=True)
 class FaceMatch:
-    similarity: float  # 0–100: the selfie's best match among the references
+    similarity: (
+        float  # the selfie's best match among the references; T-4.5 sets its scale
+    )
     faces_in_selfie: int
 
 
@@ -34,8 +36,9 @@ class FakeFaceMatch:
         return result
 
 
-class RekognitionFaceMatch:
-    """AWS Rekognition via aioboto3. Not built yet."""
+class SFaceFaceMatch:
+    """On our own worker: YuNet finds the face, SFace compares it (D-088). No
+    third party sees a selfie for this (D-087). Not built yet."""
 
     async def compare(self, selfie: bytes, references: Sequence[bytes]) -> FaceMatch:
-        raise NotImplementedError("Rekognition face match arrives with T-4.5.")
+        raise NotImplementedError("SFace face match arrives with T-4.5.")

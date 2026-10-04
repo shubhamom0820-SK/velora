@@ -24,7 +24,7 @@ from app.core.config import Settings
 from app.core.providers.facematch import (
     FaceMatchProvider,
     FakeFaceMatch,
-    RekognitionFaceMatch,
+    SFaceFaceMatch,
 )
 from app.core.providers.firebase import (
     FakeFirebaseKeys,
@@ -98,7 +98,7 @@ def build_providers(settings: Settings) -> Providers:
         facematch=(
             FakeFaceMatch()
             if settings.FACEMATCH_PROVIDER == "fake"
-            else RekognitionFaceMatch()
+            else SFaceFaceMatch()
         ),
         push=FakePush() if settings.PUSH_PROVIDER == "fake" else WebPush(),
         storage=(

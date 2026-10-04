@@ -30,7 +30,7 @@ PhoneProvider = Literal["firebase", "msg91", "fake"]
 SmsProvider = Literal["msg91", "fake"]
 PaymentsProvider = Literal["razorpay", "fake"]
 ModerationProvider = Literal["sightengine", "fake"]
-FaceMatchProvider = Literal["rekognition", "fake"]
+FaceMatchProvider = Literal["sface", "fake"]
 StorageProvider = Literal["s3", "fake"]
 PushProvider = Literal["webpush", "fake"]
 
@@ -163,11 +163,8 @@ class Settings(BaseSettings):
     SIGHTENGINE_API_USER: str = ""
     SIGHTENGINE_API_SECRET: str = ""
 
-    # --- Face match (worker) ---
+    # --- Face match (worker): on our own worker, no third party (D-087, D-088) ---
     FACEMATCH_PROVIDER: FaceMatchProvider = "fake"
-    AWS_ACCESS_KEY_ID: str = ""
-    AWS_SECRET_ACCESS_KEY: str = ""
-    AWS_REGION: str = "ap-south-1"
 
     # --- Object storage: R2 in deployed envs, the local S3 locally (D-027, D-086) ---
     # With s3, every one of these is required, checked below; R2_ENDPOINT_URL

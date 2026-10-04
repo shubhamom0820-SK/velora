@@ -152,10 +152,12 @@ never done silently.
   **The trial doesn't fit** (Vercel's own page, read 3 October 2026): 14 days or until its usage limits, whichever comes first; one per user account; started only by creating a new team, not by upgrading `knot11`; without a payment method it falls back to Hobby. So it is worth at most one month's $20, and only if started the day `v0.1.0` goes public, in a new team production would then live in. Upgrade `knot11` itself on release day.
   **The Hobby plan's upload cap already stops staging deploys** (found building T-3.14, 4 October 2026). Vercel refuses a deployment's upload past 5,000 files a day: `Error: Too many requests - try again in 24 hours (more than 5000, code: "api-upload-free")`, at `deploy.yml`'s `web — Vercel` job (`vercel deploy --prebuilt --prod`). Two staging deploys of green code hit it: `1d6eb44` (run 37146785444, 3 October, 19:10 UTC; its log also repeats `Error: Upload aborted`) and `94e3934` (run 37152600833, 20:46 UTC). `6d621f6` uploaded between them (run 37152210707, aliased at 20:40). Each time, gate, migrate and the Fly API had already deployed, so staging's API ran ahead of its web. **To recognise it in a minute:** the `web — Vercel` job red, every job before it green, and `api-upload-free` in its log. It's the plan's limit, not the code: there's nothing to debug. **Pro raises the cap, it doesn't remove it:** Vercel's limits page (read 4 October 2026) gives `api-upload-free` 5,000 a day and Pro's `api-upload-paid` 40,000. Vercel's own hint, `--archive=tgz`, would upload one archive instead of every file.
 - [ ] **P-0.16** Move `velora-prod`'s Supabase organisation to Pro before `v0.1.0` (REL-1). **Blocks that release, not the build,** and the release gate refuses while it is on Free (D-075). The Free plan keeps no automatic backups, and the first real sign-up is the first thing worth losing (the founder, 3 October 2026). Pro is $25 a month per organisation with 7 days of daily backups; its $10 of included compute covers one project, which is why `velora-prod` has an organisation of its own (`infra/PRODUCTION.md`). Point-in-time recovery, a further add-on, is T-9.14's.
-- [x] **P-0.6** Create accounts: GitHub, Supabase (Mumbai), Upstash, Cloudflare (R2 on), Fly.io (paid plan for `bom`), Vercel, Sentry, Sightengine, AWS (Rekognition, `ap-south-1`).
-  **Ticked with three still to set up**, none needed before Sprint 4: Sightengine (T-4.4), AWS for
-  Rekognition (T-4.5 — signed up, but its payment method failed verification) and Sentry (T-9.12).
-  Each is on its task's **Needs** line, which `/task` checks before planning.
+- [x] **P-0.6** Create accounts: GitHub, Supabase (Mumbai), Upstash, Cloudflare (R2 on), Fly.io (paid plan for `bom`), Vercel, Sentry, Sightengine.
+  **Ticked with two still to set up then**, none needed before Sprint 4, each on its task's
+  **Needs** line, which `/task` checks before planning: Sightengine (T-4.4; created by the founder
+  on 4 October 2026, free plan, its keys in the Keychain) and Sentry (T-9.12). **The face-match
+  vendor's account is dropped** (D-087, 4 October 2026): face matching runs on our own worker
+  (D-088), and that account's unfinished payment verification is abandoned.
 - [ ] **P-0.7** Review our own legal text before real users arrive — no lawyer at this stage (the founder's call, 1 October 2026). Check Terms, Privacy, Refunds and Contact (T-2.2) against the decisions they cite and against what the product actually does at go-live; against the IT Rules 2021 (Grievance Officer, timelines) and the DPDP Act (notice, consent, rights — section 16 and Rule 15 take effect on 13 May 2027; check for any restricted-country notification); and gender-based pricing. Start with the law-and-courts text (D-052), the weakest part we wrote ourselves. Look closely, not in passing, at the under-18 section: it keeps a hashed phone number of someone just identified as a minor (D-009). The mechanism and saying so openly are right, but minors plus retention is the most scrutinised combination there is. Privacy has no section yet on what happens to people's data if the app shuts down or is sold; add one when there is something honest to say. Gates T-9.15, not the production build (D-053). Terms' consumer-rights line (D-058) was written without a lawyer, by the founder and Claude: if the terms are ever reviewed properly, show it to one.
   **No lawyer is engaged: an open item, and its owner is the founder, Shubham Kumar** (recorded 3
   October 2026). This review is his own, with Claude; no lawyer has read the legal pages. D-048
@@ -1377,9 +1379,55 @@ exist yet. The batch is a chain, T-3.10 → T-3.11 → T-3.12 → T-3.13, each n
 - [ ] **Commit:** `feat(worker): photo moderation pipeline [T-4.4]`
 
 ### T-4.5 · Selfie verification
-- [ ] **Needs:** T-4.4, and a **working AWS account for Rekognition in `ap-south-1`** — signed up, but its payment method failed verification (P-0.6)
+- [ ] **Needs:** T-4.4; **D-088 approved**, the model and `opencv-python-headless` as a new
+  dependency (rule 4); **the liveness decision** (below), the founder's; and **the measurement
+  set** (below), which the founder gathers. No third party matches faces (D-087).
 - [ ] `POST /verification/challenge` → random pose from a list (turn left, turn right, look up, smile) stored on the row. `POST /verification/{id}/submit {photo_id}` → enqueue `verify_selfie`.
-- [ ] `verify_selfie`: re-encode; `FaceMatchProvider.compare(selfie, approved_public_photos)`; similarity ≥ 85 and exactly one face → `approved`, `users.is_verified = true`; else `rejected` with reason. Max 5 attempts / day.
+- [ ] `verify_selfie`: re-encode; `FaceMatchProvider.compare(selfie, approved_public_photos)` on the
+  worker (D-088): YuNet finds exactly one face, SFace's cosine similarity against each approved
+  public photo, the best one counted; at or above the threshold (below) → `approved`,
+  `users.is_verified = true`; else `rejected` with reason. Max 5 attempts / day. (The plan's first
+  "similarity ≥ 85" was the dropped vendor's 0–100 scale; SFace has none, and the number comes from the
+  measurement below.)
+- [ ] **Liveness: open, and the founder's to decide** (4 October 2026). D-008 makes liveness
+  mandatory for women. The direction was Sightengine's own liveness detection in place of the pose
+  check Sprint 4's plan proposed (its question D9). **Checked before committing to it,** as
+  directed: Sightengine's `liveness` model is passive, one photo, no head turns, a score from 0
+  to 1 and a rejection reason (`no_face`, `too_many_faces`, `inanimate_face`, `invalid_face`,
+  `spoof`, `deepfake`, `ai_generated`), on the same `check.json` endpoint as T-4.4's moderation,
+  so inside T-4.4's plain-API constraint (`/privacy` would still need a line for the selfie going
+  to Sightengine). **It isn't on the free plan:** one call with our free-plan keys, on Sightengine's
+  own example image, was refused: "Access to the Liveness Detection API is restricted. Feature not
+  available on the free plan. Switch to a paid plan" (0 operations charged; read by Claude, 4
+  October 2026). Its pricing page lists it under Pro, $99 a month for 40,000 operations, and its
+  documented example response consumed 10 operations for one check. The same free-plan keys do get
+  the `minor` probability T-4.4 needs, at 1 operation. So the founder chooses: Pro from this
+  task's real step on, a liveness model on our own worker, or the pose challenge on our own worker,
+  which Claude has called weak.
+- [ ] **Accuracy is ours: how it's measured** (D-088; at the founder's direction, 4 October 2026:
+  "there is no longer a vendor to blame when it is wrong").
+  - **A right match:** the same person, accepted. **A wrong match:** a different person accepted,
+    a false accept: someone verified behind a face that isn't theirs, which is what a catfish
+    needs, so it is the error that matters most. **A wrong refusal:** the same person refused, a
+    false reject: friction for anyone, and for a woman a profile that can't go live.
+  - **The measurement set, never users' data:** people who agree in writing, the founder and
+    volunteers, each giving profile-style photos and selfies taken the way T-4.7 takes them,
+    across phones, light and angles. At least 50 people with 5 selfies each, spread across the
+    people the app is for (women and men, skin tones, glasses, beards, a dupatta or a turban),
+    since the model learned mostly from other faces. Every pair of two different people is an
+    impostor pair. Stored privately, used for nothing else, deleted when the founder says.
+  - **Measured as `verify_selfie` decides:** each selfie against all of one person's photos, the
+    best match counted, so the threshold is calibrated for the decision actually made, not for
+    single pairs.
+  - **The threshold it starts at:** OpenCV's published 0.363 cosine, calibrated on LFW
+    (celebrities' photos), only while building on the fake and the set. **This task's real step
+    replaces it:** the lowest threshold at which at most 1 in 1,000 impostor pairs is accepted,
+    reported with the false-reject rate there. If that rate is above 5%, stop and tell the founder
+    before anything ships.
+  - **After launch:** every verification records its similarity and outcome, numbers only, never
+    an image (rule 15). A refused woman passing on a retry is the false-reject signal; a report of
+    a fake profile among verified users the false-accept one. Reviewed monthly until T-9.5's
+    moderators can look at disputed pairs.
 - [ ] Selfies are never public and never shown to other users.
 - [ ] Extend `make seed` (T-1.15): an approved verification row, with a placeholder selfie in the private bucket, for every seeded user marked verified — 15: the test woman, and the prototype's 14 `v` profiles (7 women, 7 men). Ishita, Riya and Pooja stop at the selfie step, unverified, with no row: they're who this task verifies against (the advisor directing T-1.15, Claude in a separate chat, 3 October 2026).
 - [ ] **D-078 (P-54):** an under-18 refusal deletes `verifications` rows and the selfies behind them,
@@ -2547,11 +2595,9 @@ Claude Code adds items here instead of doing unplanned work. Format:
     ms, which matches the query round trip above. **The user's hop,** from the founder's machine:
     Singapore 92 ms (153 ms an hour earlier, through curl: the routes vary), Mumbai 54 to 58 ms.
   - **Option A, both in Mumbai.** A round trip of about a millisecond (an estimate: no machine there
-    to measure from), so `/me` costs about 70 ms in all. It means leaving Fly for the API. **AWS
-    `ap-south-1` may not be open to us:** the account's payment method failed verification (P-0.6),
-    which also holds up Rekognition (T-4.5). **Google Cloud Run `asia-south1`** is the realistic
-    one: it rides the Google billing account Firebase needs anyway (P-0.12, not done yet). Either
-    needs WebSockets checked (D-025), `deploy.yml` and `infra/STAGING.md` rewritten, secrets moved,
+    to measure from), so `/me` costs about 70 ms in all. It means leaving Fly for the API. **Google
+    Cloud Run `asia-south1`** is the realistic one: it rides the Google billing account Firebase
+    needs anyway (P-0.12, not done yet). It needs WebSockets checked (D-025), `deploy.yml` and `infra/STAGING.md` rewritten, secrets moved,
     the smoke check repointed, and `/privacy`'s "handled by our servers in Singapore" changed.
   - **Option B, both in Singapore.** Keeps Fly: a new Supabase project in `ap-southeast-1` and Upstash
     in Singapore, by dump and restore. A round trip of about 5 to 7 ms, so `/me` costs about 150 to

@@ -1974,6 +1974,75 @@ to pull); building MinIO from source in CI (a dead project, rebuilt on every run
 The options were Claude's (T-4.1). Chosen in the founder's message of 4 October 2026. **Open**
 until the founder locks it in his own words, as D-085.
 
+### D-087 · AWS is out of Velora entirely — Open
+**The decision, in the founder's words, 4 October 2026:** "AWS is out of Velora entirely. Not
+Rekognition, not an IAM user, not a payment verification." He had said it on 3 October 2026 too,
+and it was never written down, which is how it survived.
+
+What it changes:
+- No AWS account, IAM user or AWS service of ours, now or behind any provider. Selfie face matching
+  runs on our own worker (D-088). P-0.6's AWS account is dropped, its failed payment verification
+  abandoned, and T-4.5's Needs line no longer names AWS.
+- `FACEMATCH_PROVIDER`'s real option is `sface`, not `rekognition`, and the `AWS_*` settings are
+  gone from the API.
+- `/privacy` no longer lists Amazon Web Services among those who handle data, and says the selfie
+  is compared on our own servers.
+
+**What it doesn't mean, so nobody reads it as more:** Supabase and Upstash run on Amazon's cloud in
+Mumbai (Supabase's region is `ap-south-1`; P-49 measured both hosts as Amazon's). They are
+processors we contract with, not AWS services of ours, and D-048 stands. The aioboto3 parameters
+named `aws_access_key_id` and `aws_secret_access_key` in `core/providers/storage.py` carry R2's
+keys: the S3 protocol's names, not an Amazon service.
+
+**Superseded by it:** the plan's Rekognition face match for T-4.5, and the Rekognition
+`DetectFaces` pose check that Sprint 4's plan proposed as its question D9 (a numbered question in a
+plan, never recorded here, so there is no D- entry to supersede). D-048 is Locked and not edited:
+it names AWS `ap-south-1` as a deferred home for the API, an option this decision closes, as it
+closes P-49's AWS host.
+
+**Open** until the founder confirms these words are his own: they arrived pasted, and pasted text
+has been taken for his before when it wasn't (T-3.14).
+
+### D-088 · Selfie face matching runs on our own worker: YuNet and SFace — Open
+**The decision (T-4.5):** at the founder's direction (4 October 2026), face matching moves onto our
+own worker, with no third party; the model is Claude's pick:
+- **Detection: YuNet**, `face_detection_yunet_2023mar.onnx` (232,589 bytes, SHA-256
+  `8f2383e4dd3cfbb4553ea8718107fc0423210dc964f9f4280604804ed2552fa4`), **MIT licence**.
+- **Recognition: SFace**, `face_recognition_sface_2021dec.onnx` (38,696,353 bytes, SHA-256
+  `0ba9fbfa01b5270c96627c4ef784da859931e02f04419c829e83484087c34e79`), **Apache-2.0**: a
+  MobileFaceNet trained with the SFace loss; 99.40% on LFW by OpenCV Zoo's own evaluation.
+- Both run through OpenCV's DNN module (`cv2.FaceDetectorYN`, `cv2.FaceRecognizerSF`) from
+  `opencv-python-headless`, Apache-2.0, with numpy: **a new dependency, asked for at T-4.5** as
+  rule 4 requires. Both models come from OpenCV Zoo, fetched when the image builds and checked
+  against the SHA-256s above (the sizes and hashes are the Zoo's Git LFS records, read 4 October
+  2026), never committed.
+
+**The licences, plainly:** the code and the weights permit commercial use (MIT, Apache-2.0). **The
+weights' training data is a separate question:** OpenCV Zoo doesn't say which set trained the
+shipped SFace model, and the SFace paper's experiments used CASIA-WebFace, VGGFace2 and
+MS-Celeb-1M, collections of faces of people who weren't asked. That is a question about the model's
+origins, not a restriction on using it; it goes to P-0.7's review with the processors' terms.
+
+**What the worker needs** (measured on the founder's Mac, arm64, Python 3.12, 4 October 2026):
+peak memory about 290 to 330 MB for Python, OpenCV and both models after one comparison (OpenCV
+4.14 and 5.0 both load them); detection about 35 ms on a 1600-pixel photo, one embedding 6 to 24
+ms. The worker also runs the app, so on Fly it needs **1 GB, not 512 MB**. Fly's own pricing page
+(read that day) prices a shared-cpu-1x 1 GB machine in Singapore at $8.50 a month; 512 MB there is
+about $4.68 ($3.69 at its base rate, scaled by Singapore's ratio in the same example), so about
+$3.80 a month more. On P-49's VM it costs no machine of its own. The image grows by about 150 MB
+(OpenCV about 122 MB installed, numpy about 24 MB) plus the 39 MB model. Linux amd64 figures are
+measured in T-4.5, where it runs.
+
+**How accurate it is, is ours now:** there is no vendor to blame when it's wrong, so T-4.5 says how
+it is measured, what counts as a right and a wrong match, and the threshold it starts at.
+
+**Rejected:** InsightFace's models (its README: "available for non-commercial research purposes
+only"); a hosted face-match API (D-087's reason, and the selfie leaving our servers); OpenCV's
+published threshold as the final one (it is calibrated on LFW, celebrities' photos, not on
+selfies against profile photos of people in India).
+
+**Open** until the founder approves the model and its dependency.
+
 ---
 
 ## Adding a decision

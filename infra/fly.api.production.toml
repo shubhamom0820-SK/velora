@@ -32,7 +32,7 @@ primary_region = "sin"
   SMS_PROVIDER = "msg91"
   PAYMENTS_PROVIDER = "razorpay"
   MODERATION_PROVIDER = "sightengine"
-  FACEMATCH_PROVIDER = "rekognition"
+  FACEMATCH_PROVIDER = "sface"
   STORAGE_PROVIDER = "s3"
   PUSH_PROVIDER = "webpush"
   # The production web's one address. www and the project's vercel.app address

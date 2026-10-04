@@ -462,7 +462,7 @@ _DEPLOYED: dict[str, Any] = {
     "SMS_PROVIDER": "msg91",
     "PAYMENTS_PROVIDER": "razorpay",
     "MODERATION_PROVIDER": "sightengine",
-    "FACEMATCH_PROVIDER": "rekognition",
+    "FACEMATCH_PROVIDER": "sface",
     "STORAGE_PROVIDER": "s3",
     **r2_settings(),
     "PUSH_PROVIDER": "webpush",

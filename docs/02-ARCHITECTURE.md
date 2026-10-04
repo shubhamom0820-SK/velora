@@ -17,7 +17,6 @@ flowchart LR
   A --> RZ[Razorpay]
   RZ -- webhook --> A
   W --> MOD[Sightengine]
-  W --> FACE[AWS Rekognition]
   W --> PUSH[Web Push]
   W --> R2
 ```
@@ -185,7 +184,7 @@ a failed or hung publish (1 s) is logged without failing the request (`core/even
 | Job | Trigger | Does |
 |---|---|---|
 | `moderate_photo` | photo upload completed | re-encode, strip EXIF, NSFW/minor check, approve → copy to public bucket |
-| `verify_selfie` | selfie submitted | liveness pose check + face match vs approved photos |
+| `verify_selfie` | selfie submitted | liveness (how: open, on T-4.5) + face match vs approved photos, on the worker itself: YuNet and SFace (D-088), no third party (D-087) |
 | `watermark_album` | album access granted | render per-viewer watermarked copies |
 | `send_push` | any notification | Web Push, drop dead subscriptions on 404/410 |
 | `expire_threads` | cron, every minute | active threads past `expires_at` → `expired`, emit event |
@@ -277,8 +276,7 @@ that person in the last 7 days → `wallet.credit(reason=refund_banned_partner)`
 | `RAZORPAY_KEY_ID`, `RAZORPAY_KEY_SECRET`, `RAZORPAY_WEBHOOK_SECRET` | api | |
 | `MODERATION_PROVIDER` | worker | `sightengine` \| `fake` |
 | `SIGHTENGINE_API_USER`, `SIGHTENGINE_API_SECRET` | worker | |
-| `FACEMATCH_PROVIDER` | worker | `rekognition` \| `fake` |
-| `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, `AWS_REGION` | worker | `AWS_REGION` defaults to `ap-south-1` |
+| `FACEMATCH_PROVIDER` | worker | `sface` \| `fake`: on the worker, no keys and no third party (D-087, D-088) |
 | `R2_ACCOUNT_ID`, `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY`, `R2_BUCKET_PUBLIC`, `R2_BUCKET_PRIVATE`, `PUBLIC_CDN_URL` | api, worker | all required with `s3`, named at startup (T-4.1). The account ID and the CDN aren't secrets (each Fly config's `[env]`); the token is, scoped to its environment's two buckets. `PUBLIC_CDN_URL` is `https://` with no trailing slash outside local |
 | `STORAGE_PROVIDER` | api, worker | `s3` \| `fake` (`s3` covers R2 and the local S3, SeaweedFS, T-4.1, D-086; `api/.env.example` uses the local one) |
 | `R2_ENDPOINT_URL` | api, worker | the local S3 (D-086), and only where `ENV` is local: refused anywhere else, an allowlist (rule 16), so storage goes to R2's own endpoint for `R2_ACCOUNT_ID` (T-4.1) |

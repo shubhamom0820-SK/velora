@@ -469,11 +469,13 @@ export const en = {
           "Every request you make is handled by our servers in Singapore.",
         media:
           "Your photos, selfie, voice notes and private album are stored by Cloudflare, outside India.",
-        // Deleted after the check: T-4.4 turns that on.
+        // Deleted after the check: Sightengine's default, which T-4.4 must
+        // never leave (its constraint, and P-71's).
         moderation:
           "Photos are checked by Sightengine, on servers in the United States or Europe, and deleted there after the check.",
+        // D-087, D-088: on our own servers, no third party.
         faceMatch:
-          "Your selfie is compared by Amazon Web Services, in Mumbai, India.",
+          "Your selfie is compared with your photos on our own servers, not by any other company.",
         phone:
           "Your phone number is also handled by Google, in the United States, as described above.",
       },
@@ -481,7 +483,7 @@ export const en = {
         title: "Who else handles your data",
         // D-023, D-026, D-027, D-028, D-035, D-048.
         // P-0.3: Zoho holds every support and grievance email.
-        body: "Google (sign-in codes), Razorpay (payments), Sightengine (photo checks), Amazon Web Services (selfie checks), Cloudflare (storing photos and voice notes), Supabase (our database), Upstash (our cache), Fly.io (our servers), Vercel (our website) and Zoho (our support and grievance email).",
+        body: "Google (sign-in codes), Razorpay (payments), Sightengine (photo checks), Cloudflare (storing photos and voice notes), Supabase (our database), Upstash (our cache), Fly.io (our servers), Vercel (our website) and Zoho (our support and grievance email).",
       },
       cookies: {
         title: "Cookies",

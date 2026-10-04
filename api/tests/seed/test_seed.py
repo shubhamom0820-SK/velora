@@ -85,7 +85,7 @@ def deployed_settings(env: str) -> Settings:
         SMS_PROVIDER="msg91",
         PAYMENTS_PROVIDER="razorpay",
         MODERATION_PROVIDER="sightengine",
-        FACEMATCH_PROVIDER="rekognition",
+        FACEMATCH_PROVIDER="sface",
         STORAGE_PROVIDER="s3",
         PUSH_PROVIDER="webpush",
         **r2_settings(),  # type: ignore[arg-type]

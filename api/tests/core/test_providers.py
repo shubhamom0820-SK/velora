@@ -13,7 +13,7 @@ from httpx import AsyncClient
 
 from app.core.config import Settings
 from app.core.providers import FakeProviders, Providers, build_providers, get_providers
-from app.core.providers.facematch import FaceMatch, FakeFaceMatch, RekognitionFaceMatch
+from app.core.providers.facematch import FaceMatch, FakeFaceMatch, SFaceFaceMatch
 from app.core.providers.moderation import (
     APPROVED,
     FakeModeration,
@@ -48,7 +48,7 @@ _REAL = {
     "SMS_PROVIDER": "msg91",
     "PAYMENTS_PROVIDER": "razorpay",
     "MODERATION_PROVIDER": "sightengine",
-    "FACEMATCH_PROVIDER": "rekognition",
+    "FACEMATCH_PROVIDER": "sface",
     "STORAGE_PROVIDER": "s3",
     **r2_settings(),
     "PUSH_PROVIDER": "webpush",
@@ -96,7 +96,7 @@ def test_real_settings_build_every_real_provider(env: str) -> None:
         assert isinstance(providers.sms, Msg91Sms)
     assert isinstance(providers.payments, RazorpayPayments)
     assert isinstance(providers.moderation, SightengineModeration)
-    assert isinstance(providers.facematch, RekognitionFaceMatch)
+    assert isinstance(providers.facematch, SFaceFaceMatch)
     assert isinstance(providers.push, WebPush)
     assert isinstance(providers.storage, S3Storage)
 
@@ -400,7 +400,7 @@ _STUB_CALLS: list[tuple[str, Callable[[], Awaitable[object] | object], str]] = [
         "T-8.2",
     ),
     ("moderation", lambda: SightengineModeration().check(b"jpeg"), "T-4.4"),
-    ("facematch", lambda: RekognitionFaceMatch().compare(b"s", [b"p"]), "T-4.5"),
+    ("facematch", lambda: SFaceFaceMatch().compare(b"s", [b"p"]), "T-4.5"),
     ("push", lambda: WebPush().send(PushSubscription("e", "k", "a"), {}), "T-9.4"),
 ]
 
