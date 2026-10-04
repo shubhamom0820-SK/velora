@@ -14,8 +14,9 @@ import pytest
 from httpx import ASGITransport, AsyncClient
 
 from app.core.config import Settings
+from app.core.providers.storage import S3Storage
 from app.main import close_resources, contract_openapi, create_app
-from tests.keys import random_keys
+from tests.keys import r2_settings, random_keys
 
 # D-045: outside local, every provider must be a real one.
 _REAL_PROVIDERS = {
@@ -27,6 +28,7 @@ _REAL_PROVIDERS = {
     "MODERATION_PROVIDER": "sightengine",
     "FACEMATCH_PROVIDER": "rekognition",
     "STORAGE_PROVIDER": "s3",
+    **r2_settings(),
     "PUSH_PROVIDER": "webpush",
 }
 
@@ -90,6 +92,30 @@ async def test_close_resources_is_safe_to_call_twice() -> None:
 
     await close_resources(app)
     await close_resources(app)
+
+
+async def test_close_resources_closes_storage_too() -> None:
+    """S3 storage keeps its client open between calls (T-4.1), so the app must
+    close it: here, the one `s3` built, opened, then closed with the app."""
+    app = create_app(
+        _settings(
+            "velora_test",
+            1,
+            STORAGE_PROVIDER="s3",
+            R2_ENDPOINT_URL="http://127.0.0.1:9000",
+            R2_ACCESS_KEY_ID="minioadmin",
+            R2_SECRET_ACCESS_KEY="minioadmin",
+            PUBLIC_CDN_URL="http://127.0.0.1:9000/velora-public",
+        )
+    )
+    storage = app.state.providers.storage
+    assert isinstance(storage, S3Storage)
+    await storage.presign_get("velora-private", "k")  # opens the client; no network
+    assert storage._client is not None
+
+    await close_resources(app)
+
+    assert storage._client is None
 
 
 # --- P-31: the schema and Swagger UI are served only where ENV is local --------

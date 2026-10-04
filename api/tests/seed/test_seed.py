@@ -62,7 +62,7 @@ from seed.run import (
 )
 from tests.conftest import MakeUser, make_test_settings
 from tests.infra import API_DIR, TEST_DATABASE_URL, requires_infra
-from tests.keys import random_keys
+from tests.keys import r2_settings, random_keys
 
 REPO = API_DIR.parent
 BY_KEY = {person.key: person for person in PEOPLE}
@@ -88,6 +88,7 @@ def deployed_settings(env: str) -> Settings:
         FACEMATCH_PROVIDER="rekognition",
         STORAGE_PROVIDER="s3",
         PUSH_PROVIDER="webpush",
+        **r2_settings(),  # type: ignore[arg-type]
         **random_keys(),  # type: ignore[arg-type]
     )
 

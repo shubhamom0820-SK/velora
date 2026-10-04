@@ -69,6 +69,16 @@ REAL_SMS_TO_ANYONE_IN: frozenset[str] = frozenset({"staging", "production"})
 # Where SMS_LOCAL_ALLOWED_TO may be set: an allowlist again. Anywhere else it
 # would look like protection it isn't (D-066).
 SMS_LOCAL_ALLOWED_TO_ALLOWED_IN: frozenset[str] = frozenset({"local"})
+# Where R2_ENDPOINT_URL may send storage somewhere other than R2: an allowlist
+# (rule 16). Locally it is MinIO; anywhere else the endpoint is R2's own, built
+# from R2_ACCOUNT_ID, so no setting can send users' photos to another S3.
+STORAGE_ENDPOINT_OVERRIDE_ALLOWED_IN: frozenset[str] = frozenset({"local"})
+# Where PUBLIC_CDN_URL may be plain http (MinIO's own public bucket): an
+# allowlist again. Everywhere else it serves users' photos, over https only.
+PLAIN_HTTP_CDN_ALLOWED_IN: frozenset[str] = frozenset({"local"})
+# An R2 account ID: 32 lowercase hex characters. Not a secret: it is the host
+# browsers upload to (T-4.6's CSP names it).
+_R2_ACCOUNT_ID = re.compile(r"[0-9a-f]{32}")
 _HEX = re.compile(r"[0-9a-fA-F]+")
 # A Google Cloud project ID: 6 to 30 lowercase letters, digits and hyphens,
 # starting with a letter and not ending with a hyphen.
@@ -159,7 +169,9 @@ class Settings(BaseSettings):
     AWS_SECRET_ACCESS_KEY: str = ""
     AWS_REGION: str = "ap-south-1"
 
-    # --- Object storage: R2 in deployed envs, MinIO locally (D-027) ---
+    # --- Object storage: R2 in deployed envs, MinIO locally (D-027, T-4.1) ---
+    # With s3, every one of these is required, checked below; R2_ENDPOINT_URL
+    # only where STORAGE_ENDPOINT_OVERRIDE_ALLOWED_IN says.
     STORAGE_PROVIDER: StorageProvider = "fake"
     R2_ACCOUNT_ID: str = ""
     R2_ACCESS_KEY_ID: str = ""
@@ -407,6 +419,72 @@ class Settings(BaseSettings):
                 "FIREBASE_PROJECT_ID must be a Firebase project ID: 6 to 30 lowercase "
                 "letters, digits and hyphens, starting with a letter; check for stray "
                 "quotes or spaces"
+            )
+        return self
+
+    @model_validator(mode="after")
+    def _storage_endpoint_only_where_allowed(self) -> Settings:
+        """`R2_ENDPOINT_URL` points storage away from R2: MinIO, locally. Anywhere
+        else it would send users' photos wherever it says, so it's refused."""
+        if (
+            self.R2_ENDPOINT_URL
+            and self.ENV not in STORAGE_ENDPOINT_OVERRIDE_ALLOWED_IN
+        ):
+            raise ValueError(
+                f"ENV={self.ENV} cannot set R2_ENDPOINT_URL: storage goes to R2's own "
+                "endpoint, from R2_ACCOUNT_ID, everywhere but ENV "
+                f"{', '.join(sorted(STORAGE_ENDPOINT_OVERRIDE_ALLOWED_IN))}. Remove it."
+            )
+        return self
+
+    @model_validator(mode="after")
+    def _s3_storage_is_complete(self) -> Settings:
+        """With `STORAGE_PROVIDER=s3`, everything storage needs, named at once.
+
+        Without this a missing key fails the first upload, not the deploy. Like
+        the keys above, a message names what's wanted and never echoes a value.
+        """
+        if self.STORAGE_PROVIDER != "s3":
+            return self
+        endpoint_given = (
+            bool(self.R2_ENDPOINT_URL)
+            and self.ENV in STORAGE_ENDPOINT_OVERRIDE_ALLOWED_IN
+        )
+        wanted = {
+            "R2_ACCOUNT_ID": endpoint_given or bool(self.R2_ACCOUNT_ID),
+            "R2_ACCESS_KEY_ID": bool(self.R2_ACCESS_KEY_ID),
+            "R2_SECRET_ACCESS_KEY": bool(self.R2_SECRET_ACCESS_KEY),
+            "R2_BUCKET_PUBLIC": bool(self.R2_BUCKET_PUBLIC),
+            "R2_BUCKET_PRIVATE": bool(self.R2_BUCKET_PRIVATE),
+            "PUBLIC_CDN_URL": bool(self.PUBLIC_CDN_URL),
+        }
+        missing = [name for name, present in wanted.items() if not present]
+        if missing:
+            raise ValueError(
+                f"STORAGE_PROVIDER=s3 needs {', '.join(missing)} (infra/STAGING.md §3)."
+            )
+        if self.R2_ACCOUNT_ID and not _R2_ACCOUNT_ID.fullmatch(self.R2_ACCOUNT_ID):
+            raise ValueError(
+                "R2_ACCOUNT_ID must be 32 lowercase hex characters, as Cloudflare "
+                "shows it; check for stray quotes or spaces"
+            )
+        if self.R2_BUCKET_PUBLIC == self.R2_BUCKET_PRIVATE:
+            raise ValueError(
+                "R2_BUCKET_PUBLIC and R2_BUCKET_PRIVATE must differ: the private "
+                "bucket holds originals and selfies, never served to anyone (D-027)."
+            )
+        schemes = (
+            ("https://", "http://")
+            if self.ENV in PLAIN_HTTP_CDN_ALLOWED_IN
+            else ("https://",)
+        )
+        if not self.PUBLIC_CDN_URL.startswith(schemes) or self.PUBLIC_CDN_URL.endswith(
+            "/"
+        ):
+            raise ValueError(
+                f"ENV={self.ENV} needs PUBLIC_CDN_URL to start with "
+                f"{' or '.join(schemes)} and not end with /: it is where users' "
+                "public photos are served from."
             )
         return self
 

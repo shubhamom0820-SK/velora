@@ -22,7 +22,7 @@ staging", follow `infra/STAGING.md` with these names.
 | DNS | Cloudflare | zone `veloraapp.co.in`, records DNS-only (§6) |
 | Postgres | Supabase, Mumbai (`ap-south-1`) | project `velora-prod`, in an organisation of its own |
 | Redis | Upstash, Mumbai | database `velora-prod` |
-| Objects | Cloudflare R2 | `velora-prod-public`, `velora-prod-private`, created with T-4.1 |
+| Objects | Cloudflare R2 | `velora-prod-public`, `velora-prod-private` (T-4.1); public photos at `https://cdn.veloraapp.co.in` |
 
 ## What it costs
 
@@ -35,7 +35,7 @@ release, the moment production is public and holds real sign-ups.
 | Supabase `velora-prod` | Free, $0 | **Pro, $25** in its own organisation, whose included compute covers this one project (P-0.16). Free keeps no backups |
 | Fly `velora-api` | $0: no machine until the first release | **Temporary:** one `shared-cpu-1x` machine with 512 MB, about $3 to $4 at Fly's published rate, the second Fly machine on the bill after staging's. It goes when P-49 moves the API |
 | Upstash `velora-prod` | free tier | Fly's `/readyz` check alone pings Redis every 15 s, about 173,000 commands a month: check that against the free allowance when creating it |
-| R2 | none until T-4.1 | none until T-4.1 |
+| R2 | $0: the buckets exist, empty (T-4.1) | at Cloudflare's R2 rates, not yet read against what photos will cost: check before the release |
 
 ## How a release happens
 
@@ -174,7 +174,23 @@ Redis database `velora-prod`, region Mumbai, TLS on. Copy its `rediss://…` URL
 
 ### 3. Cloudflare R2
 
-With T-4.1, as staging's: `velora-prod-public` and `velora-prod-private`, location hint `apac`.
+Created by the founder on 4 October 2026 (T-4.1), as staging's (`infra/STAGING.md` §3), and each
+line is as binding: `velora-prod-public` and `velora-prod-private`, location hint Asia-Pacific
+(APAC), Standard storage class.
+
+- **The public bucket is served only at `cdn.veloraapp.co.in`**, its custom domain
+  (`PUBLIC_CDN_URL` in `infra/fly.api.production.toml`); the private bucket has no domain.
+- **Minimum TLS 1.2 on that domain, not the default 1.0:** 1.0 is broken and these serve users'
+  photos; 1.3 would have excluded older Android phones that only speak 1.2. Read from outside by
+  Claude on 4 October 2026: 1.0 and 1.1 refused by the server, 1.2 and 1.3 accepted.
+- **One Account API token, Object Read & Write, scoped to these two buckets only**: it can't touch
+  staging's (the founder's report; not yet proved by its effect, since the token isn't anywhere
+  Claude can use it: see below). Staging's token is proved refused here (`infra/STAGING.md` §3).
+- **Its two values are not a Fly secret yet.** They go in before REL-1 (§4): until then
+  production's API, if started, refuses to start. The founder named the Keychain, service
+  `velora-prod`, as where they are; on 4 October 2026 the login Keychain held no `velora-prod`
+  item, so if they're in iCloud's Passwords, `security` can't read them and STAGING.md's piping
+  doesn't apply: set them from wherever they are, with `flyctl secrets import`.
 
 ### 4. Fly (until P-49)
 
@@ -182,7 +198,9 @@ With T-4.1, as staging's: `velora-prod-public` and `velora-prod-private`, locati
    `infra/fly.api.production.toml`; CI starts the image with them on every push.
 2. **Secrets:** `DATABASE_URL` (the direct connection, as `velora_api`), `REDIS_URL`,
    `JWT_SECRET` (`openssl rand -hex 64`), and `PHONE_PEPPER`, `PHONE_ENC_KEY` and `CODE_PEPPER`
-   (`openssl rand -hex 32` each). The owner's credentials are not a Fly secret.
+   (`openssl rand -hex 32` each); and **before REL-1**, R2's token for production's pair,
+   `R2_ACCESS_KEY_ID` and `R2_SECRET_ACCESS_KEY` (§3), without which the API refuses to start
+   (T-4.1). The owner's credentials are not a Fly secret.
 3. A **deploy token for this app only**, into GitHub (§7).
 
 ### 5. Vercel

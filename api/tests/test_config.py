@@ -12,7 +12,7 @@ import yaml  # type: ignore[import-untyped]
 from pydantic import ValidationError
 
 from app.core.config import PUBLIC_TEST_KEYS, Settings
-from tests.keys import random_keys
+from tests.keys import r2_settings, random_keys
 
 _ALL_VARS = [
     "ENV",
@@ -71,6 +71,8 @@ _FIREBASE = {"FIREBASE_PROJECT_ID": "velora-test"}
 _DEPLOYED = {
     **_REAL_PROVIDERS,
     **_FIREBASE,
+    # What s3 storage needs (T-4.1).
+    **r2_settings(),
     "REDIS_URL": "rediss://default:x@redis.example:6379/0",
     "CLIENT_IP_HEADER": "Fly-Client-IP",
     **random_keys(),
@@ -157,7 +159,9 @@ def test_real_providers_start_outside_local(env: str) -> None:
 def test_local_may_use_fakes_and_real_providers() -> None:
     assert _settings(ENV="local").PAYMENTS_PROVIDER == "fake"
     assert (
-        _settings(ENV="local", **_REAL_PROVIDERS, **_FIREBASE).PAYMENTS_PROVIDER
+        _settings(
+            ENV="local", **_REAL_PROVIDERS, **_FIREBASE, **r2_settings()
+        ).PAYMENTS_PROVIDER
         == "razorpay"
     )
 
@@ -534,6 +538,9 @@ def test_stagings_env_block_passes_settings() -> None:
         "DATABASE_URL": "postgresql+asyncpg://app:x@db.example:5432/postgres",
         "REDIS_URL": "rediss://default:x@redis.example:6379/0",
         **random_keys(),
+        # R2's token: Fly secrets, never in the file (infra/STAGING.md §4).
+        "R2_ACCESS_KEY_ID": "staging-token-id",
+        "R2_SECRET_ACCESS_KEY": "staging-token-secret",
         **_fly_env(),
     }
 
@@ -557,3 +564,153 @@ def test_staging_and_production_both_accept_velora_ic_tokens() -> None:
 
     assert _fly_env()["FIREBASE_PROJECT_ID"] == "velora-ic"
     assert production["FIREBASE_PROJECT_ID"] == "velora-ic"
+
+
+def test_productions_env_block_passes_settings() -> None:
+    """The same for production's file: what CI's "Starts as production" step
+    runs, here too, so a refusal shows before the image is built."""
+    with FLY_API_PRODUCTION_TOML.open("rb") as f:
+        production: dict[str, str] = tomllib.load(f)["env"]
+    values = {
+        "DATABASE_URL": "postgresql+asyncpg://app:x@db.example:5432/postgres",
+        "REDIS_URL": "rediss://default:x@redis.example:6379/0",
+        **random_keys(),
+        # R2's token: Fly secrets, set before REL-1 (infra/PRODUCTION.md §4).
+        "R2_ACCESS_KEY_ID": "production-token-id",
+        "R2_SECRET_ACCESS_KEY": "production-token-secret",
+        **production,
+    }
+
+    settings = Settings(_env_file=None, **values)  # type: ignore[arg-type]
+
+    assert settings.ENV == "production"
+
+
+# --- Storage: everything s3 needs, R2's own endpoint outside local (T-4.1) ------
+
+# A name nobody has listed anywhere, in any allowlist or test: a blacklist that
+# names today's environments waves it through; an allowlist refuses it (rule 16).
+UNNAMED_ENV = "env-nobody-has-named-2031"
+_MINIO = {
+    "STORAGE_PROVIDER": "s3",
+    "R2_ENDPOINT_URL": "http://127.0.0.1:9000",
+    "R2_ACCESS_KEY_ID": "minioadmin",
+    "R2_SECRET_ACCESS_KEY": "minioadmin",
+    "PUBLIC_CDN_URL": "http://127.0.0.1:9000/velora-public",
+}
+
+
+def test_staging_and_production_each_name_their_own_buckets_and_cdn() -> None:
+    with FLY_API_PRODUCTION_TOML.open("rb") as f:
+        production: dict[str, str] = tomllib.load(f)["env"]
+    staging = _fly_env()
+
+    assert (staging["R2_BUCKET_PUBLIC"], staging["R2_BUCKET_PRIVATE"]) == (
+        "velora-staging-public",
+        "velora-staging-private",
+    )
+    assert (production["R2_BUCKET_PUBLIC"], production["R2_BUCKET_PRIVATE"]) == (
+        "velora-prod-public",
+        "velora-prod-private",
+    )
+    assert staging["PUBLIC_CDN_URL"] == "https://cdn.staging.veloraapp.co.in"
+    assert production["PUBLIC_CDN_URL"] == "https://cdn.veloraapp.co.in"
+    # One account; R2's own endpoint, never an override.
+    assert staging["R2_ACCOUNT_ID"] == production["R2_ACCOUNT_ID"]
+    assert "R2_ENDPOINT_URL" not in staging
+    assert "R2_ENDPOINT_URL" not in production
+
+
+@pytest.mark.parametrize(
+    "missing",
+    [
+        "R2_ACCOUNT_ID",
+        "R2_ACCESS_KEY_ID",
+        "R2_SECRET_ACCESS_KEY",
+        "R2_BUCKET_PUBLIC",
+        "R2_BUCKET_PRIVATE",
+        "PUBLIC_CDN_URL",
+    ],
+)
+@pytest.mark.parametrize("env", ["staging", "production"])
+def test_s3_storage_missing_a_setting_refuses_to_start(env: str, missing: str) -> None:
+    message = _error(ENV=env, **{**_DEPLOYED, missing: ""})
+
+    assert f"STORAGE_PROVIDER=s3 needs {missing}" in message
+
+
+def test_every_missing_storage_setting_is_named_at_once() -> None:
+    blank = {
+        name: ""
+        for name in ("R2_ACCOUNT_ID", "R2_ACCESS_KEY_ID", "R2_SECRET_ACCESS_KEY")
+    }
+    message = _error(ENV="staging", **{**_DEPLOYED, **blank})
+
+    assert "needs R2_ACCOUNT_ID, R2_ACCESS_KEY_ID, R2_SECRET_ACCESS_KEY (" in message
+
+
+def test_locally_minio_needs_no_account() -> None:
+    settings = _settings(ENV="local", **_MINIO)
+
+    assert (settings.R2_ACCOUNT_ID, settings.R2_ENDPOINT_URL) == (
+        "",
+        "http://127.0.0.1:9000",
+    )
+
+
+def test_fake_storage_needs_nothing() -> None:
+    assert _settings(ENV="local").STORAGE_PROVIDER == "fake"
+
+
+@pytest.mark.parametrize("env", ["staging", "production"])
+def test_an_endpoint_override_outside_local_refuses_to_start(env: str) -> None:
+    message = _error(
+        ENV=env, **{**_DEPLOYED, "R2_ENDPOINT_URL": "https://s3.elsewhere.example"}
+    )
+
+    assert f"ENV={env} cannot set R2_ENDPOINT_URL" in message
+    assert "s3.elsewhere.example" not in message
+
+
+@pytest.mark.parametrize("env", ["staging", "production", "preview", UNNAMED_ENV])
+def test_the_endpoint_gate_is_an_allowlist(env: str) -> None:
+    """Called on settings copied past validation, so even a name nobody has
+    listed reaches the check: refused, as a blacklist would not."""
+    settings = _settings(ENV="local", **_MINIO).model_copy(update={"ENV": env})
+
+    with pytest.raises(ValueError, match=f"ENV={env} cannot set R2_ENDPOINT_URL"):
+        # pydantic's decorator hides that it's a method; it is one.
+        settings._storage_endpoint_only_where_allowed()  # type: ignore[operator]
+
+
+@pytest.mark.parametrize("env", ["staging", "production", "preview", UNNAMED_ENV])
+def test_a_plain_http_cdn_is_refused_outside_local(env: str) -> None:
+    settings = _settings(ENV="production", **_DEPLOYED).model_copy(
+        update={"ENV": env, "PUBLIC_CDN_URL": "http://cdn.example.test"}
+    )
+
+    with pytest.raises(
+        ValueError, match=f"ENV={env} needs PUBLIC_CDN_URL to start with https://"
+    ):
+        # pydantic's decorator hides that it's a method; it is one.
+        settings._s3_storage_is_complete()  # type: ignore[operator]
+
+
+@pytest.mark.parametrize(
+    ("name", "value", "expected"),
+    [
+        ("R2_ACCOUNT_ID", "82F9B26266DDB6B491A623971F87D3C7", "32 lowercase hex"),
+        ("R2_ACCOUNT_ID", '82f9b26266ddb6b491a623971f87d3c7"', "32 lowercase hex"),
+        ("PUBLIC_CDN_URL", "https://cdn.example.test/", "not end with /"),
+        ("PUBLIC_CDN_URL", "cdn.example.test", "start with https://"),
+        ("R2_BUCKET_PRIVATE", "velora-test-public", "must differ"),
+    ],
+)
+def test_a_badly_shaped_storage_setting_is_named_but_not_echoed(
+    name: str, value: str, expected: str
+) -> None:
+    message = _error(ENV="staging", **{**_DEPLOYED, name: value})
+
+    assert expected in message
+    if name == "R2_ACCOUNT_ID":
+        assert value not in message

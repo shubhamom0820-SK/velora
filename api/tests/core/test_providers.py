@@ -32,7 +32,7 @@ from app.core.providers.sms import (
 )
 from app.core.providers.storage import FakeStorage, ObjectNotFound, S3Storage
 from tests.conftest import CapturedLogs
-from tests.keys import random_keys
+from tests.keys import r2_settings, random_keys
 
 PHONE = "+919812345678"
 
@@ -50,6 +50,7 @@ _REAL = {
     "MODERATION_PROVIDER": "sightengine",
     "FACEMATCH_PROVIDER": "rekognition",
     "STORAGE_PROVIDER": "s3",
+    **r2_settings(),
     "PUSH_PROVIDER": "webpush",
 }
 
@@ -401,20 +402,6 @@ _STUB_CALLS: list[tuple[str, Callable[[], Awaitable[object] | object], str]] = [
     ("moderation", lambda: SightengineModeration().check(b"jpeg"), "T-4.4"),
     ("facematch", lambda: RekognitionFaceMatch().compare(b"s", [b"p"]), "T-4.5"),
     ("push", lambda: WebPush().send(PushSubscription("e", "k", "a"), {}), "T-9.4"),
-    (
-        "storage.presign_put",
-        lambda: S3Storage().presign_put("b", "k", "image/jpeg", 1),
-        "T-4.1",
-    ),
-    ("storage.presign_get", lambda: S3Storage().presign_get("b", "k"), "T-4.1"),
-    ("storage.get_bytes", lambda: S3Storage().get_bytes("b", "k"), "T-4.1"),
-    (
-        "storage.put_bytes",
-        lambda: S3Storage().put_bytes("b", "k", b"x", "image/jpeg"),
-        "T-4.1",
-    ),
-    ("storage.copy", lambda: S3Storage().copy("b", "k", "b2", "k2"), "T-4.1"),
-    ("storage.delete", lambda: S3Storage().delete("b", "k"), "T-4.1"),
 ]
 
 

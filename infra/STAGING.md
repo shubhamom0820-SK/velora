@@ -16,7 +16,7 @@ a page of its own that names its pieces and says what differs: `infra/PRODUCTION
 | DNS | Cloudflare | zone `veloraapp.co.in`, records DNS-only (§6) |
 | Postgres | Supabase, Mumbai (`ap-south-1`) | project `velora-staging` |
 | Redis | Upstash, Mumbai | database `velora-staging` |
-| Objects | Cloudflare R2 | buckets `velora-staging-public`, `velora-staging-private` |
+| Objects | Cloudflare R2 | buckets `velora-staging-public`, `velora-staging-private`; public photos at `https://cdn.staging.veloraapp.co.in` |
 | Phone sign-in | Firebase | **production's** project `velora-ic`, until P-66 (D-065): a change in its console changes production too (`infra/PRODUCTION.md` §8) |
 
 ## How a deploy happens
@@ -91,7 +91,9 @@ and never taken from the clipboard by a command you copied.
   password and still exits 0.
 - **What the Keychain holds** (`security find-generic-password -s velora-staging -a <account> -w`):
   `db-owner` (the database owner's password, which you set), `velora-api-db`, `jwt-secret`,
-  `phone-pepper`, `phone-enc-key`, `code-pepper`. `phone-pepper` never changes once a number is
+  `phone-pepper`, `phone-enc-key`, `code-pepper`; R2's token, `r2-access-key-id` and
+  `r2-secret-access-key` (§3); Sightengine's, `sightengine-api-user` and `sightengine-api-secret`
+  (T-4.4). `phone-pepper` never changes once a number is
   banned; `phone-enc-key` rotates by putting a new key first, `new,old` (D-061); a new
   `code-pepper` makes every stored PIN fail until it is set again (D-062). The worker's app
   (T-4.4) needs the same four values.
@@ -168,10 +170,42 @@ New Redis database `velora-staging`, region Mumbai, TLS on. Copy its `rediss://�
 
 ### 3. Cloudflare R2
 
-Buckets `velora-staging-public` and `velora-staging-private`, created with the **`apac` location
-hint**: nearest to users and the Singapore worker. A hint is best effort, not a guarantee, so the
-Privacy page says only "stored by Cloudflare, outside India" (D-048). Their API token and the
-public bucket's CDN domain are set with T-4.1, when storage is built.
+Buckets `velora-staging-public` and `velora-staging-private`, location hint **Asia-Pacific
+(APAC)**, Standard storage class: nearest to users and the Singapore worker. A hint is best effort,
+not a guarantee, so the Privacy page says only "stored by Cloudflare, outside India" (D-048).
+
+**Set up by the founder on 4 October 2026 (T-4.1).** Each line is something a later change must not
+undo without a decision:
+
+- **The public bucket is served only at `cdn.staging.veloraapp.co.in`**, its custom domain
+  (`PUBLIC_CDN_URL`). The private bucket has no domain and no public access; `r2.dev` access is off
+  for both (the founder's report: the `r2.dev` address isn't known here, so nothing can check it).
+- **That domain's minimum TLS is 1.2, not Cloudflare's default 1.0.** 1.0 is broken, and these
+  serve users' photos; 1.3 would have excluded older Android phones that only speak 1.2. It is a
+  setting someone could lower, or raise, without realising what it costs, so it is written here
+  and on T-4.1. Read by Claude from outside on 4 October 2026, by the server's own answer: TLS 1.0
+  and 1.1 refused with a protocol-version alert, 1.2 and 1.3 accepted.
+- **One Account API token, Object Read & Write, scoped to these two buckets only**, never "all
+  buckets", so it can't touch production's. Proved by its effect (T-4.1's probe, below): a HEAD of
+  an absent key is a 404 in these two buckets and a 403 in `velora-prod-public` and
+  `velora-prod-private`. Its two values are Fly secrets (§4), set with `flyctl secrets import`, and
+  in the Keychain as `r2-access-key-id` and `r2-secret-access-key`.
+- **`R2_ENDPOINT_URL` is never set here.** Settings refuse it anywhere but local, so storage goes to
+  R2's own endpoint for the account in `R2_ACCOUNT_ID` (`infra/fly.api.toml`; not a secret).
+
+**The proof is the probe, run inside the machine with its own keys** (T-4.1), after any change to
+the token, the buckets or the domain:
+
+```
+flyctl ssh console -a velora-api-staging -C \
+  "python -m app.tools.storage_probe --refused-bucket velora-prod-public --refused-bucket velora-prod-private"
+```
+
+It writes under `probe/` in both buckets and deletes everything it wrote: a presigned PUT stored,
+the same PUT with another type refused, the bytes read back three ways, a copy from private to public
+served at the CDN, the private key not served there, the scope refusals above (each beside a 404
+control), every object gone at the end. It prints step names only, never a URL, and exits 1 if
+any step failed. It runs only where `ENV` is local or staging: production's copy refuses.
 
 ### 4. Fly
 
@@ -188,6 +222,7 @@ public bucket's CDN domain are set with T-4.1, when storage is built.
    | `PHONE_PEPPER` | `openssl rand -hex 32` |
    | `PHONE_ENC_KEY` | `openssl rand -hex 32` |
    | `CODE_PEPPER` | `openssl rand -hex 32` (T-3.1: PINs, and OTP codes from T-3.2) |
+   | `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY` | the staging pair's R2 token (§3), from the Keychain. Without them the API refuses to start (T-4.1) |
 
    The API checks the four keys' shape before it starts and refuses the repo's public test keys
    (D-060), so a wrong one stops the deploy with the setting's name. On 3 October 2026 Claude read

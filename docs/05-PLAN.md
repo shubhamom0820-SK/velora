@@ -640,6 +640,10 @@ waits on the founder's decisions, so it is a task of its own, outside the sprint
   one-year Vercel token; the `api` record at Cloudflare, which issues its certificate; and, on
   release day, the apex and `www` records.
 - [ ] The prod app's four keys (`JWT_SECRET`, `PHONE_PEPPER`, `PHONE_ENC_KEY`, `CODE_PEPPER`) freshly generated, never staging's: startup refuses the repo's test keys (D-060) but can't know a copy of staging's. Read their shapes on the machine, lengths only, and compare each with its stored copy by SHA-256 prefix, as T-3.1 did for staging.
+- [ ] **R2's token for production's pair as Fly secrets on `velora-api`** (T-4.1): `R2_ACCESS_KEY_ID`
+  and `R2_SECRET_ACCESS_KEY`, which the founder holds (`infra/PRODUCTION.md` §3). Without them
+  production's API refuses to start. Prove the token's scope by its effect before the tag: refused
+  on staging's buckets, beside a 404 on its own.
 - [x] **And the only copy of production's keys must not be one Mac's Keychain** (the founder, 3 October 2026). Losing `PHONE_ENC_KEY` makes every stored phone number unreadable; losing `CODE_PEPPER` makes every PIN unverifiable; losing `PHONE_PEPPER` silently unbans every banned number, and login can't find any account until every number is re-hashed from its encrypted copy (D-061, D-062). Today that costs nothing, since no data depends on them. Decide here, where production's keys are born, where the second copy lives.
   **Decided (the founder, 3 October 2026): a password manager that syncs,** so the copy survives
   the machine; never only the Mac's Keychain, where `CODE_PEPPER` already sits, one laptop away
@@ -1267,15 +1271,38 @@ exist yet. The batch is a chain, T-3.10 → T-3.11 → T-3.12 → T-3.13, each n
 # Sprint 4 — Photos and verification (weeks 6–7)
 
 ### T-4.1 · Storage provider
-- [ ] **Needs:** T-1.21, T-1.2, and **R2 enabled on the Cloudflare account, with the staging buckets
+- [x] **Needs:** T-1.21, T-1.2, and **R2 enabled on the Cloudflare account, with the staging buckets
   `velora-staging-public` and `velora-staging-private`** (`infra/STAGING.md` §3) — not enabled yet
   (T-1.22); and **P-49**: the API moves to Mumbai before Sprint 4, so T-4.4's worker is built once,
   on the new host (directed by the advisor on 3 October 2026; the founder decides). With R2
   enabled, also create **production's buckets, `velora-prod-public` and `velora-prod-private`**
   (`infra/PRODUCTION.md` §3, moved from T-2.6).
-- [ ] Real `StorageProvider` on aioboto3 (works for R2 and MinIO): `presign_put(bucket, key, content_type, max_bytes, ttl=300)`, `presign_get(bucket, key, ttl=600)`, `get_bytes`, `put_bytes`, `copy`, `delete`.
-- [ ] Key helpers: `raw/{user_id}/{photo_id}`, `p/{photo_id}.jpg`, `voice/{thread_id}/{message_id}.webm`, `album/{photo_id}/{viewer_id}.jpg`.
-- [ ] **Commit:** `feat(storage): r2 presigned urls [T-4.1]`
+  **R2 is in, set up by the founder on 4 October 2026:** the four buckets, the two custom domains,
+  a token per environment scoped to its own pair, and staging's two Fly secrets (`infra/STAGING.md`
+  §3, `infra/PRODUCTION.md` §3). **P-49 is waived for this task:** the go-ahead in the founder's
+  message of 4 October 2026 came with P-49 unticked. Its reason is T-4.4's worker, and nothing here
+  is tied to where the API runs; whether it moves to T-4.4's deploy step is still open (D2 of
+  Sprint 4's plan).
+- [x] Real `StorageProvider` on aioboto3 (works for R2 and MinIO): `presign_put(bucket, key, content_type, max_bytes, ttl=300)`, `presign_get(bucket, key, ttl=600)`, `get_bytes`, `put_bytes`, `copy`, `delete`.
+  Plus `head()`, size and type: a presigned PUT can't cap its own size, so T-4.2 checks the upload
+  after it arrives. The Content-Type is signed into the PUT. One client per app, closed with it.
+- [x] Key helpers: `raw/{user_id}/{photo_id}`, `p/{photo_id}.jpg`, `voice/{thread_id}/{message_id}.webm`, `album/{photo_id}/{viewer_id}.jpg`.
+  Built from UUIDs only, checked at runtime too, so nothing a user types shapes a key
+  (`app/core/storage_keys.py`).
+- [x] **Storage goes to R2's own endpoint everywhere but local.** `R2_ENDPOINT_URL` (MinIO) is
+  refused anywhere `ENV` isn't local, an allowlist (rule 16), in `Settings` and again where the
+  endpoint is chosen; with `s3`, every R2 setting is required and named at startup, and
+  `PUBLIC_CDN_URL` is `https://` outside local.
+- [x] **The custom domains' minimum TLS is 1.2: a decision, not a default** (set by the founder, 4
+  October 2026, for this reason): 1.0 is broken, and these serve users' photos; 1.3 would have
+  excluded older Android phones that only speak 1.2. Someone could undo it without realising, so it
+  is written here and in both runbooks' §3. Read from outside by Claude the same day, by the
+  server's own answer: on `cdn.staging.veloraapp.co.in` and `cdn.veloraapp.co.in`, TLS 1.0 and 1.1
+  refused with a protocol-version alert, 1.2 and 1.3 accepted.
+- [ ] **Done when, on staging** (D14 of Sprint 4's plan): `app/tools/storage_probe`, run inside
+  staging's machine with its own keys, passes every step, the scope refusals on production's
+  buckets included; quoted in the docs commit after `/done`, with the deploy run it ran on.
+- [x] **Commit:** `feat(storage): r2 presigned urls [T-4.1]`
 
 ### T-4.2 · Upload URL and complete
 - [ ] **Needs:** T-4.1, T-3.5, and **P-54's row half** (D-078: an under-18 refusal deletes every

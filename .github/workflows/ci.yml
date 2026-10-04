@@ -71,9 +71,12 @@ jobs:
       # creates velora_test, and the postgis image's own script (which adds
       # topology and tiger-geocoder tables) never runs. As service containers,
       # CI built it differently and T-1.20's first run failed on that alone.
-      # MinIO isn't started: no test uses storage yet.
-      - name: Start Postgres and Redis (infra/docker-compose.yml)
-        run: docker compose -f infra/docker-compose.yml up -d --wait db redis
+      # MinIO too, with the buckets `make infra-up` makes: T-4.1's storage tests
+      # run against it, and fail (never skip) here when it's unreachable.
+      - name: Start Postgres, Redis and MinIO (infra/docker-compose.yml)
+        run: |
+          docker compose -f infra/docker-compose.yml up -d --wait db redis minio
+          docker compose -f infra/docker-compose.yml run --rm minio-init
 
       - uses: astral-sh/setup-uv@c18668ad3cf93ea998bef934396af7bb5c839dc7 # v10.2.0
         with:
@@ -237,14 +240,19 @@ jobs:
       - name: Serves /healthz, hides its schema outside local
         run: |
           # Outside local, Redis must be rediss:// (TLS); it's never reached here.
-          # Staging as fly.api.toml sets it, CLIENT_IP_HEADER included (D-056).
+          # Staging as fly.api.toml sets it, CLIENT_IP_HEADER included (D-056), and
+          # R2 with a placeholder token, never used: nothing touches storage here.
           docker run -d --name api -p 127.0.0.1:8000:8000 \
             -e ENV=staging -e DATABASE_URL -e REDIS_URL=rediss://ci:ci@127.0.0.1:6379/1 \
             -e JWT_SECRET -e PHONE_PEPPER -e PHONE_ENC_KEY -e CODE_PEPPER -e CLIENT_IP_HEADER=Fly-Client-IP \
             -e AUTH_PHONE_PROVIDER=firebase -e FIREBASE_PROJECT_ID=velora-ic \
             -e SMS_PROVIDER=msg91 -e PAYMENTS_PROVIDER=razorpay \
             -e MODERATION_PROVIDER=sightengine -e FACEMATCH_PROVIDER=rekognition \
-            -e STORAGE_PROVIDER=s3 -e PUSH_PROVIDER=webpush "$IMAGE"
+            -e STORAGE_PROVIDER=s3 -e PUSH_PROVIDER=webpush \
+            -e R2_ACCOUNT_ID=82f9b26266ddb6b491a623971f87d3c7 -e R2_ACCESS_KEY_ID=ci \
+            -e R2_SECRET_ACCESS_KEY=ci -e R2_BUCKET_PUBLIC=velora-staging-public \
+            -e R2_BUCKET_PRIVATE=velora-staging-private \
+            -e PUBLIC_CDN_URL=https://cdn.staging.veloraapp.co.in "$IMAGE"
           for _ in $(seq 1 30); do curl -sf -o /dev/null http://127.0.0.1:8000/healthz && break; sleep 1; done
           # A container that never answers says why in its own log. Print it: without
           # it the only clue is "/healthz never answered", and finding out costs a
@@ -287,7 +295,11 @@ jobs:
             -e AUTH_PHONE_PROVIDER=firebase -e FIREBASE_PROJECT_ID=velora-ic \
             -e SMS_PROVIDER=msg91 -e PAYMENTS_PROVIDER=razorpay \
             -e MODERATION_PROVIDER=sightengine -e FACEMATCH_PROVIDER=rekognition \
-            -e STORAGE_PROVIDER=s3 -e PUSH_PROVIDER=webpush "$IMAGE" 2>&1)"
+            -e STORAGE_PROVIDER=s3 -e PUSH_PROVIDER=webpush \
+            -e R2_ACCOUNT_ID=82f9b26266ddb6b491a623971f87d3c7 -e R2_ACCESS_KEY_ID=ci \
+            -e R2_SECRET_ACCESS_KEY=ci -e R2_BUCKET_PUBLIC=velora-staging-public \
+            -e R2_BUCKET_PRIVATE=velora-staging-private \
+            -e PUBLIC_CDN_URL=https://cdn.staging.veloraapp.co.in "$IMAGE" 2>&1)"
           status=$?
           set -e
           echo "$output" | tail -n 5
@@ -306,8 +318,10 @@ jobs:
                   print(f"{key}={value}")
           PY
           grep -qx 'ENV=production' production.env
+          # R2's token is a Fly secret (infra/PRODUCTION.md §4): a placeholder here.
           docker run -d --name api-production -p 127.0.0.1:8001:8000 --env-file production.env \
             -e DATABASE_URL -e REDIS_URL=rediss://ci:ci@127.0.0.1:6379/1 \
+            -e R2_ACCESS_KEY_ID=ci -e R2_SECRET_ACCESS_KEY=ci \
             -e JWT_SECRET -e PHONE_PEPPER -e PHONE_ENC_KEY -e CODE_PEPPER "$IMAGE"
           for _ in $(seq 1 30); do curl -sf -o /dev/null http://127.0.0.1:8001/healthz && break; sleep 1; done
           if ! curl -sf -o /dev/null http://127.0.0.1:8001/healthz; then

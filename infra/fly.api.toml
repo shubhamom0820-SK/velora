@@ -16,8 +16,8 @@ primary_region = "sin"
 
 [env]
   ENV = "staging"
-  # D-045: outside local, every provider is a real one. None is built yet, so
-  # each raises if called; nothing calls them before its task.
+  # D-045: outside local, every provider is a real one. Those not built yet
+  # raise if called; nothing calls them before its task.
   AUTH_PHONE_PROVIDER = "firebase"
   # The Firebase project whose ID tokens sign in here (D-085): velora-ic, which
   # production shares (D-065), until P-66 gives staging a project of its own.
@@ -47,8 +47,15 @@ primary_region = "sin"
   # 2 x (5 + 2) = 14 connections to Postgres. The budget is in infra/STAGING.md.
   DB_POOL_SIZE = "5"
   DB_MAX_OVERFLOW = "2"
+  # R2 (T-4.1): the account and the CDN aren't secrets; the token's two values
+  # are Fly secrets (infra/STAGING.md §4), scoped to these two buckets only.
+  # Storage goes to R2's own endpoint for this account: R2_ENDPOINT_URL is
+  # refused outside local.
+  R2_ACCOUNT_ID = "82f9b26266ddb6b491a623971f87d3c7"
   R2_BUCKET_PUBLIC = "velora-staging-public"
   R2_BUCKET_PRIVATE = "velora-staging-private"
+  # The public bucket's custom domain, minimum TLS 1.2 (infra/STAGING.md §3).
+  PUBLIC_CDN_URL = "https://cdn.staging.veloraapp.co.in"
 
 [http_service]
   internal_port = 8000

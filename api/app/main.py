@@ -56,6 +56,7 @@ async def close_resources(app: FastAPI) -> None:
     """
     await app.state.redis.aclose()
     await app.state.engine.dispose()
+    await app.state.providers.storage.aclose()
 
 
 @asynccontextmanager

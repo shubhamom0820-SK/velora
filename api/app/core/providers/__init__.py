@@ -101,7 +101,11 @@ def build_providers(settings: Settings) -> Providers:
             else RekognitionFaceMatch()
         ),
         push=FakePush() if settings.PUSH_PROVIDER == "fake" else WebPush(),
-        storage=FakeStorage() if settings.STORAGE_PROVIDER == "fake" else S3Storage(),
+        storage=(
+            FakeStorage()
+            if settings.STORAGE_PROVIDER == "fake"
+            else S3Storage(settings)
+        ),
         firebase_keys=GoogleFirebaseKeys(),
     )
 

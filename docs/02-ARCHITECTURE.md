@@ -279,9 +279,9 @@ that person in the last 7 days → `wallet.credit(reason=refund_banned_partner)`
 | `SIGHTENGINE_API_USER`, `SIGHTENGINE_API_SECRET` | worker | |
 | `FACEMATCH_PROVIDER` | worker | `rekognition` \| `fake` |
 | `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, `AWS_REGION` | worker | `AWS_REGION` defaults to `ap-south-1` |
-| `R2_ACCOUNT_ID`, `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY`, `R2_BUCKET_PUBLIC`, `R2_BUCKET_PRIVATE`, `PUBLIC_CDN_URL` | api, worker | |
-| `STORAGE_PROVIDER` | api, worker | `s3` \| `fake` (`s3` covers R2 and local MinIO, T-4.1) |
-| `R2_ENDPOINT_URL` | api, worker | S3 endpoint override; points at local MinIO, empty for real R2 |
+| `R2_ACCOUNT_ID`, `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY`, `R2_BUCKET_PUBLIC`, `R2_BUCKET_PRIVATE`, `PUBLIC_CDN_URL` | api, worker | all required with `s3`, named at startup (T-4.1). The account ID and the CDN aren't secrets (each Fly config's `[env]`); the token is, scoped to its environment's two buckets. `PUBLIC_CDN_URL` is `https://` with no trailing slash outside local |
+| `STORAGE_PROVIDER` | api, worker | `s3` \| `fake` (`s3` covers R2 and local MinIO, T-4.1; `api/.env.example` uses MinIO) |
+| `R2_ENDPOINT_URL` | api, worker | MinIO, and only where `ENV` is local: refused anywhere else, an allowlist (rule 16), so storage goes to R2's own endpoint for `R2_ACCOUNT_ID` (T-4.1) |
 | `PUSH_PROVIDER` | api, worker | `webpush` \| `fake` |
 | `VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY`, `VAPID_SUBJECT` | api, worker | public key also in web |
 | `SENTRY_DSN` | all | |

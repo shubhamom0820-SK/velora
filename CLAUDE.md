@@ -44,9 +44,11 @@ velora/
   .claude/commands/     /task /review /done
   .github/workflows/    CI pipelines
   api/                  FastAPI app
-    app/core/           config, db, redis, events, security, errors, deps, providers (fakes local-only)
+    app/core/           config, db, redis, events, security, errors, deps, providers (fakes local-only),
+                        storage_keys
     app/modules/<name>/ router.py service.py repository.py schemas.py models.py
     app/workers/        ARQ tasks + cron
+    app/tools/          checks run by hand inside a deployed machine (storage_probe, T-4.1)
     alembic/            migrations
     seed/               make seed: dev data, local stack only, never in the image (D-064)
     tests/              mirrors app/ (and seed/)
