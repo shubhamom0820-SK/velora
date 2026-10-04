@@ -189,6 +189,15 @@ plugin, committed in T-5.1: an option in `tests/conftest.py`, no dependency), an
 the seed, so a reported order can be run again. A test that passes only in file order leans on
 something an earlier one left behind: a logger cached before its capture began, a row, a key.
 
+**Breaking runs** prove a guard's test can fail: `uv run python -m tests.break_guards` (from
+`api/`) weakens one guard at a time as a careless change would, runs that task's tests on a fresh
+slot database with no bytecode, and restores each file byte for byte, proved by SHA-256. A case is
+red only when every test it names failed; a run where Postgres refused the fifty connections is
+inconclusive. `--list` names the cases (T-5.1's thirty-five, T-5.4's six), a prefix runs some
+(`t54-`), and `--repeat N` reports a scheduler-dependent red as red in N of N (P-58).
+`tests/test_break_guards.py` fails if a case's anchor leaves its file, so the claims stay
+re-runnable. Not in CI: a full pass takes about twenty minutes.
+
 Running CI's commands locally does not prove CI will pass, because the infrastructure differs:
 T-1.20's first run failed only because the postgis image built CI's test database differently
 from `infra/docker-compose.yml`, so CI now starts the same compose services. A step is verified

@@ -1684,9 +1684,9 @@ committed rows.
 - [x] **Commit:** `feat(wallet): row-locked debit and credit [T-5.1]`
 
 ### T-5.4 · The concurrency test 🔒
-- [ ] **Needs:** T-5.1
-- [ ] Settles P-07: tick it at `/done`.
-- [ ] **Committed rows, never deleted** (the ledger refuses DELETE and TRUNCATE):
+- [x] **Needs:** T-5.1
+- [x] Settles P-07: tick it at `/done`.
+- [x] **Committed rows, never deleted** (the ledger refuses DELETE and TRUNCATE):
   - fresh men each run, never onboarded, on numbers `make_user` never generates (T-5.1's helper);
   - every assertion scoped to their ids;
   - each run's database is its own, recreated when its slot is next taken (P-55); CI starts empty;
@@ -1699,22 +1699,34 @@ committed rows.
   `+9197` number the database holds, under an advisory lock, so fifty made at once never share
   one and a run on a database `TEST_DATABASE_URL` keeps never restarts into an earlier run's; and
   listening on Redis through the `client` fixture raises, naming P-64.
-- [ ] **A dedicated 50-connection engine,** asserting 50 distinct backends. If Postgres runs out of
+- [x] **A dedicated 50-connection engine,** asserting 50 distinct backends. If Postgres runs out of
   connections, fail loudly; never skip.
-- [ ] **Prove the overlap by what the lock decides** (`f543b0d`): all 50 are inside open transactions
+- [x] **Prove the overlap by what the lock decides** (`f543b0d`): all 50 are inside open transactions
   before any takes the lock (asserted). After the read, each waits up to 20 ms and records whether
   it waited alone; with the lock, all 50 do.
-- [ ] **Debits:** credit a man 10, then fire 50 concurrent debits of 5. Exactly 2 succeed, 48 get
+- [x] **Debits:** credit a man 10, then fire 50 concurrent debits of 5. Exactly 2 succeed, 48 get
   `INSUFFICIENT_CREDITS`, the balance is 0, there are 3 ledger rows (the credit and 2 debits), and
   `sum(delta) == balance`.
-- [ ] **Keys:**
+- [x] **Keys:**
   - the same key 50× concurrently, for debits and for credits: exactly 1 entry each;
   - one payment credited under two different keys: the second is refused by D-077's index;
   - two users with the same client key: both apply.
-- [ ] **Breaking runs:** `FOR UPDATE`, the repeat check, the unique key and the per-event index, one
+- [x] **Breaking runs:** `FOR UPDATE`, the repeat check, the unique key and the per-event index, one
   at a time, each red, on the task's own database as in T-5.1.
-- [ ] This test must never be skipped or marked flaky. If it fails, stop everything.
-- [ ] **Commit:** `test(wallet): concurrency and idempotency [T-5.4]`
+  **Done, 4 October 2026,** with the script committed this time (`api/tests/break_guards.py`,
+  `uv run python -m tests.break_guards t54- --repeat 3`): `FOR UPDATE` removed, the repeat check
+  moved before the lock, the repeat check removed, the unique key removed, the per-event index
+  made non-unique, and the harness's forced overlap removed, **each red in 3 of 3**, every file
+  restored by SHA-256, none differing after. T-5.1's cases re-run from the same script, **all 35
+  red in 1 of 1**: T-5.1's report and commit said 34, a miscount; there were always 35. The
+  unique-key test makes the repeat check blind on purpose, the only way to see the key go red:
+  it proves the key holds as the last line of defence, **not** that the production path is right
+  (there the lock and the repeat check stand in front of it, proved by the other tests). Its
+  patch is scoped to that test and checked restored by identity before any assertion runs. The
+  whole API suite in 8 shuffled orders: T-5.4's tests passed in all 8; seeds 3, 4 and 7 each
+  failed once, on T-4.2's photo test (P-84), which fails race-first with no T-5.4 code involved.
+- [x] This test must never be skipped or marked flaky. If it fails, stop everything.
+- [x] **Commit:** `test(wallet): concurrency and idempotency [T-5.4]`
 
 ### T-5.2 · Prices
 **Held by the founder, 4 October 2026:** not started until the wallet has a screen, since until
@@ -2304,7 +2316,7 @@ Claude Code adds items here instead of doing unplanned work. Format:
   can hold connections up to 2 s each and starve real requests. It also tells anyone which
   dependency is down. Rate-limit it with the rate-limit work, and decide whether production should
   hide per-dependency details before T-1.22 exposes `api.velora.app`. Found in review of T-1.4.
-- [ ] P-07 · Harness mode for concurrency tests — the `db` fixture is one session inside one
+- [x] P-07 · Harness mode for concurrency tests — the `db` fixture is one session inside one
   rolled-back transaction, so concurrent requests through it fail (measured: 5 concurrent requests →
   `[200, 500, 500, 500, 500]`, `InvalidRequestError`), and row locks inside a single transaction never
   contend anyway. The 🔒 tests #1–#3 in `06-TESTING.md` (wallet concurrency and idempotency, T-5.4;
@@ -2316,6 +2328,9 @@ Claude Code adds items here instead of doing unplanned work. Format:
   deletes from the ledger either).
   **Folded into T-5.4, 3 October 2026; tick it there:** fresh men per run, never deleted, every
   assertion scoped to them (06-TESTING). A database per run is P-55's.
+  **Settled by T-5.4, 4 October 2026:** fifty committed transactions on fifty connections
+  (`tests/modules/wallet/test_concurrency.py`), on fresh men, never deleted, through the harness
+  `tests/modules/wallet/races.py`.
 - [ ] P-08 · `TEST_REDIS_URL` override — `TEST_DATABASE_URL` can be overridden but the test Redis
   is fixed at `127.0.0.1:6379/1`. If T-1.20's CI runs Redis anywhere else, the harness reports the
   stack unreachable and CI hard-fails by design. Add the override alongside T-1.20. Found in review
@@ -3411,3 +3426,13 @@ Claude Code adds items here instead of doing unplanned work. Format:
   not proved under load; this failure is the reason to watch it. A storage test that fails on CI
   with `InternalError` and passes on a re-run is this item's evidence, never a flake to re-run
   past. Filed at the direction of the advisor directing Sprint 5.
+- [ ] P-84 · Scope T-4.2's "no photo was made" check to its own user. **Now: the Sprint 4
+  session's next commit.** Worst case: a test that fails by order teaches people to re-run
+  instead of investigate, the habit that loses a real bug later. In `test_upload.py`,
+  `test_a_declared_type_we_refuse_anyway_is_refused_saying_what_to_do` asserts
+  `select(Photo.id)` finds nothing in the whole table, but `test_upload_race.py` commits photos
+  for a fresh man, as it must. In file order the check runs first and passes; run race-first, all
+  four of its cases fail (`pytest tests/modules/photos/test_upload_race.py
+  tests/modules/photos/test_upload.py`). CI runs file order, so it is green there. Seen in 3 of
+  8 shuffled orders of the whole suite (seeds 3, 4 and 7) during T-5.4, which touches no photo
+  code. Fix: `where(Photo.user_id == user.id)`, 06-TESTING's rule since T-5.1. Found in T-5.4.
