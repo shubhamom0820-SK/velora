@@ -17,6 +17,9 @@ export const en = {
     comingSoon: "Coming soon.",
     login: "Sign in",
     discover: "Discover",
+    chats: "Chats",
+    wallet: "Wallet",
+    you: "You",
     admin: "Admin",
     // An onboarding step whose screen isn't built yet (T-3.10 to T-3.12).
     onboardingStep: "This step is coming next.",
@@ -28,6 +31,14 @@ export const en = {
       "We couldn't sign you out. Check your connection and try again.",
     restoreFailedTitle: "We couldn't reach {app}",
     restoreFailedBody: "Check your connection and try again.",
+  },
+  // The app's header and bottom nav (T-5.6). No Vibe: after beta (D-010).
+  shell: {
+    nav: "Main",
+    discover: "Discover",
+    chats: "Chats",
+    wallet: "Wallet",
+    you: "You",
   },
   // Sign-in and onboarding (T-3.11, T-3.12). Drafted by Claude from the
   // prototype where 08-DESIGN's list of its errors leaves it trusted, and from

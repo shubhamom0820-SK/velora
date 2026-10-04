@@ -82,4 +82,14 @@
   --corner-sheet: 24px;
   --corner-swipe: 26px;
   --corner-pill: 999px;
+
+  /* the app shell (T-5.6): provisional, since the app has no visual design yet
+     (P-57). Its header and nav read their sizes only from here, so T-6.5's
+     design pass changes these values, not src/components/shell/AppShell.tsx. */
+  --shell-width: 900px; /* the app's frame, centred on --page on desktop */
+  --shell-header-height: 56px;
+  --shell-gutter: 20px; /* the header's side padding; a nav item's on desktop */
+  --shell-nav-height: 56px; /* the bottom nav on mobile */
+  --shell-nav-icon: 20px;
+  --shell-nav-gap: 4px; /* a nav item's icon to its label */
 }

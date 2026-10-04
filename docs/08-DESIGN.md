@@ -170,6 +170,20 @@ Velas). T-5.6 builds the header and bottom nav from it provisionally. They frame
 Sprints 6 and 7, so they're a one-way door. The first task that needs an app screen designed
 (T-6.5) stops and asks, rather than inventing it from the prototype.
 
+**The shell as T-5.6 built it** (provisional, 4 October 2026). The header ✦ holds the wordmark,
+`APP_NAME` in `title-1`, never the prototype's "Knot". The nav ✦ is Discover, Chats, Wallet and
+You, at `/discover`, `/chats`, `/wallet` and `/you`, with no Vibe (D-010). It is one `<nav>`:
+along the bottom on mobile, in the header's row from 768 px, as in the prototype. The current
+place is `--chrome-accent` with its icon filled: colour alone would fail WCAG 1.4.1, since
+`--chrome-mute` against `--chrome-accent` is about 1.4:1. Its sizes are the `--shell-*` tokens in
+`tokens.css`, and its shape is `src/components/shell/AppShell.tsx` alone (`look.test.ts` holds
+both), so T-6.5's design pass changes values, not structure. Where it departs from the prototype:
+labels are `micro` (its 9.5 px), icons 20 px (its 19), and items stack icon over label at every
+width (its desktop items sit side by side); the wordmark is the landing's plain one, without the
+red letter; the page scrolls, where the prototype scrolls inside a fixed frame. The globe, the
+bell, the balance pill and the Chats badge wait for the tasks that build them (the pill is
+T-5.5's; Hindi comes after beta).
+
 **Admin:** Dashboard · Reports queue · User detail · Moderation queue · Audit log (header ✦).
 
 ## 6. Copy voice

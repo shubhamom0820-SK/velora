@@ -1723,26 +1723,26 @@ committed rows.
 - [ ] **Commit:** `feat(wallet): balance and history [T-5.3]`
 
 ### T-5.6 · App shell
-- [ ] **Needs:** T-3.10
-- [ ] The `(app)` layout's header and bottom nav: Discover, Chats, Wallet and You, each a placeholder
+- [x] **Needs:** T-3.10
+- [x] The `(app)` layout's header and bottom nav: Discover, Chats, Wallet and You, each a placeholder
   route until its task. No Vibe (after beta, D-010). The wordmark comes from `APP_NAME`, never the
   prototype's "Knot" (rule 17).
-- [ ] **Who owns the frame** (decided planning T-3.10 to T-3.13; T-3.10 and T-3.11 carry the same
+- [x] **Who owns the frame** (decided planning T-3.10 to T-3.13; T-3.10 and T-3.11 carry the same
   line). T-3.10's `(app)` layout restores the session, gates on `done` and shows the PIN lock. This
   task adds the header and nav inside that layout, in `src/components/shell/`, never replacing what
   T-3.10 put there, and never on `(auth)` routes. Onboarding has its own frame, T-3.11's
   `StepFrame`, with no header or nav, as in the prototype.
-- [ ] **Provisional (08-DESIGN):** no visual design exists for the app's screens, and the prototype
+- [x] **Provisional (08-DESIGN):** no visual design exists for the app's screens, and the prototype
   was wrong four times in Sprint 5's plan alone: the refund button, gift's direction, the price list
   and "credits" for Velas. Build only what this task names; anything more waits on P-57.
-- [ ] **The shell's look lives in two places only:** colour, type scale and spacing as tokens in
+- [x] **The shell's look lives in two places only:** colour, type scale and spacing as tokens in
   `src/styles/tokens.css`, and the header's and nav's shape in one layout component in
   `src/components/shell/`, never spread through the components inside. **Why:** this shell is
   what every later screen sits inside, built before any visual design exists (P-57). When T-6.5's
   design pass comes, it should change values, not structure. Reopening the shell's structure after
   five screens sit on it would be the most expensive rework in the sprint; this is the cheapest
   insurance against it. At the direction of the advisor directing Sprint 5, 3 October 2026.
-- [ ] **Commit:** `feat(web): app shell [T-5.6]`
+- [x] **Commit:** `feat(web): app shell [T-5.6]`
 
 ### T-5.5 · Web wallet
 - [ ] **Needs:** T-5.2, T-5.3, T-3.10, T-5.6
