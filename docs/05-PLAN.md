@@ -1191,6 +1191,13 @@ exist yet. The batch is a chain, T-3.10 → T-3.11 → T-3.12 → T-3.13, each n
   believed, not proven. **One sign-in per browser:** item 3 below needs Chrome, Firefox and
   Safari, so the check sends three real SMS to one phone, inside this task's own limit of 5 an
   hour per phone. Log out last in each browser, so no step needs another sign-in.
+  **Open, 4 October 2026, so T-3.14 lands partly complete:** staging's `sessions` rows (read
+  read-only by Claude, 12:43 UTC) show one real Firebase sign-in, at 20:53 UTC on 3 October,
+  refreshed twice in a browser they don't name, and two more accounts from numbers whose owner is
+  unknown. It closes when the founder signs in by SMS in Chrome, Firefox and Safari, naming each
+  browser as he does (the rows never record browsers), with each reload visible in the rows. The
+  37-step procedure is in `out/t-3.14-staging-check.md`, on the founder's Mac, where Firefox isn't
+  installed yet.
 - [ ] **This is the first time any of Sprint 3's session machinery runs outside a test process.**
   T-3.3's cookies, T-3.4's rotation and logout, T-3.5's `current_user` and P-42's headers have been
   proved only in-process against the local stack: staging runs `firebase`, so Path B answers 404
@@ -1222,6 +1229,11 @@ exist yet. The batch is a chain, T-3.10 → T-3.11 → T-3.12 → T-3.13, each n
   **Already proved locally, as mechanism:** T-3.10 and T-3.13 prove items 4 and 6, and parts of 1,
   3 and 5, against the local stack. That takes nothing off this list, whose proof is staging's, but
   if staging fails, the platform is the suspect, not the code.
+  **Open, 4 October 2026:** the rows show only part of items 1, 2 and 4, in a browser they don't
+  name: the refresh cookie and `X-CSRF` accepted twice, the second time with the token the first
+  rotation issued. It closes when all seven items are seen in each of the three browsers: the
+  cookies' attributes and `/v1/me`'s headers in devtools, and the rotation, the two tabs and the
+  sign-out also in the `sessions` rows.
 - [x] ~~**One Playwright run against staging** with the test number, T-3.13's journeys on the real
   path. It moved here from T-3.13 (decision 18 of T-3.10 to T-3.13's plan): it needs this task.~~
   **Moved out, 3 October 2026, to P-67, whose Needs line carries P-66:** it needs a test number,
