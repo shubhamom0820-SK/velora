@@ -728,6 +728,55 @@ async def test_a_label_missing_from_the_catalogue_is_refused(db: AsyncSession) -
 
 # --- Rule 15 --------------------------------------------------------------------------
 
+# The output's log lines carry timestamps and ids, whose digits can spell a four-digit
+# PIN by chance: CI's run 37206663207 failed on `13:45:58.482903Z`, which holds 4829.
+# The PIN counts only as a number of its own, and timestamps and ids go before looking,
+# since either can hold one (a fraction `.4829`, a segment `-4829-`). So the check fails
+# on a printed PIN and never on a coincidence.
+ISO_TIMESTAMP = re.compile(
+    r"\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?(?:Z|[+-]\d{2}:?\d{2})?"
+)
+UUID_TEXT = re.compile(
+    r"[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}", re.IGNORECASE
+)
+
+
+def prints_pin(printed: str, pin: str) -> bool:
+    text = UUID_TEXT.sub(" ", ISO_TIMESTAMP.sub(" ", printed))
+    return re.search(rf"(?<!\d){re.escape(pin)}(?!\d)", text) is not None
+
+
+@pytest.mark.parametrize(
+    "line",
+    [
+        # The line CI failed on, as structlog's console renderer drew it.
+        (
+            "\x1b[2m2026-10-04T13:45:58.482903Z\x1b[0m [\x1b[32m\x1b[1minfo     \x1b[0m] "
+            "\x1b[1mwallet.repeated\x1b[0m \x1b[36muser_id\x1b[0m=\x1b[35m"
+            "f4f718db-9e82-4bf4-9688-00d665493f95\x1b[0m"
+        ),
+        "user_id=f4f718db-9e82-4829-9688-00d665493f95",
+        "2026-10-04T13:45:58.104829+05:30 seed done",
+        # A fraction of four digits is a number of its own: only the strip removes it.
+        "2026-10-04T13:45:58.4829Z seed done",
+    ],
+)
+def test_the_pin_check_ignores_the_pin_inside_a_timestamp_or_an_id(line: str) -> None:
+    assert not prints_pin(line, "4829")
+
+
+@pytest.mark.parametrize(
+    "line",
+    [
+        "pin=4829",
+        "test_woman's PIN is 4829.",
+        "\x1b[36mpin\x1b[0m=\x1b[35m4829\x1b[0m",
+        "2026-10-04T13:45:58.482903Z seeded, pin 4829",
+    ],
+)
+def test_the_pin_check_catches_a_printed_pin(line: str) -> None:
+    assert prints_pin(line, "4829")
+
 
 async def test_the_output_never_has_a_phone_number_or_the_pin(
     db: AsyncSession, capsys: pytest.CaptureFixture[str]
@@ -740,4 +789,4 @@ async def test_the_output_never_has_a_phone_number_or_the_pin(
     for person in PEOPLE:
         national = person.phone.removeprefix("+91")
         assert national not in digits, person.key
-    assert TEST_WOMAN_PIN not in printed
+    assert not prints_pin(printed, TEST_WOMAN_PIN)
