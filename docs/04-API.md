@@ -193,7 +193,7 @@ API sent nothing to (D-073) gets `null`, as its phone would. The E2E is its only
 | `NOT_FOUND` | 404 | also used when a blocked user is looked up |
 | `USERNAME_TAKEN` | 409 | |
 | `ALREADY_EXISTS` | 409 | duplicate swipe/report/etc. |
-| `THREAD_EXPIRED` | 410 | send on an expired thread |
+| `THREAD_EXPIRED` | 410 | his send on an expired Thread; hers is delivered (D-097) |
 | `UNDERAGE` | 422 | the account is deleted, only the number's hash kept (D-072) |
 | `IMMUTABLE_FIELD` | 422 | gender/dob change; a username after onboarding (D-068) |
 | `MESSAGE_REJECTED` | 422 | abuse or payment-solicitation filter; `details.rule` |

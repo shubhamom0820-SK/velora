@@ -1746,10 +1746,11 @@ then prices show nothing. T-4.4 and T-4.6 come first.
      - **08-DESIGN §6's example copy, "This thread disappears in 4h", is wrong twice:** the word,
        since nothing disappears, and the number, since a Thread is an hour. Flagged here, not
        rewritten: the 1-hour task D-097 names rewrites it.
-     - **Not part of the answer, but following from D-097's step 4** (recorded so it isn't lost):
-       T-7.3, 06-TESTING's case 12 and the 410 `THREAD_EXPIRED` (02-ARCHITECTURE, 04-API) refuse
-       any send on an expired Thread, while her later message must be delivered; only his send waits
-       on a re-open. For T-7.3 or the 1-hour task to change, not this task.
+     - **An expired Thread refuses his sends and accepts hers** (D-097). This follows from D-097's
+       step 4 rather than from the answer: Claude wrote it down here, and the advisor confirmed it.
+       It is now beside each place that raises or tests `THREAD_EXPIRED`: 04-API, T-7.1, T-7.3 and
+       06-TESTING's case 12.
+     - The first two are noted beside T-7.11 and 08-DESIGN §6 too, where that work happens.
   2. **Changes `/refunds`, a published page. What replaces the album request, and what does a ban
      give back?** If viewing private pictures (1 Vela) replaces the album request (5, returned on a
      decline), the return `/refunds` promises for a declined request goes with it; and is the 1 Vela
@@ -1955,7 +1956,7 @@ then prices show nothing. T-4.4 and T-4.6 come first.
 ### T-7.1 · Open a thread
 - [ ] **Needs:** T-6.4, T-5.5-ready wallet (T-5.1)
 - [ ] `POST /threads` from `{match_id}` (origin `match`) or `{user_id, first_message}` (origin `dm`, first message required, 1–500 chars).
-- [ ] Rules: not blocked; both onboarded; if a thread already exists for the pair → `active`/`knotted` returns it (no charge), `expired` → `THREAD_EXPIRED` (client offers re-open).
+- [ ] Rules: not blocked; both onboarded; if a thread already exists for the pair → `active`/`knotted` returns it (no charge), `expired` → `THREAD_EXPIRED` (client offers re-open). That refusal is his alone: an expired Thread accepts her sends (D-097).
 - [ ] In one transaction: debit (men only, `thread_open` or `dm_open`), insert thread (`expires_at = now + thread_hours`), link match, insert first message if dm. Notify the other person.
 - [ ] Tests: man pays once; woman pays nothing; double-tap race creates one thread and one charge.
 - [ ] **Commit:** `feat(threads): open thread [T-7.1]`
@@ -1968,7 +1969,7 @@ then prices show nothing. T-4.4 and T-4.6 come first.
 ### T-7.3 · Messages
 - [ ] **Needs:** T-7.2
 - [ ] `GET /threads/{id}/messages?cursor=` (newest first, respects my `cleared_at`; voice notes locked for men without unlock → no media URL).
-- [ ] `POST /threads/{id}/messages`: participant only; thread `expired` → `THREAD_EXPIRED`; text 1–2000; abuse/solicitation rules → `MESSAGE_REJECTED` (+ fraud event); masking if `message_count < mask_first_n` (store `body_raw`, set `masked`); dedupe on `client_msg_id` (return existing); update `last_message_at`, `message_count`; publish `message.new`; notify recipient if not connected.
+- [ ] `POST /threads/{id}/messages`: participant only; thread `expired` → `THREAD_EXPIRED` for his send, while hers is delivered (D-097: an expired Thread refuses his sends and accepts hers); text 1–2000; abuse/solicitation rules → `MESSAGE_REJECTED` (+ fraud event); masking if `message_count < mask_first_n` (store `body_raw`, set `masked`); dedupe on `client_msg_id` (return existing); update `last_message_at`, `message_count`; publish `message.new`; notify recipient if not connected.
 - [ ] Tests for masking patterns (+91 numbers, spaced digits, emails, UPI handles, "insta: x"), rejection, dedupe, expired.
 - [ ] **Commit:** `feat(messages): list and send with safety filters [T-7.3]`
 
@@ -2018,6 +2019,7 @@ then prices show nothing. T-4.4 and T-4.6 come first.
 - [ ] Bubbles, day separators, "Sent/Read" on my last message, typing dots, voice player (locked card with price for men), icebreakers when empty, knot bar (tie / waiting), expired panel (re-open · 2 / tie), header with countdown or "Knotted · permanent", ⋯ → profile menu.
 - [ ] Composer: text (Enter sends, Shift+Enter newline), mic for women (MediaRecorder, hold or tap-to-record, 60 s cap, preview before send). Optimistic send with `client_msg_id`; failed → retry.
 - [ ] Rejected message → inline explanation, text kept in composer.
+- [ ] **Her side of an expired Thread (D-097):** readable, and otherwise silent: no prompt, and no sign that money stands between her message and his reply. An expired Thread accepts her sends, so her composer keeps working; the re-open price is his alone.
 - [ ] **Allow the microphone here (D-059):** T-2.5's Permissions-Policy has `microphone=()`, so recording is refused until this task makes it `microphone=(self)`; add `media-src` for voice notes' storage origin and `blob:` for the preview.
 - [ ] **Commit:** `feat(web): conversation screen [T-7.11]`
 

@@ -191,6 +191,9 @@ T-5.5's; Hindi comes after beta).
 Short, warm, plain. Say what happens, not what the system is. "Cleared from your chats" not
 "Deleted". "This thread disappears in 4h" not "TTL remaining". Prices always in Velas with the
 number first: "Open thread · 5 Velas". Never shame or pressure ("Only 2 left!").
+**Flagged 4 October 2026, don't copy it:** "This thread disappears in 4h" is wrong twice. Nothing
+disappears, since an expired Thread stays readable, and a Thread is an hour (D-097). The 1-hour
+task D-097 names rewrites it.
 
 ## 7. Brand images
 

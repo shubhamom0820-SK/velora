@@ -2264,6 +2264,13 @@ written by Claude, glossed "unavailable" as "not shown, never removed", and list
 "archived read-only" among the parts it superseded, while the same entry put readability down as
 an open question. That prejudged the question, and wrongly; both lines are corrected above.
 
+**Noted 4 October 2026: an expired Thread refuses his sends and accepts hers.** That asymmetry is
+the product: she sends, he sees it is there, he pays 2 Velas to re-open and reply. She is free
+throughout and is never told that money stands in the way. So `THREAD_EXPIRED` is his alone, and
+every place that raises or tests it says so (04-API, T-7.1, T-7.3, 06-TESTING's case 12). It
+follows from step 4 and the founder's answer above; Claude first wrote it down, and the advisor
+(Claude, in a separate chat) confirmed it, relayed by the founder.
+
 The names, the lifetime and the rules are the founder's decision, 4 October 2026. The write-up
 they came in is the advisor's (Claude, in a separate chat), relayed by the founder.
 
