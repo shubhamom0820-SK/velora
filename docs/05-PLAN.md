@@ -3899,7 +3899,7 @@ The number comes from the session's own block, given in its brief, from P-100 up
   times as he likes for one Thread, D-250), but no endpoint charges it; this task is its natural
   home, the founder to confirm. T-7.6 points here. Found in T-5.2; filed from this session's block
   (P-150 to P-159).
-- [ ] P-141 · Let only `main` deploy to staging. **Before the next session that can push a
+- [x] P-141 · Let only `main` deploy to staging. **Before the next session that can push a
   branch.** Worst case: a workflow file edited on any branch runs with staging's secrets, among
   them the database owner's connection used for migrations, and the Vercel and Fly tokens: it can
   deploy anything to staging or read what those secrets reach. **Observed, 4 October 2026:** the
@@ -3911,3 +3911,9 @@ The number comes from the session's own block, given in its brief, from P-100 up
   dispatch from it), so nothing legitimate is lost; a one-off like that `--debug` run would then
   need its change on `main`. A repository setting, so the founder's to change. Found running
   that deploy; filed from this session's block (P-140 to P-149).
+  **Done, 4 October 2026, by the founder:** the `staging` environment's deployment branches are
+  `main` only (GitHub reports one custom policy, branch `main`). **Proved by its effect, not the
+  setting:** `deploy.yml` dispatched from a throwaway branch (run 37224641921) was refused at the
+  first job that uses the environment: `Branch "ci-staging-policy-probe" is not allowed to deploy
+  to staging due to environment protection rules.` `migrate` was rejected and nothing after it
+  ran; only the gate job ran, and it holds no environment secret.
