@@ -2901,7 +2901,7 @@ The number comes from the session's own block, given in its brief, from P-100 up
   coupling is also written above the check in `scripts/staging-smoke`.
 
   Found while planning T-2.1.
-- [ ] P-38 · Seed Phagwara's areas, replacing Bengaluru's. **Due before T-4.10** (on its Needs
+- [x] P-38 · Seed Phagwara's areas, replacing Bengaluru's. **Due before T-4.10** (on its Needs
   line). **Needs P-65 first:** this is the next migration in the plan, and its deploy reads back
   what it did. Worst case: someone in Phagwara who denies location access is offered a list of
   Bengaluru neighbourhoods, so their area, and every distance shown to them, is wrong. D-013 is
@@ -2927,6 +2927,38 @@ The number comes from the session's own block, given in its brief, from P-100 up
   Reconsider the interests catalogue in the same task (P-27): Punjabi music is the gap there.
 
   Found while planning T-2.2.
+
+  **Done, 5 October 2026:** migration `bc589ac265c2` deletes Bengaluru's 40 and inserts 17 Phagwara
+  areas; its downgrade puts the 40 back from its own copy. Each direction first counts the profiles
+  in the areas it would remove, with the delete's own condition, and stops with a message naming
+  the fix (`AreasInUse`). **The 17**, drafted by Claude from OpenStreetMap (Overpass and Nominatim,
+  read that day), each point a place inside the locality, not a measured centre:
+  - In town, where OSM names a locality in an address or a building: Guru Hargobind Nagar, Model
+    Town, Banga Road, Sarai Road, Satnampura, Bhagatpura, Chahal Nagar, Sukhchain Nagar, Hadiabad.
+  - Around LPU: Law Gate, LPU, Maheru, Chaheru.
+  - Villages: OSM's village and hamlet points within 3 km of its point for the town (the town is
+    about 20 km²): Guru Nanak Nagar, Chachoki, Ghauspur, Bhullarai. Phagwara only, Jalandhar not
+    (P-190), at the direction of the advisor (Claude, in a separate chat).
+  - **Left out:** Urban Estate, Mehli Gate, Thapar Colony, Bazar Sarafan, Prem Nagar and Kotrani,
+    which no source could place; Patel Nagar, Subhash Nagar and Green Valley, within a few hundred
+    metres of an area already in; Tibbi, whose OSM point is 1.1 km from the bus stand OSM addresses
+    as Tibbi; Hoshiarpur Road, a road whose points spread 3 km; villages 3 to 4.5 km out (Thakarki,
+    Khothran, Bhanoki, Bazidwal, Mehtan, Mehli, Khalwara, Palahi, Birk).
+  - **The founder's review: none of the 17 had been reviewed when this landed,** so every row
+    says "not yet reviewed". He lives in Phagwara but can't vouch for twenty localities street by
+    street, so whatever he can't confirm stays marked that way (the advisor's direction). His
+    review, and any correction, is P-191: a new migration, never an edit of this one (rule 11).
+
+  The seed moved with them: `AREA_CITY` is Phagwara, each prototype neighbourhood maps to one
+  Phagwara area, and Ananya moves to Chachoki. `SCATTER_RADIUS_M` drops from 750 m to 250 m: the
+  two closest centroids are 510 m apart (Guru Hargobind Nagar and Model Town), and a test reads that
+  gap from the database and holds the radius under half of it. At 250 m, four people in one area
+  put two of them 89 m apart, under the seed's 100 m; hence Ananya. Four about texts were rewritten
+  for Phagwara, drafted by Claude for the founder to review: Ananya's, Sanya's and Siddharth's, and
+  Ishita's metro, which Phagwara doesn't have (rewriting hers was the advisor's call).
+  **P-27 stays open, undecided:** the advisor kept it out of tonight's task, as forty-five minutes
+  T-4.10 doesn't need; the catalogue is the founder's to reconsider. Proven by eleven breaking cases
+  (`tests/break_guards.py`, `p38-`), each red for its own reason.
 - [ ] P-39 · Delete the Firebase user right after sign-in. **After T-3.14 works plainly.** Worst
   case without it: every user's phone number sits in Firebase's records in the United States for
   as long as the account exists, and up to 180 days after we delete it. Deleting the Firebase user
@@ -4026,3 +4058,23 @@ The number comes from the session's own block, given in its brief, from P-100 up
   through `tests/test_require_main_checkout.py`, which also asks `make -n hooks` that the check is
   the first thing it runs; `tests.break_guards p143-` turns each red (the check disabled, the
   check not run), restored by SHA-256. Filed from this session's block (P-140 to P-149).
+- [ ] P-190 · Decide what someone just outside Phagwara picks when they deny location access.
+  **For the founder, before REL-1.** Worst case: someone in Jalandhar, 22 km from Phagwara and so
+  inside D-013's 25 km discovery radius (`discovery_radius_km`), denies location access and is
+  offered only Phagwara's 17 areas (P-38). They pick the nearest, and every distance shown to them,
+  and theirs to everyone else, is out by up to 25 km. P-38 kept the areas Phagwara's on purpose:
+  the launch city is a decision, not a radius, and the radius reaching another city is a side effect
+  of the number, not an intention (the advisor directing P-38, Claude in a separate chat, 5 October
+  2026). The choices: leave it, since that user can still share their location; seed Jalandhar's
+  areas, which widens the launch and so is D-013's to change; or narrow the radius. Found in P-38;
+  filed from this session's block (P-190 to P-199).
+- [ ] P-191 · Record the founder's review of Phagwara's 17 area centroids. **Before REL-1.** Worst
+  case: a centroid drafted from one shop's address sits in the wrong part of town, so someone who
+  denies location access and picks that area is shown distances out by a kilometre or two, and so
+  is everyone near them. P-38 landed all 17 marked "not yet reviewed" (migration `bc589ac265c2`,
+  each row with its source); its review sheet, with a map link per centroid, was
+  `out/p-38-areas-review.md` on the founder's machine. A new data migration records each row as
+  confirmed, moved or dropped, by the founder, and leaves "not yet reviewed" on what he can't
+  confirm. Moving a centroid can shrink the closest gap: the seed's test reads it from the database
+  and fails if `SCATTER_RADIUS_M` (250 m) is no longer under half of it. Found in P-38; filed from
+  this session's block (P-190 to P-199).

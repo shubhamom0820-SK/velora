@@ -1804,6 +1804,116 @@ P143: list[tuple[Case, list[str]]] = [
     ),
 ]
 
+# --- P-38: Phagwara's areas replace Bengaluru's, and the seed's scatter fits them --
+
+P38_SELECTION = ["tests/test_reference_data.py", "tests/seed/test_seed.py"]
+AREAS = "alembic/versions/20261005_bc589ac265c2_phagwara_areas.py"
+SEED_DATA = "seed/data.py"
+COUNT = "        .where(_these(city, names))\n    )\n    if in_use:\n"
+REFUSES_IN_USE = "test_the_migration_refuses_to_remove_an_area_in_use"
+LAUNCH_CITY = "test_areas_are_in_the_launch_city"
+UNDER_HALF = "test_the_scatter_stays_under_half_the_closest_gap"
+INSIDE = "test_each_profile_sits_at_its_scatter_inside_its_area"
+
+P38: list[Case] = [
+    Case(
+        id="p38-01-count-ignored",
+        what="the migration removes areas whatever its count says",
+        edits=[(AREAS, "    if in_use:\n", "    if False:\n")],
+        expect=[f"{REFUSES_IN_USE}[upgrade]", f"{REFUSES_IN_USE}[downgrade]"],
+    ),
+    Case(
+        id="p38-02-count-every-area",
+        what="the count is of every profile with an area, not the areas removed",
+        edits=[(AREAS, COUNT, "        .where(sa.true())\n    )\n    if in_use:\n")],
+        expect=["test_the_migration_counts_only_the_areas_it_removes"],
+    ),
+    Case(
+        id="p38-03-count-wrong-city",
+        what="the count always looks at Phagwara's areas, so the upgrade counts none",
+        edits=[
+            (
+                AREAS,
+                COUNT,
+                "        .where(_these(CITY, names))\n    )\n    if in_use:\n",
+            )
+        ],
+        expect=[f"{REFUSES_IN_USE}[upgrade]"],
+    ),
+    Case(
+        id="p38-04-message-without-the-fix",
+        what="the refusal says what it found but not what to do",
+        edits=[
+            (
+                AREAS,
+                'so it stopped before changing anything. {fix}"',
+                'so it stopped before changing anything."',
+            )
+        ],
+        expect=[f"{REFUSES_IN_USE}[upgrade]", f"{REFUSES_IN_USE}[downgrade]"],
+    ),
+    Case(
+        id="p38-05-downgrade-short-of-40",
+        what="the downgrade puts 39 of Bengaluru's areas back",
+        edits=[
+            (
+                AREAS,
+                "        (OLD_CITY, OLD_AREAS),\n",
+                "        (OLD_CITY, OLD_AREAS[1:]),\n",
+            )
+        ],
+        expect=["test_the_downgrade_puts_bengalurus_40_back"],
+    ),
+    Case(
+        id="p38-06-bengaluru-area-left-behind",
+        what="the upgrade leaves Koramangala in place",
+        edits=[
+            (
+                AREAS,
+                "        (OLD_CITY, [name for name, _, _ in OLD_AREAS]),\n",
+                "        (OLD_CITY, [name for name, _, _ in OLD_AREAS[1:]]),\n",
+            )
+        ],
+        expect=[LAUNCH_CITY, "test_the_areas_are_phagwaras_list"],
+    ),
+    Case(
+        id="p38-07-lat-lng-swapped",
+        what="one centroid's latitude and longitude swapped",
+        edits=[(AREAS, '"LPU", 31.2533, 75.7033,', '"LPU", 75.7033, 31.2533,')],
+        expect=[LAUNCH_CITY],
+    ),
+    Case(
+        id="p38-08-scatter-back-to-750",
+        what="Bengaluru's 750 m scatter carried across to Phagwara",
+        edits=[(SEED, "SCATTER_RADIUS_M = 250\n", "SCATTER_RADIUS_M = 750\n")],
+        expect=[UNDER_HALF, INSIDE],
+    ),
+    Case(
+        id="p38-09-scatter-just-over-half",
+        what="a scatter of 256 m, just over half the closest gap (510.16 m)",
+        edits=[(SEED, "SCATTER_RADIUS_M = 250\n", "SCATTER_RADIUS_M = 256\n")],
+        expect=[UNDER_HALF],
+    ),
+    Case(
+        id="p38-10-seed-still-in-bengaluru",
+        what="the seed looks for its areas in Bengaluru",
+        edits=[(SEED, 'AREA_CITY = "Phagwara"\n', 'AREA_CITY = "Bengaluru"\n')],
+        expect=[UNDER_HALF, INSIDE],
+    ),
+    Case(
+        id="p38-11-ananya-with-the-other-three",
+        what="Ananya back in Guru Hargobind Nagar with three others",
+        edits=[
+            (
+                SEED_DATA,
+                '        area="Chachoki",\n',
+                '        area="Guru Hargobind Nagar",\n',
+            )
+        ],
+        expect=["test_nobody_shares_a_spot"],
+    ),
+]
+
 CASES: list[tuple[Case, list[str]]] = (
     [(c, T51_SELECTION) for c in T51]
     + [(c, T54_SELECTION) for c in T54]
@@ -1813,6 +1923,7 @@ CASES: list[tuple[Case, list[str]]] = (
     + [(c, T52_SELECTION) for c in T52]
     + P142
     + P143
+    + [(c, P38_SELECTION) for c in P38]
 )
 
 # The fifty-connection fixture's own message when Postgres refuses a connection.

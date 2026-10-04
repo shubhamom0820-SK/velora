@@ -159,8 +159,8 @@ read it from `web/src/lib/legal.ts`.
 (`areas`) and a default — while a registered office is not. Committing to Phagwara for both costs
 a data migration if the launch city ever has to move.
 
-The seeded areas are still Bengaluru's, from when Bengaluru was this decision's default; P-38
-replaces them before T-4.10 reads them. Closed by the founder on 1 October 2026.
+The seeded areas were Bengaluru's, from when Bengaluru was this decision's default, until P-38
+replaced them with Phagwara's (5 October 2026). Closed by the founder on 1 October 2026.
 
 ### D-014 · Theme — Locked (black · white · red blend)
 The app has one theme, the blend: black chrome (header, bottom nav, hero, sheets), soft-white

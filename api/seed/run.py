@@ -87,13 +87,14 @@ LOCAL_DATABASE_MARKER = (
 
 # The block every seeded number sits in (seed/data.py, D-064).
 SEED_PHONE_PREFIX = "+9190000"
-# The profiles' areas are this city's until P-38 replaces them.
-AREA_CITY = "Bengaluru"
+# The launch city's areas (D-013), which P-38 seeded.
+AREA_CITY = "Phagwara"
 # How far from its area's centroid a profile may sit (`scatter`). Under half the
-# distance between the two closest centroids of all 40 areas (Rajajinagar and
-# Malleshwaram, 1,728 m), so every profile stays nearer its own area's centroid
-# than any other's; a test checks that, so P-38's areas can't quietly break it.
-SCATTER_RADIUS_M = 750
+# distance between the two closest centroids (Guru Hargobind Nagar and Model
+# Town, 510 m), so every profile stays nearer its own area's centroid than any
+# other's. A test reads the gap from the database and holds this under half of
+# it, so moving a centroid can't quietly break it. Bengaluru's was 750 m.
+SCATTER_RADIUS_M = 250
 # The event in the key of every credit the seed grants, `{user_id}:admin_grant:
 # dev-seed` (D-077): one per person, however many times the seed runs.
 SEED_EVENT = "dev-seed"
@@ -550,8 +551,7 @@ def _require_catalogues(
     if missing:
         raise SeedRefused(
             f"The database's catalogues lack {', '.join(missing)}. Run make "
-            "migrate first. If P-38 has replaced the areas, the seed's must move "
-            f"too: they are {AREA_CITY}'s."
+            f"migrate first. The seed's areas are {AREA_CITY}'s (P-38)."
         )
 
 

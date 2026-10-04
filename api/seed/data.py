@@ -3,8 +3,9 @@
 Where each piece comes from:
 
 - **The prototype** (`docs/prototype/velora-prototype-reference.html`, the `P`
-  array): each profile's first name, username, about text (verbatim), gender,
-  hometown (`from`), area (`city`, a Bengaluru neighbourhood), its three tags as
+  array): each profile's first name, username, about text (verbatim, but for
+  the four below), gender, hometown (`from`), its neighbourhood (`city`, in
+  Bengaluru, which P-38 moved to Phagwara, below), its three tags as
   the first three interests, its `intent` as the first intent, `joined`,
   `showKudos`, and `v` for the men. The prototype's `likedYou` set the likes.
 - **Drafted by Claude from each profile's about text, on 3 October 2026:** the
@@ -40,9 +41,17 @@ fictional range, so any of them may be a real person's (D-064). That's why the
 seed never prints one, and why T-3.2 and T-3.14 keep an OTP to them on this
 machine.
 
-Profiles are in Bengaluru because `areas` still is; P-38 moves both to Phagwara.
-Three about texts (Ananya's, Sanya's and Siddharth's) name Bengaluru or places
-near it, and move with them.
+**Moved to Phagwara by P-38 (5 October 2026),** with `areas`:
+
+- **Drafted by Claude, not yet reviewed by the founder:** the Phagwara area in
+  place of each prototype neighbourhood, one for one, so neighbours stay
+  neighbours, except Ananya's, moved to Chachoki: four people in one area put
+  two of them 89 m apart at P-38's 250 m scatter, and the seed keeps everyone
+  100 m apart. And four about texts rewritten for Phagwara: Ananya's hikes,
+  Sanya's being Punjabi far from Punjab, Siddharth's "Bengaluru by choice",
+  and Ishita's sketching on the metro, which Phagwara doesn't have.
+- **Rewriting Ishita's, which P-38's entry didn't list, was the advisor's call**
+  (Claude, in a separate chat), 5 October 2026.
 """
 
 from __future__ import annotations
@@ -116,7 +125,7 @@ TEST_ACCOUNTS: tuple[Person, ...] = (
         gradient=("#E8455F", "#6E1028"),
         about="The seeded test man, for local development. Not a real person.",
         hometown="Bengaluru",
-        area="Koramangala",
+        area="Guru Hargobind Nagar",
         seeking=WOMEN,
         interests=("Cricket", "Cooking", "Travel", "Gaming", "Filter coffee"),
         intents=("Something serious",),
@@ -134,7 +143,7 @@ TEST_ACCOUNTS: tuple[Person, ...] = (
         gradient=("#D9663F", "#7A1228"),
         about="The seeded test woman, for local development. Not a real person.",
         hometown="Bengaluru",
-        area="Koramangala",
+        area="Guru Hargobind Nagar",
         seeking=MEN,
         interests=("Reading", "Yoga", "Baking", "Dogs", "Indie music"),
         intents=("Long term", "Go with the flow"),
@@ -162,11 +171,11 @@ PROTOTYPE: tuple[Person, ...] = (
         gradient=("#E8455F", "#6E1028"),
         about=(
             "Moved here for work three years ago and still can't handle the "
-            "traffic. I hike most weekends — Kudremukh if I have two days, Nandi "
-            "Hills if I don't."
+            "traffic. I hike most weekends — Triund if I have two days, the "
+            "Shivaliks past Hoshiarpur if I don't."
         ),
         hometown="Dehradun",
-        area="Koramangala",
+        area="Chachoki",
         seeking=MEN,
         interests=("Filter coffee", "Trekking", "Indie music", "Travel", "Yearner"),
         intents=("Something serious", "Long term"),
@@ -186,7 +195,7 @@ PROTOTYPE: tuple[Person, ...] = (
             "pottery badly on Sundays. My dog Laddu is the real main character."
         ),
         hometown="Kolkata",
-        area="Indiranagar",
+        area="Model Town",
         seeking=MEN,
         interests=("Pottery", "Dogs", "Old Hindi cinema", "Cooking", "Yapper"),
         intents=("Long term",),
@@ -204,10 +213,10 @@ PROTOTYPE: tuple[Person, ...] = (
         gradient=("#C4324E", "#4E0A1C"),
         about=(
             "Grew up in Pune, here for my first job. I sketch strangers on the "
-            "metro. Please don't be offended if I sketch you."
+            "bus to Jalandhar. Please don't be offended if I sketch you."
         ),
         hometown="Pune",
-        area="HSR Layout",
+        area="Banga Road",
         seeking=MEN,
         interests=(
             "Badminton",
@@ -230,11 +239,11 @@ PROTOTYPE: tuple[Person, ...] = (
         username="sanya_bakes",
         gradient=("#B8496A", "#5C0F26"),
         about=(
-            "Punjabi in south Bengaluru, which means I've learned to make my own "
-            "parathas. I read two books a week and bake when I'm stressed."
+            "Chandigarh girl in Phagwara, which means I judge every paratha "
+            "against my mum's. I read two books a week and bake when I'm stressed."
         ),
         hometown="Chandigarh",
-        area="Jayanagar",
+        area="Sarai Road",
         seeking=MEN,
         interests=("Reading", "Yoga", "Baking", "Cooking", "Old Hindi cinema"),
         intents=("Casual dating", "Situationship", "Go with the flow"),
@@ -256,7 +265,7 @@ PROTOTYPE: tuple[Person, ...] = (
             "person, fair warning."
         ),
         hometown="Hyderabad",
-        area="Whitefield",
+        area="Law Gate",
         seeking=MEN,
         interests=("Gaming", "Anime", "Cats", "Yapper", "Yearner"),
         intents=("Go with the flow", "Friendship"),
@@ -276,7 +285,7 @@ PROTOTYPE: tuple[Person, ...] = (
             "shoot film photography. Early mornings are non-negotiable."
         ),
         hometown="Mysuru",
-        area="Malleshwaram",
+        area="Satnampura",
         seeking=MEN,
         interests=("Indie music", "Running", "Photography", "Yoga", "Filter coffee"),
         intents=("Something serious",),
@@ -298,7 +307,7 @@ PROTOTYPE: tuple[Person, ...] = (
             "place in the city."
         ),
         hometown="Kochi",
-        area="Bellandur",
+        area="Maheru",
         seeking=MEN,
         interests=("Reading", "Travel", "Cooking", "Filter coffee", "Sketching"),
         intents=("Long term", "Something serious"),
@@ -318,7 +327,7 @@ PROTOTYPE: tuple[Person, ...] = (
             "means my flat is chaos roughly half the year."
         ),
         hometown="Nagpur",
-        area="Rajajinagar",
+        area="Bhagatpura",
         seeking=MEN,
         interests=("Yoga", "Dogs", "Indie music", "Sketching", "Hopeless romantic"),
         intents=("Something serious",),
@@ -338,7 +347,7 @@ PROTOTYPE: tuple[Person, ...] = (
             "Training for a half marathon, badly."
         ),
         hometown="Indore",
-        area="Electronic City",
+        area="Chahal Nagar",
         seeking=MEN,
         interests=("Running", "Street food", "Gaming", "Cooking", "Anime"),
         intents=("Casual dating",),
@@ -358,7 +367,7 @@ PROTOTYPE: tuple[Person, ...] = (
             "buildings and evenings rewatching Guru Dutt films."
         ),
         hometown="Jaipur",
-        area="Basavanagudi",
+        area="LPU",
         seeking=MEN,
         interests=("Photography", "Old Hindi cinema", "Baking", "Travel", "Yearner"),
         intents=("Go with the flow",),
@@ -379,7 +388,7 @@ PROTOTYPE: tuple[Person, ...] = (
             "when I like them, which is how you'll know."
         ),
         hometown="Jaipur",
-        area="Indiranagar",
+        area="Model Town",
         seeking=WOMEN,
         interests=("Cricket", "Cooking", "Travel", "Sketching", "Hopeless romantic"),
         intents=("Something serious",),
@@ -399,7 +408,7 @@ PROTOTYPE: tuple[Person, ...] = (
             "life together. It works about half the time."
         ),
         hometown="Bhopal",
-        area="Koramangala",
+        area="Guru Hargobind Nagar",
         seeking=WOMEN,
         interests=("Startups", "Running", "Photography", "Filter coffee", "Trekking"),
         intents=("Go with the flow", "Casual dating", "Friendship"),
@@ -418,7 +427,7 @@ PROTOTYPE: tuple[Person, ...] = (
             "argue for a living, so I've learned when not to."
         ),
         hometown="Lucknow",
-        area="Jayanagar",
+        area="Sarai Road",
         seeking=WOMEN,
         interests=("Reading", "Old Hindi cinema", "Street food", "Yapper", "Travel"),
         intents=("Long term", "Something serious"),
@@ -439,7 +448,7 @@ PROTOTYPE: tuple[Person, ...] = (
             "two dogs and a guitar I'm mediocre at."
         ),
         hometown="Goa",
-        area="Whitefield",
+        area="Law Gate",
         seeking=WOMEN,
         interests=("Gaming", "Dogs", "Indie music", "Travel", "Startups"),
         intents=("Casual dating",),
@@ -459,7 +468,7 @@ PROTOTYPE: tuple[Person, ...] = (
             "and a camera I overpaid for. Looking for something that lasts."
         ),
         hometown="Chennai",
-        area="Sadashivanagar",
+        area="Hadiabad",
         seeking=WOMEN,
         interests=("Travel", "Photography", "Cricket", "Trekking", "Hopeless romantic"),
         intents=("Something serious", "Long term"),
@@ -479,7 +488,7 @@ PROTOTYPE: tuple[Person, ...] = (
             "cook badly the other three."
         ),
         hometown="Patna",
-        area="HSR Layout",
+        area="Banga Road",
         seeking=WOMEN,
         interests=("Badminton", "Anime", "Cooking", "Gaming", "Street food"),
         intents=("Go with the flow",),
@@ -500,7 +509,7 @@ PROTOTYPE: tuple[Person, ...] = (
             "the mornings and cook Punjabi food badly on Sundays."
         ),
         hometown="Amritsar",
-        area="Marathahalli",
+        area="Sukhchain Nagar",
         seeking=WOMEN,
         interests=("Running", "Cooking", "Travel", "Street food", "Yapper"),
         intents=("Long term",),
@@ -517,11 +526,11 @@ PROTOTYPE: tuple[Person, ...] = (
         username="sid_writes",
         gradient=("#E04A62", "#661020"),
         about=(
-            "Reporter covering city politics. Delhi-born, Bengaluru by choice. I "
+            "Reporter covering city politics. Delhi-born, Phagwara by choice. I "
             "read, I walk a lot, and I know where the good coffee is."
         ),
         hometown="Delhi",
-        area="Frazer Town",
+        area="Guru Nanak Nagar",
         seeking=WOMEN,
         interests=("Reading", "Indie music", "Filter coffee", "Yapper", "Trekking"),
         intents=("Something serious",),
@@ -541,7 +550,7 @@ PROTOTYPE: tuple[Person, ...] = (
             "myself. My weekends are booked eight months out, so weekdays it is."
         ),
         hometown="Ahmedabad",
-        area="Domlur",
+        area="Bhullarai",
         seeking=WOMEN,
         interests=(
             "Photography",
@@ -568,7 +577,7 @@ PROTOTYPE: tuple[Person, ...] = (
             "to cook, and I'm figuring out what I'm doing here."
         ),
         hometown="Surat",
-        area="Bellandur",
+        area="Maheru",
         seeking=WOMEN,
         interests=("Gaming", "Anime", "Startups", "Cooking", "Yearner"),
         intents=("Go with the flow", "Friendship", "Casual dating"),

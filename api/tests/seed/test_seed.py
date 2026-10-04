@@ -56,6 +56,7 @@ from seed.data import (
 )
 from seed.photos import dust
 from seed.run import (
+    AREA_CITY,
     LOCAL_DATABASE_MARKER,
     SCATTER_RADIUS_M,
     SeedRefused,
@@ -601,6 +602,25 @@ def test_the_scatter_is_fixed_by_the_username_and_inside_the_radius() -> None:
     assert all(0 <= metres <= SCATTER_RADIUS_M for metres, _ in placed)
     assert all(0 <= bearing < 360 for _, bearing in placed)
     assert len(set(placed)) == len(placed)
+
+
+async def test_the_scatter_stays_under_half_the_closest_gap(db: AsyncSession) -> None:
+    """Under half the gap between the two closest centroids, any point within
+    the radius is nearer its own centroid than any other. Read from the
+    database, so moving a centroid (P-38's are drafts) can't quietly break it."""
+    closest = await db.scalar(
+        text(
+            "SELECT min(ST_Distance(a.centroid, b.centroid)) FROM areas a "
+            "JOIN areas b ON a.id < b.id AND a.city = b.city WHERE a.city = :city"
+        ),
+        {"city": AREA_CITY},
+    )
+
+    assert closest is not None
+    assert SCATTER_RADIUS_M < closest / 2, (
+        f"{AREA_CITY}'s two closest centroids are {closest:.0f} m apart; "
+        f"SCATTER_RADIUS_M must stay under {closest / 2:.0f} m"
+    )
 
 
 async def test_each_profile_sits_at_its_scatter_inside_its_area(

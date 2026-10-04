@@ -3,6 +3,7 @@
 catalogue (D-041), and T-3.2 the OTP daily cap (D-066), tested the same way.
 T-5.2's data migrations reprice them (D-098, D-099, D-231, D-250): the tests
 read the head, and one goes back to T-1.14's values to check its downgrades.
+P-38 replaces T-1.14's Bengaluru areas with Phagwara's (D-013).
 
 Expected values are written out here, not read from the migration, so a wrong
 value in the migration fails a test instead of agreeing with itself.
@@ -12,16 +13,20 @@ from __future__ import annotations
 
 import importlib.util
 import json
+from collections.abc import Callable
 from itertools import pairwise
 from types import ModuleType
 
 import pytest
+from alembic.config import Config
 from sqlalchemy import Text, text
 from sqlalchemy.dialects.postgresql import JSONB
+from sqlalchemy.engine import Connection
 from sqlalchemy.ext.asyncio import AsyncConnection, AsyncEngine, AsyncSession
 
 from alembic import command
 from app.core.enums import LedgerReason
+from tests.conftest import MakeUser
 from tests.infra import API_DIR, run_alembic
 
 COUNTS = {
@@ -30,7 +35,7 @@ COUNTS = {
     "gifts": 6,
     "app_config": 8,
     "interests": 24,
-    "areas": 40,
+    "areas": 17,
 }
 
 
@@ -237,13 +242,33 @@ async def test_interests_have_fixed_ids_in_order(db: AsyncSession) -> None:
     assert (rows[0].slug, rows[6].slug) == ("filter-coffee", "old-hindi-cinema")
 
 
-# Areas: the launch city's location fallback (D-034).
+# Areas: the launch city's location fallback (D-034), Phagwara's since P-38.
 
-MG_ROAD = "SRID=4326;POINT(77.5946 12.9716)"
+PHAGWARA = "SRID=4326;POINT(75.7696 31.2207)"  # OSM's point for the town
+PHAGWARA_AREAS = {
+    "Guru Hargobind Nagar",
+    "Model Town",
+    "Banga Road",
+    "Sarai Road",
+    "Satnampura",
+    "Bhagatpura",
+    "Chahal Nagar",
+    "Sukhchain Nagar",
+    "Hadiabad",
+    "Law Gate",
+    "LPU",
+    "Maheru",
+    "Chaheru",
+    "Guru Nanak Nagar",
+    "Chachoki",
+    "Ghauspur",
+    "Bhullarai",
+}
 
 
 async def test_areas_are_in_the_launch_city(db: AsyncSession) -> None:
-    """Swapped latitude and longitude would land thousands of km away."""
+    """Swapped latitude and longitude would land thousands of km away, and a
+    Bengaluru area left behind would show up as a second city."""
     cities, farthest_km, distinct_points = (
         await db.execute(
             text(
@@ -251,13 +276,19 @@ async def test_areas_are_in_the_launch_city(db: AsyncSession) -> None:
                 "max(ST_Distance(centroid, ST_GeogFromText(:centre))) / 1000, "
                 "count(distinct ST_AsText(centroid)) from areas"
             ),
-            {"centre": MG_ROAD},
+            {"centre": PHAGWARA},
         )
     ).one()
 
-    assert cities == ["Bengaluru"]
-    assert farthest_km < 30
+    assert cities == ["Phagwara"]
+    assert farthest_km < 10
     assert distinct_points == COUNTS["areas"]
+
+
+async def test_the_areas_are_phagwaras_list(db: AsyncSession) -> None:
+    names = set((await db.execute(text("select name from areas"))).scalars())
+
+    assert names == PHAGWARA_AREAS
 
 
 # Running it again.
@@ -265,8 +296,8 @@ async def test_areas_are_in_the_launch_city(db: AsyncSession) -> None:
 
 async def test_seeding_again_changes_nothing(db: AsyncSession) -> None:
     """Run twice: a later migration may remove a seeded row, which the first
-    run puts back (T-5.2 retired `gift_free_daily_limit`); the second must
-    change nothing."""
+    run puts back (T-5.2 retired `gift_free_daily_limit`, P-38 Bengaluru's 40
+    areas); the second must change nothing."""
     for statement in REVISION.reference_data():
         await db.execute(statement)
     before = await _counts(db)
@@ -470,3 +501,133 @@ async def test_the_otp_cap_downgrade_removes_exactly_its_key(
         "gift_free_daily_limit",
         "gift_same_recipient_cooldown_h",
     }
+
+
+# --- P-38: Phagwara's areas replace Bengaluru's (D-013) ---------------------------
+
+AREAS_REVISION = _revision("bc589ac265c2")
+
+
+async def _alembic(db: AsyncSession, run: Callable[..., object], revision: str) -> None:
+    """Run an Alembic command on the test's own connection, inside its
+    transaction: Alembic sees one already open and leaves it to us."""
+    connection = await db.connection()
+
+    def _run(sync_connection: Connection) -> None:
+        config = Config(str(API_DIR / "alembic.ini"))
+        config.attributes["connection"] = sync_connection
+        run(config, revision)
+
+    await connection.run_sync(_run)
+
+
+async def _place(db: AsyncSession, make_user: MakeUser, city: str, name: str) -> None:
+    user, _ = await make_user()
+    await db.execute(
+        text(
+            "update profiles set area_id = "
+            "(select id from areas where city = :city and name = :name) "
+            "where user_id = :user"
+        ),
+        {"city": city, "name": name, "user": user.id},
+    )
+
+
+async def _cities(db: AsyncSession) -> dict[str, int]:
+    rows = await db.execute(text("select city, count(*) from areas group by city"))
+    return {city: count for city, count in rows.tuples()}
+
+
+async def test_the_downgrade_puts_bengalurus_40_back(test_engine: AsyncEngine) -> None:
+    try:
+        await run_alembic(test_engine, command.downgrade, AREAS_REVISION.down_revision)
+        async with test_engine.connect() as connection:
+            rows = await connection.execute(
+                text(
+                    "select city, count(*), "
+                    "ST_AsText((array_agg(centroid) filter "
+                    "(where name = 'Koramangala'))[1]) from areas group by city"
+                )
+            )
+            found = rows.all()
+    finally:
+        await run_alembic(test_engine, command.upgrade, "head")
+
+    assert [tuple(row) for row in found] == [
+        ("Bengaluru", 40, "POINT(77.6245 12.9352)")
+    ]
+
+
+@pytest.mark.parametrize(
+    ("direction", "city", "name", "found", "fix"),
+    [
+        (
+            "upgrade",
+            "Bengaluru",
+            "Koramangala",
+            (
+                "1 profiles are in Bengaluru's areas, which this migration removes "
+                "(P-38), so it stopped before changing anything."
+            ),
+            (
+                "tell the founder, then make infra-reset (it drops every session's "
+                "databases), then make infra-up migrate seed."
+            ),
+        ),
+        (
+            "downgrade",
+            "Phagwara",
+            "Law Gate",
+            (
+                "1 profiles are in Phagwara's areas, which this migration removes "
+                "(P-38), so it stopped before changing anything."
+            ),
+            "Move them out of those areas first",
+        ),
+    ],
+    ids=["upgrade", "downgrade"],
+)
+async def test_the_migration_refuses_to_remove_an_area_in_use(
+    db: AsyncSession,
+    make_user: MakeUser,
+    direction: str,
+    city: str,
+    name: str,
+    found: str,
+    fix: str,
+) -> None:
+    """A profile in an area it would remove: it stops with a message naming the
+    fix, not a bare foreign-key error, and changes nothing. Rolled back."""
+    with pytest.raises(RuntimeError) as refused:
+        async with db.begin_nested():
+            if direction == "upgrade":
+                await _alembic(db, command.downgrade, AREAS_REVISION.down_revision)
+                await _place(db, make_user, city, name)
+                await _alembic(db, command.upgrade, AREAS_REVISION.revision)
+            else:
+                await _place(db, make_user, city, name)
+                await _alembic(db, command.downgrade, AREAS_REVISION.down_revision)
+
+    assert type(refused.value).__name__ == "AreasInUse"
+    assert found in str(refused.value)
+    assert fix in str(refused.value)
+    assert await _cities(db) == {"Phagwara": 17}  # head, as the harness left it
+
+
+async def test_the_migration_counts_only_the_areas_it_removes(
+    db: AsyncSession, make_user: MakeUser
+) -> None:
+    """Someone in another city's area doesn't stop it: the count has the
+    delete's own condition, not "anyone with an area"."""
+    async with db.begin_nested():
+        await _alembic(db, command.downgrade, AREAS_REVISION.down_revision)
+        await db.execute(
+            text(
+                "insert into areas (city, name, centroid) values "
+                "('Elsewhere', 'Somewhere', ST_GeogFromText('SRID=4326;POINT(75 31)'))"
+            )
+        )
+        await _place(db, make_user, "Elsewhere", "Somewhere")
+        await _alembic(db, command.upgrade, AREAS_REVISION.revision)
+
+    assert await _cities(db) == {"Phagwara": 17, "Elsewhere": 1}

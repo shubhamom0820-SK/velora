@@ -128,9 +128,10 @@ Indexes: `GIST(location)`, `GIN(username gin_trgm_ops)`, `GIN(first_name gin_trg
 
 ### areas  (seed data for location fallback)
 `id uuid pk, city text, name text, centroid geography(Point,4326)`. Unique `(city, name)`.
-Seed: 40 Bengaluru neighbourhoods (D-013's default), drafted by Claude and reviewed by the founder
-(T-1.14); centroids are approximate to about 1 km. D-013 is now Phagwara; P-38 replaces these
-before T-4.10 reads them.
+Seed: 17 Phagwara areas (D-013), from P-38, which replaced T-1.14's 40 Bengaluru neighbourhoods.
+Drafted by Claude from OpenStreetMap; each centroid is a point inside the locality, not a measured
+centre, and its migration (`bc589ac265c2`) says, row by row, where it came from and whether the
+founder confirmed it. The two closest are 510 m apart.
 
 ### interests  (seed: 24, T-1.14)
 `id smallint pk, slug text unique, label text`.
