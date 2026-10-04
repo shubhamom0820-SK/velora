@@ -2114,6 +2114,11 @@ T-4.6's upload control, or HEIC? Tested on the real control, not reasoned about.
 "no HEIC" silently breaks every iPhone sign-up, and we would find out from users, not from tests. On
 T-4.6's Done-when; if HEIC arrives, stop and tell the founder before anything ships. Locked when
 that check passes.
+**Where the check stands (5 October 2026):** two uploads on staging through T-4.6's photos step
+were accepted by `complete`, which reads the bytes on arrival and refuses HEIC, so neither was
+HEIC; whether they were JPEG rather than PNG or WebP is unknown, since the worker replaces the
+upload with its re-encode within seconds. Still Open: which device made them is the founder's to
+confirm (T-4.6's Done-when).
 
 ### D-090 · An under-18 refusal queues its files' deletion before it commits — Locked
 **Supersedes one sentence of D-078:** "The enqueue comes after the commit, so a refusal that rolls
@@ -2263,7 +2268,10 @@ step: the slot is simply empty again. Telling them then is P-74.
 - One message for every moderation rejection: no API change, but "no face" and "text over the
   photo" are things the person can fix if told.
 
-Recommended and built by Claude in T-4.6, 4 October 2026. **Open until the founder approves it.**
+Recommended and built by Claude in T-4.6, 4 October 2026. Approved as built by the advisor
+directing T-4.6 (Claude, in a separate chat), relayed by the founder, 5 October 2026, in the
+advisor's words, not the founder's; the advisor says the founder hasn't read it yet. **Open until
+the founder approves it.**
 
 ### D-097 · A Thread lasts an hour; Extend buys a day; a Knot is unchanged — Locked
 **The names.** One word, one meaning: CLAUDE.md rule 17 exists for exactly this.
@@ -2652,6 +2660,41 @@ for moderation (rule 12), and T-4.6 proposes naming to the owner only reasons on
 
 **Its number predates the D-number blocks** (CLAUDE.md, "P- and D-numbers"): it was on `main`
 before that rule, so it keeps it; renumbering would risk the stale reference the rule prevents.
+
+### D-280 · Required status checks work without pull requests, so D-044's reason for rejecting them was false — Open
+**The correction (T-4.6, 4 and 5 October 2026):** D-044 (Locked) rejected required status checks
+because "GitHub attaches them to pull requests, and this project merges by fast-forward without
+pull requests, so there is nothing to require them on." GitHub's own page says otherwise: "After
+all required status checks pass, any commits must either be pushed to another branch and then
+merged or pushed directly to the protected branch." (About protected branches, read by Claude from
+the page itself, 4 October 2026.) Pushed directly is our flow exactly: the task branch is pushed,
+CI runs on it, and `main` is fast-forwarded to that same commit. With "Do not allow bypassing the
+above settings" it binds admins too. **This supersedes D-044's rejection of required status checks
+(its "Rejected: required status checks" sentences) and nothing else of D-044;** D-044 is not
+edited.
+
+**Why it isn't on today:** GitHub refuses it for this repository. Asked for `main`'s protection
+on 4 October 2026, its API answered 403: "Upgrade to GitHub Pro or make this repository public to
+enable this feature." GitHub's plans page lists protected branches in private repositories among
+what GitHub Pro adds.
+
+**What covers it meanwhile:** the landing guard (`76bda6f`, `scripts/push-gate`, installed by
+`make hooks`): a push that moves `main` is refused unless `make lint`, `make test` and CI passed
+for that exact commit. Checked by Claude on 5 October 2026 through the installed hook: an
+unchecked commit pushed as `main`, piped through `tail -1` with `&&` after, ran the `&&` and
+landed nothing ("push-gate: refused: make lint and make test hasn't passed on 3c589da's tree in
+this checkout."). **A hook protects the clones that installed it; a required check at GitHub
+protects every clone that will ever exist,** and is the one `git push --no-verify` can't skip.
+Today there is one machine and the guard covers it; before production deploys matter, that stops
+being true. P-180 turns the check on before REL-1.
+
+**Why recorded now, before it can be used:** a decision resting on a false premise is worse than
+none, because it looks settled, and the next reader of D-044 would take "nothing to require them
+on" as fact. The finding is Claude's, from T-4.6 (GitHub's page, and its 403 for this repository);
+recording it now, superseding rather than editing, is at the direction of the advisor directing
+T-4.6 (Claude, in a separate chat), relayed by the founder, 5 October 2026. **Open until the
+founder approves it.**
+
 ---
 
 ## Adding a decision

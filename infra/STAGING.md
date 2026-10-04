@@ -227,9 +227,12 @@ undo without a decision:
   (At 14:49 UTC, before it was set, the staging origin got that 403 too.) **`GET` is wider than
   the photos need:** an `<img>` sends no preflight and needs no rule, which the local S3 shows,
   where the rule allows `PUT` only and a pending photo still shows by its signed link (T-4.6).
-  Whether it stays is the founder's. **Proved by a real browser's upload** the same day (T-4.6):
-  a PUT signed inside the API machine for a key under `probe/`, sent by Chromium from the staging
-  origin, answered 200 with that origin allowed, its bytes read back and then deleted.
+  **Proved by a real browser's upload** the same day (T-4.6): a PUT signed inside the API machine
+  for a key under `probe/`, sent by Chromium from the staging origin, answered 200 with that origin
+  allowed, its bytes read back and then deleted. **`GET` removed by the founder that night,** so the
+  rule is now exactly T-4.6's: checked by Claude at 19:12 UTC, the staging origin's `PUT` preflight
+  with `content-type` answered 204 naming that origin, `content-type`, `PUT` and 3600; a `GET`
+  preflight, `DELETE`, an extra header, production's origin and another site each got R2's 403.
 
 **The proof is the probe, run inside the machine with its own keys** (T-4.1), after any change to
 the token, the buckets or the domain:

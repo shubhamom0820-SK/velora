@@ -654,6 +654,8 @@ waits on the founder's decisions, so it is a task of its own, outside the sprint
   (`infra/PRODUCTION.md` §3), set by the founder and checked by a preflight from
   `https://veloraapp.co.in`. Without it no browser can upload a photo, so nobody gets past the
   photos step.
+  **And P-180, with no condition:** CI required at GitHub before `main` moves (D-280). The landing
+  guard protects only the clones that installed it; this protects every clone.
   **And three that block only under their condition** (the founder, 3 and 4 October 2026), each
   condition written beside it so nobody reads it as unconditional and blocks a release that
   doesn't need it:
@@ -1694,12 +1696,32 @@ exist yet. The batch is a chain, T-3.10 → T-3.11 → T-3.12 → T-3.13, each n
   https://staging.veloraapp.co.in`, upload progress reached the page, and what arrived, read back in
   the machine, was 10 bytes of `image/jpeg` beginning `ffd8ffe0`; then deleted, and read back as
   gone. (R2 answers an unsigned request with 400 before CORS applies, so only a signed one shows
-  both legs.) Not yet: a person's upload through the photos step, signed in, which the founder
-  does on staging with the iPhone check below.
+  both legs.) **Then through the photos step itself,** signed in, on 5 October 2026 (below).
+  **And narrowed to `PUT` only** the same night, `GET` removed by the founder: checked at 19:12
+  UTC, the staging origin's `PUT` preflight names `PUT` alone, and a `GET` preflight gets R2's 403.
 - [ ] **Done when, on a real iPhone, on this control (D-089):** iOS Safari's upload sends JPEG, not
   HEIC, read from what the API received (its bytes), never reasoned about. If it sends HEIC, "no
   HEIC" breaks every iPhone sign-up: stop and tell the founder before anything ships. D-089 is
   Locked when this passes.
+  **Where it stands, 5 October 2026 (unticked):** a fresh sign-up on staging at 01:06 IST went
+  through the photos step and uploaded two photos, at 01:08:06 and 01:08:34 (the API's request
+  log). `complete` read each one's bytes on arrival and accepted both, and it refuses HEIC there,
+  so **neither arrived as HEIC.** One was approved by T-4.4's worker on staging; the other was
+  rejected `no_face`, and the page read its reason back by `GET /photos/{id}` (D-096).
+  **The limit, exactly:** not HEIC, which is not the same as JPEG. Whether they were JPEG rather
+  than PNG or WebP is unknown: the worker writes its re-encode over the upload within seconds
+  (`moderate_photo`, D-101), so the bytes as received were gone before anything else read them.
+  The advisor's ruling (Claude, in a separate chat, relayed by the founder, 5 October 2026): that
+  excludes D-089's risk, a HEIC refused breaking every iPhone sign-up, by direct evidence, and the
+  format question stays open at no cost; no further watcher for it.
+  **What it rests on, open for the founder:** which device made the 01:06 sign-up. The evidence is
+  the iPhone's only if it was the iPhone, in Safari; until he says, this box stays unticked and
+  D-089 stays Open.
+  **To settle first, 5 October 2026 (the founder):** whether the photo completed at 00:44:59 IST
+  (the desktop one, most likely: the only upload then) and the 01:08 photo that was refused both
+  had a clear face. If they did, D-101's `no_face`
+  refused real faces two times out of three, and it needs tuning before real users. Not a finding
+  yet: two photos nobody here has seen.
 - [x] **Commit:** `feat(web): photo upload step [T-4.6]`
 
 ### T-4.7 · Web selfie step
@@ -3813,6 +3835,27 @@ The number comes from the session's own block, given in its brief, from P-100 up
   not proved under load; this failure is the reason to watch it. A storage test that fails on CI
   with `InternalError` and passes on a re-run is this item's evidence, never a flake to re-run
   past. Filed at the direction of the advisor directing Sprint 5.
+- [ ] P-180 · Require CI at GitHub before `main` moves: GitHub Pro, and a required status check on
+  `main` (D-280). **Before REL-1** (on its Needs line). Worst case without it: a clone without the
+  landing guard (a new machine, a reinstalled one, a `make hooks` never run, or `git push
+  --no-verify`) puts on `main` a commit CI never passed, and every session rebases onto it. The
+  guard (`scripts/push-gate`) protects the clones that installed it; a required check at GitHub
+  protects every clone that will ever exist. **What it costs:** GitHub Pro, $4 a month as the
+  advisor gave it; GitHub's pricing page as Claude read it on 5 October 2026 listed Free, Team ($4
+  per user a month) and Enterprise and showed no price for Pro, so confirm it at purchase. GitHub's
+  plans page lists protected branches in private repositories among what Pro adds, and today its
+  API refuses them here (403, "Upgrade to GitHub Pro or make this repository public"). **The
+  steps, the founder's:** upgrade the account `shubhamom0820-SK` to Pro; then Settings → Branches →
+  a rule for `main`: "Require status checks to pass", naming each of CI's jobs (`api — secrets,
+  lint, migrate, pytest`, `web — lint, vitest, build`, `e2e — Playwright`, `image — no .env inside,
+  serves, fails fast`, `repo — types, hooks, gate`), and "Do not allow bypassing the above
+  settings". **Proved by its effect:** a commit CI never ran on, pushed to `main`, refused by
+  GitHub in its own words; then a commit CI passed on its branch, fast-forwarded, accepted. Not
+  tonight (the advisor, 5 October 2026): today there is one machine and the guard covers it, and
+  $4 a month is not the obstacle; remembering is, which is why it is on REL-1's Needs line.
+
+  Found answering T-4.6's question about the pipe; filed from this session's block (P-180 to
+  P-189).
 - [x] P-84 · Scope T-4.2's "no photo was made" check to its own user. **Now: the Sprint 4
   session's next commit.** **Done in T-4.4's commit** (`feat(worker): photo moderation
   pipeline`), found there independently: its own committed photos turned the same check red in
