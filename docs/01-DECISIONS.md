@@ -85,7 +85,8 @@ for his first real conversation: ₹300 at the entry pack, ₹200 at the largest
 the number to watch is now ₹250 and ₹111. The first-purchase bonus and T-10.4's variant are open,
 on T-5.2's Needs line.
 **Noted 4 October 2026, D-231:** the first-purchase bonus above stays, on D-099's packs. T-10.4's
-variant is still open.
+variant is still open. **Superseded 4 October 2026 by D-250:** the entry variant, `entry-25`, is
+retired.
 
 ### D-006 · Clearing is one-sided — Locked
 Clearing hides a chat from *your* list only. The other person keeps their copy. The server keeps
@@ -2302,7 +2303,9 @@ lands, 24 hours is what runs and 1 hour is what is decided; nothing is changed t
 then.
 
 **What this entry leaves open** is on T-5.2's Needs line, with every pricing question, each with
-the files it touches.
+the files it touches. **Answered or moved 4 October 2026 by D-250:** a man answering her first
+message pays the 2-Vela re-open; Extend can be bought again and again; (a), (d) and (c)'s own two
+questions went to P-150.
 
 **Answered 4 October 2026 (the founder): an expired Thread stays readable.** "Unavailable" means he
 can't send, not that he can't read: the history he paid 5 Velas for stays visible to both of them.
@@ -2359,6 +2362,7 @@ and free-gift limit (`gift_free_daily_limit`, 3 a day, now 15 a week). D-016's o
 D-004's other rows, what a private message is, viewing private pictures, and the gifts. This entry
 supersedes only what it names, so until the founder rules, D-004 and D-016 still say the rest.
 **Answered 4 October 2026 by D-231,** all but whether a Super Like counts as swiping.
+**And that by D-250:** it doesn't, and keeps 5 Velas, by default.
 
 The prices and the rules are the founder's decision, 4 October 2026. The reasoning beside them
 (re-open and Extend moving together) is the advisor's write-up (Claude, in a separate chat),
@@ -2388,7 +2392,7 @@ larger pack is still cheaper per Vela, as D-005 required.
 the first-purchase bonus, T-10.4's price test, the prototype's packs and its "Most popular" tag on
 the dominated pack, and 09-RESEARCH's "about ₹300".
 **Answered 4 October 2026 by D-231,** all but T-10.4's price test and whether "Most popular" can
-be true on day one.
+be true on day one. **D-250:** `entry-25` is retired; the day-one question moved to T-8.7.
 
 The packs are the founder's decision, 4 October 2026. The reasoning beside them (the dominated
 pack, the ₹250 and ₹111) is the advisor's write-up (Claude, in a separate chat), relayed by the
@@ -2498,10 +2502,66 @@ decision, and now says ₹250.
 
 **Still open, on T-5.2's Needs line:** whether a Super Like is swiping; the "Most popular" tag on
 day one; T-10.4's price test, which these answers didn't reach; and four things about how a Thread
-lives (D-097).
+lives (D-097). **Answered or moved 4 October 2026 by D-250.**
 
 The answers are the founder's decision, 4 October 2026. The words are the advisor's write-up
 (Claude, in a separate chat), relayed by the founder.
+
+### D-250 · T-5.2's last questions, answered — Locked (values tunable)
+The founder's answers, 4 October 2026, to what D-097, D-098, D-099 and D-231 left open on T-5.2's
+Needs line, and to three questions Claude raised planning T-5.2.
+
+**A Super Like is not swiping.** Free swiping (D-098) is an ordinary left or right swipe. A Super
+Like is its own action and keeps D-004's 5 Velas. **That price survived by default, not by
+decision:** the founder had no preference on D-004's other prices (D-231), so it stands because
+nobody said to change it, recorded so anyone revisiting it knows it was never weighed.
+
+**`entry-25` is retired, not repriced:** the new packs replace it. **Why, in one number:** ₹999
+for 25 is ₹40 a Vela, and D-099's entry pack is ₹50 a Vela, so keeping it would have left the
+cheapest pack sitting below the ladder. T-10.4 can propose a fresh test against the new packs when
+there are users to test on. Retired is `active = false`, never a deletion: `payments` points at
+packs (rule 12).
+
+**T-5.2 replaces the packs** with D-099's four, by a data migration of its own, as 03-SCHEMA said.
+
+**When she wrote first, he pays to answer: the 2-Vela re-open,** `thread_reopen`, a priced action
+with a ledger reason of its own (T-5.2's item 10(b)).
+
+**Extend can be bought more than once for one Thread.** Ten Velas buys another 24 hours, as many
+times as he likes, so its reason repeats for one ref and D-077's "one entry per event" index leaves
+it out, as it does `thread_reopen` (D-251). **Why:** a Thread that hasn't knotted otherwise falls
+back to 1-hour windows forever, and a man willing to pay for another day should be able to. It is
+also the simpler rule to explain. This answers T-5.2's own "if Extend can be bought more than once",
+which Claude's summary to the founder had put as item 10(c). **It doesn't answer (c) as written:**
+can he Extend a Thread that has already expired, and do the 10 Velas include the 2 to re-open it?
+
+**Moved, and still open.** Whether "Most popular" can show before anyone has bought goes to T-8.7,
+which owns the screen, on its Needs line; the tag stays on the ₹4,500 pack, chosen knowingly
+(D-231). D-097's (a), whether his own message restarts the hour, and (d), when the hour starts
+after Extend, go to P-150, the 1-hour task, with a pointer at T-7.6; (c)'s two questions go with
+them, moved by Claude (the founder to confirm), since they touch no file of T-5.2's either.
+
+**Supersedes** D-005's beta entry variant (₹999 for 25).
+
+The answers are the founder's decision, 4 October 2026, relayed with the reasons beside them by the
+advisor (Claude, in a separate chat). Written up by Claude in T-5.2.
+
+### D-251 · Two new debit reasons: `thread_extend` and `dm_message` — Locked
+D-098's two new priced actions each get a ledger reason of their own (T-5.2): Extend is
+`thread_extend` (10 Velas) and each private message after the first is `dm_message` (2). The
+names are the founder's, 4 October 2026; the shape is Claude's, by D-077's rules:
+
+| reason | direction | `ref_type` | the event in the key | "one entry per event" index |
+|---|---|---|---|---|
+| `thread_extend` | debit | `thread` | named by the caller | left out: it repeats for one Thread (D-250) |
+| `dm_message` | debit | `message` | the message's id | in: one charge per message, ever |
+
+`dm_open` stays the first private message, with the Thread as its ref. `dm_message` refs the
+message it paid for, so the index refuses charging one message twice, however its key was built.
+Like every reason, each is an `action_prices` key, so `pricing.service` prices it from a row.
+
+The names are the founder's decision, 4 October 2026, relayed by the advisor (Claude, in a separate
+chat); the shape is Claude's, in T-5.2.
 
 ### D-101 · What moderation's scores mean — Open
 **The proposal (T-4.4, Claude, 4 October 2026; the founder's to lock or change):** the worker

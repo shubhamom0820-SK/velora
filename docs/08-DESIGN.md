@@ -174,7 +174,7 @@ Sprints 6 and 7, so they're a one-way door. The first task that needs an app scr
 packs are ₹1,500 → 30, ₹4,500 → 100, ₹6,000 → 250 and ₹10,000 → 450, not its 30, 100, 150 and
 250. Its "Most popular" tag stays on the ₹4,500 pack, chosen knowingly though that pack is the
 dominated one; whether the words can show before anyone has bought is the founder's to settle
-(T-5.2's Needs line, item 8). The gifts are four at 5, 10, 15 and 20 Velas, with fifteen free
+(on T-8.7's Needs line, moved from T-5.2's on 4 October 2026). The gifts are four at 5, 10, 15 and 20 Velas, with fifteen free
 sends a week, not its five at 20 to 500. Its price list's re-open (3), direct message (5) and
 album request (5) are D-098's and D-231's 2, 8 and 1. The prototype itself isn't edited (P-22).
 

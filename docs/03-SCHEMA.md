@@ -427,7 +427,7 @@ active boolean not null default true, sort smallint not null default 0, variant 
 Seed (D-005): `pack-25` 25/₹1,500 · `pack-50` 50/₹2,500 · `pack-75` 75/₹3,375 · `pack-100`
 100/₹4,000 (variant A, sort 1–4); `entry-25` 25/₹999 (variant B, the beta price test, T-10.4).
 **Decided since** (D-099, D-231): ₹1,500 → 30 · ₹4,500 → 100 · ₹6,000 → 250 · ₹10,000 → 450,
-with the 20% bonus kept; T-5.2's data migrations apply them. T-10.4's variant is open.
+with the 20% bonus kept; T-5.2's data migrations apply them, and retire `entry-25` (D-250).
 
 ### payments
 | column | type | notes |

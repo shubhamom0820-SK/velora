@@ -1882,12 +1882,13 @@ committed rows.
 - [x] **Commit:** `test(wallet): concurrency and idempotency [T-5.4]`
 
 ### T-5.2 · Prices
-**Held by the founder, 4 October 2026:** not started until the wallet has a screen, since until
-then prices show nothing. T-4.4 and T-4.6 come first.
-- [ ] **Needs:** T-5.1, and the founder's answer to each question below still marked **Open**. Claude
-  found all ten on 4 October 2026 while writing D-097 to D-100; the founder answered nine the same
-  day (D-097's note, D-230, D-231). Answered ones keep their numbers, so references to them hold.
-  What is open is his call: none is to be guessed at.
+**Not held** (the founder, 4 October 2026). It was held earlier that day until the wallet had a
+screen, behind T-4.4 and T-4.6; that order was the sprint's sequence, not a dependency, since
+prices don't depend on the web photos step, and the hold is lifted.
+- [ ] **Needs:** T-5.1, and the founder's answer to each question below. Claude found all ten on 4
+  October 2026 while writing D-097 to D-100; the founder answered them the same day (D-097's note,
+  D-230, D-231, D-250), and moved the parts that touch no file of this task's to the tasks they
+  touch. Answered ones keep their numbers, so references to them hold.
   1. **Answered: an expired Thread stays readable** (D-097, which records it). Asked as: can an
      expired Thread still be read, which `/terms` answers today? "Unavailable" means he can't send,
      not that he can't read: the history he paid for stays visible to both of them. **Why:** he
@@ -1912,10 +1913,9 @@ then prices show nothing. T-4.4 and T-4.6 come first.
      And the album request is viewing private pictures, at 1 Vela (D-231).
   3. **Answered: D-004's other prices** (D-231). The direct message is the private message (item
      4). A voice-note unlock (5), a Super Like (5) and a "liked you" reveal (20) stay at D-004's
-     prices **by default, not by decision**: the founder had no preference. **Open: does a Super Like
-     count as "swiping", free under D-098?** Touches: 01-DECISIONS (D-098, D-231), 03-SCHEMA
-     (`swipe_dir_t`, `action_prices`), 04-API (`/swipes`), 05-PLAN (T-6.4, T-9.9), the prototype's
-     price list.
+     prices **by default, not by decision**: the founder had no preference. **Answered: a Super
+     Like is not swiping** (D-250). Free swiping is an ordinary left or right swipe; a Super Like is
+     its own action and keeps D-004's 5, which survived by default and was never decided.
   4. **Answered: a private message is sent from a profile directly, with no swipe and no match**
      (D-231): 8 Velas for the first, 2 for each after, and it never expires. It is D-004's direct
      message (`dm_open`, the `dm` origin), whose 5 is dead. How it is kept beside 03-SCHEMA's rule
@@ -1926,28 +1926,41 @@ then prices show nothing. T-4.4 and T-4.6 come first.
   6. **Answered: the 20% first-purchase bonus stays,** on D-099's packs (D-231). On a first
      purchase it makes opening a Thread about ₹208 at the entry pack and ₹93 at the largest.
   7. **Answered: the prototype's packs are stale** (D-231; 08-DESIGN §5 records the departure).
-     **Open: T-10.4's price test,** ₹1,500 against ₹999 for 25 Velas, matches no pack now, and the
-     answers didn't reach it. Touches: 03-SCHEMA (`credit_packs`' `variant`, the `entry-25` row),
-     05-PLAN (T-8.1, T-10.4), T-1.14's migration and `api/tests/test_reference_data.py`.
+     **Answered: `entry-25` is retired, not repriced** (D-250). T-10.4's test, ₹1,500 against ₹999
+     for 25 Velas, matched no pack once D-099's replaced D-005's. ₹999 for 25 is ₹40 a Vela and the
+     new entry pack is ₹50 a Vela, so keeping it would have left the cheapest pack sitting below the
+     ladder. T-10.4 can propose a fresh test against the new packs when there are users to test on.
   8. **Answered: "Most popular" stays on the ₹4,500 pack, chosen knowingly** (D-231), with the
-     arithmetic that makes it the dominated pack in front of us. **Open, the founder's: at launch
-     nobody has bought anything, so the words aren't true on day one.** That is a separate problem
-     from the value question. Touches: 05-PLAN (T-8.7), 08-DESIGN (§5; §6's "Never shame or
-     pressure"), the prototype.
+     arithmetic that makes it the dominated pack in front of us. **Moved to T-8.7, which owns the
+     screen** (the founder, 4 October 2026): at launch nobody has bought anything, so the words
+     aren't true on day one, a separate problem from the value question and still open. No file of
+     this task's holds the tag: `credit_packs` has no column for it.
   9. **Answered: 09-RESEARCH's "about ₹300" was stale,** not a decision, and now says ₹250.
-  10. **Open: four things about how a Thread lives** (D-097), none answered by its five steps:
-      - (a) **Does his own message restart the hour?** Step 2 says hers does and is silent on
-        his. If his did, he could keep a Thread open alone, free, by writing every 59 minutes,
-        and would never re-open one.
-      - (b) **When she sends the first message, does he pay anything to answer, and does the same
-        hour run?** Step 1 describes only a Thread a man opens, and she may message 30 men a day.
-      - (c) **Can he Extend a Thread that has already expired, and if so do the 10 Velas include
-        the 2 to re-open it?** "At any point" doesn't say.
-      - (d) **When Extend's 24 hours end, does the hour start then, or run from her last
-        message,** which could expire the Thread the moment Extend ends?
-
-      Touches: 01-DECISIONS (D-097), 03-SCHEMA (`threads`: `expires_at`, `app_config`'s
-      `thread_hours`), 05-PLAN (T-7.1, T-7.6, T-7.7), and the 1-hour task D-097 names.
+  10. **Four things about how a Thread lives** (D-097), none answered by its five steps. **(b)
+      answered (D-250); (a) and (d) moved** to P-150, the 1-hour task D-097 names, with a pointer
+      at T-7.6 (the founder, 4 October 2026): they touch no file of this task's. **(c) partly
+      answered, and its own two questions moved there too** (Claude, the founder to confirm).
+      - (a) **Moved, open: does his own message restart the hour?** Step 2 says hers does and is
+        silent on his. If his did, he could keep a Thread open alone, free, by writing every 59
+        minutes, and would never re-open one.
+      - (b) **Answered: when she sends the first message, he pays to answer,** and that is the
+        2-Vela re-open, `thread_reopen`: a priced action with a ledger reason of its own.
+      - (c) **Moved, open: can he Extend a Thread that has already expired, and if so do the 10
+        Velas include the 2 to re-open it?** "At any point" doesn't say. **What was answered**
+        (D-250): Extend can be bought more than once for one Thread, 10 Velas for another 24 hours
+        each time, so its reason repeats for one ref. Claude's summary to the founder put (c) as
+        that question, so his "yes" answered it and not (c)'s two as written. Those touch no file
+        of this task's, so they went to P-150 with (a) and (d) (Claude, 4 October 2026, correcting
+        its own summary the same evening).
+      - (d) **Moved, open: when Extend's 24 hours end, does the hour start then, or run from her
+        last message,** which could expire the Thread the moment Extend ends?
+- **Estimate, 4 October 2026: about 5½ hours of working time** (4½ to 7), Claude's, made before
+  seeing any other. Slowest, it said: making the new ledger reasons reversible. Postgres can add a
+  value to `ledger_reason_t` and never remove one, so going down means rebuilding the type under
+  the ledger's three reason checks, its per-event index and its append-only triggers, and refusing
+  once any row uses a new reason, since no row can be deleted. **It stands over the advisor's 2½ to
+  3½ hours** (Claude, in a separate chat), which was wrong because it didn't account for the
+  enum's one-way nature (the founder). The measured time is recorded here at `/done`.
 - [ ] **The prices are D-097 to D-099's and D-231's** (the founder, 4 October 2026). Velas, for men;
   0 for a woman, for every action:
   - open a Thread 5 · re-open an expired Thread 2, every time · Extend, 24 hours, 10 · first
@@ -1960,13 +1973,15 @@ then prices show nothing. T-4.4 and T-4.6 come first.
   - re-open (2) and Extend (10) change together or not at all (D-098).
 - [ ] **Written by data migrations of this task's own,** one change each (rule 11), never by editing
   T-1.14's: `thread_reopen` from 3 to 2, `dm_open` from 5 to 8, `album_request` from 5 to 1; the
-  `gifts` rows become D-231's four; `gift_free_daily_limit` gives way to fifteen free sends a week.
-  03-SCHEMA's seed lines and `tests/test_reference_data.py` change with them. The new priced
-  actions, Extend and each private message after the first, are debit reasons of their own: an
-  addition to `ledger_reason_t` with D-077's direction and `ref_type`, and T-5.1's test that the
-  debit reasons are exactly the priced actions plus `gift` grows to match. If Extend can be bought
-  more than once for one Thread, it repeats for one ref, as `thread_reopen` does, and D-077's
-  per-event index leaves it out.
+  `gifts` rows become D-231's four; `gift_free_daily_limit` gives way to fifteen free sends a week;
+  **the packs become D-099's four and `entry-25` is retired** (D-250: this task replaces the packs,
+  as 03-SCHEMA said). 03-SCHEMA's seed lines and `tests/test_reference_data.py` change with them.
+  The new priced actions, Extend (`thread_extend`) and each private message after the first
+  (`dm_message`), are debit reasons of their own (D-251): an addition to `ledger_reason_t` with
+  D-077's direction and `ref_type`, and T-5.1's test that the debit reasons are exactly the priced
+  actions plus `gift` grows to match. **Extend can be bought more than once for one Thread**
+  (D-250), so it repeats for one ref, as `thread_reopen` does, and D-077's per-event index leaves
+  it out.
 - [ ] **Not this task's:** the 1-hour Thread (D-097): `thread_hours` stays 24 until its own task.
   Women's limits (D-098: 30 men and 30 private messages a day) are rate limits for the tasks that
   send messages, not prices. No charging path for women is built, enabled or disabled (D-098).
@@ -2127,6 +2142,9 @@ then prices show nothing. T-4.4 and T-4.6 come first.
 - [ ] **Needs:** T-7.2
 - [ ] `GET /threads/{id}/messages?cursor=` (newest first, respects my `cleared_at`; voice notes locked for men without unlock → no media URL).
 - [ ] `POST /threads/{id}/messages`: participant only; thread `expired` → `THREAD_EXPIRED` for his send, while hers is delivered (D-097: an expired Thread refuses his sends and accepts hers); text 1–2000; abuse/solicitation rules → `MESSAGE_REJECTED` (+ fraud event); masking if `message_count < mask_first_n` (store `body_raw`, set `masked`); dedupe on `client_msg_id` (return existing); update `last_message_at`, `message_count`; publish `message.new`; notify recipient if not connected.
+- [ ] **When she wrote first, he pays to answer: the 2-Vela re-open, `thread_reopen`** (D-250,
+  the founder, 4 October 2026; T-5.2's item 10(b)). Charged through `pricing.service.charge`
+  (T-5.2), never a literal price.
 - [ ] Tests for masking patterns (+91 numbers, spaced digits, emails, UPI handles, "insta: x"), rejection, dedupe, expired.
 - [ ] **Commit:** `feat(messages): list and send with safety filters [T-7.3]`
 
@@ -2143,6 +2161,11 @@ then prices show nothing. T-4.4 and T-4.6 come first.
 
 ### T-7.6 · Expiry and re-open
 - [ ] **Needs:** T-7.4
+- **Questions of how a Thread lives are P-150's,** moved from T-5.2's item 10 on 4 October 2026,
+  and still open: does his own message restart the hour; can he Extend a Thread that has expired,
+  and do the 10 Velas include this task's 2-Vela re-open; and when Extend's 24 hours end, does the
+  hour start then or run from her last message? They decide what this task's re-open charges and
+  when its cron expires a Thread once the 1-hour task lands.
 - [ ] Cron `expire_threads` (every minute, batches of 500, `FOR UPDATE SKIP LOCKED`) → `expired` + event. Cron `warn_expiring` (< 2 h, once) → push + event.
 - [ ] `POST /threads/{id}/reopen` (expired only) → debit 2 (men; D-098), `active`, `expires_at = now + 24h`, reset warning.
 - [ ] Tests using a controllable clock.
@@ -2199,6 +2222,9 @@ then prices show nothing. T-4.4 and T-4.6 come first.
 - [ ] **Needs:** T-5.1, T-1.21, and P-0.17: a chartered accountant has confirmed how prepaid Velas are treated, before any real sale can happen; and **P-130**: no Velas are sold while `/refunds` promises returns that don't exist (D-230)
 - [ ] `GET /packs`: active packs for the user's price-test variant (`users.id` hash → A/B, stable). `POST /payments/orders {pack_id}` + `Idempotency-Key`: copy amount + `credits` from the pack, compute first-purchase bonus, create provider order, insert `payments` (`created`), return checkout params.
 - [ ] **A woman can't order Velas** → `NOT_ALLOWED` (D-076). The database would refuse her credit anyway; the route says so first, before she pays for something she could never use.
+- [ ] **Variant B has no active pack** since T-5.2 retired `entry-25` (D-250). Worst case: a man
+  hashed into B opens the store and finds nothing to buy. This task decides what B is shown until
+  T-10.4 proposes a new test, and tests that no man ever gets an empty list.
 - [ ] Fake provider: returns a fake order and exposes a local-only endpoint that simulates the webhook.
 - [ ] **Commit:** `feat(payments): packs and order creation [T-8.1]`
 
@@ -2279,8 +2305,11 @@ then prices show nothing. T-4.4 and T-4.6 come first.
 - [ ] **Commit:** `feat(referrals): codes and rewards [T-8.6]`
 
 ### T-8.7 · Web store and checkout
-- [ ] **Needs:** T-8.2, T-5.5
-- [ ] Store sheet from the prototype (packs, per-Vela and per-thread price, first-purchase banner), with D-099's packs, not the prototype's (08-DESIGN §5). **"Most popular" stays on the ₹4,500 pack, the dominated one, chosen knowingly (D-231); whether the words can be shown when nobody has bought anything yet is the founder's to settle (T-5.2's Needs line, item 8).** The 20% first-purchase bonus stays. Load Razorpay Checkout script on demand. On success callback → poll `/payments/{id}` every 1.5 s (max 60 s) → toast + wallet refresh. Failure/dismiss → "Payment didn't go through" sheet with retry.
+- [ ] **Needs:** T-8.2, T-5.5, and the founder's answer: **can "Most popular" show when nobody has
+  bought anything yet?** At launch the words aren't true of the world. Moved here from T-5.2's
+  Needs line (item 8), 4 October 2026 (the founder), since this screen holds the tag:
+  `credit_packs` has no column for it. Separate from the value question, which is settled (D-231).
+- [ ] Store sheet from the prototype (packs, per-Vela and per-thread price, first-purchase banner), with D-099's packs, not the prototype's (08-DESIGN §5). **"Most popular" stays on the ₹4,500 pack, the dominated one, chosen knowingly (D-231); whether the words can be shown when nobody has bought anything yet is the founder's to settle (on this task's Needs line).** The 20% first-purchase bonus stays. Load Razorpay Checkout script on demand. On success callback → poll `/payments/{id}` every 1.5 s (max 60 s) → toast + wallet refresh. Failure/dismiss → "Payment didn't go through" sheet with retry.
 - [ ] **Widen the CSP here (D-059):** Razorpay Checkout's script, frame and connect hosts, exactly as Razorpay documents them. The CSP has been enforced since T-2.5, so checkout fails with a CSP error until this lands.
 - [ ] **Commit:** `feat(web): store and razorpay checkout [T-8.7]`
 
@@ -2415,7 +2444,7 @@ then prices show nothing. T-4.4 and T-4.6 come first.
 - [ ] **T-10.1** Invite codes: signup requires a code during beta (`app_config.beta_invite_only`); women's codes unlimited, men's limited per code.
 - [ ] **T-10.2** Product analytics (PostHog, EU/India region if available): events `signup_step_completed`, `swipe`, `match`, `thread_opened`, `message_sent`, `knot_tied`, `thread_expired_unanswered`, `purchase_started`, `purchase_paid`, `report_filed`. No message content, no phone numbers. Update `/privacy` (T-2.2) to say what it collects and where it goes. Widen the CSP here for the provider's script and connect hosts, deliberately (D-059).
 - [ ] **T-10.3** Metrics queries for the weekly review: D1/D7 retention, thread → knot rate, % threads expiring with zero replies, paying conversion (men), revenue per paying user, reports per 100 users, active gender ratio.
-- [ ] **T-10.4** Price test: variant A (₹1,500 / 25 Velas) vs B (₹999 / 25) assigned 50/50; compare revenue per paying man after 3 weeks.
+- [ ] **T-10.4** Price test: variant A (₹1,500 / 25 Velas) vs B (₹999 / 25) assigned 50/50; compare revenue per paying man after 3 weeks. **Both variants are gone** (D-099, D-250): D-099's packs replaced A, and T-5.2 retired B, `entry-25`, since ₹999 for 25 is ₹40 a Vela, below the new entry pack's ₹50. This task proposes a fresh test against D-099's packs when there are users to test on.
 - [ ] **T-10.7** First-thread-free test (risk R1 in `09-RESEARCH.md`): half of new men get their first thread free. Measure paying conversion, threads per man, and revenue per man — not just the free-thread take-up.
 - [ ] **T-10.5** Moderator runbook: report handling per reason, SLA, escalation (minor suspected → immediate ban + preserve evidence), canned replies.
 - [ ] **T-10.6** Feedback loop: in-app "Send feedback" → `feedback` table; weekly triage into Proposed tasks.
@@ -3777,3 +3806,21 @@ The number comes from the session's own block, given in its brief, from P-100 up
   `release-gate`, the hole scenario exited 0. Each check removed alone went red: `ci-gate`'s branch
   filter (4 scenarios), its read-back check (1), `release-gate`'s filter (3); each restored and
   checked by SHA-256.
+- [ ] P-150 · Write the 1-hour task D-097 names, which moves a Thread from 24 hours to 1 and lists
+  every place that says 24 hours. **Needs:** the founder's answers to the questions moved here from
+  T-5.2's item 10 on 4 October 2026, still open: (a) and (d) by the founder, (c) by Claude, the
+  founder to confirm (T-5.2's item 10 says why):
+  - (a) **Does his own message restart the hour?** D-097's step 2 says hers does and is silent on
+    his. Worst case if it's guessed: his did, so he keeps a Thread open alone, free, by writing
+    every 59 minutes, and never pays a re-open.
+  - (c) **Can he Extend a Thread that has already expired, and if so do the 10 Velas include the 2
+    to re-open it?** Worst case if it's guessed: he's charged 12 Velas where 10 were meant, or
+    gets a re-open free inside Extend where it was meant to cost 2.
+  - (d) **When Extend's 24 hours end, does the hour start then, or run from her last message?**
+    Worst case if it's guessed: from her last message, so a Thread he paid 10 Velas to extend can
+    expire the instant the extension ends.
+
+  **Also unowned: no task sells Extend yet.** T-5.2 prices it (`thread_extend`, 10 Velas, as many
+  times as he likes for one Thread, D-250), but no endpoint charges it; this task is its natural
+  home, the founder to confirm. T-7.6 points here. Found in T-5.2; filed from this session's block
+  (P-150 to P-159).
