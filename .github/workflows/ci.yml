@@ -333,6 +333,39 @@ jobs:
           test "$(tail -n 1 <<<"$body")" = 404
           if grep -q '"paths"' <<<"$body"; then echo "::error::The 404 carries the schema."; exit 1; fi
 
+      # T-4.4: the worker's settings, read from its own Fly config, in the image
+      # that runs it. With Sightengine's keys (placeholders) it is ready; without
+      # them it refuses, naming both, as Fly's release command would before a
+      # deploy. Nothing here connects: --check only reads the settings.
+      - name: The worker's settings from fly.worker.toml, ready and refused
+        run: |
+          python3 - > worker.env <<'PY'
+          import tomllib
+          with open("infra/fly.worker.toml", "rb") as f:
+              for key, value in tomllib.load(f)["env"].items():
+                  print(f"{key}={value}")
+          PY
+          grep -qx 'ENV=staging' worker.env
+          check() {
+            docker run --rm --env-file worker.env \
+              -e DATABASE_URL -e REDIS_URL=rediss://ci:ci@127.0.0.1:6379/1 \
+              -e R2_ACCESS_KEY_ID=ci -e R2_SECRET_ACCESS_KEY=ci \
+              -e JWT_SECRET -e PHONE_PEPPER -e PHONE_ENC_KEY -e CODE_PEPPER \
+              "$@" "$IMAGE" python -m app.workers --check 2>&1
+          }
+          set +e
+          ready="$(check -e SIGHTENGINE_API_USER=ci -e SIGHTENGINE_API_SECRET=ci)"
+          ready_status=$?
+          refused="$(check)"
+          refused_status=$?
+          set -e
+          echo "$ready"
+          echo "$refused"
+          test "$ready_status" = 0
+          grep -qx 'worker: settings ready.' <<<"$ready"
+          test "$refused_status" = 2
+          grep -q 'MODERATION_PROVIDER=sightengine needs SIGHTENGINE_API_USER, SIGHTENGINE_API_SECRET' <<<"$refused"
+
   repo:
     name: repo — types, hooks, gate
     runs-on: ubuntu-24.04

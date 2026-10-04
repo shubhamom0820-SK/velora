@@ -162,7 +162,13 @@ CHECK_IF_IDLE_FOR = timedelta(seconds=30)
 _CHECKED_IN_AT = "checked_in_at"
 
 
-def build_engine(url: str, *, pool_size: int = 5, max_overflow: int = 5) -> AsyncEngine:
+def build_engine(
+    url: str,
+    *,
+    pool_size: int = 5,
+    max_overflow: int = 5,
+    hide_parameters: bool = False,
+) -> AsyncEngine:
     """An engine whose pool holds `pool_size` connections, plus `max_overflow`
     more under load. The pool is per process: every uvicorn worker opens its own,
     so a deployment's connection budget is workers x (pool_size + max_overflow)
@@ -171,9 +177,17 @@ def build_engine(url: str, *, pool_size: int = 5, max_overflow: int = 5) -> Asyn
     Newest connection first (LIFO), so a quiet pool keeps reusing the one it
     just used, warm and unchecked, and the rest can idle out; checked only after
     `CHECK_IF_IDLE_FOR` idle (P-53).
+
+    `hide_parameters` keeps a query's values out of its errors, so a failed
+    query can't log a storage key or a hash (rule 15); the worker sets it
+    (T-4.4), and P-80 asks whether the API should too.
     """
     engine = create_async_engine(
-        url, pool_size=pool_size, max_overflow=max_overflow, pool_use_lifo=True
+        url,
+        pool_size=pool_size,
+        max_overflow=max_overflow,
+        pool_use_lifo=True,
+        hide_parameters=hide_parameters,
     )
     event.listen(engine.sync_engine.pool, "checkin", _note_checkin)
     event.listen(engine.sync_engine.pool, "checkout", _check_if_idle)

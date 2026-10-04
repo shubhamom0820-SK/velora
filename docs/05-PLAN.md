@@ -1369,11 +1369,20 @@ exist yet. The batch is a chain, T-3.10 → T-3.11 → T-3.12 → T-3.13, each n
 - [x] **Commit:** `feat(photos): list, reorder, delete [T-4.3]`
 
 ### T-4.4 · Moderation worker
-- [ ] **Needs:** T-4.2, T-1.15, and a **Sightengine account with API keys** — created by the founder on 4 October 2026, free plan, its keys in the Keychain (P-0.6)
-- [ ] ARQ worker bootstrap (`workers/main.py`) + `make worker`.
-- [ ] **The worker polls every 10 seconds** (D-091), a setting: on Upstash's Free plan that is
+- [x] **Needs:** T-4.2, T-1.15, and a **Sightengine account with API keys** — created by the founder on 4 October 2026, free plan, its keys in the Keychain (P-0.6)
+- [x] ARQ worker bootstrap (`workers/main.py`) + `make worker`.
+  `python -m app.workers` (`make worker`; `make dev` starts it too): `moderate_photo` and
+  `delete_files`, the API's `Settings`, its own engine (query values hidden from errors, rule 15),
+  ARQ's line naming a job's arguments replaced by its name (`delete_files` carries storage keys).
+  It refuses to start without Sightengine's keys, naming them; `--check` says so and exits 2.
+  Proved end to end by `test_a_photo_the_api_completes_is_moderated_by_the_worker_through_arq`:
+  the API's own `complete` queues the job on this run's Redis, a real ARQ worker built as the
+  real one is runs it, and the photo ends approved and published.
+- [x] **The worker polls every 10 seconds** (D-091), a setting: on Upstash's Free plan that is
   260,640 commands a month idle, 52% of the 500K, where ARQ's default 0.5 seconds would be over
-  five million.
+  five million. `WORKER_POLL_DELAY_S`, default 10; the health key hourly; abort and cron off.
+  `test_it_polls_every_10_seconds_which_is_d091s_sum` builds the worker as `run_worker` does and
+  recomputes D-091's 260,640 from its own numbers.
 - [ ] **On Fly now (D-095, the founder, 4 October 2026):** not after P-49's move.
   Deploy the worker to Fly staging (moved from T-1.22): a 1 GB machine (D-088), with Sightengine's
   and R2's keys among its secrets; `infra/fly.worker.toml` beside
@@ -1381,15 +1390,58 @@ exist yet. The batch is a chain, T-3.10 → T-3.11 → T-3.12 → T-3.13, each n
   Add its pool to the connection budget in `infra/STAGING.md`. It shares `Settings`, so it needs
   the API's four keys as secrets, the same values (from the Keychain, `infra/STAGING.md`):
   otherwise it can't read the numbers or hashes the API wrote, or doesn't start (D-060, D-061).
-- [ ] `moderate_photo(photo_id)`: fetch raw → Pillow open (reject if not an image) → `ImageOps.exif_transpose` → resize longest side 1600 → save JPEG q85 **without EXIF** → `ModerationProvider.check()` → approve (write public copy for `public` kind) or reject with reason (`nudity`, `minor_suspected`, `no_face`, `text_overlay`, `other`). `minor_suspected` is D-093's: rejected without an accusation ("We couldn't verify this photo — try a different one"), the image deleted, a `fraud_events` signal kept; the internal report waits for T-9.2's system user.
-- [ ] Idempotent: re-running on an approved photo does nothing.
-- [ ] **Pillow under D-092's three conditions:** a full decode and re-encode, proved with a photo
+- [x] `moderate_photo(photo_id)`: fetch raw → Pillow open (reject if not an image) → `ImageOps.exif_transpose` → resize longest side 1600 → save JPEG q85 **without EXIF** → `ModerationProvider.check()` → approve (write public copy for `public` kind) or reject with reason (`nudity`, `minor_suspected`, `no_face`, `text_overlay`, `other`). `minor_suspected` is D-093's: rejected without an accusation ("We couldn't verify this photo — try a different one"), the image deleted, a `fraud_events` signal kept; the internal report waits for T-9.2's system user.
+  **As built** (`photos.service.moderate`): at most 8 MB read and the bytes judged again (the PUT
+  URL outlives `complete`, D-089); the re-encoded JPEG written over the upload before Sightengine
+  is asked, so no original is kept even when it fails; approved public photos published from the
+  bytes scored, never copied from the upload; `no_face` for public photos only; an upload it can't
+  read, `other` (or `too_large`), its file deleted; the decision written with the user's row
+  locked, so it and a reorder take turns (`test_the_decision_and_a_reorder_take_turns`, the
+  overlap observed in `pg_stat_activity`). The thresholds are Claude's, the founder's to change:
+  **D-101, Open.** What the owner reads of a rejection is T-4.6's (D-093's first condition at the
+  API: no reason that names a possible minor); the `fraud_events` row is
+  `possible_minor_photo_score`, weight 0, `meta`
+  `{what, model, score}`, never the image or which photo; every copy deleted and read back, and a
+  copy still there tried again. Three failures leave it pending, logged at error level.
+- [x] Idempotent: re-running on an approved photo does nothing.
+- [x] **Pillow under D-092's three conditions:** a full decode and re-encode, proved with a photo
   that genuinely carries GPS EXIF (the test fails if any location survives); the pixel limit set
   explicitly and tested with an actual bomb file; the version pinned exactly, and updated when CVEs
-  land.
-- [ ] **Sightengine under D-094:** built on a fake shaped like its documented responses; the last
+  land. **Met:** (1) `tests/fixtures/located/` holds a JPEG, a PNG and a WebP carrying a location
+  in every place each format allows (EXIF GPS, XMP, a comment, a text chunk, bytes after the
+  image), made by Claude with Pillow and **confirmed by two readers that aren't Pillow** on 4
+  October 2026: Apple's ImageIO (12.9716 N, 77.5946 E, 920 m, orientation 6, in all three) and
+  exifread 3.0.0 (the same, as rationals 444/25 and 1014/25). A test re-checks those bytes before
+  trusting them; `test_no_location_survives_the_reencode` (critical) reads the output's segments
+  by hand, exactly SOI, JFIF, tables, frame, scan, EOI and nothing after;
+  `test_a_located_photo_is_stored_with_no_location_anywhere` (critical) checks every stored copy
+  and what Sightengine is sent. (2) `MAX_PIXELS` 40 million, set on Pillow and checked before
+  decoding: an 8,000 × 8,000 PNG bomb of under 20 KB (above ours, under Pillow's 89 million
+  default) and 2.5- and 3.6-gigapixel bombs under 400 KB are refused with no decode. (3)
+  `pillow==12.3.0` (PyPI listed no vulnerability for it, 4 October 2026); a test fails on `>=`.
+- [x] **Sightengine under D-094:** built on a fake shaped like its documented responses; the last
   step one real call whose response's shape (field names, nesting, types) is compared with the
   fake's, and the date and the shape seen recorded here.
+  **The check, by Claude, 4 October 2026, from this Mac with the Keychain's keys:**
+  `app/tools/sightengine_shape.py` sends Sightengine's two documentation examples (`example7.jpg`,
+  a face; `text1-1200.jpg`, embedded text), each re-encoded as the worker sends a photo, through
+  the provider `build_providers` makes, and compares each answer's shape with the fake's.
+  **The first run found the fake wrong in two places, both the documentation's:** with no text in
+  the image, `text.boxes` is absent, not `[]` (the reader, requiring it, refused every ordinary
+  photo: every upload would have stayed pending); and each box carries a `prob` number the
+  documentation doesn't show. The fake and the reader now follow the real answers
+  (`CHECKED_ANSWER`). **The recorded run, at 15:42 UTC on the provider code this commit lands:
+  0 differences for both, exit 0.** The shape seen: `status` string; `request {id string, timestamp number, operations
+  number}`; `nudity {sexual_activity, sexual_display, erotica, very_suggestive, suggestive,
+  mildly_suggestive, none: number; suggestive_classes {bikini, cleavage, lingerie, male_chest,
+  male_underwear, miniskirt, minishort, nudity_art, other, schematic, sextoy, suggestive_focus,
+  suggestive_pose, swimwear_male, swimwear_one_piece, visibly_undressed: number;
+  cleavage_categories {very_revealing, revealing, none: number}; male_chest_categories
+  {very_revealing, revealing, slightly_revealing, none: number}}; context {sea_lake_pool,
+  outdoor_other, indoor_other: number}}`; `faces [{x1, y1, x2, y2: number; attributes {age
+  {minor: number}}}]`; `artificial_faces []` (no element seen); `text {has_artificial,
+  has_natural: number; boxes [{x1, y1, x2, y2, prob: number; label: string}], absent when there
+  is no text}`; `media {id, uri: string}`. Three runs in all, 15 operations of the free plan's.
 - [ ] **Sightengine keeps nothing by default, and this task stays on that default.** There is no
   setting to turn on: deleting is Sightengine's default, which `/privacy`'s "deleted there after the
   check" (D-048) rests on. Its FAQ, "What happens to our images, videos and audio files after
@@ -1416,9 +1468,22 @@ exist yet. The batch is a chain, T-3.10 → T-3.11 → T-3.12 → T-3.13, each n
   a separate chat), relayed by the founder, 4 October 2026, answering D13 of Sprint 4's plan; the
   quote checked against the page by Claude the same day. P-71 carries the same constraint, beside
   `/privacy`'s other processors.
-- [ ] Tests with the fake provider for approve and each reject path; test that output has no EXIF.
-- [ ] Extend `make seed` (T-1.15): an approved public photo at position 0 for every seeded user past the photos step (everyone but the moderator, including the three women at the selfie step) — a placeholder from the prototype's `c1`/`c2` gradient, re-encoded like any upload and stored through `StorageProvider`. Re-running creates no duplicates.
-- [ ] **Commit:** `feat(worker): photo moderation pipeline [T-4.4]`
+  **Held by a test:** `test_every_request_stays_on_the_plain_image_api`: every request goes to
+  `/1.0/check.json` with nothing in its URL and exactly four form fields (`models`, `api_user`,
+  `api_secret`, `media`); a workflow field, or `check-workflow.json`, fails it.
+- [x] Tests with the fake provider for approve and each reject path; test that output has no EXIF.
+  `tests/modules/photos/test_moderate.py`, `tests/core/test_moderation.py`,
+  `tests/core/test_reencode.py`, `tests/workers/`. **Every guard broken once, all 32 red,**
+  every file restored by SHA-256: `uv run python -m tests.break_guards t44` (its cases, committed,
+  kept applicable by `tests/test_break_guards.py`).
+- [x] Extend `make seed` (T-1.15): an approved public photo at position 0 for every seeded user past the photos step (everyone but the moderator, including the three women at the selfie step) — a placeholder from the prototype's `c1`/`c2` gradient, re-encoded like any upload and stored through `StorageProvider`. Re-running creates no duplicates.
+  22 people (the moderator excepted), 900 × 1200, both buckets; someone seeded before T-4.4 gets
+  theirs on the next run, once; a place 0 already holding a live photo gets none.
+- [ ] **Done when, on staging:** the worker deploys by `deploy.yml`; its secrets match their
+  sources by SHA-256 prefix, computed on each machine and from the Keychain; a job queued on
+  staging's Redis is run by it; `sightengine_shape` passes inside its machine; its memory measured
+  there. Recorded in the docs commit after `/done`, with the deploy run.
+- [x] **Commit:** `feat(worker): photo moderation pipeline [T-4.4]`
 
 ### T-4.5 · Selfie verification
 - [ ] **Needs:** T-4.4; D-088 (approved by the founder, 4 October 2026: the model and
@@ -2069,7 +2134,7 @@ then prices show nothing. T-4.4 and T-4.6 come first.
 - [ ] **Commit:** `feat(payments): refund requests [T-8.3]`
 
 ### T-8.4 · Private album
-- [ ] **Needs:** T-4.4, T-5.1
+- [ ] **Needs:** T-4.4, T-5.1; **P-79**: an approved private photo can't be swapped for an unmoderated one through its upload URL
 - [ ] Requests (debit 5 for men, `credits_charged` stored), incoming list for owner, decide (grant → enqueue `watermark_album`; decline → `wallet.credit(refund_album_declined)`), revoke (delete watermarked copies, status `revoked`).
 - [ ] **A decline refunds only when `credits_charged > 0`.** A woman's request is free, `credit()` refuses an amount of 0, and the database refuses any ledger row for her (D-076).
 - [ ] `watermark_album`: for each private photo render a copy with the viewer's `@username` tiled diagonally at ~20% opacity.
@@ -2231,7 +2296,7 @@ then prices show nothing. T-4.4 and T-4.6 come first.
 - [ ] **Commit:** `docs(ops): backup and restore runbook [T-9.14]`
 
 ### T-9.15 · Go live
-- [ ] **Needs:** T-9.13, T-9.14, P-0.5, P-0.7, P-0.8; **P-73**: who the two unidentified staging accounts are; **P-72**: a human path for repeated possible-minor flags (D-093); **T-4.11**: liveness before the first real user (the founder, 4 October 2026); **P-66**: until staging has a Firebase project of its own, its sign-ins land in production's user pool, which is not acceptable after launch (the founder, 3 October 2026, on T-3.14); **P-0.18**: the billing account converted from its free trial, after App Check (P-68), since after launch the trial's end is an outage with no warning (the founder, 3 October 2026); and **P-68**: App Check enforced on Authentication and proved by its effect, before the site is public for sign-in (the founder, 4 October 2026)
+- [ ] **Needs:** T-9.13, T-9.14, P-0.5, P-0.7, P-0.8; **P-80**: no query value in the API's database errors (rule 15); **P-81**: the lawyer's answer on a possible minor's photo that is also sexual (D-093); **P-73**: who the two unidentified staging accounts are; **P-72**: a human path for repeated possible-minor flags (D-093); **T-4.11**: liveness before the first real user (the founder, 4 October 2026); **P-66**: until staging has a Firebase project of its own, its sign-ins land in production's user pool, which is not acceptable after launch (the founder, 3 October 2026, on T-3.14); **P-0.18**: the billing account converted from its free trial, after App Check (P-68), since after launch the trial's end is an outage with no warning (the founder, 3 October 2026); and **P-68**: App Check enforced on Authentication and proved by its effect, before the site is public for sign-in (the founder, 4 October 2026)
 - [ ] Production env: real SMS, real Razorpay live keys + webhook URL, real moderation and face match, VAPID keys. Run the pre-launch checklist in `07-CHECKLISTS.md`. Do one real ₹ purchase yourself and refund it, under D-076's rule 3: the refund reverses that purchase's Velas in the ledger in the same step (T-8.2), so money never goes back while its Velas stand.
 - [ ] **Write to the waitlist** (T-2.3): its copy promises to tell people when Velora opens near them. Nothing can send bulk email yet, so choose how before launch day, or the list is one we can't write to. A sending service is a new dependency and another processor `/privacy` must name, and its From address needs SPF and DKIM, like the mailboxes (P-0.3). B-14, a second city, writes to it again, by city.
   **DKIM before the first send, or the launch email goes to spam:** our DMARC record says
@@ -3442,8 +3507,10 @@ The number comes from the session's own block, given in its brief, from P-100 up
   not proved under load; this failure is the reason to watch it. A storage test that fails on CI
   with `InternalError` and passes on a re-run is this item's evidence, never a flake to re-run
   past. Filed at the direction of the advisor directing Sprint 5.
-- [ ] P-84 · Scope T-4.2's "no photo was made" check to its own user. **Now: the Sprint 4
-  session's next commit.** Worst case: a test that fails by order teaches people to re-run
+- [x] P-84 · Scope T-4.2's "no photo was made" check to its own user. **Now: the Sprint 4
+  session's next commit.** **Done in T-4.4's commit** (`feat(worker): photo moderation
+  pipeline`), found there independently: its own committed photos turned the same check red in
+  file order, so it is scoped to the test's user, as written below. Worst case: a test that fails by order teaches people to re-run
   instead of investigate, the habit that loses a real bug later. In `test_upload.py`,
   `test_a_declared_type_we_refuse_anyway_is_refused_saying_what_to_do` asserts
   `select(Photo.id)` finds nothing in the whole table, but `test_upload_race.py` commits photos
@@ -3490,3 +3557,35 @@ The number comes from the session's own block, given in its brief, from P-100 up
   (Claude, in a separate chat), relayed by the founder, 4 October 2026.
 
   Found building T-5.6.
+- [ ] P-79 · Stop an approved private photo being swapped for an unmoderated one. **Before T-8.4**
+  (on its Needs line), which first shows private photos to anyone but their owner. Worst case: a
+  private photo passes moderation, its owner PUTs a nude, or a photo carrying their home's
+  location, to the same presigned URL, and T-8.4's album shows it to the people they granted.
+  How: the upload URL lasts 5 minutes (D-027) and still works after `complete`; moderation reads
+  the upload and writes the re-encoded JPEG back over it (T-4.4), so a PUT inside those 5
+  minutes, after moderation, replaces the approved copy. A public photo is safe: its public copy is
+  the bytes Sightengine scored, written to its own key, never copied from the upload (T-4.4 tests
+  that). Options: keep the moderated copy at a key of its own (a column, so a migration, P-65
+  first), or have T-8.4 render albums only from bytes moderation wrote. The founder decides.
+
+  Found building T-4.4.
+- [ ] P-80 · Keep query values out of the API's database errors. **Before real users** (on
+  T-9.15's Needs line). Worst case: a failed query's error, logged with its parameters, carries a
+  phone number's hash, an encrypted number or a storage key into Fly's logs (rule 15). Seen
+  building T-4.4: a test's unique-key violation printed `[parameters: (…, 'raw/<user>/<photo>', …)]`.
+  SQLAlchemy's `hide_parameters=True` removes them; T-4.4 gave `build_engine` the option and
+  turned it on for the worker only, since changing the API's engine was outside the task. Turning
+  it on for the API is one argument in `create_app()`, and a test that a failing query's error
+  names no value.
+
+  Found building T-4.4.
+- [ ] P-81 · Ask the lawyer whether D-093's deletion may need to yield when a photo is also sexual.
+  **Before the first real user** (P-0.7's review; on T-9.15's Needs line). Worst case: a photo
+  Sightengine scores as possibly a minor's and as sexual is deleted, as D-093 requires, when the
+  law required it kept and reported. Claude doesn't know what Indian law requires here and claims
+  nothing; this is a question, not a finding. The code does what D-093 says: a possible minor's
+  photo is deleted first, whatever else it scores (T-4.4, `photos/moderation.py`). If the answer is
+  that such a photo must be preserved, D-093 is superseded by a decision, never changed in code
+  alone.
+
+  Found building T-4.4.

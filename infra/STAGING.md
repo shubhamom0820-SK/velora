@@ -12,6 +12,8 @@ a page of its own that names its pieces and says what differs: `infra/PRODUCTION
 | Piece | Where | Name |
 |---|---|---|
 | API | Fly.io, `sin` (Singapore; D-048) | app `velora-api-staging` → `https://api.staging.veloraapp.co.in` |
+| Worker | Fly.io, `sin`, its own app (T-4.4, D-095) | app `velora-worker-staging`: the API's image as the ARQ worker, no HTTP |
+| Moderation | Sightengine, plain image API (T-4.4) | the worker's `check.json` calls; files deleted after processing, by default |
 | Web | Vercel, its own project | `velora-staging` → `https://staging.veloraapp.co.in` |
 | DNS | Cloudflare | zone `veloraapp.co.in`, records DNS-only (§6) |
 | Postgres | Supabase, Mumbai (`ap-south-1`) | project `velora-staging` |
@@ -31,11 +33,16 @@ any commit whose CI passed):
    app mustn't be one step from doing so (P-18).
 3. **api** runs `flyctl deploy`. Fly builds `api/Dockerfile` with `api/` as the context, and only
    routes to the new machine once `/readyz` passes.
-4. **web** builds and deploys with the Vercel CLI. The project has no Git connection
+4. **worker** (T-4.4) runs `flyctl deploy` with `infra/fly.worker.toml`, after the API, with a
+   token for the worker's app only (`FLY_WORKER_API_TOKEN`). Its release command,
+   `python -m app.workers --check`, runs on a one-off machine with the app's settings and secrets
+   first: a missing key stops the deploy with the setting's name. It runs beside **web**; a red
+   worker job fails the run, so a release waits for it (D-075).
+5. **web** builds and deploys with the Vercel CLI. The project has no Git connection
    (`web/vercel.json` also turns Git deploys off), so the web can't go live around the gate.
    **A red `web — Vercel` job on green code** is most likely Vercel's Hobby upload cap: look for
    `api-upload-free` in its log (P-0.15). The web stays on the last build that uploaded.
-5. **smoke** runs `scripts/staging-smoke` against staging from the outside, bodies included:
+6. **smoke** runs `scripts/staging-smoke` against staging from the outside, bodies included:
    `/readyz`, the hidden schema and docs, the web (it must be our build, calling this API), the
    hidden `/admin` and `/dev/*`, and CORS.
 
@@ -51,10 +58,11 @@ The pool is per process, and the image runs **2 uvicorn workers**, each with its
 |---|---|---|---|
 | API | `velora_api` | direct connection, IPv6 (Fly has it) | 2 workers × (`DB_POOL_SIZE` 5 + `DB_MAX_OVERFLOW` 2) = **14** |
 | Migrations | the owner (`postgres`) | session pooler, IPv4 (GitHub's runners have no IPv6) | 1, during a deploy |
-| Worker | `velora_api` | direct | arrives with T-4.4; add its pool here |
+| Worker | `velora_api` | direct, IPv6 | 1 process × (`DB_POOL_SIZE` 2 + `DB_MAX_OVERFLOW` 1) = **3** (T-4.4, `infra/fly.worker.toml`) |
 
-That's **one machine**: `deploy.yml` passes `--ha=false`, because Fly's default of two would double
-the sum. Supabase's smallest compute allows 60 direct connections, and its own services use some.
+**17 at most, under the role's 20.** Each app is **one machine**: `deploy.yml` passes `--ha=false`
+to both, because Fly's default of two would double each sum (and run the worker's poll twice,
+D-091). Supabase's smallest compute allows 60 direct connections, and its own services use some.
 Change
 `DB_POOL_SIZE` / `DB_MAX_OVERFLOW` in `infra/fly.api.toml`, never the image, and redo this sum
 whenever workers, machines or pools change — two machines doubles it. Production starts from this
@@ -63,8 +71,9 @@ table, not from a guess.
 **`velora_api` has a connection limit of 20**, set on the role itself, so the database enforces the
 budget even if a pool setting drifts. 20 sits above the 14 the pools allow, so normal load never
 reaches it, and well under the instance's 60, so a runaway pool can't starve the migrations or
-Supabase's own services. When the worker (T-4.4) or a second machine raises the sum, raise the limit
-with it (`alter role velora_api connection limit N`) and record the new number and reason here.
+Supabase's own services. The worker (T-4.4) brings the sum to 17, still under 20, so the limit is
+unchanged. When a second machine or a bigger pool raises the sum past it, raise the limit with it
+(`alter role velora_api connection limit N`) and record the new number and reason here.
 
 ## How secrets get set
 
@@ -96,7 +105,8 @@ and never taken from the clipboard by a command you copied.
   (T-4.4). `phone-pepper` never changes once a number is
   banned; `phone-enc-key` rotates by putting a new key first, `new,old` (D-061); a new
   `code-pepper` makes every stored PIN fail until it is set again (D-062). The worker's app
-  (T-4.4) needs the same four values.
+  (T-4.4) holds the same four values: **a key changed on one app is changed on both, the same
+  day**, or the worker can't read what the API wrote.
 - **Settings check URLs, and never echo a value:** a wrong scheme stops the container before uvicorn
   starts, naming the setting (`DATABASE_URL` must be `postgresql+asyncpg://`; `REDIS_URL` must be
   `rediss://` outside local), and a validation error never prints what it was given.
@@ -237,6 +247,27 @@ any step failed. It runs only where `ENV` is local or staging: production's copy
 
    The owner's credentials are **not** a Fly secret.
 3. Create a **deploy token** for this app only (Tokens → Create deploy token).
+4. **The worker's app, `velora-worker-staging`** (T-4.4, D-095), in the same organisation and
+   region. Its settings are in `infra/fly.worker.toml`; its secrets are the API's, the same
+   values, plus Sightengine's:
+
+   | Secret | Value |
+   |---|---|
+   | `DATABASE_URL`, `REDIS_URL` | the API's own, piped from the API's machine into `flyctl secrets import`, never printed |
+   | `JWT_SECRET`, `PHONE_PEPPER`, `PHONE_ENC_KEY`, `CODE_PEPPER` | the Keychain's, the API's values (D-060, D-061): with others, it can't read what the API wrote |
+   | `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY` | the Keychain's, the API's token (§3) |
+   | `SIGHTENGINE_API_USER`, `SIGHTENGINE_API_SECRET` | the Keychain's `sightengine-api-user`, `sightengine-api-secret` |
+
+   Each is compared with its source by SHA-256, first 8 hex characters, computed in each place
+   (as T-4.1 did): a copy that was never the same value fails only when it's used. Its deploy
+   token is its own, scoped to this app, in GitHub's `staging` environment as
+   `FLY_WORKER_API_TOKEN`; the API's token can't deploy it.
+
+   **Sightengine is checked where it runs:**
+   `flyctl ssh console -a velora-worker-staging -C "python -m app.tools.sightengine_shape"` sends
+   Sightengine's two documentation examples, re-encoded as the worker sends a photo, and compares
+   each answer's shape with the fake the tests use (D-094). It prints field names and types, never
+   a value or a key; exit 0 when they match. 6 operations a run, on the free plan's allowance.
 
 ### 5. Vercel
 
@@ -297,7 +328,8 @@ Settings → Environments → **new environment `staging`**.
 | Kind | Name | Value |
 |---|---|---|
 | Secret | `STAGING_MIGRATION_DATABASE_URL` | the **session pooler** connection, as the owner |
-| Secret | `FLY_API_TOKEN` | Fly's deploy token |
+| Secret | `FLY_API_TOKEN` | Fly's deploy token for `velora-api-staging` |
+| Secret | `FLY_WORKER_API_TOKEN` | Fly's deploy token for `velora-worker-staging` only (T-4.4) |
 | Secret | `VERCEL_TOKEN` | a Vercel access token **scoped to the `velora-staging` project, with no expiry** |
 | Secret | `VERCEL_ORG_ID`, `VERCEL_PROJECT_ID` | from the Vercel project |
 | Variable | `STAGING_API_URL` | `https://api.staging.veloraapp.co.in` |
@@ -321,7 +353,12 @@ scripts/staging-smoke https://api.staging.veloraapp.co.in https://staging.velora
 
 A configuration error (a missing secret, a fake provider) stops the container with the message
 instead of crash-looping: the image checks settings once before uvicorn starts its workers. Read
-it in Fly's logs.
+it in Fly's logs. The worker's is stopped earlier, by its release command, before any machine is
+replaced: read it in the deploy job's log.
+
+**The worker is working** when a photo uploaded on staging reaches `approved` within a poll and a
+Sightengine call (T-4.4): its machine's log says `worker.started` once, then `moderation.decided`
+for each photo, by the photo's id, never a key.
 
 ## Before any T-3 auth work: close the CORS hole
 
@@ -348,4 +385,5 @@ curl -s -o /dev/null -D - -X OPTIONS https://velora-api-staging.fly.dev/healthz 
   nothing sets a cookie until T-3.3. T-3.14's Done-when is the proof: sign in on staging, reload,
   and the session is still there.
 - **Every provider is a real one that isn't built yet** (D-045): each raises if called, and
-  nothing calls one before its task.
+  nothing calls one before its task. Built and called on staging: storage (R2, T-4.1) and
+  moderation (Sightengine, T-4.4).

@@ -23,16 +23,17 @@ infra-down: ## Stop the docker stack, keeping data
 infra-reset: ## Stop the docker stack and DROP all data volumes
 	$(COMPOSE) down -v
 
-dev: ## Run infra + api + web, all on 127.0.0.1 (worker joins with T-4.4)
+dev: ## Run infra + api + worker + web, all on 127.0.0.1
 	$(MAKE) infra-up
-	@echo "api http://127.0.0.1:8000  web http://127.0.0.1:3000  (Ctrl-C stops both)"
+	@echo "api http://127.0.0.1:8000  web http://127.0.0.1:3000  worker: moderates photos  (Ctrl-C stops all three)"
 	@trap 'kill 0' INT TERM; \
 	( cd api && uv run uvicorn app.main:app --host 127.0.0.1 --port 8000 --reload ) & \
+	( cd api && uv run python -m app.workers ) & \
 	( cd web && pnpm dev --port 3000 ) & \
 	wait
 
-worker: ## Run the ARQ worker only [T-4.4]
-	@echo "not yet — T-4.4"
+worker: ## Run the ARQ worker only: moderate_photo, delete_files (T-4.4)
+	cd api && uv run python -m app.workers
 
 seed: ## Dev data, local only: 20 profiles, 3 test accounts (re-run changes nothing)
 	cd api && uv run python -m seed

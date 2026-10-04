@@ -8,23 +8,28 @@ Every account is created by signup's own service (`users.service`, T-3.3),
 with the keys the local API reads, and the PIN goes through `hash_pin`, so
 sign-in finds these accounts exactly as it finds anyone else.
 
-Insert-only, with one exception: a person's seeded credits (the test man's 60)
-are granted even if he is already there, by an account from before T-5.1 or a
-seed that ran before credits existed. They go through `wallet.service.credit()`
-like any other credit (rule 5), under a key of the seed's own (`SEED_EVENT`),
-so a second run finds the entry and changes nothing.
+Insert-only, with two exceptions, each made once: a person's seeded credits
+(the test man's 60) are granted even if he is already there, by an account from
+before T-5.1 or a seed that ran before credits existed. They go through
+`wallet.service.credit()` like any other credit (rule 5), under a key of the
+seed's own (`SEED_EVENT`), so a second run finds the entry and changes nothing.
+And everyone past the photos step gets an approved public photo at place 0
+(T-4.4) if no live one holds that place, someone from before T-4.4 included:
+the prototype's gradient, re-encoded like any upload and stored through
+`StorageProvider`, so a second run finds it and adds nothing.
 """
 
 from __future__ import annotations
 
 import hashlib
 import math
+import re
 import sys
 from collections.abc import KeysView, Mapping, Sequence
 from dataclasses import dataclass, field
 from datetime import date, timedelta
 from typing import TextIO
-from uuid import UUID
+from uuid import UUID, uuid4
 
 from sqlalchemy import func, select, text
 from sqlalchemy.dialects.postgresql import insert
@@ -38,12 +43,18 @@ from app.core.enums import (
     Gender,
     LedgerReason,
     OnboardingStep,
+    PhotoKind,
+    ReviewStatus,
     SwipeDirection,
     UserStatus,
 )
 from app.core.errors import AppError
+from app.core.providers import build_providers
+from app.core.providers.storage import FakeStorage, StorageProvider
 from app.core.security import hash_phone, hash_pin, normalize_phone
+from app.core.storage_keys import public_photo_key, raw_key
 from app.modules.auth import pins
+from app.modules.photos.models import Photo
 from app.modules.profiles import rules
 from app.modules.profiles.models import (
     Area,
@@ -59,6 +70,7 @@ from app.modules.users.models import User
 from app.modules.wallet import service as wallet_service
 from app.modules.wallet.service import WalletMisuse
 from seed.data import PEOPLE, SWIPES, Person, SeedSwipe
+from seed.photos import placeholder
 
 # --- The three checks: each an allowlist (rule 16, D-064) ---------------------
 
@@ -85,6 +97,15 @@ SCATTER_RADIUS_M = 750
 # The event in the key of every credit the seed grants, `{user_id}:admin_grant:
 # dev-seed` (D-077): one per person, however many times the seed runs.
 SEED_EVENT = "dev-seed"
+
+
+# Who has a photo: everyone past the photos step (T-4.4).
+_STEPS = tuple(OnboardingStep)
+_COLOUR = re.compile(r"#[0-9A-F]{6}")
+
+
+def past_photos(step: OnboardingStep) -> bool:
+    return _STEPS.index(step) > _STEPS.index(OnboardingStep.PHOTOS)
 
 
 class SeedRefused(Exception):
@@ -217,7 +238,13 @@ def _person_problems(person: Person, today: date) -> list[str]:
             "pin",
         )
         filled = [name for name in asked_later if getattr(person, name) is not None]
-        if filled or person.interests or person.intents or person.verified:
+        if (
+            filled
+            or person.interests
+            or person.intents
+            or person.verified
+            or person.gradient
+        ):
             problems.append(
                 "onboarding not started, so nothing it would ask for can be set"
             )
@@ -248,6 +275,15 @@ def _person_problems(person: Person, today: date) -> list[str]:
             problems.append(f"username {problem} (T-3.7)")
         elif rules.is_reserved(person.username):
             problems.append("username is reserved (T-3.7)")
+    if past_photos(person.step):
+        if person.gradient is None or not all(
+            _COLOUR.fullmatch(colour) for colour in person.gradient
+        ):
+            problems.append(
+                "past the photos step, so needs a gradient: two #RRGGBB colours (T-4.4)"
+            )
+    elif person.gradient is not None:
+        problems.append("not past the photos step, so has no photo yet (T-4.4)")
     if len(person.interests) != 5 or len(set(person.interests)) != 5:
         problems.append("exactly 5 different interests (T-3.8)")
     if not 1 <= len(set(person.intents)) == len(person.intents) <= 3:
@@ -288,6 +324,7 @@ class SeedReport:
     swipes_added: int = 0
     credited: list[str] = field(default_factory=list)
     already_credited: list[str] = field(default_factory=list)
+    photos_added: list[str] = field(default_factory=list)
 
 
 async def write_seed(
@@ -295,10 +332,16 @@ async def write_seed(
     settings: Settings,
     people: Sequence[Person] = PEOPLE,
     swipes: Sequence[SeedSwipe] = SWIPES,
+    *,
+    storage: StorageProvider | None = None,
 ) -> SeedReport:
-    """Write everyone who isn't there yet, the swipes, and the credits.
-    Insert-only but for credits: someone found by their phone hash is left
-    exactly as they are, except that their seeded credits are granted once."""
+    """Write everyone who isn't there yet, the swipes, the credits and the
+    placeholder photos. Insert-only but for credits and photos: someone found
+    by their phone hash is left exactly as they are, except that their seeded
+    credits are granted once and a missing photo at place 0 is added once.
+    `make seed` stores the photos' files through the configured storage; a test
+    that doesn't read them leaves `storage` out and they go to a fake."""
+    storage = storage or FakeStorage()
     # `interests.label` and `areas.name` are nullable (P-24); a row without one
     # can't be the one a label names.
     interest_ids = {
@@ -417,7 +460,57 @@ async def write_seed(
     for person in people:
         if person.credits:
             await _grant(session, person, user_ids[person.key], report)
+    for person in people:
+        if person.gradient is not None and past_photos(person.step):
+            await _photo(
+                session, settings, storage, person, user_ids[person.key], report
+            )
     return report
+
+
+async def _photo(
+    session: AsyncSession,
+    settings: Settings,
+    storage: StorageProvider,
+    person: Person,
+    user_id: UUID,
+    report: SeedReport,
+) -> None:
+    """An approved public photo at place 0, unless a live one holds it. Its
+    files go in both buckets, as moderation leaves an approved one (T-4.4)."""
+    held = await session.scalar(
+        select(Photo.id).where(
+            Photo.user_id == user_id,
+            Photo.kind == PhotoKind.PUBLIC,
+            Photo.position == 0,
+            Photo.status != ReviewStatus.REJECTED,
+        )
+    )
+    if held is not None:
+        return
+    assert person.gradient is not None
+    clean = placeholder(*person.gradient)
+    photo_id = uuid4()
+    private, public = raw_key(user_id, photo_id), public_photo_key(photo_id)
+    await storage.put_bytes(
+        settings.R2_BUCKET_PRIVATE, private, clean.data, "image/jpeg"
+    )
+    await storage.put_bytes(settings.R2_BUCKET_PUBLIC, public, clean.data, "image/jpeg")
+    session.add(
+        Photo(
+            id=photo_id,
+            user_id=user_id,
+            kind=PhotoKind.PUBLIC,
+            position=0,
+            raw_key=private,
+            public_key=public,
+            status=ReviewStatus.APPROVED,
+            width=clean.width,
+            height=clean.height,
+        )
+    )
+    await session.flush()
+    report.photos_added.append(person.key)
 
 
 async def _grant(
@@ -484,10 +577,15 @@ def summary(report: SeedReport) -> str:
     ]
     if report.credited:
         lines.append(f"  Credits granted to {', '.join(report.credited)}.")
+    if report.photos_added:
+        lines.append(
+            f"  Placeholder photos added for {len(report.photos_added)} people."
+        )
     if report.existing:
         lines.append(
             "  Anyone already there was left as they are, even if seed/data.py "
-            "changed since, except that seeded credits are granted once"
+            "changed since, except that seeded credits are granted once, and a "
+            "missing placeholder photo added once"
             + (
                 f" ({', '.join(report.already_credited)} had them already)."
                 if report.already_credited
@@ -510,15 +608,17 @@ async def main(
         refuse_unless_loopback(settings.DATABASE_URL)
         check_people(PEOPLE, SWIPES, clock.today_ist())
         engine = build_engine(settings.DATABASE_URL, pool_size=1, max_overflow=0)
+        storage = build_providers(settings).storage
         try:
             async with (
                 AsyncSession(engine, expire_on_commit=False) as session,
                 session.begin(),
             ):
                 await require_local_marker(session)
-                report = await write_seed(session, settings)
+                report = await write_seed(session, settings, storage=storage)
         finally:
             await engine.dispose()
+            await storage.aclose()
     except SeedRefused as refusal:
         err.write(f"seed: refused. {refusal}\n")
         return 2

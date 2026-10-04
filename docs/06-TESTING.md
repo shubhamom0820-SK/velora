@@ -83,7 +83,8 @@ empty (P-55), but other tests in the same run commit too. So a test that commits
 - `fake_providers` (T-1.21) — every external service as its in-memory fake; the `app` fixture
   installs it, so no test reaches a real provider. `fake_providers.sms.last_code(phone)`,
   `fake_providers.payments.capture(order_id)` (a signed webhook to deliver),
-  `fake_providers.moderation.next = "reject:nudity"` (one-shot).
+  `fake_providers.moderation.next = "reject:nudity"` (one-shot; also `"fail"`). The fake answers in
+  Sightengine's own shape, through the real reader, as D-094's real check corrected it (T-4.4).
 
 ## Tests that must never be skipped 🔒
 
@@ -113,7 +114,10 @@ If any of these fails, nothing ships.
 12. **Expired thread** (T-7.6): his send → `THREAD_EXPIRED`, and hers is delivered (D-097); re-open charges exactly 2 (D-098).
 13. **A Knot is mutual** (T-7.7): one tap never converts; two taps always do.
 14. **Private data** (T-4.4, T-4.5): processed images contain no EXIF; selfies never appear in
-    any public response.
+    any public response. From T-4.4: photos that genuinely carry a location
+    (`tests/fixtures/located/`, confirmed by two readers that aren't Pillow) come out with none,
+    in JPEG, PNG and WebP, and through the whole pipeline, every stored copy and what Sightengine
+    is sent.
 15. **Refresh reuse** (T-3.4): replaying a refresh token rotated more than 10 seconds ago revokes
     the family; within 10 seconds it's refused without that (D-067).
 16. **Firebase token** (T-3.14): forged, expired, wrong-audience and already-used ID tokens are all

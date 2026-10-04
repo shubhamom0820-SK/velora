@@ -678,9 +678,556 @@ T54: list[Case] = [
     ),
 ]
 
-CASES: list[tuple[Case, list[str]]] = [(c, T51_SELECTION) for c in T51] + [
-    (c, T54_SELECTION) for c in T54
+
+# --- T-4.4: the worker, moderation, D-092's Pillow, D-093, D-094, the seed's photos --
+# Each case's selection is the files that must catch it.
+
+T44: list[tuple[Case, list[str]]] = [
+    (
+        Case(
+            id="t44-01-exif-carried-into-the-output-d-092-1",
+            what="EXIF carried into the output (D-092 1)",
+            edits=[
+                (
+                    "app/core/images.py",
+                    "                width, height = image.size\n",
+                    '                width, height = image.size\n                _carried = image.info.get("exif", b"")\n',
+                ),
+                (
+                    "app/core/images.py",
+                    '    clean.save(out, "JPEG", quality=JPEG_QUALITY, optimize=True)',
+                    '    clean.save(out, "JPEG", quality=JPEG_QUALITY, optimize=True, exif=_carried)',
+                ),
+            ],
+            expect=[
+                "test_no_location_survives_the_reencode[image/jpeg]",
+                "test_no_location_survives_the_reencode[image/png]",
+                "test_no_location_survives_the_reencode[image/webp]",
+                "test_a_located_photo_is_stored_with_no_location_anywhere",
+            ],
+        ),
+        ["tests/core/test_reencode.py", "tests/modules/photos/test_moderate.py"],
+    ),
+    (
+        Case(
+            id="t44-02-a-metadata-strip-the-original-bytes-kept",
+            what="a metadata strip: the original bytes kept (D-092 1)",
+            edits=[
+                (
+                    "app/core/images.py",
+                    "    return Reencoded(data=out.getvalue(), width=clean.width, height=clean.height)",
+                    "    return Reencoded(data=data, width=clean.width, height=clean.height)",
+                ),
+            ],
+            expect=[
+                "test_no_location_survives_the_reencode[image/jpeg]",
+                "test_a_located_photo_is_stored_with_no_location_anywhere",
+            ],
+        ),
+        ["tests/core/test_reencode.py", "tests/modules/photos/test_moderate.py"],
+    ),
+    (
+        Case(
+            id="t44-03-the-pixel-limit-removed-pillow-s-default",
+            what="the pixel limit removed, Pillow's default left (D-092 2)",
+            edits=[
+                ("app/core/images.py", "Image.MAX_IMAGE_PIXELS = MAX_PIXELS\n", "\n"),
+                (
+                    "app/core/images.py",
+                    "                if width * height > MAX_PIXELS:\n                    raise TooManyPixels\n",
+                    "",
+                ),
+            ],
+            expect=[
+                "test_a_bomb_under_pillows_default_is_refused_by_our_limit",
+                "test_the_limit_is_set_here_never_left_to_pillows_default",
+            ],
+        ),
+        ["tests/core/test_reencode.py"],
+    ),
+    (
+        Case(
+            id="t44-04-every-pillow-parser-reachable",
+            what="every Pillow parser reachable",
+            edits=[
+                (
+                    "app/core/images.py",
+                    "io.BytesIO(data), formats=[_PILLOW_FORMAT[image_type]]",
+                    "io.BytesIO(data), formats=None",
+                ),
+            ],
+            expect=["test_only_the_judged_format_is_parsed"],
+        ),
+        ["tests/core/test_reencode.py"],
+    ),
+    (
+        Case(
+            id="t44-05-pillow-pinned-with-d-092-3",
+            what="Pillow pinned with >= (D-092 3)",
+            edits=[
+                ("pyproject.toml", '"pillow==12.3.0",', '"pillow>=12.3.0",'),
+            ],
+            expect=["test_pillow_is_pinned_exactly_and_the_pin_is_what_runs"],
+        ),
+        ["tests/core/test_reencode.py"],
+    ),
+    (
+        Case(
+            id="t44-06-idempotency-removed",
+            what="idempotency removed",
+            edits=[
+                (
+                    "app/modules/photos/service.py",
+                    '    if photo.status is not ReviewStatus.PENDING:\n        return f"already {photo.status.value}: nothing to do"\n',
+                    "",
+                ),
+            ],
+            expect=["test_running_it_again_on_a_decided_photo_does_nothing"],
+        ),
+        ["tests/modules/photos/test_moderate.py"],
+    ),
+    (
+        Case(
+            id="t44-07-a-private-photo-published",
+            what="a private photo published",
+            edits=[
+                (
+                    "app/modules/photos/service.py",
+                    "        if locked.kind is PhotoKind.PUBLIC:\n            key = public_photo_key(locked.id)",
+                    "        if True:\n            key = public_photo_key(locked.id)",
+                ),
+            ],
+            expect=[
+                "test_an_approved_private_photo_never_reaches_the_public_bucket",
+                "test_a_located_photo_is_stored_with_no_location_anywhere[private]",
+            ],
+        ),
+        ["tests/modules/photos/test_moderate.py"],
+    ),
+    (
+        Case(
+            id="t44-08-the-public-copy-copied-from-the-upload-n",
+            what="the public copy copied from the upload, not the bytes scored",
+            edits=[
+                (
+                    "app/modules/photos/service.py",
+                    '            await _stored(\n                storage.put_bytes(\n                    settings.R2_BUCKET_PUBLIC, key, clean.data, "image/jpeg"\n                )\n            )',
+                    "            await storage.copy(settings.R2_BUCKET_PRIVATE, locked.raw_key, settings.R2_BUCKET_PUBLIC, key)",
+                ),
+            ],
+            expect=[
+                "test_the_public_copy_is_what_was_scored_even_if_the_upload_changed"
+            ],
+        ),
+        ["tests/modules/photos/test_moderate.py"],
+    ),
+    (
+        Case(
+            id="t44-09-a-possible-minor-not-recorded-d-093-3-4",
+            what="a possible minor not recorded (D-093 3, 4)",
+            edits=[
+                (
+                    "app/modules/photos/service.py",
+                    "            safety_service.record_possible_minor(\n                session,\n                locked.user_id,\n                score=max(scores.minors),\n                model=MINOR_MODEL,\n            )\n",
+                    "",
+                ),
+            ],
+            expect=[
+                "test_a_possible_minor_is_rejected_recorded_as_a_score_and_every_copy_deleted",
+                "test_a_possible_minors_photo_still_stored_is_tried_again_until_gone",
+            ],
+        ),
+        ["tests/modules/photos/test_moderate.py"],
+    ),
+    (
+        Case(
+            id="t44-10-a-possible-minor-s-copies-kept-d-093-4",
+            what="a possible minor's copies kept (D-093 4)",
+            edits=[
+                (
+                    "app/modules/photos/service.py",
+                    "    if reason == moderation_rules.MINOR_SUSPECTED:\n        await _delete_every_copy(photo, storage, settings)\n",
+                    "",
+                ),
+            ],
+            expect=[
+                "test_a_possible_minor_is_rejected_recorded_as_a_score_and_every_copy_deleted",
+                "test_a_minor_score_wins_over_nudity",
+            ],
+        ),
+        ["tests/modules/photos/test_moderate.py"],
+    ),
+    (
+        Case(
+            id="t44-11-the-deletion-assumed-not-read-back",
+            what="the deletion assumed, not read back",
+            edits=[
+                (
+                    "app/modules/photos/service.py",
+                    "    except Exception:  # noqa: BLE001 — unreadable is not proof it left\n        return False\n    return False\n",
+                    "    except Exception:  # noqa: BLE001 — unreadable is not proof it left\n        return False\n    return True\n",
+                ),
+            ],
+            expect=[
+                "test_a_possible_minors_photo_still_stored_is_tried_again_until_gone"
+            ],
+        ),
+        ["tests/modules/photos/test_moderate.py"],
+    ),
+    (
+        Case(
+            id="t44-13-the-user-s-row-not-locked-before-the-dec",
+            what="the user's row not locked before the decision",
+            edits=[
+                (
+                    "app/modules/photos/service.py",
+                    "        try:\n            await users_service.locked_user(session, photo.user_id)\n        except LookupError:\n            locked = None\n        else:\n            locked = await repository.photo_for_update(session, photo.user_id, photo.id)\n",
+                    "        locked = await repository.photo_for_update(session, photo.user_id, photo.id)\n",
+                ),
+            ],
+            expect=["test_the_decision_and_a_reorder_take_turns"],
+        ),
+        ["tests/modules/photos/test_moderate_race.py"],
+    ),
+    (
+        Case(
+            id="t44-14-nudity-checked-before-a-possible-minor",
+            what="nudity checked before a possible minor",
+            edits=[
+                (
+                    "app/modules/photos/moderation.py",
+                    '    if any(score >= MINOR_AT for score in scores.minors):\n        return "minor_suspected"\n    if max(scores.nudity[name] for name in EXPLICIT) >= NUDITY_AT:\n        return "nudity"\n',
+                    '    if max(scores.nudity[name] for name in EXPLICIT) >= NUDITY_AT:\n        return "nudity"\n    if any(score >= MINOR_AT for score in scores.minors):\n        return "minor_suspected"\n',
+                ),
+            ],
+            expect=["test_a_minor_score_wins_over_nudity"],
+        ),
+        ["tests/modules/photos/test_moderate.py"],
+    ),
+    (
+        Case(
+            id="t44-15-human-review-turned-on-a-workflow-in-the",
+            what="human review turned on: a workflow in the request",
+            edits=[
+                (
+                    "app/core/providers/moderation.py",
+                    '            "models": ",".join(MODELS),\n',
+                    '            "models": ",".join(MODELS),\n            "workflow": "wfl_human_review",\n',
+                ),
+            ],
+            expect=[
+                "test_a_check_is_one_post_of_the_image_with_three_models",
+                "test_every_request_stays_on_the_plain_image_api",
+            ],
+        ),
+        ["tests/core/test_moderation.py"],
+    ),
+    (
+        Case(
+            id="t44-16-a-second-sightengine-endpoint-workflows",
+            what="a second Sightengine endpoint (workflows)",
+            edits=[
+                (
+                    "app/core/providers/moderation.py",
+                    'CHECK_URL: Final = "https://api.sightengine.com/1.0/check.json"',
+                    'CHECK_URL: Final = "https://api.sightengine.com/1.0/check-workflow.json"',
+                ),
+            ],
+            expect=["test_every_request_stays_on_the_plain_image_api"],
+        ),
+        ["tests/core/test_moderation.py"],
+    ),
+    (
+        Case(
+            id="t44-17-a-lax-reader-types-coerced",
+            what="a lax reader: types coerced",
+            edits=[
+                (
+                    "app/core/providers/moderation.py",
+                    'model_config = ConfigDict(strict=True, extra="allow", frozen=True)',
+                    'model_config = ConfigDict(strict=False, extra="allow", frozen=True)',
+                ),
+            ],
+            expect=[
+                "test_an_answer_in_any_other_shape_fails_loudly_never_reads_as_zero[a score as a string]"
+            ],
+        ),
+        ["tests/core/test_moderation.py"],
+    ),
+    (
+        Case(
+            id="t44-18-a-lax-reader-a-missing-score-read-as-0",
+            what="a lax reader: a missing score read as 0",
+            edits=[
+                (
+                    "app/core/providers/moderation.py",
+                    "    erotica: float\n",
+                    "    erotica: float = 0.0\n",
+                ),
+            ],
+            expect=[
+                "test_an_answer_in_any_other_shape_fails_loudly_never_reads_as_zero[a nudity class missing]"
+            ],
+        ),
+        ["tests/core/test_moderation.py"],
+    ),
+    (
+        Case(
+            id="t44-19-the-keys-sent-in-the-url",
+            what="the keys sent in the URL",
+            edits=[
+                (
+                    "app/core/providers/moderation.py",
+                    "                data=self._form,\n",
+                    "                params=self._form,\n",
+                ),
+            ],
+            expect=[
+                "test_a_check_is_one_post_of_the_image_with_three_models",
+                "test_every_request_stays_on_the_plain_image_api",
+            ],
+        ),
+        ["tests/core/test_moderation.py"],
+    ),
+    (
+        Case(
+            id="t44-20-the-fake-drifted-back-to-the-documentati",
+            what="the fake drifted back to the documentation (D-094)",
+            edits=[
+                (
+                    "app/core/providers/moderation.py",
+                    '    "text": {"has_artificial": 0.01, "has_natural": 0.02},',
+                    '    "text": {"has_artificial": 0.01, "has_natural": 0.02, "boxes": []},',
+                ),
+            ],
+            expect=["test_an_answer_with_no_text_has_no_boxes_as_real_answers_do"],
+        ),
+        ["tests/core/test_moderation.py"],
+    ),
+    (
+        Case(
+            id="t44-21-the-upload-kept-until-sightengine-answer",
+            what="the upload kept until Sightengine answers",
+            edits=[
+                (
+                    "app/modules/photos/service.py",
+                    '    await _stored(storage.put_bytes(private, photo.raw_key, clean.data, "image/jpeg"))\n',
+                    "",
+                ),
+            ],
+            expect=[
+                "test_a_moderation_failure_tries_again_and_keeps_no_original",
+                "test_a_located_photo_is_stored_with_no_location_anywhere",
+            ],
+        ),
+        ["tests/modules/photos/test_moderate.py"],
+    ),
+    (
+        Case(
+            id="t44-22-trusting-the-type-complete-saw",
+            what="trusting the type complete saw",
+            edits=[
+                (
+                    "app/modules/photos/service.py",
+                    "    image_type = sniff(data[:SNIFF_BYTES])\n",
+                    '    image_type = sniff(b"\\xff\\xd8\\xff")\n',
+                ),
+            ],
+            expect=["test_the_bytes_decide_again_not_what_complete_saw"],
+        ),
+        ["tests/modules/photos/test_moderate.py"],
+    ),
+    (
+        Case(
+            id="t44-23-no-size-bound-at-the-worker",
+            what="no size bound at the worker",
+            edits=[
+                (
+                    "app/modules/photos/service.py",
+                    "    if len(data) > MAX_UPLOAD_BYTES:\n",
+                    "    if False:\n",
+                ),
+            ],
+            expect=[
+                "test_what_the_worker_cant_read_is_rejected_and_its_file_removed[over 8 MB since complete]"
+            ],
+        ),
+        ["tests/modules/photos/test_moderate.py"],
+    ),
+    (
+        Case(
+            id="t44-24-an-unreadable-upload-s-file-left-behind",
+            what="an unreadable upload's file left behind",
+            edits=[
+                (
+                    "app/modules/photos/service.py",
+                    "        locked.reject_reason = reason\n    await storage.delete(settings.R2_BUCKET_PRIVATE, photo.raw_key)\n",
+                    "        locked.reject_reason = reason\n",
+                ),
+            ],
+            expect=["test_what_the_worker_cant_read_is_rejected_and_its_file_removed"],
+        ),
+        ["tests/modules/photos/test_moderate.py"],
+    ),
+    (
+        Case(
+            id="t44-25-a-refused-user-s-re-encoded-copy-left-be",
+            what="a refused user's re-encoded copy left behind",
+            edits=[
+                (
+                    "app/modules/photos/service.py",
+                    "            # have run before the copy above was written. Don't leave it.\n            await storage.delete(settings.R2_BUCKET_PRIVATE, photo.raw_key)\n",
+                    "            # have run before the copy above was written. Don't leave it.\n",
+                ),
+            ],
+            expect=["test_a_user_refused_while_their_photo_was_checked_leaves_no_file"],
+        ),
+        ["tests/modules/photos/test_moderate.py"],
+    ),
+    (
+        Case(
+            id="t44-26-the-third-failure-retried-never-logged",
+            what="the third failure retried, never logged",
+            edits=[
+                (
+                    "app/workers/tasks/moderate_photo.py",
+                    "        if job_try < MODERATE_TRIES:\n",
+                    "        if job_try <= MODERATE_TRIES:\n",
+                ),
+            ],
+            expect=[
+                "test_the_third_failure_logs_an_error_and_leaves_the_photo_pending"
+            ],
+        ),
+        ["tests/workers/test_moderate_photo.py"],
+    ),
+    (
+        Case(
+            id="t44-27-the-worker-starts-without-sightengine-s",
+            what="the worker starts without Sightengine's keys",
+            edits=[
+                (
+                    "app/workers/main.py",
+                    '    if settings.MODERATION_PROVIDER == "sightengine":\n',
+                    "    if False:\n",
+                ),
+            ],
+            expect=[
+                "test_sightengine_without_its_keys_is_refused_naming_them",
+                "test_check_says_why_it_wouldnt_start_and_never_echoes_a_value",
+            ],
+        ),
+        ["tests/workers/test_worker.py"],
+    ),
+    (
+        Case(
+            id="t44-28-arq-s-default-0-5-s-poll-d-091",
+            what="ARQ's default 0.5 s poll (D-091)",
+            edits=[
+                (
+                    "app/workers/main.py",
+                    '        "poll_delay": settings.WORKER_POLL_DELAY_S,\n',
+                    '        "poll_delay": 0.5,\n',
+                ),
+            ],
+            expect=[
+                "test_it_polls_every_10_seconds_which_is_d091s_sum",
+                "test_the_poll_delay_is_a_setting",
+            ],
+        ),
+        ["tests/workers/test_worker.py"],
+    ),
+    (
+        Case(
+            id="t44-29-arq-logs-the-job-s-arguments-rule-15",
+            what="ARQ logs the job's arguments (rule 15)",
+            edits=[
+                (
+                    "app/workers/main.py",
+                    '            record.args = (waited, ref, "…", extra)\n',
+                    "            record.args = (waited, ref, _, extra)\n",
+                ),
+            ],
+            expect=[
+                "test_arq_never_logs_a_jobs_arguments_which_can_be_storage_keys",
+                "test_the_started_line_keeps_the_jobs_name_and_timing",
+            ],
+        ),
+        ["tests/workers/test_worker.py"],
+    ),
+    (
+        Case(
+            id="t44-30-the-worker-s-errors-carry-query-values-r",
+            what="the worker's errors carry query values (rule 15)",
+            edits=[
+                (
+                    "app/workers/main.py",
+                    "        hide_parameters=True,\n",
+                    "        hide_parameters=False,\n",
+                ),
+            ],
+            expect=["test_the_workers_database_errors_carry_no_values"],
+        ),
+        ["tests/workers/test_worker.py"],
+    ),
+    (
+        Case(
+            id="t44-31-the-worker-s-fly-config-drifts-from-the",
+            what="the worker's Fly config drifts from the API's",
+            edits=[
+                (
+                    "../infra/fly.worker.toml",
+                    'R2_BUCKET_PUBLIC = "velora-staging-public"',
+                    'R2_BUCKET_PUBLIC = "velora-staging-other"',
+                ),
+            ],
+            expect=["test_the_worker_reads_the_same_settings_as_the_api_on_staging"],
+        ),
+        ["tests/workers/test_worker.py"],
+    ),
+    (
+        Case(
+            id="t44-32-the-seed-adds-a-second-photo-on-a-re-run",
+            what="the seed adds a second photo on a re-run",
+            edits=[
+                ("seed/run.py", "    if held is not None:\n        return\n", ""),
+            ],
+            expect=[
+                "test_a_second_run_adds_no_photo",
+                "test_a_place_0_that_already_holds_a_live_photo_gets_none",
+                "test_a_second_run_changes_nothing",
+            ],
+        ),
+        [
+            "tests/seed/test_seed.py::test_a_second_run_adds_no_photo",
+            "tests/seed/test_seed.py::test_a_place_0_that_already_holds_a_live_photo_gets_none",
+            "tests/seed/test_seed.py::test_a_second_run_changes_nothing",
+        ],
+    ),
+    (
+        Case(
+            id="t44-33-the-seed-s-placeholder-not-re-encoded",
+            what="the seed's placeholder not re-encoded",
+            edits=[
+                (
+                    "seed/photos.py",
+                    '    return reencode(out.getvalue(), "image/png")\n',
+                    "    return Reencoded(data=out.getvalue(), width=SIZE[0], height=SIZE[1])\n",
+                ),
+            ],
+            expect=[
+                "test_everyone_past_the_photos_step_has_an_approved_photo_at_place_0"
+            ],
+        ),
+        [
+            "tests/seed/test_seed.py::test_everyone_past_the_photos_step_has_an_approved_photo_at_place_0"
+        ],
+    ),
 ]
+
+CASES: list[tuple[Case, list[str]]] = (
+    [(c, T51_SELECTION) for c in T51] + [(c, T54_SELECTION) for c in T54] + T44
+)
 
 # The fifty-connection fixture's own message when Postgres refuses a connection.
 REFUSED_CONNECTIONS = "connections ("
@@ -691,13 +1238,17 @@ def sha(path: Path) -> str:
 
 
 def tracked() -> dict[str, str]:
-    """Every file under api/ but caches and the virtualenv, by SHA-256."""
+    """Every file under api/ but caches and the virtualenv, and infra/'s Fly
+    configs (T-4.4 breaks one), by SHA-256, keyed by their path from api/."""
     skip = {".venv", "__pycache__", ".pytest_cache", ".mypy_cache", ".ruff_cache"}
-    return {
+    files = {
         str(path.relative_to(API)): sha(path)
         for path in API.rglob("*")
         if path.is_file() and not skip & set(path.relative_to(API).parts)
     }
+    for path in (API.parent / "infra").glob("fly.*.toml"):
+        files[f"../infra/{path.name}"] = sha(path)
+    return files
 
 
 def failed_tests(output: str) -> list[str]:
@@ -713,7 +1264,18 @@ def run_tests(selection: list[str]) -> tuple[int, str, float]:
     env.pop("TEST_DATABASE_URL", None)
     start = time.monotonic()
     proc = subprocess.run(  # its exit code is read below
-        ["uv", "run", "pytest", "-q", "-p", "no:cacheprovider", "-rfE", *selection],
+        # --frozen: a case that edits pyproject.toml mustn't re-lock (T-4.4).
+        [
+            "uv",
+            "run",
+            "--frozen",
+            "pytest",
+            "-q",
+            "-p",
+            "no:cacheprovider",
+            "-rfE",
+            *selection,
+        ],
         cwd=API,
         env=env,
         capture_output=True,

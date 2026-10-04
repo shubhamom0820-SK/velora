@@ -5,8 +5,8 @@ implementation, chosen by an environment variable in `Settings`. Fakes run only
 where `ENV` is `local` — `Settings` refuses to start otherwise (D-045) — and
 every test gets them through the `fake_providers` fixture.
 
-Routes reach them with `Depends(get_providers)`; the worker will build its own
-with `build_providers` (T-4.4).
+Routes reach them with `Depends(get_providers)`; the worker builds its own with
+`build_providers` (T-4.4, `app/workers/main.py`).
 
 Google's keys for Firebase ID tokens (T-3.14) are the exception to choosing by
 setting: they are always Google's, because the route that reads them is served
@@ -93,7 +93,9 @@ def build_providers(settings: Settings) -> Providers:
         moderation=(
             FakeModeration()
             if settings.MODERATION_PROVIDER == "fake"
-            else SightengineModeration()
+            else SightengineModeration(
+                settings.SIGHTENGINE_API_USER, settings.SIGHTENGINE_API_SECRET
+            )
         ),
         facematch=(
             FakeFaceMatch()

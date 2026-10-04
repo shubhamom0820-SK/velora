@@ -14,12 +14,7 @@ from httpx import AsyncClient
 from app.core.config import Settings
 from app.core.providers import FakeProviders, Providers, build_providers, get_providers
 from app.core.providers.facematch import FaceMatch, FakeFaceMatch, SFaceFaceMatch
-from app.core.providers.moderation import (
-    APPROVED,
-    FakeModeration,
-    ModerationResult,
-    SightengineModeration,
-)
+from app.core.providers.moderation import FakeModeration, SightengineModeration
 from app.core.providers.payments import FakePayments, RazorpayPayments
 from app.core.providers.push import FakePush, PushSubscription, WebPush
 from app.core.providers.sms import (
@@ -303,26 +298,8 @@ async def test_a_webhook_for_an_unknown_order_is_a_test_mistake() -> None:
 
 
 # --- Moderation --------------------------------------------------------------
-
-
-async def test_fake_moderation_approves_until_told_to_reject_once() -> None:
-    moderation = FakeModeration()
-
-    assert await moderation.check(b"a") == APPROVED
-    moderation.next = "reject:minor_suspected"
-    assert await moderation.check(b"b") == ModerationResult(
-        approved=False, reason="minor_suspected"
-    )
-    assert await moderation.check(b"c") == APPROVED  # `next` is one-shot
-    assert moderation.checked == [b"a", b"b", b"c"]
-
-
-async def test_fake_moderation_refuses_an_unknown_outcome() -> None:
-    moderation = FakeModeration()
-    moderation.next = "reject:blurry"
-
-    with pytest.raises(ValueError, match="not 'reject:blurry'"):
-        await moderation.check(b"a")
+#
+# Sightengine and its fake are T-4.4's: tests/core/test_moderation.py.
 
 
 # --- Face match --------------------------------------------------------------
@@ -399,7 +376,6 @@ _STUB_CALLS: list[tuple[str, Callable[[], Awaitable[object] | object], str]] = [
         lambda: RazorpayPayments().verify_webhook(b"{}", "sig"),
         "T-8.2",
     ),
-    ("moderation", lambda: SightengineModeration().check(b"jpeg"), "T-4.4"),
     ("facematch", lambda: SFaceFaceMatch().compare(b"s", [b"p"]), "T-4.5"),
     ("push", lambda: WebPush().send(PushSubscription("e", "k", "a"), {}), "T-9.4"),
 ]

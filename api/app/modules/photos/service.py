@@ -12,23 +12,39 @@ step: each works at its step or after, never before.
 
 from __future__ import annotations
 
+from collections.abc import Awaitable, Callable
+from contextlib import AbstractAsyncContextManager
 from datetime import timedelta
 from uuid import UUID, uuid4
 
+import structlog
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core import clock
+from app.core import clock, images
 from app.core.config import Settings
 from app.core.enums import OnboardingStep, PhotoKind, ReviewStatus
 from app.core.errors import AppError, invalid_field
-from app.core.images import ACCEPTED_NAMES, ACCEPTED_TYPES, SNIFF_BYTES, sniff
+from app.core.images import (
+    ACCEPTED_NAMES,
+    ACCEPTED_TYPES,
+    SNIFF_BYTES,
+    sniff,
+)
+from app.core.providers.moderation import (
+    MINOR_MODEL,
+    ModerationFailed,
+    ModerationProvider,
+    Scores,
+)
 from app.core.providers.storage import ObjectNotFound, StorageProvider
 from app.core.queue import MODERATE_PHOTO, Queue
-from app.core.storage_keys import public_url, raw_key
+from app.core.storage_keys import public_photo_key, public_url, raw_key
+from app.modules.photos import moderation as moderation_rules
 from app.modules.photos import repository
 from app.modules.photos.models import Photo
 from app.modules.photos.schemas import Photo as PhotoOut
 from app.modules.photos.schemas import UploadUrl
+from app.modules.safety import service as safety_service
 from app.modules.users import service as users_service
 from app.modules.users.models import User
 
@@ -324,3 +340,220 @@ async def delete_photo(
         public_key = photo.public_key
     if public_key:
         await storage.delete(settings.R2_BUCKET_PUBLIC, public_key)
+
+
+# --- Moderation (T-4.4) ----------------------------------------------------------------
+#
+# The worker's half of a photo: `moderate` runs as the `moderate_photo` job, which
+# `complete` queues. D-092 re-encodes it, Sightengine scores it (D-094), and
+# `moderation.verdict` decides. Re-running it on a decided photo changes nothing.
+
+log = structlog.get_logger(__name__)
+
+
+class TryAgain(Exception):
+    """Storage or Sightengine failed for now. `moderate_photo` tries again; the
+    last try logs `event` at error level and leaves the photo as it is."""
+
+    def __init__(self, event: str, what: str) -> None:
+        super().__init__(what)
+        self.event = event
+
+
+Sessions = Callable[[], AbstractAsyncContextManager[AsyncSession]]
+
+
+async def moderate(
+    sessions: Sessions,
+    photo_id: UUID,
+    *,
+    storage: StorageProvider,
+    moderation: ModerationProvider,
+    settings: Settings,
+) -> str:
+    """Moderate one public or private photo, once: what happened, in words.
+
+    The upload is read (at most 8 MB) and judged by its bytes again (D-089):
+    its URL lasts 5 minutes, so what `complete` saw may have been replaced
+    since. It is re-encoded and **written back over itself** before anything
+    else, so no
+    original with its location is kept, whatever happens next. Then scored, and
+    the outcome recorded with the user's row locked, as every photo change is:
+    - approved: a public photo's copy goes to the public bucket, from the
+      bytes that were scored, never from the private copy, which a second PUT
+      could have replaced since;
+    - rejected: the re-encoded copy stays, privately, for T-9.5's review;
+    - rejected as a possible minor's (D-093): a `fraud_events` signal, and the
+      image and every copy deleted, each read back as gone;
+    - not an image this pipeline can read, or too big: rejected `other` or
+      `too_large`, its file deleted.
+    """
+    async with sessions() as session, session.begin():
+        photo = await repository.photo_by_id(session, photo_id)
+    if photo is None:
+        return "no such photo: its user was refused, and it went with them"
+    if photo.kind is PhotoKind.SELFIE:
+        return "a selfie: T-4.5's verify_selfie checks it, not this"
+    if (
+        photo.status is ReviewStatus.REJECTED
+        and photo.reject_reason == moderation_rules.MINOR_SUSPECTED
+    ):
+        # A try before this one recorded it, and its deletion didn't finish.
+        await _delete_every_copy(photo, storage, settings)
+        return "a possible minor's photo: every copy gone"
+    if photo.status is not ReviewStatus.PENDING:
+        return f"already {photo.status.value}: nothing to do"
+
+    private = settings.R2_BUCKET_PRIVATE
+    try:
+        data = await storage.read_prefix(private, photo.raw_key, MAX_UPLOAD_BYTES + 1)
+    except ObjectNotFound:
+        log.warning("moderation.no_file", photo_id=str(photo.id))
+        return "no file to moderate"
+    except Exception as error:  # noqa: BLE001 — storage is down: try again
+        raise TryAgain("moderation.storage_failed", type(error).__name__) from None
+
+    if len(data) > MAX_UPLOAD_BYTES:
+        return await _refuse_unreadable(sessions, photo, TOO_LARGE, storage, settings)
+    image_type = sniff(data[:SNIFF_BYTES])
+    try:
+        if image_type is None:
+            raise images.UnreadableImage
+        clean = images.reencode(data, image_type)
+    except images.UnreadableImage:
+        return await _refuse_unreadable(
+            sessions, photo, moderation_rules.OTHER, storage, settings
+        )
+    del data
+    await _stored(storage.put_bytes(private, photo.raw_key, clean.data, "image/jpeg"))
+
+    try:
+        scores = await moderation.check(clean.data)
+    except ModerationFailed as failure:
+        raise TryAgain("moderation.failed_photo", str(failure)) from None
+    reason = moderation_rules.verdict(scores, photo.kind)
+
+    outcome = await _record(sessions, photo, reason, clean, scores, storage, settings)
+    if outcome is not None:
+        return outcome
+    log.info(
+        "moderation.decided",
+        photo_id=str(photo.id),
+        outcome=reason or ReviewStatus.APPROVED.value,
+    )
+    if reason == moderation_rules.MINOR_SUSPECTED:
+        await _delete_every_copy(photo, storage, settings)
+    return reason or ReviewStatus.APPROVED.value
+
+
+async def _record(
+    sessions: Sessions,
+    photo: Photo,
+    reason: moderation_rules.Reason | None,
+    clean: images.Reencoded,
+    scores: Scores,
+    storage: StorageProvider,
+    settings: Settings,
+) -> str | None:
+    """Write the decision, unless the photo stopped waiting for one: None when
+    written, else what stopped it."""
+    async with sessions() as session, session.begin():
+        try:
+            await users_service.locked_user(session, photo.user_id)
+        except LookupError:
+            locked = None
+        else:
+            locked = await repository.photo_for_update(session, photo.user_id, photo.id)
+        if locked is None:
+            # Refused while this ran: the rows went, and D-078's deletion may
+            # have run before the copy above was written. Don't leave it.
+            await storage.delete(settings.R2_BUCKET_PRIVATE, photo.raw_key)
+            return "its user was refused while it was checked: its file removed"
+        if locked.status is not ReviewStatus.PENDING:
+            # Removed by its owner meanwhile (T-4.3): nothing is published.
+            return f"{locked.status.value} while it was checked: left as it is"
+        locked.moderation = moderation_rules.summary(scores)
+        if reason == moderation_rules.MINOR_SUSPECTED:
+            locked.status = ReviewStatus.REJECTED
+            locked.reject_reason = reason
+            safety_service.record_possible_minor(
+                session,
+                locked.user_id,
+                score=max(scores.minors),
+                model=MINOR_MODEL,
+            )
+            return None
+        locked.width, locked.height = clean.width, clean.height
+        if reason is not None:
+            locked.status = ReviewStatus.REJECTED
+            locked.reject_reason = reason
+            return None
+        if locked.kind is PhotoKind.PUBLIC:
+            key = public_photo_key(locked.id)
+            await _stored(
+                storage.put_bytes(
+                    settings.R2_BUCKET_PUBLIC, key, clean.data, "image/jpeg"
+                )
+            )
+            locked.public_key = key
+        locked.status = ReviewStatus.APPROVED
+    return None
+
+
+async def _refuse_unreadable(
+    sessions: Sessions,
+    photo: Photo,
+    reason: str,
+    storage: StorageProvider,
+    settings: Settings,
+) -> str:
+    """Rejected before it was scored: nothing worth keeping, so its file goes,
+    as `complete` removes a file it refuses."""
+    async with sessions() as session, session.begin():
+        locked = await repository.photo_for_update(session, photo.user_id, photo.id)
+        if locked is None or locked.status is not ReviewStatus.PENDING:
+            return "decided while it was read: left as it is"
+        locked.status = ReviewStatus.REJECTED
+        locked.reject_reason = reason
+    await storage.delete(settings.R2_BUCKET_PRIVATE, photo.raw_key)
+    log.info("moderation.decided", photo_id=str(photo.id), outcome=reason)
+    return reason
+
+
+async def _delete_every_copy(
+    photo: Photo, storage: StorageProvider, settings: Settings
+) -> None:
+    """D-093: the image and every copy of it, each read back as gone: a
+    delete that answers success isn't proof the object left (D-090's rule).
+    Sightengine's copy is gone by its default retention (T-4.4)."""
+    copies = [
+        (settings.R2_BUCKET_PRIVATE, photo.raw_key),
+        (settings.R2_BUCKET_PUBLIC, public_photo_key(photo.id)),
+    ]
+    for bucket, key in copies:
+        try:
+            await storage.delete(bucket, key)
+        except Exception:  # noqa: BLE001, S112 — the read-back below decides
+            continue
+    for bucket, key in copies:
+        if not await _gone(storage, bucket, key):
+            raise TryAgain(
+                "moderation.minor_photo_not_deleted", "a copy is still stored"
+            )
+
+
+async def _gone(storage: StorageProvider, bucket: str, key: str) -> bool:
+    try:
+        await storage.head(bucket, key)
+    except ObjectNotFound:
+        return True
+    except Exception:  # noqa: BLE001 — unreadable is not proof it left
+        return False
+    return False
+
+
+async def _stored(write: Awaitable[None]) -> None:
+    try:
+        await write
+    except Exception as error:  # noqa: BLE001 — storage is down: try again
+        raise TryAgain("moderation.storage_failed", type(error).__name__) from None

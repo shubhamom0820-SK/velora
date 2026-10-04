@@ -158,6 +158,13 @@ class Settings(BaseSettings):
     RAZORPAY_KEY_SECRET: str = ""
     RAZORPAY_WEBHOOK_SECRET: str = ""
 
+    # --- The worker (T-4.4) ---
+    # How long the worker waits between looks at the queue (D-091). 10 seconds
+    # on Upstash's Free plan is 260,640 commands a month idle, 52% of its 500K;
+    # ARQ's default 0.5 would be over five million. Changing it is changing that
+    # sum: redo it first, and never pick a paid plan quietly to fit it.
+    WORKER_POLL_DELAY_S: float = Field(default=10.0, gt=0)
+
     # --- Moderation (worker) ---
     MODERATION_PROVIDER: ModerationProvider = "fake"
     SIGHTENGINE_API_USER: str = ""

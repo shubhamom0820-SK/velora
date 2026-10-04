@@ -31,6 +31,12 @@ def add(session: AsyncSession, photo: Photo) -> None:
     session.add(photo)
 
 
+async def photo_by_id(session: AsyncSession, photo_id: UUID) -> Photo | None:
+    """Any photo, unlocked: the worker's first look (T-4.4)."""
+    photo: Photo | None = await session.get(Photo, photo_id)
+    return photo
+
+
 async def photo_for_update(
     session: AsyncSession, user_id: UUID, photo_id: UUID
 ) -> Photo | None:

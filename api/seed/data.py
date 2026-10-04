@@ -29,6 +29,10 @@ Where each piece comes from:
   on 3 October 2026.
 - **The test man's 60 credits:** T-1.15's plan, granted from T-5.1, when
   `wallet.service.credit()` exists to grant them (rule 5).
+- **Each placeholder photo's colours (T-4.4):** the prototype's `c1` and `c2`
+  for its twenty profiles; the test man and the test woman, who aren't in the
+  prototype, take the first two of its `GR` gradients (Claude's choice, 4
+  October 2026).
 
 The phone numbers sit in one block, `+91 90000 00xxx`: `00001`-`00003` for the
 test accounts, `001NN` for the prototype's profile NN. India reserves no
@@ -79,6 +83,9 @@ class Person:
     # Granted once through `wallet.service.credit()` (T-5.1), even to someone
     # already there. Only a man may hold any (D-076).
     credits: int = 0
+    # The placeholder photo's two colours (T-4.4): the prototype's `c1`, `c2`.
+    # Everyone past the photos step has one; nobody before it does.
+    gradient: tuple[str, str] | None = None
 
 
 @dataclass(frozen=True)
@@ -106,6 +113,7 @@ TEST_ACCOUNTS: tuple[Person, ...] = (
         dob=date(1998, 6, 1),
         first_name="Test man",
         username="test_man",
+        gradient=("#E8455F", "#6E1028"),
         about="The seeded test man, for local development. Not a real person.",
         hometown="Bengaluru",
         area="Koramangala",
@@ -123,6 +131,7 @@ TEST_ACCOUNTS: tuple[Person, ...] = (
         verified=True,
         first_name="Test woman",
         username="test_woman",
+        gradient=("#D9663F", "#7A1228"),
         about="The seeded test woman, for local development. Not a real person.",
         hometown="Bengaluru",
         area="Koramangala",
@@ -150,6 +159,7 @@ PROTOTYPE: tuple[Person, ...] = (
         verified=True,
         first_name="Ananya",
         username="ananya_d",
+        gradient=("#E8455F", "#6E1028"),
         about=(
             "Moved here for work three years ago and still can't handle the "
             "traffic. I hike most weekends — Kudremukh if I have two days, Nandi "
@@ -170,6 +180,7 @@ PROTOTYPE: tuple[Person, ...] = (
         verified=True,
         first_name="Meera",
         username="meera.k",
+        gradient=("#D9663F", "#7A1228"),
         about=(
             "Bengali, so I have strong opinions about fish and football. I throw "
             "pottery badly on Sundays. My dog Laddu is the real main character."
@@ -190,6 +201,7 @@ PROTOTYPE: tuple[Person, ...] = (
         dob=date(2003, 1, 9),
         first_name="Ishita",
         username="ishita_draws",
+        gradient=("#C4324E", "#4E0A1C"),
         about=(
             "Grew up in Pune, here for my first job. I sketch strangers on the "
             "metro. Please don't be offended if I sketch you."
@@ -216,6 +228,7 @@ PROTOTYPE: tuple[Person, ...] = (
         verified=True,
         first_name="Sanya",
         username="sanya_bakes",
+        gradient=("#B8496A", "#5C0F26"),
         about=(
             "Punjabi in south Bengaluru, which means I've learned to make my own "
             "parathas. I read two books a week and bake when I'm stressed."
@@ -237,6 +250,7 @@ PROTOTYPE: tuple[Person, ...] = (
         dob=date(2004, 5, 5),
         first_name="Riya",
         username="riya_gg",
+        gradient=("#D9553F", "#78121A"),
         about=(
             "Final year, part-time streamer. I'm much funnier over text than in "
             "person, fair warning."
@@ -256,6 +270,7 @@ PROTOTYPE: tuple[Person, ...] = (
         verified=True,
         first_name="Kavya",
         username="kavya.sings",
+        gradient=("#C2405A", "#450A1A"),
         about=(
             "Trained in Carnatic vocal since I was six. I run half marathons and "
             "shoot film photography. Early mornings are non-negotiable."
@@ -276,6 +291,7 @@ PROTOTYPE: tuple[Person, ...] = (
         verified=True,
         first_name="Diya",
         username="diya_reads",
+        gradient=("#E8455F", "#4E0A1C"),
         about=(
             "Architect. Moved from Kochi for a project and stayed. I read mostly "
             "non-fiction and I've been slowly working through every filter coffee "
@@ -296,6 +312,7 @@ PROTOTYPE: tuple[Person, ...] = (
         verified=True,
         first_name="Nandini",
         username="nandini.m",
+        gradient=("#D9663F", "#6E1028"),
         about=(
             "Yoga instructor and part-time graphic designer. I foster dogs, which "
             "means my flat is chaos roughly half the year."
@@ -315,6 +332,7 @@ PROTOTYPE: tuple[Person, ...] = (
         dob=date(2000, 4, 2),
         first_name="Pooja",
         username="pooja_runs",
+        gradient=("#C4324E", "#7A1228"),
         about=(
             "Data analyst. Indori, so I have unreasonably high standards for poha. "
             "Training for a half marathon, badly."
@@ -334,6 +352,7 @@ PROTOTYPE: tuple[Person, ...] = (
         verified=True,
         first_name="Tanvi",
         username="tanvi_clicks",
+        gradient=("#B8496A", "#450A1A"),
         about=(
             "Photography student from Jaipur. I spend weekends shooting heritage "
             "buildings and evenings rewatching Guru Dutt films."
@@ -354,6 +373,7 @@ PROTOTYPE: tuple[Person, ...] = (
         verified=True,
         first_name="Arjun",
         username="arjun_cooks",
+        gradient=("#A8253C", "#3E0812"),
         about=(
             "Product designer, Rajasthani, moved here in 2021. I cook for people "
             "when I like them, which is how you'll know."
@@ -373,6 +393,7 @@ PROTOTYPE: tuple[Person, ...] = (
         verified=True,
         first_name="Dev",
         username="dev.builds",
+        gradient=("#C43450", "#5A0E22"),
         about=(
             "Building something in fintech. I run at 6am to feel like I have my "
             "life together. It works about half the time."
@@ -391,6 +412,7 @@ PROTOTYPE: tuple[Person, ...] = (
         dob=date(1997, 1, 26),
         first_name="Kabir",
         username="kabir_lko",
+        gradient=("#CC6440", "#661020"),
         about=(
             "Lawyer. Lucknowi, which means I'm annoyingly polite. I read a lot and "
             "argue for a living, so I've learned when not to."
@@ -411,6 +433,7 @@ PROTOTYPE: tuple[Person, ...] = (
         verified=True,
         first_name="Rohan",
         username="rohan_goa",
+        gradient=("#E04A62", "#4A0C1E"),
         about=(
             "Backend engineer. Grew up on a beach, now I live in traffic. I have "
             "two dogs and a guitar I'm mediocre at."
@@ -430,6 +453,7 @@ PROTOTYPE: tuple[Person, ...] = (
         verified=True,
         first_name="Vikram",
         username="vik_rides",
+        gradient=("#A8253C", "#5C0F26"),
         about=(
             "Consultant, Tamil, based here eight years. Weekend motorcycle rides "
             "and a camera I overpaid for. Looking for something that lasts."
@@ -449,6 +473,7 @@ PROTOTYPE: tuple[Person, ...] = (
         dob=date(2000, 8, 15),
         first_name="Aditya",
         username="adi_plays",
+        gradient=("#C43450", "#3E0812"),
         about=(
             "Software engineer from Patna. I play badminton four nights a week and "
             "cook badly the other three."
@@ -469,6 +494,7 @@ PROTOTYPE: tuple[Person, ...] = (
         verified=True,
         first_name="Karan",
         username="karan_lifts",
+        gradient=("#CC6440", "#4E0A1C"),
         about=(
             "Sales, and yes I know what that sounds like. From Amritsar. I gym in "
             "the mornings and cook Punjabi food badly on Sundays."
@@ -489,6 +515,7 @@ PROTOTYPE: tuple[Person, ...] = (
         verified=True,
         first_name="Siddharth",
         username="sid_writes",
+        gradient=("#E04A62", "#661020"),
         about=(
             "Reporter covering city politics. Delhi-born, Bengaluru by choice. I "
             "read, I walk a lot, and I know where the good coffee is."
@@ -508,6 +535,7 @@ PROTOTYPE: tuple[Person, ...] = (
         dob=date(2001, 2, 20),
         first_name="Neel",
         username="neel_shoots",
+        gradient=("#C2405A", "#450A1A"),
         about=(
             "Gujarati, shoot weddings for a living and street photography for "
             "myself. My weekends are booked eight months out, so weekdays it is."
@@ -534,6 +562,7 @@ PROTOTYPE: tuple[Person, ...] = (
         verified=True,
         first_name="Yash",
         username="yash_codes",
+        gradient=("#B8496A", "#78121A"),
         about=(
             "First job out of college. From Surat. I game too much, I'm learning "
             "to cook, and I'm figuring out what I'm doing here."

@@ -122,7 +122,7 @@ async def test_a_url_to_upload_one_photo_to_the_private_bucket(
 async def test_a_declared_type_we_refuse_anyway_is_refused_saying_what_to_do(
     db: AsyncSession, client: AsyncClient, make_user: MakeUser, declared: str
 ) -> None:
-    _, token = await _at(db, make_user)
+    user, token = await _at(db, make_user)
 
     response = await _upload_url(client, token, content_type=declared)
 
@@ -130,7 +130,8 @@ async def test_a_declared_type_we_refuse_anyway_is_refused_saying_what_to_do(
     error = _error(response)
     assert error["code"] == "UNSUPPORTED_IMAGE"
     assert "JPEG, PNG or WebP" in error["message"]
-    assert await db.scalar(select(Photo.id)) is None
+    # Scoped to this user: tests that commit (T-4.4's) leave photos behind.
+    assert await db.scalar(select(Photo.id).where(Photo.user_id == user.id)) is None
 
 
 async def test_before_the_photos_step_is_onboarding_incomplete(

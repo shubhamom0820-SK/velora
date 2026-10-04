@@ -14,9 +14,10 @@ from collections.abc import Sequence
 from dataclasses import replace
 from datetime import UTC, date, datetime, timedelta
 from typing import Any
-from uuid import UUID
+from uuid import UUID, uuid4
 
 import pytest
+from PIL import Image
 from sqlalchemy import func, select, text
 from sqlalchemy.engine import make_url
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -27,13 +28,17 @@ from app.core.enums import (
     Gender,
     LedgerReason,
     OnboardingStep,
+    PhotoKind,
+    ReviewStatus,
     Role,
     Seeking,
     SwipeDirection,
 )
+from app.core.providers.storage import FakeStorage
 from app.core.security import decrypt_phone, hash_phone, normalize_phone, verify_pin
 from app.modules.matches.models import Match
 from app.modules.notifications.models import NotificationPrefs
+from app.modules.photos.models import Photo
 from app.modules.profiles.models import Profile, ProfileIntent, ProfileInterest
 from app.modules.swipes.models import Swipe
 from app.modules.users.models import User
@@ -49,6 +54,7 @@ from seed.data import (
     Person,
     SeedSwipe,
 )
+from seed.photos import dust
 from seed.run import (
     LOCAL_DATABASE_MARKER,
     SCATTER_RADIUS_M,
@@ -362,6 +368,27 @@ TODAY = date(2026, 10, 3)
             (*SWIPES, SeedSwipe("nobody", "test_man", LIKE)),
             "swipe nobody -> test_man: names someone who isn't in the seed",
         ),
+        (
+            _with("ishita", gradient=None),
+            SWIPES,
+            (
+                "ishita: past the photos step, so needs a gradient: two #RRGGBB "
+                "colours (T-4.4)"
+            ),
+        ),
+        (
+            _with("dev", gradient=("#C43450", "red")),
+            SWIPES,
+            (
+                "dev: past the photos step, so needs a gradient: two #RRGGBB "
+                "colours (T-4.4)"
+            ),
+        ),
+        (
+            _with("moderator", gradient=("#C43450", "#5A0E22")),
+            SWIPES,
+            "moderator: onboarding not started, so nothing it would ask for can be set",
+        ),
     ],
 )
 def test_data_that_breaks_a_rule_is_refused(
@@ -640,7 +667,15 @@ async def test_joined_sets_when_they_signed_up(db: AsyncSession, clock: Any) -> 
 # --- Twice, and what it refuses mid-way ---------------------------------------------
 
 
-_COUNTED = (User, Profile, Wallet, NotificationPrefs, ProfileInterest, ProfileIntent)
+_COUNTED = (
+    User,
+    Profile,
+    Wallet,
+    NotificationPrefs,
+    ProfileInterest,
+    ProfileIntent,
+    Photo,
+)
 
 
 async def _counts(db: AsyncSession) -> list[int | None]:
@@ -790,3 +825,117 @@ async def test_the_output_never_has_a_phone_number_or_the_pin(
         national = person.phone.removeprefix("+91")
         assert national not in digits, person.key
     assert not prints_pin(printed, TEST_WOMAN_PIN)
+
+
+# --- Placeholder photos (T-4.4) ------------------------------------------------------
+
+PUBLIC, PRIVATE = "velora-public", "velora-private"
+
+
+async def _photos_of(db: AsyncSession, person: Person) -> list[Photo]:
+    user = await _user(db, person.phone)
+    return list(await db.scalars(select(Photo).where(Photo.user_id == user.id)))
+
+
+async def test_everyone_past_the_photos_step_has_an_approved_photo_at_place_0(
+    db: AsyncSession,
+) -> None:
+    """Everyone but the moderator, the three women at the selfie step included;
+    each stored in both buckets as moderation leaves an approved photo."""
+    storage = FakeStorage()
+
+    report = await write_seed(db, make_test_settings(), storage=storage)
+
+    past = [p.key for p in PEOPLE if run.past_photos(p.step)]
+    assert report.photos_added == past
+    assert len(past) == 22 and "moderator" not in past
+    assert {"ishita", "riya", "pooja"} <= set(past)
+    assert await _photos_of(db, BY_KEY["moderator"]) == []
+    for key in past:
+        [photo] = await _photos_of(db, BY_KEY[key])
+        assert (photo.kind, photo.position, photo.status) == (
+            PhotoKind.PUBLIC,
+            0,
+            ReviewStatus.APPROVED,
+        )
+        assert photo.raw_key == f"raw/{photo.user_id}/{photo.id}"
+        assert photo.public_key == f"p/{photo.id}.jpg"
+        assert (photo.width, photo.height) == (900, 1200)
+        private = storage.objects[(PRIVATE, photo.raw_key)]
+        assert storage.objects[(PUBLIC, photo.public_key)] == private
+        assert private.content_type == "image/jpeg"
+        # Re-encoded like any upload: a JPEG with nothing before its pixels
+        # but JFIF, its tables and its frame.
+        header = private.data[: private.data.index(b"\xff\xda")]
+        assert b"JFIF" in header and b"Exif" not in header
+    assert len(storage.objects) == 2 * len(past)
+
+
+async def test_each_photo_is_its_profiles_prototype_gradient(db: AsyncSession) -> None:
+    """The bottom-right corner is far from both glows: the second colour,
+    dusted as the prototype dusts it."""
+    storage = FakeStorage()
+    await write_seed(db, make_test_settings(), storage=storage)
+
+    for key in ("ananya", "yash", "test_man"):
+        [photo] = await _photos_of(db, BY_KEY[key])
+        gradient = BY_KEY[key].gradient
+        assert gradient is not None
+        with Image.open(
+            io.BytesIO(storage.objects[(PUBLIC, f"p/{photo.id}.jpg")].data)
+        ) as image:
+            corner = image.convert("RGB").getpixel((895, 1195))
+        assert isinstance(corner, tuple)
+        expected = dust(gradient[1])
+        assert all(abs(a - b) <= 6 for a, b in zip(corner, expected, strict=True))
+
+
+async def test_a_second_run_adds_no_photo(db: AsyncSession) -> None:
+    storage = FakeStorage()
+    await write_seed(db, make_test_settings(), storage=storage)
+    before = dict(storage.objects)
+
+    again = await write_seed(db, make_test_settings(), storage=storage)
+
+    assert again.photos_added == []
+    assert storage.objects == before
+    for person in PEOPLE:
+        assert len(await _photos_of(db, person)) == (1 if person.gradient else 0)
+
+
+async def test_someone_seeded_before_photos_gets_one_once(db: AsyncSession) -> None:
+    """The other exception to insert-only: a seed from before T-4.4 left
+    people with no photo; the next run adds one each, once."""
+    before_photos = [replace(p, gradient=None) for p in PEOPLE]
+    first = await write_seed(db, make_test_settings(), people=before_photos)
+    assert first.photos_added == []
+
+    second = await write_seed(db, make_test_settings())
+
+    assert second.created == []
+    assert len(second.photos_added) == 22
+    assert "Placeholder photos added for 22 people." in summary(second)
+
+
+async def test_a_place_0_that_already_holds_a_live_photo_gets_none(
+    db: AsyncSession,
+) -> None:
+    """Someone who uploaded their own: the seed never puts one beside it."""
+    await write_seed(db, make_test_settings(), people=_with("test_man", gradient=None))
+    man = await _user(db, BY_KEY["test_man"].phone)
+    photo_id = uuid4()
+    db.add(
+        Photo(
+            id=photo_id,
+            user_id=man.id,
+            kind=PhotoKind.PUBLIC,
+            position=0,
+            raw_key=f"raw/{man.id}/{photo_id}",
+        )
+    )
+    await db.flush()
+
+    again = await write_seed(db, make_test_settings())
+
+    assert "test_man" not in again.photos_added
+    assert [p.id for p in await _photos_of(db, BY_KEY["test_man"])] == [photo_id]

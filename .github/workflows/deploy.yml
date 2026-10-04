@@ -2,6 +2,7 @@
 # second check after /done's gate (D-044) — and then checks staging itself.
 #
 #   gate → migrate (as the owner, from here) → api (Fly) → web (Vercel) → smoke
+#                                                       ↘ worker (Fly, T-4.4)
 #
 # Runs after CI completes on main, for the exact commit CI tested; or by hand
 # for any commit whose CI passed (Actions → Deploy staging → Run workflow).
@@ -120,6 +121,33 @@ jobs:
         env:
           FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
         run: flyctl deploy api --config "$GITHUB_WORKSPACE/infra/fly.api.toml" --remote-only --ha=false
+
+  # The ARQ worker (T-4.4, D-095): the API's image, run as the worker, its own
+  # Fly app. After the API, so a job the new API queues meets a worker that
+  # knows it. Its token deploys this app only, as the API's deploys only the
+  # API's. The release command checks its settings before any machine changes.
+  worker:
+    name: worker — Fly
+    needs: [gate, api]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    environment: staging
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ needs.gate.outputs.sha }}
+          persist-credentials: false
+
+      - uses: superfly/flyctl-actions/setup-flyctl@fc53c09e1bc3be6f54706524e3b82c4f462f77be # v1.5
+        with:
+          version: ${{ env.FLYCTL_VERSION }}
+
+      # --ha=false: one machine, which the connection budget assumes
+      # (infra/STAGING.md); two would also run every job's poll twice (D-091).
+      - name: flyctl deploy
+        env:
+          FLY_API_TOKEN: ${{ secrets.FLY_WORKER_API_TOKEN }}
+        run: flyctl deploy api --config "$GITHUB_WORKSPACE/infra/fly.worker.toml" --remote-only --ha=false
 
   web:
     name: web — Vercel

@@ -161,7 +161,7 @@ enforced in the service. Index `(intent_id)`: discovery filters on intent, match
 | public_key | text null | set when approved (public kind only) |
 | status | review_status_t default 'pending' | |
 | reject_reason | text null | |
-| moderation | jsonb | provider response summary |
+| moderation | jsonb | the scores the decision read (T-4.4): provider, models, `explicit`, `faces`, `artificial_faces`, `text_artificial`; never the image or the request |
 | width, height | int null | |
 
 Indexes: `(user_id, kind, position)`, `(status) where status='pending'`.
@@ -334,6 +334,9 @@ Check `score between 0 and 100` (D-031). Bands are policy, so no check ties them
 ### fraud_events
 `id uuid pk, user_id uuid fk users, signal text not null, weight smallint not null, meta jsonb, created_at`.
 Index `(user_id, created_at desc)`.
+A signal, never a verdict. `possible_minor_photo_score` (T-4.4, D-093): a model's score that one
+photo may show a minor, weight 0 until T-9.2 says what it may count for; `meta` is `{what, model,
+score}`, and never the image or which photo.
 
 ---
 

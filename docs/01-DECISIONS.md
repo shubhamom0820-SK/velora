@@ -2372,6 +2372,30 @@ the record than a clean one that was lucky.
 The rules are the founder's decision, 4 October 2026. The words are the advisor's (Claude, in a
 separate chat), relayed by the founder, as corrected above.
 
+### D-101 · What moderation's scores mean — Open
+**The proposal (T-4.4, Claude, 4 October 2026; the founder's to lock or change):** the worker
+asks Sightengine for `nudity-2.1`, `face-age` and `text` in one plain `check.json` call
+(`face-age`, because Sightengine marks `face-attributes` deprecated), and decides in this order,
+the first that holds deciding (`api/app/modules/photos/moderation.py`, each threshold one
+constant):
+1. **`minor_suspected`:** any real face scored 0.5 or more as a minor's. Sightengine says faces near
+   18 score close to 0.5, so this catches young-looking adults, which D-093 accepts. First, so a
+   photo that also scores as sexual is handled as D-093 says (P-81 asks the lawyer about that case).
+2. **`nudity`:** sexual activity, sexual display, erotica or "very suggestive" at 0.5 or more.
+   Swimwear, a bare chest and the merely suggestive pass: ordinary on dating profiles.
+3. **`no_face`:** a public photo with no real face (drawings, statues and masks don't count). A
+   private one needs none: only people its owner chose see it (T-8.4).
+4. **`text_overlay`:** embedded text at 0.8 or more. Overlaid numbers and handles would get round
+   the chat's masking (T-7.3); text in the scene is "natural" and passes.
+
+**What the owner reads is T-4.6's to decide,** not this entry's: the column keeps the reason
+for moderation (rule 12), and T-4.6 proposes naming to the owner only reasons on a list, so
+`minor_suspected` reaches them as `other`, in D-093's words.
+
+**Why Open:** the numbers are a first guess at a trade-off nobody has measured: a false rejection
+costs a real person a retry, a false approval puts a photo in front of strangers. They are tuned
+from what T-9.5's queue shows, by changing a constant and this entry, never silently.
+
 ---
 
 ## Adding a decision

@@ -47,14 +47,15 @@ velora/
     app/core/           config, db, redis, events, security, errors, deps, providers (fakes local-only),
                         storage_keys
     app/modules/<name>/ router.py service.py repository.py schemas.py models.py
-    app/workers/        ARQ tasks + cron
-    app/tools/          checks run by hand inside a deployed machine (storage_probe, T-4.1)
+    app/workers/        ARQ worker (main.py, `python -m app.workers`) + tasks/
+    app/tools/          checks run by hand inside a deployed machine (storage_probe, T-4.1;
+                        sightengine_shape, T-4.4)
     alembic/            migrations
     seed/               make seed: dev data, local stack only, never in the image (D-064)
     tests/              mirrors app/ (and seed/)
   web/                  Next.js app (App Router, TypeScript strict, Tailwind v4)
-  infra/                docker-compose.yml, fly.api.toml + STAGING.md (staging's runbook),
-                        fly.api.production.toml + PRODUCTION.md (production's: released by tag)
+  infra/                docker-compose.yml, fly.api.toml + fly.worker.toml + STAGING.md (staging's
+                        runbook), fly.api.production.toml + PRODUCTION.md (production's: released by tag)
   scripts/              ci-gate, release-gate, with-tools, staging-smoke, check-image-no-env, migrate-with-url
   Makefile
 ```
@@ -87,8 +88,8 @@ reference for its APIs, which differ from older versions.
 ```
 make infra-up    # docker: postgres+postgis, redis, s3 (SeaweedFS, D-086); stamps the dev db as local   (make infra-down to stop)
 make infra-reset # stop the stack and DROP all data volumes (clean database)
-make dev         # infra + api + web on 127.0.0.1 (worker joins with T-4.4)
-make worker      # ARQ worker only
+make dev         # infra + api + worker + web on 127.0.0.1
+make worker      # ARQ worker only: moderate_photo, delete_files (polls every 10 s, D-091)
 make seed        # dev data: 20 profiles, test users (local only; a re-run changes nothing, infra-reset starts over)
 make test        # api pytest + web vitest   (test-api / test-web for one side)
 make lint        # ruff + mypy + eslint + tsc --noEmit + prettier check   (lint-api / lint-web)

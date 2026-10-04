@@ -115,6 +115,18 @@ def test_providers_default_to_fake() -> None:
     assert settings.PUSH_PROVIDER == "fake"
 
 
+def test_the_worker_polls_every_10_seconds_unless_told() -> None:
+    """D-091: 10 seconds on Upstash Free; ARQ's own default is 0.5."""
+    assert _settings().WORKER_POLL_DELAY_S == 10
+    assert _settings(WORKER_POLL_DELAY_S="2.5").WORKER_POLL_DELAY_S == 2.5
+
+
+@pytest.mark.parametrize("delay", ["0", "-1"])
+def test_a_poll_delay_of_zero_or_less_is_refused(delay: str) -> None:
+    with pytest.raises(ValidationError, match="WORKER_POLL_DELAY_S"):
+        _settings(WORKER_POLL_DELAY_S=delay)
+
+
 def test_invalid_env_is_rejected() -> None:
     with pytest.raises(ValidationError):
         _settings(ENV="staging-ish")
