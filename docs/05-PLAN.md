@@ -3280,6 +3280,13 @@ The number comes from the session's own block, given in its brief, from P-100 up
   commit's subject beside its SHA. In `scripts/ci-gate-test`: an already-merged HEAD exits with the
   new code and says why; an explicit `main` still checks. At the direction of the advisor directing
   T-3.2 to T-3.10, 3 October 2026; found in P-54.
+  **Seen a second time, in other circumstances (4 October 2026):** a rebase stopped on a conflict,
+  which leaves HEAD on `main`'s own commit, and the gate, run in the same chained command, printed
+  `CI is green for 48a5975 (run 37216216651)`: a commit already on `main`, with nothing of the
+  session's in it. The push before it had failed, so nothing went up, and the green was disregarded
+  (P-0.15's deploy flag, landed later as `da5172a`). P-54's case was a refused fast-forward; this
+  was a stopped rebase. Twice, by two routes, makes it a thing that happens, not a thing that
+  happened.
 - [ ] P-61 · Give the API's 500s their CORS headers. **Before T-9.12,** or sooner if a screen needs to
   tell a crash from no signal. Worst case: a browser can't read the API's `INTERNAL` envelope at all,
   so every 500 looks to the web exactly like a lost connection ("Failed to fetch"), and a bug in
@@ -3641,3 +3648,18 @@ The number comes from the session's own block, given in its brief, from P-100 up
   4 October 2026). Decided by the founder, 4 October 2026; filed by Claude.
 
   Found writing D-230.
+- [ ] P-140 · Make a deploy's gate read `main`'s own CI run, not whichever ran last for the commit.
+  **Before the next day with several sessions landing at once.** Worst case: a commit whose CI
+  on `main` passed is refused deployment, and the refusal reads as if the commit failed on its
+  merits, so someone hunts a bug that isn't there while staging falls behind `main`. **Observed,
+  4 October 2026:** staging's deploy of `da5172a` (run 37219111888) stopped at its gate, `CI concluded
+  'cancelled' for da5172a (run 37218824878)`. Three CI runs existed for that commit: 37218291859 on
+  its own branch (success), 37218706519 on `main` (success) and 37218824878 on another session's
+  branch, `docs-pricing-answers` (cancelled, the newest, created 16:59:52 UTC). **Read from the
+  code, not tested:** `scripts/ci-gate` (lines 49–55) takes the newest push-event run of the CI
+  workflow for the commit, on any branch (`sort_by(.createdAt) | last`), which fits what happened.
+  **Not established:** how that branch came to point at `da5172a`, and whether the same rule could
+  also let a newer green run on another branch stand in for a red run on `main` (the code allows
+  it; nobody has seen it). Fix to decide: the deploy's gate filters to `main`'s run for the
+  commit, and `/done`'s to the task branch's. Found landing P-0.15's deploy flag; filed from this
+  session's block (P-140 to P-149).
