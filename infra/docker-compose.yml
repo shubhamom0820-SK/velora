@@ -54,7 +54,12 @@ services:
   # in ./s3/s3.json: development values, as above.
   s3:
     image: chrislusf/seaweedfs:4.48@sha256:4e61d15fd35994cb1e43e1e553dff106794841fd9a99ade2fc8c8bfce4d7872d
-    command: server -dir=/data -ip.bind=0.0.0.0 -s3 -s3.port=9000 -s3.config=/etc/seaweedfs/s3.json
+    # -volume.max: a collection claims 7 volumes at its first write, and a fresh
+    # server holds three (velora-public, velora-private and the filer's own), so
+    # 21 at least; the documented default is 8 (`weed server -h`). 100 leaves each
+    # room to grow. Without it CI's fresh server starved velora-public whenever the
+    # first write came 25 s later than usual (P-77); s3-init claims both below.
+    command: server -dir=/data -ip.bind=0.0.0.0 -volume.max=100 -s3 -s3.port=9000 -s3.config=/etc/seaweedfs/s3.json
     ports:
       - "127.0.0.1:9000:9000"
     volumes:
@@ -66,7 +71,8 @@ services:
       timeout: 5s
       retries: 24
 
-  # One-shot: creates whichever of the two buckets is missing, then exits.
+  # One-shot: creates whichever of the two buckets is missing, claims each one's
+  # volumes, then exits.
   # Inside s3's network, so its master answers on localhost; creating a bucket
   # that exists is an error in `weed shell`, hence the check first.
   s3-init:
@@ -87,6 +93,14 @@ services:
           fi
         done
         echo "init: buckets ready"
+        # Claim each bucket's volumes now, by writing and deleting one object
+        # through the filer: whichever bucket a test writes first, the other
+        # has its volumes already and can't be starved by it (P-77).
+        for bucket in velora-public velora-private; do
+          curl -sf -X PUT --data-binary claim "http://localhost:8888/buckets/$$bucket/.volume-claim" > /dev/null
+          curl -sf -X DELETE "http://localhost:8888/buckets/$$bucket/.volume-claim" > /dev/null
+        done
+        echo "init: each bucket's volumes claimed"
         echo s3.bucket.list | weed shell -master=localhost:9333
 
 volumes:

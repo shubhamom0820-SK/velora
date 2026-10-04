@@ -1984,6 +1984,15 @@ time creates nothing and exits 0.
 production: fall back to Chainguard's MinIO, pinned by digest, and tell the founder (the
 instruction that came with the choice).
 
+**What the switch cost (T-5.4, 4 October 2026):** an afternoon of CI. A fresh SeaweedFS claims
+7 volumes per collection at its first write and was started with no `-volume.max`, so on CI the
+collection written last could find none: every write to `velora-public` failed with
+`InternalError` once the first storage write came about 25 s later than usual. It was latent on
+`main` from the switch: T-5.4's 50-connection tests lengthened the critical pass by that much and
+went red twice, and `main` plus a test that only sleeps 25 s went red on the same four tests. The
+fix (P-77): `-volume.max=100`, and `s3-init` claiming both buckets' volumes at startup. It doesn't
+change the decision: MinIO's images were gone, and there was no staying put.
+
 **Rejected:** Chainguard's MinIO (above); our cached MinIO images copied to GitHub's registry
 (frozen without MinIO's October 2025 security fix, and every fresh clone would need a GitHub login
 to pull); building MinIO from source in CI (a dead project, rebuilt on every run).

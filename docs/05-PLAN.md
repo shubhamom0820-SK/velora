@@ -3389,3 +3389,25 @@ Claude Code adds items here instead of doing unplanned work. Format:
   direction, 4 October 2026.
 
   Found preparing T-4.6.
+- [x] P-77 · Give CI's fresh SeaweedFS room for both buckets. **Done, 4 October 2026,** at the
+  direction of the advisor directing Sprint 5, relayed by the founder. Worst case, as it happened:
+  every session's storage tests go red on CI the day its suite grows, with nothing of theirs at
+  fault. A fresh SeaweedFS claims 7 volumes per collection at its first write; started with no
+  `-volume.max` (documented default 8), the collection written last could find none, and writes
+  to `velora-public` failed with `InternalError` once the first one came about 25 s later than
+  usual. Found when T-5.4's 50-connection tests lengthened the critical pass by that much (CI run
+  37205686329, two attempts). Fix, both halves: `-volume.max=100` with the count in a comment,
+  since neither alone is enough; and `s3-init` writes and deletes one object in each bucket
+  through the filer, so both claim their volumes before any test runs. **Proved on the commit
+  that went red,** `main` plus a test that only sleeps 25 s (`dfff8bf`, red: run 37210123236):
+  with the fix, green (`5a7aafc`, run 37213315783); with the fix reverted, a tree identical to
+  `dfff8bf`, red again on the same four tests (`b2837cb`, run 37213318457). The cost is written on
+  D-086.
+- [ ] P-78 · Watch SeaweedFS under load it hasn't met. **Not resolved by P-77, whenever a test
+  first puts real concurrency on it.** Worst case: a storage server failing under load it has
+  never seen, read as a flake. What P-77 proved is timing, not load: `main` plus a 25 s sleep
+  reproduced the failure with no extra connections, and T-5.4's 50 connections are Postgres's,
+  in an earlier pytest process. Nothing has put concurrent S3 writes on SeaweedFS yet, so it is
+  not proved under load; this failure is the reason to watch it. A storage test that fails on CI
+  with `InternalError` and passes on a re-run is this item's evidence, never a flake to re-run
+  past. Filed at the direction of the advisor directing Sprint 5.
