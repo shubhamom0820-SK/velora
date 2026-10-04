@@ -1307,8 +1307,32 @@ exist yet. The batch is a chain, T-3.10 → T-3.11 → T-3.12 → T-3.13, each n
   otherwise it can't read the numbers or hashes the API wrote, or doesn't start (D-060, D-061).
 - [ ] `moderate_photo(photo_id)`: fetch raw → Pillow open (reject if not an image) → `ImageOps.exif_transpose` → resize longest side 1600 → save JPEG q85 **without EXIF** → `ModerationProvider.check()` → approve (write public copy for `public` kind) or reject with reason (`nudity`, `minor_suspected`, `no_face`, `text_overlay`, `other`). `minor_suspected` also opens an internal report.
 - [ ] Idempotent: re-running on an approved photo does nothing.
-- [ ] Sightengine: turn on deleting each image right after its check, so photos don't stay on its
-  servers in the US and Europe — `/privacy` says they're deleted there (D-048).
+- [ ] **Sightengine keeps nothing by default, and this task stays on that default.** There is no
+  setting to turn on: deleting is Sightengine's default, which `/privacy`'s "deleted there after the
+  check" (D-048) rests on. Its FAQ, "What happens to our images, videos and audio files after
+  processing?", at https://sightengine.com/faq/data-retention-after-processing, read by Claude on
+  4 October 2026 from the page itself, word for word:
+
+  > By default, images, videos and audios are deleted after processing. You can request a change
+  > to this default policy to suit your needs.
+  > We only keep a file when you use a feature that stores it:
+  > - you send it for human review (hybrid moderation workflow)
+  > - you submit it to the Feedback API
+  > - you add it to a near-duplicate list\* or upload it with the Upload API (deleted after 14 days)
+  > - you redact a video: the redacted video is kept so you can download it (deleted after 3 months)
+  >
+  > \* Lists can be set to keep only fingerprints. The original files are then deleted, but the
+  > list can't be upgraded to newer fingerprint versions.
+
+  **The constraint: we use the plain image moderation API only,** none of those four features.
+  **Turning on hybrid review or the Feedback API makes /privacy inaccurate the same day, so either
+  is a decision that changes a published page, not a tuning knob someone enables for better
+  accuracy.** The same holds for the Upload API and near-duplicate lists. And the retention policy
+  is configurable on request, so "default" is a state we must not drift out of, not a guarantee:
+  no one asks Sightengine to change it without the same decision. Found by the advisor (Claude, in
+  a separate chat), relayed by the founder, 4 October 2026, answering D13 of Sprint 4's plan; the
+  quote checked against the page by Claude the same day. P-71 carries the same constraint, beside
+  `/privacy`'s other processors.
 - [ ] Tests with the fake provider for approve and each reject path; test that output has no EXIF.
 - [ ] Extend `make seed` (T-1.15): an approved public photo at position 0 for every seeded user past the photos step (everyone but the moderator, including the three women at the selfie step) — a placeholder from the prototype's `c1`/`c2` gradient, re-encoded like any upload and stored through `StorageProvider`. Re-running creates no duplicates.
 - [ ] **Commit:** `feat(worker): photo moderation pipeline [T-4.4]`
@@ -3052,3 +3076,12 @@ Claude Code adds items here instead of doing unplanned work. Format:
   2026.
 
   Found building T-3.14.
+  **And the constraint that keeps `/privacy`'s Sightengine line true** (4 October 2026). `/privacy`
+  says photos are checked by Sightengine "and deleted there after the check". That holds only while
+  T-4.4 uses Sightengine's plain image moderation API, on its default retention, which deletes
+  after processing; T-4.4 quotes Sightengine's FAQ and the four features that keep files (human
+  review, the Feedback API, the Upload API and near-duplicate lists, redacted videos). **Turning on
+  hybrid review or the Feedback API makes /privacy inaccurate the same day, so either is a decision
+  that changes a published page, not a tuning knob someone enables for better accuracy.** Sightengine
+  changes its retention on request, so "default" is a state we must not drift out of, not a
+  guarantee. At the direction of the advisor (Claude, in a separate chat), relayed by the founder.
