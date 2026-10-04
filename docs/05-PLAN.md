@@ -1733,15 +1733,23 @@ committed rows.
 then prices show nothing. T-4.4 and T-4.6 come first.
 - [ ] **Needs:** T-5.1, and the founder's answer to each question below, found by Claude on 4 October
   2026 while writing D-097 to D-100. They are his calls: none is resolved here, and none is to be
-  guessed at. **The first two change published pages**, so neither is answered in passing.
-  1. **Changes `/terms`, a published page. Can an expired Thread still be read?** D-097 says its
-     messages become unavailable, without saying whether to him alone or to both. `/terms` says an
-     expired Thread "is kept, read-only", and so do D-003, 06-TESTING's J7 and the prototype.
-     T-7.11's expired panel offers re-open or tie, though her side may show no locked state and no
-     prompt. And T-7.3, 06-TESTING's case 12 and the 410 `THREAD_EXPIRED` refuse any send on an
-     expired Thread, where her later message must be delivered. Touches: `web/src/i18n/en.ts`
-     (`/terms`), 01-DECISIONS (D-003, D-097), 02-ARCHITECTURE, 04-API, 05-PLAN (T-7.3, T-7.6,
-     T-7.11), 06-TESTING, the prototype.
+  guessed at. **The first two touch published pages**, so neither is answered in passing: the first
+  is answered, the second is still open.
+  1. **Answered by the founder, 4 October 2026: an expired Thread stays readable** (D-097, which
+     records it). Asked as: can an expired Thread still be read, which `/terms` answers today?
+     "Unavailable" means he can't send, not that he can't read: the history he paid for stays
+     visible to both of them. **Why:** he bought that conversation, and hiding it would be both
+     harsher than intended and a change to a live page for no gain. So `/terms` ("kept, read-only")
+     stands as published, and so do D-003, 06-TESTING's J7 and the prototype. What it settles:
+     - **T-7.11's expired panel** must show her no prompt, and no sign that money stands between
+       her message and his reply: readable, and otherwise silent on her side.
+     - **08-DESIGN §6's example copy, "This thread disappears in 4h", is wrong twice:** the word,
+       since nothing disappears, and the number, since a Thread is an hour. Flagged here, not
+       rewritten: the 1-hour task D-097 names rewrites it.
+     - **Not part of the answer, but following from D-097's step 4** (recorded so it isn't lost):
+       T-7.3, 06-TESTING's case 12 and the 410 `THREAD_EXPIRED` (02-ARCHITECTURE, 04-API) refuse
+       any send on an expired Thread, while her later message must be delivered; only his send waits
+       on a re-open. For T-7.3 or the 1-hour task to change, not this task.
   2. **Changes `/refunds`, a published page. What replaces the album request, and what does a ban
      give back?** If viewing private pictures (1 Vela) replaces the album request (5, returned on a
      decline), the return `/refunds` promises for a declined request goes with it; and is the 1 Vela

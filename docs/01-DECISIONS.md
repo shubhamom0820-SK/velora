@@ -32,9 +32,10 @@ An expired thread is archived read-only, never deleted, and can be re-opened for
 README, 03-SCHEMA, 06-TESTING and three code comments; this entry and all of them were corrected
 to Knot in the same commit. Velora is the company name, and Thread and Knot are product nouns
 (CLAUDE.md rule 17).
-**Superseded in part, 4 October 2026, by D-097:** a Thread lasts 1 hour, restarted by her message;
-an expired Thread's messages become unavailable, never deleted; re-opening costs 2 Velas (D-098).
-The Knot, and the rule above, stand. The code still runs 24 hours until D-097's own task.
+**Superseded in part, 4 October 2026, by D-097:** a Thread lasts 1 hour, restarted by her message,
+and re-opening costs 2 Velas (D-098). An expired Thread stays archived read-only, as above, for
+both: he can't send until he re-opens it. The Knot, and the rule above, stand. The code still runs
+24 hours until D-097's own task.
 
 ### D-004 · Action prices — Locked (values tunable)
 Prices live in the `action_prices` table, not in code, so they can change without a deploy.
@@ -2227,7 +2228,8 @@ worker is built once on its new host (on T-4.1's Needs line, waived there for T-
 1. A man's first message opens it: 5 Velas, and the hour starts.
 2. She replies inside the hour: it stays open, the hour restarts from her message, and nothing more
    is charged. It is the same hour throughout, at the first message or the hundredth.
-3. The hour passes: the Thread expires, and its messages become unavailable.
+3. The hour passes: the Thread expires and becomes unavailable to him: he can't send in it until he
+   re-opens it. Its history stays readable to both of them.
 4. She messages later: it is delivered, and he can see that it is there. He pays 2 Velas to re-open
    the Thread and reply, every time, and it carries on as before.
 5. Extend, at any point: 10 Velas, and for 24 hours the Thread doesn't expire.
@@ -2237,12 +2239,12 @@ prompt, and never that money stands between her message and his reply. She is ne
 
 **Expiry is a state, never a deletion.** Rule 12 holds: nothing in the five tables the app role
 can never delete from (`messages`, `reports`, `ledger_entries`, `payments`, `audit_log`; 03-SCHEMA)
-is hard-deleted, and her later message reaching him proves the history is still there. "Unavailable" means not shown, never
-removed.
+is hard-deleted, and her later message reaching him proves the history is still there.
+"Unavailable" means he can't send, never that anything is hidden or removed.
 
-**Supersedes three parts of D-003:** "expires 24h after opening" (1 hour, restarted by her
-message); "archived read-only" (unavailable); and "re-opened for 3 credits" (2 Velas, D-098).
-D-003's Knot, and its rule that permanence is never bought, stand.
+**Supersedes two parts of D-003:** "expires 24h after opening" (1 hour, restarted by her message)
+and "re-opened for 3 credits" (2 Velas, D-098). D-003's "archived read-only, never deleted" stands,
+and so do its Knot and its rule that permanence is never bought.
 
 **Decided, not built.** Today's code, tests and copy still give a Thread 24 hours
 (`app_config.thread_hours`, seeded 24). Moving them to 1 hour is surgery on built, tested code and
@@ -2251,8 +2253,16 @@ lands, 24 hours is what runs and 1 hour is what is decided; nothing is changed t
 then.
 
 **What this entry leaves open** is on T-5.2's Needs line, with every pricing question, each with
-the files it touches. One of them changes a published page: whether an expired Thread can still be
-read, which `/terms` answers today.
+the files it touches.
+
+**Answered 4 October 2026 (the founder): an expired Thread stays readable.** "Unavailable" means he
+can't send, not that he can't read: the history he paid 5 Velas for stays visible to both of them.
+**Why:** he bought that conversation, and hiding it would be both harsher than intended and a
+change to a live page for no gain. So `/terms` ("kept, read-only") stands as published, and so do
+D-003, 06-TESTING's J7 and the prototype. **Corrected with it:** this entry's first version,
+written by Claude, glossed "unavailable" as "not shown, never removed", and listed D-003's
+"archived read-only" among the parts it superseded, while the same entry put readability down as
+an open question. That prejudged the question, and wrongly; both lines are corrected above.
 
 The names, the lifetime and the rules are the founder's decision, 4 October 2026. The write-up
 they came in is the advisor's (Claude, in a separate chat), relayed by the founder.
