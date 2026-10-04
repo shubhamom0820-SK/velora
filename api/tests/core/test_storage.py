@@ -1,10 +1,11 @@
-"""Storage (T-4.1): `S3Storage` against MinIO, as `make infra-up` runs it and
-CI starts it; the endpoint gate; and the probe that proves R2 where it runs.
+"""Storage (T-4.1): `S3Storage` against the local S3 (SeaweedFS, D-086), as
+`make infra-up` runs it and CI starts it; the endpoint gate; and the probe that
+proves R2 where it runs.
 
-MinIO is shared by every run on the machine (P-55 gives it no slot), so each
-test writes under a prefix of its own and deletes what it wrote; no assertion
-looks at anything else in a bucket. R2 itself is proved by the probe inside
-staging's machine (infra/STAGING.md §3), never by MinIO passing.
+The local S3 is shared by every run on the machine (P-55 gives it no slot), so
+each test writes under a prefix of its own and deletes what it wrote; no
+assertion looks at anything else in a bucket. R2 itself is proved by the probe
+inside staging's machine (infra/STAGING.md §3), never by a local server passing.
 """
 
 from __future__ import annotations
@@ -31,9 +32,9 @@ from app.tools.storage_probe import ProbeRefused, probe
 from tests.conftest import make_test_settings
 from tests.infra import (
     API_DIR,
-    LOCAL_MINIO_URL,
-    MINIO_DOWN_REASON,
-    MINIO_UP,
+    LOCAL_S3_URL,
+    S3_DOWN_REASON,
+    S3_UP,
     in_ci,
     infra_policy,
 )
@@ -45,31 +46,31 @@ PUBLIC, PRIVATE = "velora-public", "velora-private"
 UNNAMED_ENV = "env-nobody-has-named-2031"
 
 
-def minio_settings() -> Settings:
-    """Local settings for MinIO, as `api/.env.example` has them."""
+def local_s3_settings() -> Settings:
+    """Local settings for the local S3, as `api/.env.example` has them."""
     return make_test_settings().model_copy(
         update={
             "STORAGE_PROVIDER": "s3",
-            "R2_ENDPOINT_URL": LOCAL_MINIO_URL,
-            "R2_ACCESS_KEY_ID": "minioadmin",
-            "R2_SECRET_ACCESS_KEY": "minioadmin",
+            "R2_ENDPOINT_URL": LOCAL_S3_URL,
+            "R2_ACCESS_KEY_ID": "velora-local",
+            "R2_SECRET_ACCESS_KEY": "velora-local-secret",
             "R2_BUCKET_PUBLIC": PUBLIC,
             "R2_BUCKET_PRIVATE": PRIVATE,
-            "PUBLIC_CDN_URL": f"{LOCAL_MINIO_URL}/{PUBLIC}",
+            "PUBLIC_CDN_URL": f"{LOCAL_S3_URL}/{PUBLIC}",
         }
     )
 
 
 @pytest.fixture
 async def storage() -> AsyncIterator[S3Storage]:
-    decision = infra_policy(reachable=MINIO_UP, ci=in_ci())
+    decision = infra_policy(reachable=S3_UP, ci=in_ci())
     if decision == "skip":
-        pytest.skip(MINIO_DOWN_REASON)
+        pytest.skip(S3_DOWN_REASON)
     if decision == "fail":
         pytest.fail(
-            f"CI requires MinIO, and it is not reachable ({MINIO_DOWN_REASON})."
+            f"CI requires the local S3, and it is not reachable ({S3_DOWN_REASON})."
         )
-    s3 = S3Storage(minio_settings())
+    s3 = S3Storage(local_s3_settings())
     try:
         yield s3
     finally:
@@ -158,7 +159,7 @@ async def test_a_presigned_get_returns_the_bytes(
         response = await http.get(await storage.presign_get(PRIVATE, key))
 
         assert (response.status_code, response.content) == (200, b"private bytes")
-        unsigned = await http.get(f"{LOCAL_MINIO_URL}/{PRIVATE}/{key}")
+        unsigned = await http.get(f"{LOCAL_S3_URL}/{PRIVATE}/{key}")
         assert unsigned.status_code == 403  # the private bucket answers no one unsigned
     finally:
         await _cleanup(storage, (PRIVATE, key))
@@ -239,11 +240,11 @@ async def test_the_fake_reports_size_and_type_too() -> None:
         await fake.head(PRIVATE, "missing")
 
 
-def test_the_example_env_is_minio_as_these_tests_use_it() -> None:
-    """`api/.env.example` stores files in MinIO, so `make dev` and `make seed`
+def test_the_example_env_is_the_local_s3_as_these_tests_use_it() -> None:
+    """`api/.env.example` stores files in the local S3, so `make dev` and `make seed`
     write real objects; and as a whole it starts, s3 settings complete."""
     example = dotenv_values(API_DIR / ".env.example")
-    expected = minio_settings()
+    expected = local_s3_settings()
 
     for name in (
         "STORAGE_PROVIDER",
@@ -256,14 +257,14 @@ def test_the_example_env_is_minio_as_these_tests_use_it() -> None:
     ):
         assert example[name] == getattr(expected, name), name
     started = Settings(_env_file=API_DIR / ".env.example")
-    assert storage_endpoint(started) == LOCAL_MINIO_URL
+    assert storage_endpoint(started) == LOCAL_S3_URL
 
 
 # --- The endpoint: R2's own, except locally (rule 16) -----------------------------
 
 
-def test_locally_the_endpoint_may_be_minio() -> None:
-    assert storage_endpoint(minio_settings()) == LOCAL_MINIO_URL
+def test_locally_the_endpoint_may_be_the_local_s3() -> None:
+    assert storage_endpoint(local_s3_settings()) == LOCAL_S3_URL
 
 
 @pytest.mark.parametrize("env", ["staging", "production", "preview", UNNAMED_ENV])
@@ -271,7 +272,7 @@ def test_anywhere_else_the_endpoint_is_r2s_own(env: str) -> None:
     """Even for settings `Settings` never checked (copied past validation): the
     override is honoured only where the allowlist names."""
     r2 = r2_settings()
-    settings = minio_settings().model_copy(
+    settings = local_s3_settings().model_copy(
         update={"ENV": env, "R2_ACCOUNT_ID": r2["R2_ACCOUNT_ID"]}
     )
 
@@ -283,12 +284,12 @@ def test_anywhere_else_the_endpoint_is_r2s_own(env: str) -> None:
 # --- The probe (D14): what proves R2 on staging -----------------------------------------
 
 
-async def test_the_probe_passes_every_step_against_minio(
+async def test_the_probe_passes_every_step_against_the_local_s3(
     storage: S3Storage, http: httpx.AsyncClient
 ) -> None:
-    """MinIO's public bucket allows anonymous reads (`make infra-up`), so even
+    """The local public bucket allows anonymous reads (`infra/s3/s3.json`), so even
     the CDN step runs here."""
-    report = await probe(minio_settings(), storage, http)
+    report = await probe(local_s3_settings(), storage, http)
 
     assert not report.failed, report.lines
     assert all(line.startswith("ok") for line in report.lines)
@@ -301,9 +302,9 @@ async def test_the_probe_passes_every_step_against_minio(
 async def test_a_bucket_these_keys_reach_is_reported_as_a_failure(
     storage: S3Storage, http: httpx.AsyncClient
 ) -> None:
-    """MinIO's keys reach every bucket: named as one they mustn't, the probe
+    """The local keys reach every bucket: named as one they mustn't, the probe
     says so, so a token scoped too widely can't pass it."""
-    report = await probe(minio_settings(), storage, http, refused_buckets=(PRIVATE,))
+    report = await probe(local_s3_settings(), storage, http, refused_buckets=(PRIVATE,))
 
     assert report.failed
     assert f"FAIL these keys are refused on {PRIVATE}" in report.lines
@@ -325,7 +326,7 @@ async def test_a_failed_delete_is_reported_not_raised(
         await real_delete(bucket, key)
 
     monkeypatch.setattr(storage, "delete", first_delete_fails)
-    report = await probe(minio_settings(), storage, http)
+    report = await probe(local_s3_settings(), storage, http)
 
     assert report.lines[-1] == "FAIL every probe object is deleted"
     assert report.failed
@@ -335,7 +336,7 @@ async def test_a_failed_delete_is_reported_not_raised(
 
 @pytest.mark.parametrize("env", ["production", "preview", UNNAMED_ENV])
 async def test_the_probe_refuses_outside_local_and_staging(env: str) -> None:
-    settings = minio_settings().model_copy(update={"ENV": env})
+    settings = local_s3_settings().model_copy(update={"ENV": env})
 
     async with httpx.AsyncClient() as http:
         with pytest.raises(ProbeRefused, match="runs only where ENV is local, staging"):
@@ -345,7 +346,7 @@ async def test_the_probe_refuses_outside_local_and_staging(env: str) -> None:
 async def test_the_probes_command_refuses_before_touching_storage(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    production = minio_settings().model_copy(update={"ENV": "production"})
+    production = local_s3_settings().model_copy(update={"ENV": "production"})
     monkeypatch.setattr(storage_probe, "get_settings", lambda: production)
     out, err = io.StringIO(), io.StringIO()
 

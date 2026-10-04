@@ -10,9 +10,9 @@ help: ## List the available targets
 	@echo "Velora — make targets:"
 	@grep -E '^[a-z][a-zA-Z0-9_-]*:.*?## ' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*?## "}; {printf "  %-15s %s\n", $$1, $$2}'
 
-infra-up: ## Start docker: postgres+postgis, redis, minio; stamp the dev database as local
-	$(COMPOSE) up -d --wait db redis minio
-	$(COMPOSE) run --rm minio-init
+infra-up: ## Start docker: postgres+postgis, redis, s3 (SeaweedFS); stamp the dev database as local
+	$(COMPOSE) up -d --wait db redis s3
+	$(COMPOSE) run --rm s3-init
 	@# The dev seed writes only to a database carrying this stamp (T-1.15, D-064).
 	@# psql runs inside the container, so this reaches no other database.
 	$(COMPOSE) exec -T db sh -c 'psql -v ON_ERROR_STOP=1 -q -U "$$POSTGRES_USER" -d "$$POSTGRES_DB"' < infra/postgres/stamp-local.sql

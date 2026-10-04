@@ -46,48 +46,50 @@ services:
       timeout: 3s
       retries: 12
 
-  # Pulled from quay.io: minio/minio on Docker Hub is no longer publicly pullable.
-  # quay.io is MinIO's own registry and serves the same images.
-  minio:
-    image: quay.io/minio/minio:RELEASE.2025-04-22T22-12-26Z
-    command: server /data --console-address ":9001"
-    environment:
-      MINIO_ROOT_USER: ${MINIO_ROOT_USER:-minioadmin}
-      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-minioadmin}
+  # S3, standing in for R2 (D-086): SeaweedFS, since MinIO was archived and its
+  # images withdrawn. Pinned by version and by the digest of its multi-arch
+  # index, so a re-tag can't change what runs. Its S3 gateway answers on 9000,
+  # path-style; nothing else of it is published. Credentials, and anonymous
+  # read on velora-public only (it mirrors the CDN-served bucket, D-027), are
+  # in ./s3/s3.json: development values, as above.
+  s3:
+    image: chrislusf/seaweedfs:4.48@sha256:4e61d15fd35994cb1e43e1e553dff106794841fd9a99ade2fc8c8bfce4d7872d
+    command: server -dir=/data -ip.bind=0.0.0.0 -s3 -s3.port=9000 -s3.config=/etc/seaweedfs/s3.json
     ports:
       - "127.0.0.1:9000:9000"
-      - "127.0.0.1:9001:9001"
     volumes:
-      - velora_miniodata:/data
+      - velora_s3data:/data
+      - ./s3/s3.json:/etc/seaweedfs/s3.json:ro
     healthcheck:
-      test: ["CMD", "mc", "ready", "local"]
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1:9000/healthz"]
       interval: 5s
       timeout: 5s
-      retries: 12
+      retries: 24
 
-  # One-shot: creates the two buckets, then exits. velora-public is anonymous
-  # read to mirror the CDN-served R2 bucket in D-027; velora-private stays shut.
-  minio-init:
-    image: quay.io/minio/mc:RELEASE.2025-04-16T18-13-26Z
+  # One-shot: creates whichever of the two buckets is missing, then exits.
+  # Inside s3's network, so its master answers on localhost; creating a bucket
+  # that exists is an error in `weed shell`, hence the check first.
+  s3-init:
+    image: chrislusf/seaweedfs:4.48@sha256:4e61d15fd35994cb1e43e1e553dff106794841fd9a99ade2fc8c8bfce4d7872d
+    network_mode: "service:s3"
     depends_on:
-      minio:
+      s3:
         condition: service_healthy
     entrypoint:
       - /bin/sh
       - -c
       - |
         set -e
-        mc alias set local http://minio:9000 "$${MINIO_ROOT_USER:-minioadmin}" "$${MINIO_ROOT_PASSWORD:-minioadmin}"
-        mc mb --ignore-existing local/velora-public
-        mc mb --ignore-existing local/velora-private
-        mc anonymous set download local/velora-public
+        existing="$$(echo s3.bucket.list | weed shell -master=localhost:9333 | awk '{print $$1}')"
+        for bucket in velora-public velora-private; do
+          if ! printf '%s\n' "$$existing" | grep -qx "$$bucket"; then
+            printf 's3.bucket.create -name %s\n' "$$bucket" | weed shell -master=localhost:9333
+          fi
+        done
         echo "init: buckets ready"
-        mc ls local
-    environment:
-      MINIO_ROOT_USER: ${MINIO_ROOT_USER:-minioadmin}
-      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-minioadmin}
+        echo s3.bucket.list | weed shell -master=localhost:9333
 
 volumes:
   velora_pgdata:
   velora_redisdata:
-  velora_miniodata:
+  velora_s3data:

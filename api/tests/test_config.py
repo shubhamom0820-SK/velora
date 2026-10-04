@@ -591,11 +591,11 @@ def test_productions_env_block_passes_settings() -> None:
 # A name nobody has listed anywhere, in any allowlist or test: a blacklist that
 # names today's environments waves it through; an allowlist refuses it (rule 16).
 UNNAMED_ENV = "env-nobody-has-named-2031"
-_MINIO = {
+_LOCAL_S3 = {
     "STORAGE_PROVIDER": "s3",
     "R2_ENDPOINT_URL": "http://127.0.0.1:9000",
-    "R2_ACCESS_KEY_ID": "minioadmin",
-    "R2_SECRET_ACCESS_KEY": "minioadmin",
+    "R2_ACCESS_KEY_ID": "velora-local",
+    "R2_SECRET_ACCESS_KEY": "velora-local-secret",
     "PUBLIC_CDN_URL": "http://127.0.0.1:9000/velora-public",
 }
 
@@ -649,8 +649,8 @@ def test_every_missing_storage_setting_is_named_at_once() -> None:
     assert "needs R2_ACCOUNT_ID, R2_ACCESS_KEY_ID, R2_SECRET_ACCESS_KEY (" in message
 
 
-def test_locally_minio_needs_no_account() -> None:
-    settings = _settings(ENV="local", **_MINIO)
+def test_locally_the_local_s3_needs_no_account() -> None:
+    settings = _settings(ENV="local", **_LOCAL_S3)
 
     assert (settings.R2_ACCOUNT_ID, settings.R2_ENDPOINT_URL) == (
         "",
@@ -676,7 +676,7 @@ def test_an_endpoint_override_outside_local_refuses_to_start(env: str) -> None:
 def test_the_endpoint_gate_is_an_allowlist(env: str) -> None:
     """Called on settings copied past validation, so even a name nobody has
     listed reaches the check: refused, as a blacklist would not."""
-    settings = _settings(ENV="local", **_MINIO).model_copy(update={"ENV": env})
+    settings = _settings(ENV="local", **_LOCAL_S3).model_copy(update={"ENV": env})
 
     with pytest.raises(ValueError, match=f"ENV={env} cannot set R2_ENDPOINT_URL"):
         # pydantic's decorator hides that it's a method; it is one.

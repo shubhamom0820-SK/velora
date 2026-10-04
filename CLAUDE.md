@@ -83,7 +83,7 @@ reference for its APIs, which differ from older versions.
 ## Commands
 
 ```
-make infra-up    # docker: postgres+postgis, redis, minio; stamps the dev db as local   (make infra-down to stop)
+make infra-up    # docker: postgres+postgis, redis, s3 (SeaweedFS, D-086); stamps the dev db as local   (make infra-down to stop)
 make infra-reset # stop the stack and DROP all data volumes (clean database)
 make dev         # infra + api + web on 127.0.0.1 (worker joins with T-4.4)
 make worker      # ARQ worker only
@@ -116,7 +116,7 @@ October 2026 this line said "Chrome or Firefox" as fact, from documentation alon
 
 **Never run `make infra-reset` without telling the founder first, and never while another session
 is testing.** Every worktree on this machine shares one Docker stack, so a reset drops every
-session's databases mid-run: `velora`, every test run's, MinIO and Redis. From T-5.1 it is also the
+session's databases mid-run: `velora`, every test run's, the local S3 and Redis. From T-5.1 it is also the
 only reset of `velora`: the ledger refuses DELETE and TRUNCATE, so a user with Velas can't be
 removed any other way. Tests need no reset: each run has a database and a Redis database of its
 own, created empty when it starts (P-55, 06-TESTING), so breaking a constraint to prove a test

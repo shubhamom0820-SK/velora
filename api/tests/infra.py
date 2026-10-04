@@ -280,13 +280,13 @@ TEST_REDIS_URL = (
 
 requires_infra = pytest.mark.skipif(not INFRA_UP, reason=INFRA_DOWN_REASON)
 
-# MinIO, the local stand-in for R2 (T-4.1): only the storage tests need it, so
-# it isn't part of INFRA_UP. The same rule applies: skip locally when it's down,
-# fail in CI. Every run shares it (P-55 slots it no more than the buckets
-# `make infra-up` makes), so each test writes under a prefix of its own.
-LOCAL_MINIO_URL = "http://127.0.0.1:9000"
-MINIO_UP = _reachable(LOCAL_MINIO_URL)
-MINIO_DOWN_REASON = "MinIO not reachable — start it with `make infra-up`"
+# The local S3, standing in for R2 (T-4.1, D-086: SeaweedFS): only the storage
+# tests need it, so it isn't part of INFRA_UP. The same rule applies: skip
+# locally when it's down, fail in CI. Every run shares its two buckets (P-55
+# gives it no slot), so each test writes under a prefix of its own.
+LOCAL_S3_URL = "http://127.0.0.1:9000"
+S3_UP = _reachable(LOCAL_S3_URL)
+S3_DOWN_REASON = "The local S3 isn't reachable — start it with `make infra-up`"
 
 
 @asynccontextmanager

@@ -1,0 +1,15 @@
+{
+  "identities": [
+    {
+      "name": "velora-local",
+      "credentials": [
+        { "accessKey": "velora-local", "secretKey": "velora-local-secret" }
+      ],
+      "actions": ["Admin", "Read", "List", "Tagging", "Write"]
+    },
+    {
+      "name": "anonymous",
+      "actions": ["Read:velora-public"]
+    }
+  ]
+}

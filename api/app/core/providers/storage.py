@@ -1,4 +1,4 @@
-"""Object storage: R2 in deployed environments, MinIO locally (D-027, T-4.1).
+"""Object storage: R2 in deployed environments, the local S3 locally (D-027, D-086).
 
 Browsers upload and download through presigned URLs only; the server reads and
 writes bytes directly (re-encoding, watermarking).
@@ -130,7 +130,7 @@ class FakeStorage:
 
 def storage_endpoint(settings: Settings) -> str:
     """R2's own endpoint for this account, unless `ENV` is one where
-    `R2_ENDPOINT_URL` may point elsewhere (MinIO): an allowlist (rule 16), so
+    `R2_ENDPOINT_URL` may point elsewhere (the local S3): an allowlist (rule 16), so
     no setting can send photos to another S3 anywhere else. `Settings` refuses
     the override there too; this holds even for settings it never checked."""
     if (
@@ -146,7 +146,7 @@ _NOT_FOUND = frozenset({"NoSuchKey", "404", "NotFound"})
 
 
 class S3Storage:
-    """aioboto3 against R2, or MinIO locally.
+    """aioboto3 against R2, or the local S3 (SeaweedFS, D-086).
 
     One client per app, opened at first use and kept, so calls reuse its
     connections; `aclose()` releases it. Path-style addressing, so every bucket
@@ -173,7 +173,7 @@ class S3Storage:
                             endpoint_url=self._endpoint,
                             aws_access_key_id=self._key_id,
                             aws_secret_access_key=self._secret,
-                            # R2's region; MinIO accepts it too.
+                            # R2's region; the local S3 accepts it too.
                             region_name="auto",
                             config=Config(
                                 signature_version="s3v4",

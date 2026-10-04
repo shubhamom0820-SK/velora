@@ -70,10 +70,10 @@ REAL_SMS_TO_ANYONE_IN: frozenset[str] = frozenset({"staging", "production"})
 # would look like protection it isn't (D-066).
 SMS_LOCAL_ALLOWED_TO_ALLOWED_IN: frozenset[str] = frozenset({"local"})
 # Where R2_ENDPOINT_URL may send storage somewhere other than R2: an allowlist
-# (rule 16). Locally it is MinIO; anywhere else the endpoint is R2's own, built
+# (rule 16). Locally it is the local S3 (D-086); anywhere else the endpoint is R2's own, built
 # from R2_ACCOUNT_ID, so no setting can send users' photos to another S3.
 STORAGE_ENDPOINT_OVERRIDE_ALLOWED_IN: frozenset[str] = frozenset({"local"})
-# Where PUBLIC_CDN_URL may be plain http (MinIO's own public bucket): an
+# Where PUBLIC_CDN_URL may be plain http (the local S3's public bucket): an
 # allowlist again. Everywhere else it serves users' photos, over https only.
 PLAIN_HTTP_CDN_ALLOWED_IN: frozenset[str] = frozenset({"local"})
 # An R2 account ID: 32 lowercase hex characters. Not a secret: it is the host
@@ -169,7 +169,7 @@ class Settings(BaseSettings):
     AWS_SECRET_ACCESS_KEY: str = ""
     AWS_REGION: str = "ap-south-1"
 
-    # --- Object storage: R2 in deployed envs, MinIO locally (D-027, T-4.1) ---
+    # --- Object storage: R2 in deployed envs, the local S3 locally (D-027, D-086) ---
     # With s3, every one of these is required, checked below; R2_ENDPOINT_URL
     # only where STORAGE_ENDPOINT_OVERRIDE_ALLOWED_IN says.
     STORAGE_PROVIDER: StorageProvider = "fake"
@@ -424,7 +424,7 @@ class Settings(BaseSettings):
 
     @model_validator(mode="after")
     def _storage_endpoint_only_where_allowed(self) -> Settings:
-        """`R2_ENDPOINT_URL` points storage away from R2: MinIO, locally. Anywhere
+        """`R2_ENDPOINT_URL` points storage away from R2: the local S3. Anywhere
         else it would send users' photos wherever it says, so it's refused."""
         if (
             self.R2_ENDPOINT_URL

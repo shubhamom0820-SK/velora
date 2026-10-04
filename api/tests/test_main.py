@@ -103,8 +103,8 @@ async def test_close_resources_closes_storage_too() -> None:
             1,
             STORAGE_PROVIDER="s3",
             R2_ENDPOINT_URL="http://127.0.0.1:9000",
-            R2_ACCESS_KEY_ID="minioadmin",
-            R2_SECRET_ACCESS_KEY="minioadmin",
+            R2_ACCESS_KEY_ID="velora-local",
+            R2_SECRET_ACCESS_KEY="velora-local-secret",
             PUBLIC_CDN_URL="http://127.0.0.1:9000/velora-public",
         )
     )

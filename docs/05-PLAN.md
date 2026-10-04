@@ -1283,13 +1283,13 @@ exist yet. The batch is a chain, T-3.10 → T-3.11 → T-3.12 → T-3.13, each n
   message of 4 October 2026 came with P-49 unticked. Its reason is T-4.4's worker, and nothing here
   is tied to where the API runs; whether it moves to T-4.4's deploy step is still open (D2 of
   Sprint 4's plan).
-- [x] Real `StorageProvider` on aioboto3 (works for R2 and MinIO): `presign_put(bucket, key, content_type, max_bytes, ttl=300)`, `presign_get(bucket, key, ttl=600)`, `get_bytes`, `put_bytes`, `copy`, `delete`.
+- [x] Real `StorageProvider` on aioboto3 (works for R2 and the local S3, SeaweedFS since D-086): `presign_put(bucket, key, content_type, max_bytes, ttl=300)`, `presign_get(bucket, key, ttl=600)`, `get_bytes`, `put_bytes`, `copy`, `delete`.
   Plus `head()`, size and type: a presigned PUT can't cap its own size, so T-4.2 checks the upload
   after it arrives. The Content-Type is signed into the PUT. One client per app, closed with it.
 - [x] Key helpers: `raw/{user_id}/{photo_id}`, `p/{photo_id}.jpg`, `voice/{thread_id}/{message_id}.webm`, `album/{photo_id}/{viewer_id}.jpg`.
   Built from UUIDs only, checked at runtime too, so nothing a user types shapes a key
   (`app/core/storage_keys.py`).
-- [x] **Storage goes to R2's own endpoint everywhere but local.** `R2_ENDPOINT_URL` (MinIO) is
+- [x] **Storage goes to R2's own endpoint everywhere but local.** `R2_ENDPOINT_URL` (the local S3) is
   refused anywhere `ENV` isn't local, an allowlist (rule 16), in `Settings` and again where the
   endpoint is chosen; with `s3`, every R2 setting is required and named at startup, and
   `PUBLIC_CDN_URL` is `https://` outside local.
@@ -1428,7 +1428,7 @@ before merging (rule 11 untouched).
 
 **From T-5.1, `make infra-reset` is the only reset.** The first ledger row makes its user
 permanent: the ledger refuses DELETE and TRUNCATE, and foreign keys into `users` are RESTRICT.
-Starting over means `make infra-reset` (every volume: `velora`, every test run's, MinIO, Redis), then
+Starting over means `make infra-reset` (every volume: `velora`, every test run's, the local S3, Redis), then
 `make infra-up migrate seed`. That stack serves every worktree on the machine (`CLAUDE.md`). No
 migration ever writes a ledger row (rule 5), so no downgrade needs to delete one. Per-test rollback
 still works, since a rollback isn't a DELETE. Tests that commit rows follow 06-TESTING's rules for
@@ -2032,10 +2032,13 @@ Claude Code adds items here instead of doing unplanned work. Format:
   arm64 manifest, so it runs under emulation on the dev Mac. It works, but it is slow, and T-1.5
   targets `make test` green in under 10 s. Either accept the cost, switch to an arm64 PostGIS
   image, or build one — needs a D-entry either way — found during T-1.2
-- [ ] P-02 · Record the MinIO registry and pinning in `01-DECISIONS.md` — `minio/minio` on Docker
+- [x] P-02 · Record the MinIO registry and pinning in `01-DECISIONS.md` — `minio/minio` on Docker
   Hub is no longer publicly pullable, so the stack pulls from `quay.io/minio/*` at pinned RELEASE
   tags. The tag also matters because newer MinIO community builds drop the web console that T-1.2's
   acceptance depends on — found during T-1.2
+  **Settled by D-086, 4 October 2026 (T-4.1):** MinIO is archived and quay.io withdrew its images
+  too, so the local S3 is now SeaweedFS, pinned by version and index digest; D-086 records the
+  registry, the pinning and why.
 - [x] P-03 · Decide the response-class strategy — FastAPI 0.141 deprecates `ORJSONResponse`
   ("FastAPI now serializes data directly to JSON bytes via Pydantic"), but T-1.3 specifies orjson
   responses, so every error response currently emits a `FastAPIDeprecationWarning`. Either keep it

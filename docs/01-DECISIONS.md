@@ -1925,6 +1925,55 @@ separate chat), relayed by the founder on 4 October 2026: "PyJWT and httpx it is
 Open; I'm approving it now in these words." That line is the advisor's (the founder, the same
 day). **Open** until the founder locks it in his own words.
 
+### D-086 · The local S3 is SeaweedFS, because MinIO is archived — Open
+**The decision (T-4.1):** local development and CI stand in for R2 with **SeaweedFS**
+(`chrislusf/seaweedfs`, Apache-2.0) in `infra/docker-compose.yml`: its S3 gateway on
+`127.0.0.1:9000`, path-style; credentials, and anonymous read on `velora-public` only (it mirrors
+the CDN-served bucket, D-027), in `infra/s3/s3.json`; a one-shot `s3-init` that creates whichever
+bucket is missing. It replaces MinIO. **Supersedes D-036's list of ports** (D-036 is Locked and
+not edited): published now are Postgres 5432, Redis 6379 and S3 9000, each on `127.0.0.1`, as
+D-036 requires; MinIO's 9001 went with it. **Settles P-02**, the registry and the pinning:
+Docker Hub, by version `4.48` and by the digest of its multi-arch index, both in the compose file,
+so a re-tag can't change what runs, and a digest that disappears fails loudly at `make infra-up`
+and in CI, never silently.
+
+**Why MinIO had to go: it is archived.** Its maintainers stopped publishing images to Docker Hub
+and Quay on 23 October 2025 and archived the repository in February 2026 (read 4 October 2026).
+That day quay.io answered "no such manifest" for every MinIO tag tried, `latest` included, and
+Docker Hub refused, so T-4.1's first CI run (37195913766) couldn't start it. Any fresh
+`make infra-up` failed with it, Postgres and Redis included, since one `up` starts all three;
+the founder's Mac worked only from its image cache.
+
+**Why not a rebuilt MinIO.** Chainguard's free MinIO images pull without a login and passed the
+same checks as SeaweedFS below, but chosen in the founder's message of 4 October 2026, with this
+reasoning: "it's about expectation, not purity". They pin us to someone else's build of a dead
+project, and a server calling itself RELEASE.2026-09-22 when the repository was archived in
+February 2026 means nobody here can say whose source it came from. They are free today and cost a
+day on whatever morning the image goes, which can't be predicted; switching costs an hour or two
+once, and the work was already stopped. The risk is contained: local and CI only, never
+production or a user's photo.
+
+**Why SeaweedFS and not Garage:** the one provable faster (the brief was "whichever of the two you
+can prove faster"). SeaweedFS grants anonymous read on one bucket at its path-style URL, which is
+how the tests and the local `PUBLIC_CDN_URL` stand in for the CDN; Garage serves public reads only
+through a separate website endpoint chosen by hostname. **Proved before the switch** (4 October
+2026, on spare ports, then in a throwaway compose project): T-4.1's storage probe passed every
+step against it; an expired presigned PUT and an unsigned read of the private bucket were refused
+(403); an anonymous read of the public bucket was served (200) and an anonymous write refused
+(403); a missing object maps to `ObjectNotFound` for get, head and copy; and `s3-init` run a second
+time creates nothing and exits 0.
+
+**If it stops emulating S3 well enough for our tests,** that shows in a local run, never in
+production: fall back to Chainguard's MinIO, pinned by digest, and tell the founder (his
+instruction with the choice).
+
+**Rejected:** Chainguard's MinIO (above); our cached MinIO images copied to GitHub's registry
+(frozen without MinIO's October 2025 security fix, and every fresh clone would need a GitHub login
+to pull); building MinIO from source in CI (a dead project, rebuilt on every run).
+
+The options were Claude's (T-4.1). Chosen in the founder's message of 4 October 2026. **Open**
+until the founder locks it in his own words, as D-085.
+
 ---
 
 ## Adding a decision
