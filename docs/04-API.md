@@ -82,7 +82,7 @@ public photo at `PUBLIC_CDN_URL`, any other live one by a 10-minute signed link 
 | GET | /threads/{id}/messages | ✅ | `?cursor=` → `Page<Message>` | T-7.3 |
 | POST | /threads/{id}/messages | ✅ | `{client_msg_id, kind, body?, media_key?, duration_s?}` → `Message` | T-7.3 |
 | POST | /threads/{id}/read | ✅ | `{up_to_message_id}` → 204 | T-7.5 |
-| POST | /threads/{id}/reopen | ✅ | → `Thread` (3 Velas) | T-7.6 |
+| POST | /threads/{id}/reopen | ✅ | → `Thread` (2 Velas, D-098) | T-7.6 |
 | POST | /threads/{id}/knot | ✅ | → `Thread` (sets your tap; converts when both) | T-7.7 |
 | DELETE | /threads/{id}/knot | ✅ | → `Thread` (untie → active, fresh 24h) | T-7.7 |
 | POST | /threads/{id}/clear | ✅ | → 204 (one-sided) | T-7.8 |

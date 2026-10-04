@@ -32,6 +32,9 @@ An expired thread is archived read-only, never deleted, and can be re-opened for
 README, 03-SCHEMA, 06-TESTING and three code comments; this entry and all of them were corrected
 to Knot in the same commit. Velora is the company name, and Thread and Knot are product nouns
 (CLAUDE.md rule 17).
+**Superseded in part, 4 October 2026, by D-097:** a Thread lasts 1 hour, restarted by her message;
+an expired Thread's messages become unavailable, never deleted; re-opening costs 2 Velas (D-098).
+The Knot, and the rule above, stand. The code still runs 24 hours until D-097's own task.
 
 ### D-004 · Action prices — Locked (values tunable)
 Prices live in the `action_prices` table, not in code, so they can change without a deploy.
@@ -48,6 +51,9 @@ Prices live in the `action_prices` table, not in code, so they can change withou
 | Tie the knot / message in a knot | Free |
 
 Women pay nothing for any action.
+**Superseded in part, 4 October 2026, by D-098:** re-opening is 2, and Extend (10), private messages
+(8, then 2) and viewing private pictures (1) are added. Whether the rows D-098 doesn't name stay is
+open there.
 
 ### D-005 · Credit packs — Locked
 | Credits | Price | Per credit | Cost of one thread (5 cr) |
@@ -69,6 +75,9 @@ descending per-credit order whatever you choose.
 Packs live in `credit_packs`, so price changes are a row update, not a deploy. Beta runs a cheaper
 entry variant (₹999 / 25) against variant A — see T-10.4. The number to watch is what a man pays
 for his first real conversation: ₹300 at the entry pack, ₹200 at the largest.
+**Superseded, 4 October 2026, by D-099:** four new packs, ₹1,500 to ₹10,000 for 30 to 450 Velas, and
+the number to watch is now ₹250 and ₹111. The first-purchase bonus and T-10.4's variant are open
+there.
 
 ### D-006 · Clearing is one-sided — Locked
 Clearing hides a chat from *your* list only. The other person keeps their copy. The server keeps
@@ -94,6 +103,9 @@ Six gifts, sendable **from a woman's profile** by men. Two are free, two cost 2 
 against D-003), and gifts sent anonymously (a gift with no name is a harassment vector).
 **Noted 3 October 2026:** a gift debits its sender and credits nobody, and `gift` is a debit-only
 ledger reason (D-076, D-077).
+**Superseded in part, 4 October 2026, by D-098:** a paid gift costs 5, 10, 15 or 20 Velas, and 15
+gifts a week are free, in place of the prices above and `gift_free_daily_limit = 3`. The
+catalogue's shape is open there.
 
 ### D-007 · Kudos, not reviews — Locked
 After a few messages the sender may pick one of four fixed positive notes. It goes privately to
@@ -623,6 +635,9 @@ and cancellation policy for merchant approval; P-0.8 confirms each gateway's exa
 handles broken-transaction claims only. Decided by the founder on 1 October 2026.
 **Noted 3 October 2026:** money goes back only for a payment with no Velas still standing against
 it (D-076, rule 3).
+**Noted 4 October 2026:** D-100 says no refund path and no reversal is built. That collides with
+this entry's two automatic returns and its refund of a duplicate charge, and the founder hasn't
+ruled. Read D-100 before planning T-8.2, T-8.3, T-8.4 or T-9.3.
 
 ### D-051 · What deleting an account erases, and what it keeps — Locked
 **Erased:** the profile, photos, private album and everything else other people can see of the
@@ -1581,6 +1596,10 @@ lawyer has read it (P-0.7 has none booked).
   under D-050.
 
 Approved by the founder on 3 October 2026.
+**Noted 4 October 2026:** D-100 says no reversal is built, which collides with rule 3's reversal of
+a refunded or disputed payment's Velas (T-8.2), and the founder hasn't ruled. Read D-100 before
+planning T-8.2. D-098 adds: a paid tier for women, deferred, can't be sold in Velas without
+reopening this entry.
 
 ### D-077 · A ledger entry happens once — Locked
 **How a double credit is made impossible, not just unlikely:** six layers. Each is proved by
@@ -2187,6 +2206,168 @@ founder chose the reversal.
 
 **Supersedes** the advisor's direction of 3 October 2026 that P-49 come before Sprint 4 so the
 worker is built once on its new host (on T-4.1's Needs line, waived there for T-4.1).
+
+### D-097 · A Thread lasts an hour; Extend buys a day; a Knot is unchanged — Locked
+**The names.** One word, one meaning: CLAUDE.md rule 17 exists for exactly this.
+- **Thread** is the live chat. One thing, one name, and it lasts **1 hour**.
+- **Extend** is the paid 24-hour option, 10 Velas. It is **not** a Knot, and nothing calls it one:
+  a "24-hour knot" is Extend. Like Thread and Knot, it is a product noun, never renamed with the
+  brand.
+- **Knot** is unchanged (D-003): both people tap "Tie the knot", and it is permanent and free.
+  Extend buys time, never permanence, which is granted by the other person.
+
+**How a Thread lives.**
+1. A man's first message opens it: 5 Velas, and the hour starts.
+2. She replies inside the hour: it stays open, the hour restarts from her message, and nothing more
+   is charged. It is the same hour throughout, at the first message or the hundredth.
+3. The hour passes: the Thread expires, and its messages become unavailable.
+4. She messages later: it is delivered, and he can see that it is there. He pays 2 Velas to re-open
+   the Thread and reply, every time, and it carries on as before.
+5. Extend, at any point: 10 Velas, and for 24 hours the Thread doesn't expire.
+
+**Her side** shows only that her message hasn't been seen. Nothing more: no locked state, no
+prompt, and never that money stands between her message and his reply. She is never charged.
+
+**Expiry is a state, never a deletion.** Rule 12 holds: nothing in the five tables the app role
+can never delete from (`messages`, `reports`, `ledger_entries`, `payments`, `audit_log`; 03-SCHEMA)
+is hard-deleted, and her later message reaching him proves the history is still there. "Unavailable" means not shown, never
+removed.
+
+**Supersedes three parts of D-003:** "expires 24h after opening" (1 hour, restarted by her
+message); "archived read-only" (unavailable); and "re-opened for 3 credits" (2 Velas, D-098).
+D-003's Knot, and its rule that permanence is never bought, stand.
+
+**Decided, not built.** Today's code, tests and copy still give a Thread 24 hours
+(`app_config.thread_hours`, seeded 24). Moving them to 1 hour is surgery on built, tested code and
+gets a task of its own, not yet written, which lists every place that says 24 hours. Until it
+lands, 24 hours is what runs and 1 hour is what is decided; nothing is changed to match it before
+then.
+
+**Not settled here,** for that task to raise with the founder:
+- whether his messages restart the hour too, or only hers (recorded: hers do);
+- whom "unavailable" covers, him or both, given her side shows no locked state;
+- how the hour runs on a Thread a woman opens (D-098 lets her message 30 men a day);
+- whether Extend on an expired Thread re-opens it, and at what price; and how the hour runs once
+  Extend's 24 hours end.
+
+The names, the lifetime and the rules are the founder's decision, 4 October 2026. The write-up
+they came in is the advisor's (Claude, in a separate chat), relayed by the founder; the questions
+above are Claude's, from reading the record that day.
+
+### D-098 · What things cost: men pay per action, women pay nothing — Locked (values tunable)
+Prices stay data (D-004, D-016): `action_prices` and `gifts`, changed by a row, not a deploy.
+
+| Action | Velas |
+|---|---|
+| Open a Thread (his first message) | 5 |
+| Re-open an expired Thread, every time | 2 |
+| Extend a Thread, 24 hours (D-097) | 10 |
+| First private message | 8 |
+| Every private message after it | 2 |
+| View private pictures | 1 |
+| Virtual gift | 5 / 10 / 15 / 20 |
+| Swiping, either way | Free |
+| Tie the knot, and messaging in a Knot (D-003, unchanged) | Free |
+
+15 virtual gifts a week are free. Private messages never expire.
+
+**Women pay nothing, anywhere.** Rate limits only: a woman messages at most 30 men and sends at
+most 30 private messages a day. A paid tier above those limits was considered and deliberately
+deferred, so **no charging path for women is built: none enabled, and none disabled in the code.**
+If it is ever revived, it can't be sold in Velas without reopening D-076, whose rule 1 the
+database enforces: no woman ever holds a Vela.
+
+**Re-open and Extend move together.** Extend costs what five re-opens do, so it pays for itself
+after five lapses, which one slow day of conversation reaches with a 1-hour Thread. Change neither
+price without the other.
+
+**What a message costs in rupees** is in D-099, beside the packs that set it.
+
+**Supersedes** D-004's re-open price (3), and D-016's gift prices (two free, two at 2, two at 4)
+and free-gift limit (`gift_free_daily_limit`, 3 a day, now 15 a week). D-016's other rules stand.
+
+**Not settled here** (raised with the founder, 4 October 2026; T-5.2 needs the answers). This entry
+supersedes only what it names, so until he rules, D-004 and D-016 still say the rest:
+- **D-004's other rows aren't in this list:** a direct message without a match (5), unlocking a
+  voice note (5), Super Like (5) and revealing one "liked you" (20). Each is a ledger reason and an
+  `action_prices` row today. And "swiping, either way, free" doesn't say whether a Super Like, a
+  swipe kind (`swipe_dir_t`), is free.
+- **What a private message is:** how it differs from a Thread's messages and from D-004's direct
+  message (`dm_open`), and where it lives. No table or task holds one today.
+- **Viewing private pictures:** whether it replaces D-004's private album request (5, refunded if
+  declined; T-8.4), and whether the 1 Vela is paid per view or once per grant.
+- **Gifts:** how many, at which of the four prices; whether free gifts stay a kind of their own;
+  and whether the free fifteen are gifts sent at no price, which move no Vela, or a weekly grant of
+  Velas, which would be a credit with a reason of its own, to men only (D-076).
+
+The prices and the rules are the founder's decision, 4 October 2026. The reasoning beside them
+(re-open and Extend moving together) is the advisor's write-up (Claude, in a separate chat),
+relayed by the founder; the open questions are Claude's.
+
+### D-099 · Four packs, and the ₹4,500 one is dominated on purpose — Locked (values tunable)
+| Price | Velas | Per Vela | Opening one Thread (5 Velas) |
+|---|---|---|---|
+| ₹1,500 | 30 | ₹50 | ₹250 |
+| ₹4,500 | 100 | ₹45 | ₹225 |
+| ₹6,000 | 250 | ₹24 | ₹120 |
+| ₹10,000 | 450 | ₹22.22 | ₹111 |
+
+Packs stay rows of `credit_packs` (D-005), priced in paise (D-029).
+
+**The number that decides whether men buy at all:** one message, the 5 Velas that open a Thread,
+costs **₹250 at the entry pack and ₹111 at the largest**. Anyone revisiting the pricing starts
+here. D-005's was ₹300 and ₹200.
+
+**The ₹4,500 pack is dominated, knowingly.** ₹1,500 more buys 150 more Velas at the next pack, so
+few should rationally buy it. It was priced that way on purpose: don't "fix" it by accident. Each
+larger pack is still cheaper per Vela, as D-005 required.
+
+**The prototype's packs aren't these:** 30, 100, 150 and 250 Velas, with the ₹4,500 one tagged
+"Most popular". T-8.7 builds the store from the prototype; it takes the values from here.
+
+**Supersedes** D-005's four packs (25 to 100 Velas, ₹1,500 to ₹4,000) and its number to watch.
+
+**Not settled here** (raised with the founder, 4 October 2026):
+- D-005's first-purchase bonus, +20% (`credit_packs.bonus_first_pct`, default 20), isn't in this
+  list.
+- T-10.4's beta price test, ₹1,500 against ₹999 for 25 Velas, matches no pack here.
+
+The packs are the founder's decision, 4 October 2026. The reasoning beside them (the dominated
+pack, the ₹250 and ₹111) is the advisor's write-up (Claude, in a separate chat), relayed by the
+founder; the arithmetic was checked by Claude.
+
+### D-100 · No refunds, no expiry, and every Vela moves through the wallet — Locked
+**Velas never expire.** Bought is bought: no expiry job, no dormancy sweep, no balance that quietly
+ages out. D-050 already said so; this holds it.
+
+**No refunds.** If she never replies, the 8 Velas of a first private message are spent. No refund
+path, no reversal and no pending balance is built. A refund arriving later is a new decision that
+supersedes this one, and since it would touch rules 5 and 12, it must not arrive by accident. A
+wallet carrying a quiet, unused refund branch is worse than one without.
+
+**Every Vela moves through the wallet:** `wallet.service.debit()` or `credit()` (rule 5), gifts and
+the weekly free fifteen included. Whatever form the fifteen take (D-098), any Vela they move goes
+through one of the two, and no path adds or removes a balance any other way. A paid gift is a
+`gift` debit and credits nobody (D-076 rule 2).
+
+**Not reconciled yet: where "no refunds" meets the record** (raised with the founder, 4 October
+2026). This entry supersedes none of these, and they can't all stand beside it:
+- **D-050's two automatic returns:** a declined album request (T-8.4, `refund_album_declined`), and
+  Velas spent on someone banned within 7 days (T-9.3, `refund_banned_partner`). Both reasons are in
+  `ledger_reason_t` and `wallet/rules.py`, and `/refunds` promises both today.
+- **D-076 rule 3:** a refund made in Razorpay's dashboard, or a chargeback, reverses that payment's
+  Velas in the ledger, by a debit reason T-8.2 adds. That is a reversal.
+- **D-050's broken payments (T-8.3):** a duplicate charge goes back to the payment method. It
+  returns money for a payment that granted no Velas, so no balance moves; whether "no refunds"
+  reaches it is the founder's to say.
+- **The bare `refund` reason:** in `ledger_reason_t` since T-1.12, refused by the service until a
+  task gives it a meaning (D-077). It is a quiet, unused refund branch in the wallet today.
+
+Changing any of them in code is a task of its own, whatever the ruling.
+
+The rules are the founder's decision, 4 October 2026. The write-up they came in is the advisor's
+(Claude, in a separate chat), relayed by the founder; the list of conflicts is Claude's, from
+reading the record that day.
 
 ---
 

@@ -110,7 +110,7 @@ If any of these fails, nothing ships.
 10. **Clearing is one-sided** (T-7.8): A clears → B still sees every message.
 11. **Contact masking** (T-7.3): numbers, spaced digits, emails, UPI IDs, social handles masked in
     the first 20 messages; `body_raw` never returned by any user-facing endpoint.
-12. **Expired thread** (T-7.6): sending → `THREAD_EXPIRED`; re-open charges exactly 3.
+12. **Expired thread** (T-7.6): sending → `THREAD_EXPIRED`; re-open charges exactly 2 (D-098).
 13. **A Knot is mutual** (T-7.7): one tap never converts; two taps always do.
 14. **Private data** (T-4.4, T-4.5): processed images contain no EXIF; selfies never appear in
     any public response.
@@ -135,7 +135,7 @@ A test in this list is marked `@pytest.mark.critical`; CI runs them first and fa
 | J4 | Swipe → match → open thread (−5) → chat both ways live | T-7.13 |
 | J5 | Voice note from woman → man unlocks (−5) → plays | T-7.13 |
 | J6 | Both tie the knot → Knots tab, no countdown | T-7.13 |
-| J7 | Thread expires → read-only → re-open (−3) | T-7.13 |
+| J7 | Thread expires → read-only → re-open (−2) | T-7.13 |
 | J8 | Buy Velas (fake gateway) → balance updates | T-8.7 |
 | J9 | Payment fails → retry sheet → success | T-8.7 |
 | J10 | Report with also-block → confirmation shown → person gone everywhere | T-9.1 |

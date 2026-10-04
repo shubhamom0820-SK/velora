@@ -1719,7 +1719,30 @@ committed rows.
 ### T-5.2 · Prices
 **Held by the founder, 4 October 2026:** not started until the wallet has a screen, since until
 then prices show nothing. T-4.4 and T-4.6 come first.
-- [ ] **Needs:** T-5.1
+- [ ] **Needs:** T-5.1, and the founder's answers to what D-098 and D-099 leave open (raised 4
+  October 2026): which of D-004's other actions stay, what a private message is, what viewing
+  private pictures replaces, the gift catalogue and the free fifteen, the first-purchase bonus and
+  T-10.4's variant.
+- [ ] **The prices are D-097 to D-099's** (the founder, 4 October 2026). Velas, for men; 0 for a
+  woman, for every action:
+  - open a Thread 5 · re-open an expired Thread 2, every time · Extend, 24 hours, 10 · first
+    private message 8 · each private message after it 2 · view private pictures 1 · a virtual gift
+    5, 10, 15 or 20 · swiping free · 15 gifts a week free · tying the knot, and a Knot's messages,
+    free. Private messages never expire.
+  - packs: ₹1,500 → 30 · ₹4,500 → 100 · ₹6,000 → 250 · ₹10,000 → 450. The ₹4,500 pack is
+    dominated on purpose (D-099): don't "fix" it.
+  - re-open (2) and Extend (10) change together or not at all (D-098).
+- [ ] **Written by data migrations of this task's own,** one change each (rule 11), never by editing
+  T-1.14's. `thread_reopen` goes from 3 to 2; 03-SCHEMA's seed lines and
+  `tests/test_reference_data.py` change with them. Each new priced action is a debit reason of its
+  own, so an addition to `ledger_reason_t` with D-077's direction and `ref_type`, and T-5.1's test
+  that the debit reasons are exactly the priced actions plus `gift` grows to match. If Extend can be
+  bought more than once for one Thread, it repeats for one ref, as `thread_reopen` does, and D-077's
+  per-event index leaves it out.
+- [ ] **Not this task's:** the 1-hour Thread (D-097): `thread_hours` stays 24 until its own task.
+  Women's limits (D-098: 30 men and 30 private messages a day) are rate limits for the tasks that
+  send messages, not prices. No charging path for women is built, enabled or disabled (D-098), and
+  `charge` never refunds, reverses or holds a pending balance (D-100).
 - [ ] `pricing.service.price_for(user, action)`:
   - women 0; men the `action_prices` value;
   - no gender raises; an inactive row gives `NOT_ALLOWED`; a missing row is a 500; never 0 by
@@ -1885,7 +1908,7 @@ then prices show nothing. T-4.4 and T-4.6 come first.
 ### T-7.6 · Expiry and re-open
 - [ ] **Needs:** T-7.4
 - [ ] Cron `expire_threads` (every minute, batches of 500, `FOR UPDATE SKIP LOCKED`) → `expired` + event. Cron `warn_expiring` (< 2 h, once) → push + event.
-- [ ] `POST /threads/{id}/reopen` (expired only) → debit 3 (men), `active`, `expires_at = now + 24h`, reset warning.
+- [ ] `POST /threads/{id}/reopen` (expired only) → debit 2 (men; D-098), `active`, `expires_at = now + 24h`, reset warning.
 - [ ] Tests using a controllable clock.
 - [ ] **Commit:** `feat(threads): expiry, warnings, reopen [T-7.6]`
 
@@ -1914,7 +1937,7 @@ then prices show nothing. T-4.4 and T-4.6 come first.
 
 ### T-7.11 · Web conversation
 - [ ] **Needs:** T-7.3, T-7.7, T-7.9
-- [ ] Bubbles, day separators, "Sent/Read" on my last message, typing dots, voice player (locked card with price for men), icebreakers when empty, knot bar (tie / waiting), expired panel (re-open · 3 / tie), header with countdown or "Knotted · permanent", ⋯ → profile menu.
+- [ ] Bubbles, day separators, "Sent/Read" on my last message, typing dots, voice player (locked card with price for men), icebreakers when empty, knot bar (tie / waiting), expired panel (re-open · 2 / tie), header with countdown or "Knotted · permanent", ⋯ → profile menu.
 - [ ] Composer: text (Enter sends, Shift+Enter newline), mic for women (MediaRecorder, hold or tap-to-record, 60 s cap, preview before send). Optimistic send with `client_msg_id`; failed → retry.
 - [ ] Rejected message → inline explanation, text kept in composer.
 - [ ] **Allow the microphone here (D-059):** T-2.5's Permissions-Policy has `microphone=()`, so recording is refused until this task makes it `microphone=(self)`; add `media-src` for voice notes' storage origin and `blob:` for the preview.
