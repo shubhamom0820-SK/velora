@@ -1754,6 +1754,26 @@ T52: list[Case] = [
 ]
 
 
+# --- P-142: one run's fifty connections at a time, on the whole server -----------
+
+P142: list[tuple[Case, list[str]]] = [
+    (
+        Case(
+            id="p142-fifty-turn",
+            what="P-142: a fifty-connection phase takes the server's turn without waiting",
+            edits=[
+                (
+                    CONCURRENCY,
+                    'text("select pg_try_advisory_lock(:lock, 0)"), {"lock": FIFTY_LOCK}',
+                    'text("select true"), {"lock": FIFTY_LOCK}',
+                )
+            ],
+            expect=["test_a_fifty_waits_while_another_run_holds_the_turn"],
+        ),
+        [CONCURRENCY],
+    ),
+]
+
 CASES: list[tuple[Case, list[str]]] = (
     [(c, T51_SELECTION) for c in T51]
     + [(c, T54_SELECTION) for c in T54]
@@ -1761,6 +1781,7 @@ CASES: list[tuple[Case, list[str]]] = (
     + T46
     + LAND
     + [(c, T52_SELECTION) for c in T52]
+    + P142
 )
 
 # The fifty-connection fixture's own message when Postgres refuses a connection.

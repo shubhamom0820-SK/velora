@@ -3968,3 +3968,20 @@ The number comes from the session's own block, given in its brief, from P-100 up
   `'users'::regclass` reads (D-072's check), which would report every listed table as holding no
   key, a loud false red, if such an order ever happened. Found in T-5.2; filed from this
   session's block (P-150 to P-159).
+- [x] P-142 · Let two runs' fifty-connection tests take turns on the shared server. **Done, 4
+  October 2026,** at the direction of the advisor directing Sprint 5. Worst case, as it was
+  happening: a red on code nobody changed, blocking each session's landing in turn, since the
+  landing guard runs `make test` locally first. Every checkout shares one Postgres of 100
+  connections, and since T-5.4 every full run opens fifty at once for its concurrency tests: two
+  runs together don't fit, and the second failed loudly (`Postgres opened 40 of 50 connections
+  … too many clients`), as designed, but on no fault of its own. Seen twice landing P-141.
+  **Fix:** the `fifty` fixture first takes the server's one fifty-connection turn, a Postgres
+  advisory lock (first key 50) on the server's own `postgres` database, so every run and slot
+  sees it, held on a connection of its own, so a run that dies frees it; a second run waits for
+  it, up to 600 s, then fails loudly, never skips. Restarting the shared database with a higher
+  limit was rejected tonight: it would cut off every session's running tests. **Proved both
+  ways:** two runs started together, both 7 of 7 (42.6 s and 53.5 s, against 25 s alone: they
+  took turns); with the lock removed, both failed on the collision itself (`Postgres opened 44`
+  to `49 of 50`), and the new `test_a_fifty_waits_while_another_run_holds_the_turn` went red
+  (`it took the turn while another run held it`); restored by SHA-256. The case is committed:
+  `tests.break_guards p142-`, red in 1 of 1. Filed from this session's block (P-140 to P-149).

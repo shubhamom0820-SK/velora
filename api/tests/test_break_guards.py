@@ -38,12 +38,21 @@ def test_each_case_can_still_apply(
 def test_case_ids_are_unique_and_name_their_task() -> None:
     ids = [case["id"] for case, _ in CASES]
     assert len(ids) == len(set(ids))
-    assert {i.split("-")[0] for i in ids} == {"t51", "t54", "t44", "t46", "land", "t52"}
+    assert {i.split("-")[0] for i in ids} == {
+        "t51",
+        "t54",
+        "t44",
+        "t46",
+        "land",
+        "t52",
+        "p142",
+    }
     assert len([i for i in ids if i.startswith("t51-")]) == 35
     assert len([i for i in ids if i.startswith("t54-")]) == 6
     assert len([i for i in ids if i.startswith("t44-")]) == 37
     assert len([i for i in ids if i.startswith("land-")]) == 5
     assert len([i for i in ids if i.startswith("t52-")]) == 22
+    assert len([i for i in ids if i.startswith("p142-")]) == 1
 
 
 def test_failed_tests_reads_ids_whole() -> None:

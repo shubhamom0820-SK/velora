@@ -16,11 +16,13 @@ import asyncio
 import itertools
 import uuid
 from collections.abc import AsyncIterator
+from contextlib import asynccontextmanager
 from typing import Any
 
 import pytest
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncConnection, AsyncEngine, create_async_engine
+from sqlalchemy.pool import NullPool
 
 from app.core.enums import LedgerReason
 from app.core.errors import AppError
@@ -28,19 +30,59 @@ from app.modules.wallet import repository, rules, service
 from app.modules.wallet.rules import Ref, RefType
 from app.modules.wallet.service import LedgerResult
 from tests.committed import fresh_man
-from tests.infra import TEST_DATABASE_URL
+from tests.infra import SERVER_URL, TEST_DATABASE_URL
 from tests.modules.wallet.races import Move, Outcome, Race, ledger_of, violated
 
 CALLS = 50
 # Fifty holders one after another: a second in all, with the lock in place.
 COMPANY_WAIT_S = 0.02
 
+# One run's fifty connections at a time, on the whole server (P-142). Every
+# checkout shares one Postgres of 100 connections, and two runs' fifty at once
+# don't fit: the second failed loudly, on code nobody had changed. An advisory
+# lock on the server's own `postgres` database, so every run and slot sees it,
+# held on a connection of its own: a run that dies frees it as it closes. Its
+# first key means "a fifty's turn"; P-55's slots lock on 55.
+FIFTY_LOCK = 50
+FIFTY_WAIT_S = 600.0
+
+
+@asynccontextmanager
+async def fifty_turn() -> AsyncIterator[None]:
+    """Wait for the server's one fifty-connection turn, and hold it."""
+    engine = create_async_engine(
+        SERVER_URL, poolclass=NullPool, isolation_level="AUTOCOMMIT"
+    )
+    try:
+        async with engine.connect() as connection:
+            loop = asyncio.get_running_loop()
+            deadline = loop.time() + FIFTY_WAIT_S
+            while not await connection.scalar(
+                text("select pg_try_advisory_lock(:lock, 0)"), {"lock": FIFTY_LOCK}
+            ):
+                if loop.time() >= deadline:
+                    pytest.fail(
+                        f"Another run held the fifty-connection turn for {FIFTY_WAIT_S:.0f} s "
+                        "(P-142). Let it finish; this test never skips."
+                    )
+                await asyncio.sleep(0.2)
+            yield
+    finally:
+        await engine.dispose()
+
 
 @pytest.fixture
 async def fifty(test_engine: AsyncEngine) -> AsyncIterator[list[AsyncConnection]]:
     """Fifty connections from an engine of exactly fifty, all open before any
-    test starts, and fifty distinct backends. Postgres refusing one fails the
-    test loudly: it never runs with fewer, and never skips."""
+    test starts, and fifty distinct backends, opened only in this run's turn
+    (P-142). Postgres refusing one fails the test loudly: it never runs with
+    fewer, and never skips."""
+    async with fifty_turn():
+        async for connections in _fifty_connections():
+            yield connections
+
+
+async def _fifty_connections() -> AsyncIterator[list[AsyncConnection]]:
     engine = create_async_engine(
         TEST_DATABASE_URL, pool_size=CALLS, max_overflow=0, pool_timeout=30
     )
@@ -255,3 +297,26 @@ async def test_two_men_with_one_client_key_both_apply(
         assert sorted(r.applied for r in his) == [False] * (CALLS // 2 - 1) + [True]
         assert len({r.entry.id for r in his}) == 1
         assert await ledger_of(test_engine, man) == (2, 4, 4)
+
+
+# --- Taking turns (P-142) -----------------------------------------------------------
+
+
+async def test_a_fifty_waits_while_another_run_holds_the_turn() -> None:
+    """Another run's fifty holds the turn: this one doesn't start until it is
+    released. Without the lock it would start at once, and two runs' fifty
+    connections would not fit in the shared server."""
+    loop = asyncio.get_running_loop()
+
+    async def take_the_turn() -> float:
+        async with fifty_turn():
+            return loop.time()
+
+    async with fifty_turn():  # another run's fifty, mid-test
+        waiting = asyncio.create_task(take_the_turn())
+        await asyncio.sleep(1.0)
+        assert not waiting.done(), "it took the turn while another run held it"
+        released_at = loop.time()
+    started_at = await asyncio.wait_for(waiting, timeout=10)
+
+    assert started_at >= released_at

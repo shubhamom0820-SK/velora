@@ -57,6 +57,9 @@ empty (P-55), but other tests in the same run commit too. So a test that commits
   ones that commit: from T-5.1 every run holds committed men, so `select(User)` or a count of
   `users` finds them too. T-5.1 found eleven such assertions (in `test_otp_verify.py`,
   `test_refresh.py` and `test_dob_gender.py`) and scoped each to the test's own number.
+- **Takes the server's turn before opening many connections.** Every checkout shares one Postgres
+  of 100 connections, so T-5.4's fifty-connection tests first take a server-wide advisory lock
+  (`fifty_turn`, P-142) and a second run waits rather than failing for want of connections.
 - **Never commits a wallet that disagrees with its ledger.** T-9.9's reconciliation is global by
   design, so a test proving it catches a mismatch runs inside the rolled-back transaction.
 - **Breaks constraints only on a database of its own.** Every run's is (P-55), so a guard broken to
