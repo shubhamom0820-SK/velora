@@ -1353,8 +1353,95 @@ T46: list[tuple[Case, list[str]]] = [
     ),
 ]
 
+# --- The landing guard (4 October 2026): a push to main asks the checks itself ----
+
+GUARD = "tests/test_push_gate.py"
+REFUSES = "test_the_landing_guard_refuses_what_it_should"
+
+LAND: list[tuple[Case, list[str]]] = [
+    (
+        Case(
+            id="land-1-the-marks-not-asked",
+            what="push-gate lets main move without make lint and make test's marks",
+            edits=[
+                (
+                    "../scripts/push-gate",
+                    '    [[ -f "$marks/$kind-$tree" ]] || missing+=("make $kind")\n',
+                    "    :\n",
+                )
+            ],
+            expect=[REFUSES],
+        ),
+        [GUARD],
+    ),
+    (
+        Case(
+            id="land-2-ci-not-asked",
+            what="push-gate lets main move without asking CI",
+            edits=[
+                (
+                    "../scripts/push-gate",
+                    '  if ! "$root/scripts/with-tools" --need gh "$ci_gate" --branch "$branch" "$local_sha" </dev/null >&2; then\n',
+                    "  if false; then\n",
+                )
+            ],
+            expect=[REFUSES],
+        ),
+        [GUARD],
+    ),
+    (
+        Case(
+            id="land-3-only-main-s-first-line",
+            what="push-gate reads only the first ref of a push",
+            edits=[
+                (
+                    "../scripts/push-gate",
+                    "while read -r _local_ref local_sha remote_ref _remote_sha; do\n",
+                    "read -r _local_ref local_sha remote_ref _remote_sha; for _once in 1; do\n",
+                ),
+            ],
+            expect=[REFUSES],
+        ),
+        [GUARD],
+    ),
+    (
+        Case(
+            id="land-4-a-dirty-tree-marked",
+            what="mark-checked vouches for a tree with changes not committed",
+            edits=[
+                (
+                    "../scripts/mark-checked",
+                    'if [[ -n "$(git status --porcelain)" ]]; then echo dirty; else',
+                    "if false; then echo dirty; else",
+                )
+            ],
+            expect=[REFUSES],
+        ),
+        [GUARD],
+    ),
+    (
+        Case(
+            id="land-5-any-branch-s-run",
+            what="push-gate reads whichever branch's run points at the commit (P-140)",
+            edits=[
+                (
+                    "../scripts/push-gate",
+                    '    elif [[ -n "$carried" && "$(wc -l <<<"$carried" | tr -d \' \')" == 1 ]]; then\n      branch="$carried"\n',
+                    '    elif [[ -n "$carried" ]]; then\n      branch="$(head -n 1 <<<"$carried")"\n',
+                )
+            ],
+            expect=[REFUSES],
+        ),
+        [GUARD],
+    ),
+]
+
 CASES: list[tuple[Case, list[str]]] = (
-    [(c, T51_SELECTION) for c in T51] + [(c, T54_SELECTION) for c in T54] + T44 + T46
+    [(c, T51_SELECTION) for c in T51]
+    + [(c, T54_SELECTION) for c in T54]
+    + T44
+    + T46
+    + LAND
 )
 
 # The fifty-connection fixture's own message when Postgres refuses a connection.
@@ -1366,8 +1453,9 @@ def sha(path: Path) -> str:
 
 
 def tracked() -> dict[str, str]:
-    """Every file under api/ but caches and the virtualenv, and infra/'s Fly
-    configs (T-4.4 breaks one), by SHA-256, keyed by their path from api/."""
+    """Every file under api/ but caches and the virtualenv, infra/'s Fly configs
+    (T-4.4 breaks one) and the landing guard's scripts, by SHA-256, keyed by
+    their path from api/."""
     skip = {".venv", "__pycache__", ".pytest_cache", ".mypy_cache", ".ruff_cache"}
     files = {
         str(path.relative_to(API)): sha(path)
@@ -1376,6 +1464,8 @@ def tracked() -> dict[str, str]:
     }
     for path in (API.parent / "infra").glob("fly.*.toml"):
         files[f"../infra/{path.name}"] = sha(path)
+    for name in ("push-gate", "mark-checked"):
+        files[f"../scripts/{name}"] = sha(API.parent / "scripts" / name)
     return files
 
 

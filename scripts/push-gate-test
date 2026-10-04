@@ -1,0 +1,103 @@
+#!/usr/bin/env bash
+# Tests scripts/push-gate and scripts/mark-checked (the landing guard, 4 October
+# 2026) in a throwaway repository, with a stub for scripts/ci-gate. Each case
+# checks the exit code and the message: a refusal that says nothing, or a
+# crash that happens to exit 1, would pass on the code alone. Runs locally and
+# in CI.
+set -euo pipefail
+
+here="$(cd "$(dirname "$0")" && pwd)"
+work="$(mktemp -d)"
+trap 'rm -rf "$work"' EXIT
+
+repo="$work/repo"
+mkdir -p "$repo/scripts"
+cp "$here/push-gate" "$here/mark-checked" "$here/with-tools" "$repo/scripts/"
+cat >"$work/ci-gate" <<'STUB'
+#!/usr/bin/env bash
+echo "stub ci-gate asked: $*"
+exit "$(cat "$STUB_CI_EXIT")"
+STUB
+chmod +x "$work/ci-gate"
+git -C "$repo" init -q
+git -C "$repo" add scripts
+git -C "$repo" -c user.email=t@t -c user.name=t commit -q -m first
+echo a >"$repo/file"
+git -C "$repo" add file
+git -C "$repo" -c user.email=t@t -c user.name=t commit -q -m second
+git -C "$repo" checkout -q -b work
+sha="$(git -C "$repo" rev-parse HEAD)"
+# What a pushed task branch leaves: a remote-tracking ref at the commit.
+git -C "$repo" update-ref refs/remotes/origin/task "$sha"
+zero=0000000000000000000000000000000000000000
+marks="$(git -C "$repo" rev-parse --path-format=absolute --git-path velora-checked)"
+
+passed=0 failed=0
+# expect NAME EXIT MESSAGE STDIN [ENV=VALUE]...
+expect() {
+  local name="$1" want="$2" message="$3" input="$4" got=0
+  shift 4
+  (cd "$repo" && printf '%s\n' "$input" | env PUSH_GATE_CI_GATE="$work/ci-gate" \
+    STUB_CI_EXIT="$work/ci-exit" "$@" scripts/push-gate origin url) >"$work/out" 2>&1 || got=$?
+  if [[ "$got" == "$want" ]] && if [[ -z "$message" ]]; then [[ ! -s "$work/out" ]]; else grep -qF -- "$message" "$work/out"; fi; then
+    passed=$((passed + 1))
+  else
+    failed=$((failed + 1))
+    echo "FAIL $name: exit $got (want $want), output:"
+    sed 's/^/    /' "$work/out"
+  fi
+}
+to_main="refs/heads/x $sha refs/heads/main $zero"
+mark() { (cd "$repo" && scripts/mark-checked "$1" "$(scripts/mark-checked tree)") >"$work/mark.out"; }
+
+echo 0 >"$work/ci-exit"
+expect "a branch push isn't asked anything, and says nothing" 0 "" "refs/heads/x $sha refs/heads/x $zero"
+expect "main, nothing checked" 1 "refused: make lint and make test hasn't passed on ${sha:0:7}'s tree" "$to_main"
+mark lint
+grep -qF "marked for landing" "$work/mark.out" || { echo "FAIL lint mark: $(cat "$work/mark.out")"; failed=$((failed + 1)); }
+expect "main, lint only" 1 "refused: make test hasn't passed" "$to_main"
+mark test
+echo 1 >"$work/ci-exit"
+expect "main, checked, CI red" 1 "refused: CI hasn't passed for ${sha:0:7}" "$to_main"
+echo 0 >"$work/ci-exit"
+expect "main, checked, CI green" 0 "push-gate: ${sha:0:7}: lint, test and CI (on task) passed." "$to_main"
+expect "CI is asked about the exact commit, on its branch" 0 "stub ci-gate asked: --branch task $sha" "$to_main"
+git -C "$repo" update-ref refs/remotes/origin/other "$sha"
+expect "two branches point at it: refused" 1 "several branches on origin point at ${sha:0:7}" "$to_main"
+expect "two branches, one named" 0 "stub ci-gate asked: --branch other $sha" "$to_main" PUSH_GATE_BRANCH=other
+git -C "$repo" update-ref refs/remotes/origin/work "$sha"
+expect "two branches, the checked-out one among them" 0 "stub ci-gate asked: --branch work $sha" "$to_main"
+git -C "$repo" update-ref -d refs/remotes/origin/work
+git -C "$repo" update-ref -d refs/remotes/origin/other
+git -C "$repo" update-ref -d refs/remotes/origin/task
+git -C "$repo" update-ref refs/remotes/origin/main "$sha"
+expect "only main points at it: no run can vouch" 1 "no branch on origin points at ${sha:0:7}" "$to_main"
+git -C "$repo" update-ref -d refs/remotes/origin/main
+git -C "$repo" update-ref refs/remotes/origin/task "$sha"
+echo 1 >"$work/ci-exit"
+expect "the manual path skips CI only" 0 "CI not asked (/done's manual path)" "$to_main" \
+  VELORA_PUSH_GATE_MANUAL_PATH=1
+expect "deleting main" 1 "refused: this push deletes main." "(delete) $zero refs/heads/main $sha"
+echo 0 >"$work/ci-exit"
+expect "a branch and main in one push: main is still asked" 1 "refused: make lint and make test" \
+  "$(printf 'refs/heads/x %s refs/heads/x %s\nrefs/heads/y %s refs/heads/main %s' "$sha" "$zero" \
+    "$(git -C "$repo" rev-parse HEAD~1)" "$zero")"
+
+# mark-checked: what it refuses to vouch for.
+echo b >"$repo/file"
+mark test
+grep -qF "changes not committed: not marked" "$work/mark.out" && passed=$((passed + 1)) ||
+  { echo "FAIL a dirty tree was marked: $(cat "$work/mark.out")"; failed=$((failed + 1)); }
+git -C "$repo" checkout -q -- file
+start="$(cd "$repo" && scripts/mark-checked tree)"
+echo c >"$repo/file"
+git -C "$repo" -c user.email=t@t -c user.name=t commit -q -am third
+(cd "$repo" && scripts/mark-checked test "$start") >"$work/mark.out"
+grep -qF "the commit changed while make test ran" "$work/mark.out" && passed=$((passed + 1)) ||
+  { echo "FAIL a moved tree was marked: $(cat "$work/mark.out")"; failed=$((failed + 1)); }
+third="$(git -C "$repo" rev-parse 'HEAD^{tree}')"
+[[ ! -e "$marks/test-$third" ]] && passed=$((passed + 1)) ||
+  { echo "FAIL a mark exists for a tree that wasn't checked"; failed=$((failed + 1)); }
+
+echo "push-gate-test: $passed passed, $failed failed"
+((failed == 0))

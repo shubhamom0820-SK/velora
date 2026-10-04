@@ -1,0 +1,41 @@
+#!/usr/bin/env bash
+# Marks a commit's tree as having passed `make lint` or `make test`, for
+# scripts/push-gate, which refuses a push to main without both marks (the
+# landing guard, 4 October 2026).
+#
+#   scripts/mark-checked tree            the tree to be checked: HEAD's, or "dirty"
+#   scripts/mark-checked KIND START      after KIND passed: mark HEAD's tree, if
+#                                        START was it and nothing changed since
+#
+# A mark is a file named KIND-TREE in this checkout's git directory, so it
+# vouches only for exactly the files the check ran on: a working tree with any
+# change, or a tree that moved while the check ran, gets none, and says why.
+# Make runs the second form only when every check before it passed, so a
+# failure can't be marked, whatever a pipe does to the exit code later.
+set -euo pipefail
+
+tree() {
+  if [[ -n "$(git status --porcelain)" ]]; then echo dirty; else git rev-parse 'HEAD^{tree}'; fi
+}
+
+case "${1:-}" in
+  tree) tree ;;
+  lint | test)
+    kind="$1" start="${2:?usage: scripts/mark-checked lint|test START}"
+    now="$(tree)"
+    if [[ "$start" == dirty || "$now" == dirty ]]; then
+      echo "mark-checked: make $kind passed with changes not committed: not marked for landing. Commit, then run it again."
+    elif [[ "$start" != "$now" ]]; then
+      echo "mark-checked: the commit changed while make $kind ran: not marked for landing. Run it again."
+    else
+      dir="$(git rev-parse --git-path velora-checked)"
+      mkdir -p "$dir"
+      : >"$dir/$kind-$now"
+      echo "mark-checked: make $kind passed on tree ${now:0:7}: marked for landing."
+    fi
+    ;;
+  *)
+    echo "usage: scripts/mark-checked tree | lint START | test START" >&2
+    exit 64
+    ;;
+esac

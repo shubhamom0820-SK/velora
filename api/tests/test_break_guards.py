@@ -3,7 +3,8 @@ case's anchor is still in its file exactly once, every test it expects still
 exists, and its parser reads node ids the way pytest prints them.
 
 Without this, an edit to a guarded file would leave a case that can't apply,
-and the claim it backed (T-5.1's thirty-five, T-5.4's six, T-4.4's thirty-seven, T-4.6's three)
+and the claim it backed (T-5.1's thirty-five, T-5.4's six, T-4.4's thirty-seven, T-4.6's three,
+the landing guard's five)
 unrecheckable.
 """
 
@@ -37,10 +38,11 @@ def test_each_case_can_still_apply(
 def test_case_ids_are_unique_and_name_their_task() -> None:
     ids = [case["id"] for case, _ in CASES]
     assert len(ids) == len(set(ids))
-    assert {i.split("-")[0] for i in ids} == {"t51", "t54", "t44", "t46"}
+    assert {i.split("-")[0] for i in ids} == {"t51", "t54", "t44", "t46", "land"}
     assert len([i for i in ids if i.startswith("t51-")]) == 35
     assert len([i for i in ids if i.startswith("t54-")]) == 6
     assert len([i for i in ids if i.startswith("t44-")]) == 37
+    assert len([i for i in ids if i.startswith("land-")]) == 5
 
 
 def test_failed_tests_reads_ids_whole() -> None:

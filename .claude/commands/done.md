@@ -20,7 +20,9 @@ Finish task $ARGUMENTS.
      an error from GitHub.
 9. Fast-forward `main`: `git checkout main`, `git merge --ff-only origin/main`, then
    `git merge --ff-only <branch>`, then `git push origin main`. If a fast-forward isn't possible,
-   stop and tell me.
+   stop and tell me. The push itself refuses unless step 1's `make lint test` passed on this exact
+   commit's tree and CI passed for it (`scripts/push-gate`, CLAUDE.md "Landing"): if it refuses,
+   stop and show what it printed. Never `--no-verify`.
 10. Delete the branch, locally and on origin.
 
 ## Manual path: only when GitHub can't be reached (gate exit 4)
@@ -59,7 +61,8 @@ stop and ask me. Take this path only when I say so, after you've shown me the ga
    - `scripts/ci-gate-test`
 
    The full-history secrets scan needs GitHub; CI runs it on `main` once GitHub is back (step 4).
-3. Do steps 9 and 10 above. If the push fails because git can't reach GitHub either, stop and tell
+3. Do steps 9 and 10 above, pushing with `VELORA_PUSH_GATE_MANUAL_PATH=1 git push origin main`:
+   the landing guard then skips its CI half only, never `make lint test`'s. If the push fails because git can't reach GitHub either, stop and tell
    me: `main` has then moved locally only, and must be pushed before the next task starts.
 4. When GitHub answers again, check CI on what went to `main`: `scripts/ci-gate main`. If it isn't
    green, tell me at once — `main` is red, and fixing it comes before anything else.

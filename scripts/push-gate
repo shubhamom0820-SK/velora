@@ -1,0 +1,82 @@
+#!/usr/bin/env bash
+# The landing guard (4 October 2026): git runs this before every push, as the
+# pre-push hook `make hooks` installs. A push that would move `main` goes only
+# if, for the exact commit it pushes,
+#   1. `make lint` and `make test` both passed on its tree, in this checkout
+#      (scripts/mark-checked's marks), and
+#   2. CI passed for it (scripts/ci-gate, D-044), on the branch CI ran it on: the
+#      one of this remote's branches pointing at it, the checked-out one if
+#      several do (P-140: never another branch's run). PUSH_GATE_BRANCH names it
+#      when that can't tell.
+# Every other push goes untouched. So a gate whose exit code a pipe swallowed
+# can't land anything: the push asks the checks itself. Twice on 4 October 2026
+# a session landed past a red `make test` that `| grep` or `| tail -1` had hidden.
+#
+# /done's manual path (ci-gate exit 4, GitHub unreachable, the founder's say-so)
+# skips the CI half only: VELORA_PUSH_GATE_MANUAL_PATH=1 git push origin main.
+# Never the local half. `git push --no-verify` skips every hook; nothing here
+# can stop that, so it is never used for main.
+#
+# Reads git's own pre-push lines on stdin: <local ref> <local sha> <remote ref> <remote sha>.
+set -euo pipefail
+
+remote="${1:-origin}"
+root="$(git rev-parse --show-toplevel)"
+ci_gate="${PUSH_GATE_CI_GATE:-$root/scripts/ci-gate}"
+zero=0000000000000000000000000000000000000000
+marks="$(git rev-parse --git-path velora-checked)"
+refused=0
+
+refuse() {
+  echo "push-gate: refused: $*" >&2
+  refused=1
+}
+
+while read -r _local_ref local_sha remote_ref _remote_sha; do
+  [[ "$remote_ref" == refs/heads/main ]] || continue
+  if [[ "$local_sha" == "$zero" ]]; then
+    refuse "this push deletes main."
+    continue
+  fi
+  short="${local_sha:0:7}"
+  tree="$(git rev-parse "$local_sha^{tree}")"
+  missing=()
+  for kind in lint test; do
+    [[ -f "$marks/$kind-$tree" ]] || missing+=("make $kind")
+  done
+  if ((${#missing[@]})); then
+    names="${missing[0]}"
+    if ((${#missing[@]} > 1)); then names="$names and ${missing[1]}"; fi
+    refuse "$names hasn't passed on $short's tree in this checkout. With every change committed, run make lint test, then push again."
+    continue
+  fi
+  if [[ "${VELORA_PUSH_GATE_MANUAL_PATH:-}" == 1 ]]; then
+    echo "push-gate: $short: lint and test passed here; CI not asked (/done's manual path)." >&2
+    continue
+  fi
+  branch="${PUSH_GATE_BRANCH:-}"
+  if [[ -z "$branch" ]]; then
+    # The branches CI could have run it on: this remote's, pointing at it, but main.
+    carried="$(git for-each-ref --points-at "$local_sha" --format='%(refname:lstrip=3)' \
+      "refs/remotes/$remote" | grep -vx -e main -e HEAD || true)"
+    current="$(git symbolic-ref -q --short HEAD || true)"
+    if [[ -n "$current" ]] && grep -qx -- "$current" <<<"$carried"; then
+      branch="$current"
+    elif [[ -n "$carried" && "$(wc -l <<<"$carried" | tr -d ' ')" == 1 ]]; then
+      branch="$carried"
+    elif [[ -z "$carried" ]]; then
+      refuse "no branch on $remote points at $short, so no CI run can vouch for it. Push its branch first, wait for CI, then push main."
+      continue
+    else
+      refuse "several branches on $remote point at $short. Name the one CI ran on: PUSH_GATE_BRANCH=<branch> git push."
+      continue
+    fi
+  fi
+  if ! "$root/scripts/with-tools" --need gh "$ci_gate" --branch "$branch" "$local_sha" </dev/null >&2; then
+    refuse "CI hasn't passed for $short on $branch (scripts/ci-gate, above)."
+    continue
+  fi
+  echo "push-gate: $short: lint, test and CI (on $branch) passed." >&2
+done
+
+exit "$refused"

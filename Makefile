@@ -38,7 +38,10 @@ worker: ## Run the ARQ worker only: moderate_photo, delete_files (T-4.4)
 seed: ## Dev data, local only: 20 profiles, 3 test accounts (re-run changes nothing)
 	cd api && uv run python -m seed
 
-test: test-api test-web ## api pytest + web vitest (CI runs each half as its own job)
+# `test` and `lint` mark the commit's tree when they pass, for the landing guard:
+# scripts/push-gate refuses a push to main without both marks (scripts/mark-checked).
+test: ## api pytest + web vitest (CI runs each half as its own job); marks the tree on success
+	@start="$$(scripts/mark-checked tree)" && $(MAKE) --no-print-directory test-api test-web && scripts/mark-checked test "$$start"
 
 test-api: ## api pytest: the critical tests first, then the rest (06-TESTING)
 	cd api && uv run pytest -m critical && uv run pytest -m "not critical"
@@ -46,7 +49,8 @@ test-api: ## api pytest: the critical tests first, then the rest (06-TESTING)
 test-web: ## web vitest
 	cd web && pnpm test
 
-lint: lint-api lint-web ## api + web lint (CI runs each half as its own job)
+lint: ## api + web lint (CI runs each half as its own job); marks the tree on success
+	@start="$$(scripts/mark-checked tree)" && $(MAKE) --no-print-directory lint-api lint-web && scripts/mark-checked lint "$$start"
 
 lint-api: ## api: ruff + format check + strict mypy
 	cd api && uv run ruff check . && uv run ruff format --check . && uv run mypy
@@ -54,8 +58,17 @@ lint-api: ## api: ruff + format check + strict mypy
 lint-web: ## web: eslint + tsc + prettier check
 	cd web && pnpm lint && pnpm typecheck && pnpm format:check
 
-hooks: ## Install the git pre-commit hooks (once per clone)
+hooks: ## Install the git hooks (once per clone): pre-commit's, and the landing guard's pre-push
 	cd api && uv run pre-commit install
+	@# Shared by every worktree of this clone; each push runs its own checkout's
+	@# scripts/push-gate, and a checkout from before the guard has none to run.
+	@hook="$$(git rev-parse --git-common-dir)/hooks/pre-push"; \
+	printf '%s\n' '#!/bin/sh' \
+	  '# Installed by make hooks: the landing guard (scripts/push-gate).' \
+	  'root="$$(git rev-parse --show-toplevel)"' \
+	  '[ -x "$$root/scripts/push-gate" ] || exit 0' \
+	  'exec "$$root/scripts/push-gate" "$$@"' > "$$hook" && chmod +x "$$hook" && \
+	echo "pre-push installed at $$hook"
 
 migrate: ## alembic upgrade head
 	cd api && uv run alembic upgrade head
