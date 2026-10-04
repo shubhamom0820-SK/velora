@@ -30,7 +30,12 @@ any commit whose CI passed):
 2. **migrate** runs `alembic upgrade head` from CI **as the database owner**
    (`scripts/migrate-with-url`). The owner's credentials live only in GitHub, never on Fly: the app
    runs as `velora_api`, which can't disable the ledger's triggers, and a code-execution bug in the
-   app mustn't be one step from doing so (P-18).
+   app mustn't be one step from doing so (P-18). Then it asks the database where it is, not
+   Alembic (P-65): after the commit, `alembic_version` must hold the repo's single head, D-076's
+   two triggers must be present and enabled, and D-077's index present, unique and valid. The log
+   says what it read (`migrate: alembic_version holds …`). Anything else fails the job, naming
+   what it found, so **api** never deploys onto it. The migration is committed by then: a red
+   here doesn't undo it, it says the database isn't where the repo thinks.
 3. **api** runs `flyctl deploy`. Fly builds `api/Dockerfile` with `api/` as the context, and only
    routes to the new machine once `/readyz` passes.
 4. **worker** (T-4.4) runs `flyctl deploy` with `infra/fly.worker.toml`, after the API, with a

@@ -3465,7 +3465,7 @@ The number comes from the session's own block, given in its brief, from P-100 up
   `tests/conftest.py`), so the gap fails loudly until T-7.4 closes it. Proved both ways in
   `tests/test_harness.py`, and red with the tripwire removed and with it on `pubsub()` alone.
   This item's fix removes it, and turns that test into one that sees the events.
-- [ ] P-65 · Make the deploy read `alembic_version` back after migrating. **Before P-38 or P-62,
+- [x] P-65 · Make the deploy read `alembic_version` back after migrating. **Before P-38 or P-62,
   whichever lands first:** the plan's next migrations (P-38's areas, due before T-4.10, on whose
   Needs line this sits; P-62's trigger fix). No task from T-3.12 to T-6.4 carries one: checked
   task by task on 3 October 2026 (discovery's GIST index already exists, T-1.9). A task that
@@ -3488,6 +3488,28 @@ The number comes from the session's own block, given in its brief, from P-100 up
   test: a wrong database refused, and a database at head with each of the three dropped, then
   disabled, refused, naming the object. At the direction of the advisor directing Sprint 5,
   3 October 2026, after T-5.1; the three objects added at the advisor's direction the same day.
+  **Done, 4 October 2026,** at the founder's direction. `scripts/migrate-with-url` hands Alembic a
+  connection of its own, commits, and on that connection reads `alembic_version`: anything but the
+  repo's single head (`get_current_head()`, which refuses two) exits 1, naming what the database
+  holds. With the head matching, D-076's two triggers must be on their own tables with `tgenabled`
+  `O` or `A` (`R` fires only under replica, so it counts as disabled), and D-077's index on
+  `ledger_entries`, unique and valid; each refusal names the object. **Proof, both ways**
+  (`api/tests/test_migrate_with_url.py`, the real script against scratch databases on the run's
+  slot): an empty database migrated, then read back on the test's own connection; one at head
+  passes again. Refused: Alembic logging `Running upgrade` for the last migration while a trigger
+  on `alembic_version` keeps the old version (the false green this item exists for); a head
+  stamped one migration short; each trigger dropped, disabled, replica-only and on the wrong table;
+  the index dropped, on the wrong table, not unique and invalid. **Weakenings** (the script
+  restored by SHA-256 after each): red with the comparison removed, with Alembic's answer trusted,
+  with `R` or any `tgenabled` accepted, with either object matched by name alone, with uniqueness
+  or validity unchecked, with a refusal exiting 0, and with a transaction opened before the upgrade
+  and the commit removed: there the script printed the head and exited 0 over a database with no
+  `alembic_version`, caught only by the test's own readback. **Green, as expected,** with the
+  commit removed alone: Alembic commits a transaction it opened itself, and the commit is for the
+  case above. **Not proved against a real deploy:** the failing case would mean breaking staging's
+  `alembic_version`, whose owner credentials live only in GitHub. **Unexplained:** one run of the
+  weakening set reported two errors on the index cases, with no log kept, no Postgres error logged
+  then, and none in 33 runs since; if it recurs, keep pytest's output.
 - [ ] P-66 · Give staging a Firebase project of its own, with its own test numbers, its own
   authorised domains and its own region policy. **Before the first staging check that signs in
   and runs unattended** (an E2E against staging, or anything in CI that signs in): that is P-67,

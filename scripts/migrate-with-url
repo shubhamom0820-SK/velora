@@ -3,6 +3,12 @@
 # owner, with none of the app's settings (T-1.22, D-046). deploy.yml runs this
 # from CI, so the owner's credentials are never on Fly beside the app.
 #
+# Then it asks the database, not Alembic, where it is (P-65): on the same
+# connection, after the commit, `alembic_version` must hold the repo's single
+# head, and the guards a matching head can't vouch for must be in place.
+# Anything else exits 1, naming what it found. Alembic's own "Running upgrade"
+# is the migrator reporting on itself; this is the database's answer.
+#
 #   MIGRATION_DATABASE_URL=postgresql+asyncpg://owner:…@host:5432/db scripts/migrate-with-url
 set -euo pipefail
 
@@ -10,15 +16,115 @@ set -euo pipefail
 
 cd "$(dirname "$0")/../api"
 uv run --locked python - <<'PY'
+import asyncio
 import os
+import sys
+from logging.config import fileConfig
 
 from alembic import command
 from alembic.config import Config
+from alembic.script import ScriptDirectory
+from sqlalchemy import text
+from sqlalchemy.engine import Connection
+from sqlalchemy.ext.asyncio import create_async_engine
+from sqlalchemy.pool import NullPool
 
+# Alembic's schema comparison never sees a trigger or a function, nor a partial
+# index's condition, so a matching head can't vouch for these. They carry the
+# regulatory position (D-076) and one entry per event (D-077). A later guard of
+# the same weight is added here by the task that builds it; nothing else is.
+TRIGGERS = (
+    ("ledger_entries", "ledger_entries_only_men"),
+    ("wallets", "wallets_only_men"),
+)
+UNIQUE_INDEXES = (("ledger_entries", "uq_ledger_entries_one_per_event"),)
+
+# pg_trigger.tgenabled: O and A fire in every session. D is disabled, and R
+# fires only under session_replication_role = replica: both exist and refuse
+# nothing.
+FIRES = ("O", "A")
+
+url = os.environ["MIGRATION_DATABASE_URL"]
 config = Config("alembic.ini")
 # ConfigParser reads % as interpolation, and URL-encoded passwords contain it.
-config.set_main_option(
-    "sqlalchemy.url", os.environ["MIGRATION_DATABASE_URL"].replace("%", "%%")
-)
-command.upgrade(config, "head")
+config.set_main_option("sqlalchemy.url", url.replace("%", "%%"))
+# env.py skips its logging setup when handed a connection; this keeps
+# Alembic's "Running upgrade" lines in the deploy's log.
+assert config.config_file_name is not None
+fileConfig(config.config_file_name)
+
+
+def trigger_problem(connection: Connection, table: str, name: str) -> str | None:
+    enabled = connection.scalar(
+        text(
+            "select tgenabled::text from pg_trigger"
+            " where tgrelid = to_regclass(:table) and tgname = :name"
+        ),
+        {"table": table, "name": name},
+    )
+    if enabled is None:
+        return f"trigger {name} on {table} is missing"
+    if enabled not in FIRES:
+        return f"trigger {name} on {table} is disabled (tgenabled {enabled})"
+    return None
+
+
+def unique_index_problem(connection: Connection, table: str, name: str) -> str | None:
+    found = connection.execute(
+        text(
+            "select indisunique, indisvalid from pg_index"
+            " where indexrelid = to_regclass(:name) and indrelid = to_regclass(:table)"
+        ),
+        {"table": table, "name": name},
+    ).one_or_none()
+    if found is None:
+        return f"index {name} on {table} is missing"
+    unique, valid = found
+    if not unique:
+        return f"index {name} on {table} is not unique"
+    if not valid:
+        return f"index {name} on {table} is not valid"
+    return None
+
+
+def migrate_then_ask(connection: Connection) -> list[str]:
+    config.attributes["connection"] = connection
+    command.upgrade(config, "head")
+    # Read after the commit, never inside the upgrade's transaction: a
+    # connection sees its own uncommitted writes, which may yet roll back.
+    connection.commit()
+
+    # Raises if the repo has more than one head.
+    head = ScriptDirectory.from_config(config).get_current_head()
+    versions = connection.scalars(text("select version_num from alembic_version")).all()
+    print(f"migrate: alembic_version holds {', '.join(versions) or 'nothing'}.")
+    if versions != [head]:
+        return [f"alembic_version holds {versions}; the repo's head is {head}"]
+    print(f"migrate: that is the repo's head, {head}.")
+
+    problems = [
+        *(trigger_problem(connection, table, name) for table, name in TRIGGERS),
+        *(unique_index_problem(connection, table, name) for table, name in UNIQUE_INDEXES),
+    ]
+    return [problem for problem in problems if problem is not None]
+
+
+async def main() -> list[str]:
+    engine = create_async_engine(url, poolclass=NullPool)
+    try:
+        async with engine.connect() as connection:
+            return await connection.run_sync(migrate_then_ask)
+    finally:
+        await engine.dispose()
+
+
+problems = asyncio.run(main())
+if problems:
+    for problem in problems:
+        print(f"migrate: refused. {problem}.", file=sys.stderr)
+    sys.exit(1)
+for table, name in TRIGGERS:
+    print(f"migrate: trigger {name} on {table}: present and enabled.")
+for table, name in UNIQUE_INDEXES:
+    print(f"migrate: index {name} on {table}: present, unique and valid.")
 PY
