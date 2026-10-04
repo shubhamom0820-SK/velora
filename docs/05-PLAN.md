@@ -1865,6 +1865,10 @@ then prices show nothing. T-4.4 and T-4.6 come first.
 ### T-5.5 · Web wallet
 - [ ] **Needs:** T-5.2, T-5.3, T-3.10, T-5.6
 - [ ] **The balance pill** (men), or "Free access" (women), sits in T-5.6's header.
+- [ ] **The shell's look guard is still a blacklist** (P-83, which waits for T-6.5): whatever this
+  task adds to `AppShell.tsx` keeps its look values in `tokens.css` by its own discipline, never
+  by trusting `look.test.ts` to catch one. At the direction of the advisor directing T-5.6 (Claude,
+  in a separate chat), relayed by the founder, 4 October 2026.
 - [ ] **The wallet screen** has a black balance card, a price list from `/prices` and the ledger
   history (infinite scroll). It follows the prototype with these departures, written into 08-DESIGN:
   - no "Request a refund on unspent credits" and no "Unspent credits refundable within 7 days" (the
@@ -1909,7 +1913,7 @@ then prices show nothing. T-4.4 and T-4.6 come first.
 
 
 ### T-6.5 · Web discover deck
-- [ ] **Needs:** T-6.2, T-6.4, and P-57: the app's screens have no visual design, so this task stops and asks before designing one rather than inventing it from the prototype
+- [ ] **Needs:** T-6.2, T-6.4, and P-57: the app's screens have no visual design, so this task stops and asks before designing one rather than inventing it from the prototype; and P-82 and P-83: its design pass changes the shell's values, so first the shell is checked where a browser draws it, and its look guard fails anything not on an allowed list
 - [ ] `useDiscover(feed, filters)` infinite query; keep 3 cards rendered; prefetch next page at 5 left.
 - [ ] Card with `@use-gesture/react` + `@react-spring/web`: drag with rotation, LIKE/PASS overlays by drag distance, fling threshold 100 px or velocity, up = super. Tap = open profile. Keyboard ← → ↑ on desktop.
 - [ ] Optimistic swipe: advance immediately, rollback + toast on error.
@@ -3444,3 +3448,41 @@ Claude Code adds items here instead of doing unplanned work. Format:
   tests/modules/photos/test_upload.py`). CI runs file order, so it is green there. Seen in 3 of
   8 shuffled orders of the whole suite (seeds 3, 4 and 7) during T-5.4, which touches no photo
   code. Fix: `where(Photo.user_id == user.id)`, 06-TESTING's rule since T-5.1. Found in T-5.4.
+- [ ] P-82 · Check the app shell where a browser draws it, at a phone's width and a desktop's.
+  **Before T-6.5** (on its Needs line). It needs T-4.9, whose journey is the first to reach
+  `/discover`. Worst case without it: at one width the nav, the only way between Discover, Chats,
+  Wallet and You, is gone, under the page, or over the last thing on every screen, and every test
+  stays green. T-5.6's tests run in jsdom, which applies no CSS: they prove the DOM (one nav,
+  exactly four links, inside the gate and never on `(auth)`) and that the classes read tokens
+  (`look.test.ts`), never where the nav lands. Tailwind drops a class it can't compile without an
+  error, so a mistyped token reference removes a style silently. T-5.6's placement claims (fixed
+  along the bottom on a phone, in the header's row from 768 px, the frame 900 px and centred,
+  every item at least 44 × 44) rest on one Playwright run against `next dev` with a mocked API,
+  whose script stayed in that session's scratchpad: not a check anyone can re-run.
+  **The fix:** in T-3.13's E2E, on D-084's terms (a production build, Chromium, nothing kept, so
+  assertions and no screenshots), once J1 reaches `/discover`. At 390 × 844 and 1280 × 800: the
+  four links are visible and each opens its route; on the phone the nav's bottom edge is the
+  viewport's and `<main>` keeps clear of it; on the desktop the nav sits inside the header's box.
+  The control: `/login` and an onboarding step show no nav at either width. Proved by its effect:
+  drop the nav's `md:static`, see the desktop case go red, restore. At the direction of the
+  advisor directing T-5.6 (Claude, in a separate chat), relayed by the founder, 4 October 2026.
+
+  Found building T-5.6.
+- [ ] P-83 · Make the shell's look guard an allowlist. **Before T-6.5** (on its Needs line). Worst
+  case: a look value from a family nobody listed lands in `AppShell.tsx`, the guard stays green,
+  and T-6.5's design pass meets values written into structure: the rework T-5.6's rule exists to
+  prevent, the most expensive in the sprint. `look.test.ts` bans the families T-5.6 thought of
+  (Tailwind's spacing, type, radius, line-width, shadow and opacity scales, arbitrary values,
+  numbers passed as sizes, inline styles), so `scale-95`, `duration-150`, `blur-sm`,
+  `aspect-video` and whatever Tailwind adds next all pass it. That is a blacklist, the shape
+  D-084 records: a blacklist passes every test written with today's names. T-5.5, which puts the
+  balance pill in the header, edits the shell before T-6.5 does, under the blacklist.
+  **The fix:** invert it. In the shell's components a class passes only if it is on an allowed
+  list: layout utilities that carry no look (display, flex, position, alignment, `z-*`, zero
+  offsets); utilities named after a token, those names read from `tokens.css` and `globals.css`,
+  never typed into the test; and `(--name)` references to a token that exists. Anything else
+  fails. Its test includes a class nobody has named, as D-084's gate test includes
+  `env-nobody-has-named-2031`, and keeps it. At the direction of the advisor directing T-5.6
+  (Claude, in a separate chat), relayed by the founder, 4 October 2026.
+
+  Found building T-5.6.
