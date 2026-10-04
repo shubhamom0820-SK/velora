@@ -138,7 +138,7 @@ Checked value by value against the prototype in T-1.19, and corrected where the 
 | Icon | a Lucide icon at stroke 2; decorative (hidden) unless given a label |
 | EmptyState / ErrorState | icon, title, body, action |
 | Countdown | shared ticker; `4h 59m left` → `12m 30s left` → `Expired` |
-| GiftGrid | 6 tiles, 3×2; free tiles show remaining count, paid show Velas |
+| GiftGrid | D-231's four gifts, each with its price in Velas, and the free sends left this week (was six tiles, 3×2) |
 | PriceTag | shows Velas for men, "free" for women (reads from `/prices`) |
 
 T-1.19 built Button, Chip, Field, TextArea, Toggle, Sheet, Toast, Avatar, Skeleton, Spinner, Icon,
@@ -169,6 +169,14 @@ Sprint 5's plan alone (the refund button, gift's direction, the price list, and 
 Velas). T-5.6 builds the header and bottom nav from it provisionally. They frame every screen in
 Sprints 6 and 7, so they're a one-way door. The first task that needs an app screen designed
 (T-6.5) stops and asks, rather than inventing it from the prototype.
+
+**The store and the gifts depart from the prototype too** (D-099, D-231; 4 October 2026). The
+packs are ₹1,500 → 30, ₹4,500 → 100, ₹6,000 → 250 and ₹10,000 → 450, not its 30, 100, 150 and
+250. Its "Most popular" tag stays on the ₹4,500 pack, chosen knowingly though that pack is the
+dominated one; whether the words can show before anyone has bought is the founder's to settle
+(T-5.2's Needs line, item 8). The gifts are four at 5, 10, 15 and 20 Velas, with fifteen free
+sends a week, not its five at 20 to 500. Its price list's re-open (3), direct message (5) and
+album request (5) are D-098's and D-231's 2, 8 and 1. The prototype itself isn't edited (P-22).
 
 **The shell as T-5.6 built it** (provisional, 4 October 2026). The header ✦ holds the wordmark,
 `APP_NAME` in `title-1`, never the prototype's "Knot". The nav ✦ is Discover, Chats, Wallet and

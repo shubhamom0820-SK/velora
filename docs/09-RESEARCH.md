@@ -104,7 +104,7 @@ profiles and intuitive navigation.
 
 **R1 · Our business model is the #1 complaint, sharpened.**
 Paywalls are the most hated thing in the category, and we charge per conversation. At the entry
-pack a man pays about ₹300 to open one thread; Tinder India sells roughly a month of unlimited
+pack a man pays ₹250 to open one Thread (D-099); Tinder India sells roughly a month of unlimited
 messaging for less. We are defensible on *why* (it is what keeps the inbox clean for women), but the
 first-run experience has to prove value before it asks for money. Candidate fix: the first thread
 free, once per account. Decide before beta, measure in T-10.4.

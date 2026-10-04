@@ -633,6 +633,9 @@ waits on the founder's decisions, so it is a task of its own, outside the sprint
     and inaccurate from the moment `/login` ships.
   - **P-69:** `velora-ic`'s browser API key restricted to our two sites and the APIs the web calls,
     after T-3.14's staging check.
+  **And P-130, with no condition** (D-230, 4 October 2026): `/refunds` rewritten to say there is no
+  product refund. As published it promises Velas back on a ban and on a declined album request,
+  which the product will never return.
   **And three that block only under their condition** (the founder, 3 and 4 October 2026), each
   condition written beside it so nobody reads it as unconditional and blocks a release that
   doesn't need it:
@@ -1809,93 +1812,94 @@ committed rows.
 ### T-5.2 · Prices
 **Held by the founder, 4 October 2026:** not started until the wallet has a screen, since until
 then prices show nothing. T-4.4 and T-4.6 come first.
-- [ ] **Needs:** T-5.1, and the founder's answer to each question below, found by Claude on 4 October
-  2026 while writing D-097 to D-100. They are his calls: none is resolved here, and none is to be
-  guessed at. **The first two touch published pages**, so neither is answered in passing: the first
-  is answered, the second is still open.
-  1. **Answered by the founder, 4 October 2026: an expired Thread stays readable** (D-097, which
-     records it). Asked as: can an expired Thread still be read, which `/terms` answers today?
-     "Unavailable" means he can't send, not that he can't read: the history he paid for stays
-     visible to both of them. **Why:** he bought that conversation, and hiding it would be both
-     harsher than intended and a change to a live page for no gain. So `/terms` ("kept, read-only")
-     stands as published, and so do D-003, 06-TESTING's J7 and the prototype. What it settles:
+- [ ] **Needs:** T-5.1, and the founder's answer to each question below still marked **Open**. Claude
+  found all ten on 4 October 2026 while writing D-097 to D-100; the founder answered nine the same
+  day (D-097's note, D-230, D-231). Answered ones keep their numbers, so references to them hold.
+  What is open is his call: none is to be guessed at.
+  1. **Answered: an expired Thread stays readable** (D-097, which records it). Asked as: can an
+     expired Thread still be read, which `/terms` answers today? "Unavailable" means he can't send,
+     not that he can't read: the history he paid for stays visible to both of them. **Why:** he
+     bought that conversation, and hiding it would be both harsher than intended and a change to a
+     live page for no gain. So `/terms` ("kept, read-only") stands as published, and so do D-003,
+     06-TESTING's J7 and the prototype. What it settles:
      - **T-7.11's expired panel** must show her no prompt, and no sign that money stands between
        her message and his reply: readable, and otherwise silent on her side.
      - **08-DESIGN §6's example copy, "This thread disappears in 4h", is wrong twice:** the word,
-       since nothing disappears, and the number, since a Thread is an hour. Flagged here, not
+       since nothing disappears, and the number, since a Thread is an hour. Flagged, not
        rewritten: the 1-hour task D-097 names rewrites it.
      - **An expired Thread refuses his sends and accepts hers** (D-097). This follows from D-097's
        step 4 rather than from the answer: Claude wrote it down here, and the advisor confirmed it.
-       It is now beside each place that raises or tests `THREAD_EXPIRED`: 04-API, T-7.1, T-7.3 and
+       It is beside each place that raises or tests `THREAD_EXPIRED`: 04-API, T-7.1, T-7.3 and
        06-TESTING's case 12.
      - The first two are noted beside T-7.11 and 08-DESIGN §6 too, where that work happens.
-  2. **Changes `/refunds`, a published page. What replaces the album request, and what does a ban
-     give back?** If viewing private pictures (1 Vela) replaces the album request (5, returned on a
-     decline), the return `/refunds` promises for a declined request goes with it; and is the 1 Vela
-     paid per view or once per grant? Separately, `/refunds` promises back "the Velas you spent on
-     them" when someone is banned, but T-9.3 lists only Threads opened, voice unlocks and album
-     requests: not gifts, which are priced today, and not private messages, re-opens, Extends or
-     picture views. Touches: `web/src/i18n/en.ts` (`/refunds`), 01-DECISIONS (D-004, D-050,
-     D-098), 02-ARCHITECTURE (a banned partner's refund), 03-SCHEMA (`album_requests`,
-     `refund_album_declined`, `refund_banned_partner`), 04-API (the album rows), 05-PLAN (T-8.4,
-     T-8.8, T-9.3).
-  3. **D-004's prices that D-098 doesn't mention:** a direct message without a match (5), unlocking
-     a voice note (5), Super Like (5) and revealing one "liked you" (20). Kept, repriced or dropped?
-     And "swiping, either way, free" doesn't say whether a Super Like, a swipe kind, is free.
-     Touches: 01-DECISIONS (D-004, D-098), 03-SCHEMA (`ledger_reason_t`, `swipe_dir_t`,
-     `action_prices`), 04-API (`/threads`, `/messages/{id}/unlock`, `/likes/{user_id}/reveal`),
-     05-PLAN (T-5.5's "seven actions", T-6.4, T-6.7, T-7.1, T-7.9, T-7.13, T-9.3, T-9.9),
-     06-TESTING (J5), `api/app/modules/wallet/rules.py`, T-1.14's migration and
-     `api/tests/test_reference_data.py`, the prototype's price list.
-  4. **What a private message is.** Nothing defines it: how it differs from a Thread's messages and
-     from D-004's direct message (`dm_open`, a Thread with origin `dm`), where it is kept (no table
-     or task holds one), and what "never expire" means beside a Thread's hour. Women's limit of 30
-     a day counts them. Touches: 01-DECISIONS (D-098), 03-SCHEMA (`threads`, `messages`,
-     `thread_origin_t`), 04-API, 05-PLAN (T-7.1, T-7.3).
-  5. **The gifts.** How many, at which of 5, 10, 15 and 20 Velas; whether free gifts stay a kind of
-     their own; and whether the 15 free a week are sends at no price, which move no Vela, or a
-     weekly grant of Velas to men, which would be a credit with a reason of its own. Today there
-     are six, at 0, 0, 2, 2, 4 and 4, with free ones capped at 3 a day. Touches: 01-DECISIONS
-     (D-016, D-098), 03-SCHEMA (`gifts`, `app_config`'s `gift_free_daily_limit`), 05-PLAN (T-5.5,
-     T-8.9, T-8.10), 08-DESIGN (GiftGrid), T-1.14's migration and
-     `api/tests/test_reference_data.py`, the prototype's gifts.
-  6. **The 20% first-purchase bonus** (D-005) isn't in D-099: kept or dropped? Touches:
-     01-DECISIONS (D-005, D-099), 03-SCHEMA (`credit_packs.bonus_first_pct`, default 20), 05-PLAN
-     (T-8.1, T-8.2, T-8.7's first-purchase banner), the prototype.
-  7. **The packs around D-099.** T-10.4's price test, ₹1,500 against ₹999 for 25 Velas, matches no
-     pack now. The prototype's packs are 30, 100, 150 and 250 Velas, and T-8.7 builds the store
-     from the prototype. Touches: 03-SCHEMA (`credit_packs`, its `variant`), 05-PLAN (T-8.1, T-8.7,
-     T-10.4), T-1.14's migration and `api/tests/test_reference_data.py`, the prototype.
-  8. **The prototype tags the ₹4,500 pack "Most popular":** the pack D-099 records as dominated on
-     purpose. Touches: the prototype, 05-PLAN (T-8.7), 08-DESIGN.
-  9. **09-RESEARCH's R1 says a man pays "about ₹300"** to open a Thread at the entry pack; under
-     D-099 it is ₹250. Touches: 09-RESEARCH §3.
-  10. **The rest of how a Thread lives** (D-097): whether his messages restart the hour too, or only
-      hers; how the hour runs on a Thread a woman opens; whether Extend on an expired Thread
-      re-opens it, and at what price; and how the hour runs once Extend's 24 hours end. Touches:
-      01-DECISIONS (D-097), 03-SCHEMA (`threads`), 05-PLAN (T-7.1, T-7.6, T-7.7), and the 1-hour
-      task D-097 names.
-- [ ] **The prices are D-097 to D-099's** (the founder, 4 October 2026). Velas, for men; 0 for a
-  woman, for every action:
+  2. **Answered, and it changes `/refunds`, a published page: no product refunds** (D-230).
+     Nothing is returned on a ban or on a declined album request, so T-9.3 is dropped and T-8.4's
+     decline returns nothing; `refund_album_declined` and `refund_banned_partner` stay unused, never
+     repurposed. A chargeback reversal (T-8.2) and a duplicate charge (T-8.3) aren't product refunds
+     and stay. `/refunds` is wrong as published: **P-130** rewrites it, before REL-1 and T-8.1.
+     And the album request is viewing private pictures, at 1 Vela (D-231).
+  3. **Answered: D-004's other prices** (D-231). The direct message is the private message (item
+     4). A voice-note unlock (5), a Super Like (5) and a "liked you" reveal (20) stay at D-004's
+     prices **by default, not by decision**: the founder had no preference. **Open: does a Super Like
+     count as "swiping", free under D-098?** Touches: 01-DECISIONS (D-098, D-231), 03-SCHEMA
+     (`swipe_dir_t`, `action_prices`), 04-API (`/swipes`), 05-PLAN (T-6.4, T-9.9), the prototype's
+     price list.
+  4. **Answered: a private message is sent from a profile directly, with no swipe and no match**
+     (D-231): 8 Velas for the first, 2 for each after, and it never expires. It is D-004's direct
+     message (`dm_open`, the `dm` origin), whose 5 is dead. How it is kept beside 03-SCHEMA's rule
+     that an active Thread always expires is T-7.1's to propose (noted there).
+  5. **Answered: four gifts, at 5, 10, 15 and 20 Velas** (D-231). The old six and the cap of three
+     free a day are gone. Fifteen sends a week are free, as sends, not a grant of Velas; the
+     sixteenth costs its price.
+  6. **Answered: the 20% first-purchase bonus stays,** on D-099's packs (D-231). On a first
+     purchase it makes opening a Thread about ₹208 at the entry pack and ₹93 at the largest.
+  7. **Answered: the prototype's packs are stale** (D-231; 08-DESIGN §5 records the departure).
+     **Open: T-10.4's price test,** ₹1,500 against ₹999 for 25 Velas, matches no pack now, and the
+     answers didn't reach it. Touches: 03-SCHEMA (`credit_packs`' `variant`, the `entry-25` row),
+     05-PLAN (T-8.1, T-10.4), T-1.14's migration and `api/tests/test_reference_data.py`.
+  8. **Answered: "Most popular" stays on the ₹4,500 pack, chosen knowingly** (D-231), with the
+     arithmetic that makes it the dominated pack in front of us. **Open, the founder's: at launch
+     nobody has bought anything, so the words aren't true on day one.** That is a separate problem
+     from the value question. Touches: 05-PLAN (T-8.7), 08-DESIGN (§5; §6's "Never shame or
+     pressure"), the prototype.
+  9. **Answered: 09-RESEARCH's "about ₹300" was stale,** not a decision, and now says ₹250.
+  10. **Open: four things about how a Thread lives** (D-097), none answered by its five steps:
+      - (a) **Does his own message restart the hour?** Step 2 says hers does and is silent on
+        his. If his did, he could keep a Thread open alone, free, by writing every 59 minutes,
+        and would never re-open one.
+      - (b) **When she sends the first message, does he pay anything to answer, and does the same
+        hour run?** Step 1 describes only a Thread a man opens, and she may message 30 men a day.
+      - (c) **Can he Extend a Thread that has already expired, and if so do the 10 Velas include
+        the 2 to re-open it?** "At any point" doesn't say.
+      - (d) **When Extend's 24 hours end, does the hour start then, or run from her last
+        message,** which could expire the Thread the moment Extend ends?
+
+      Touches: 01-DECISIONS (D-097), 03-SCHEMA (`threads`: `expires_at`, `app_config`'s
+      `thread_hours`), 05-PLAN (T-7.1, T-7.6, T-7.7), and the 1-hour task D-097 names.
+- [ ] **The prices are D-097 to D-099's and D-231's** (the founder, 4 October 2026). Velas, for men;
+  0 for a woman, for every action:
   - open a Thread 5 · re-open an expired Thread 2, every time · Extend, 24 hours, 10 · first
-    private message 8 · each private message after it 2 · view private pictures 1 · a virtual gift
-    5, 10, 15 or 20 · swiping free · 15 gifts a week free · tying the knot, and a Knot's messages,
-    free. Private messages never expire.
-  - packs: ₹1,500 → 30 · ₹4,500 → 100 · ₹6,000 → 250 · ₹10,000 → 450. The ₹4,500 pack is
-    dominated on purpose (D-099): don't "fix" it.
+    private message 8 · each private message after it 2 · view private pictures 1 · unlock a voice
+    note 5 · Super Like 5 · reveal one "liked you" 20 (these three by default, D-231) · a gift 5,
+    10, 15 or 20, and fifteen free sends a week · swiping free · tying the knot, and a Knot's
+    messages, free. Private messages never expire.
+  - packs: ₹1,500 → 30 · ₹4,500 → 100 · ₹6,000 → 250 · ₹10,000 → 450, with the 20% first-purchase
+    bonus. The ₹4,500 pack is dominated on purpose (D-099): don't "fix" it.
   - re-open (2) and Extend (10) change together or not at all (D-098).
 - [ ] **Written by data migrations of this task's own,** one change each (rule 11), never by editing
-  T-1.14's. `thread_reopen` goes from 3 to 2; 03-SCHEMA's seed lines and
-  `tests/test_reference_data.py` change with them. Each new priced action is a debit reason of its
-  own, so an addition to `ledger_reason_t` with D-077's direction and `ref_type`, and T-5.1's test
-  that the debit reasons are exactly the priced actions plus `gift` grows to match. If Extend can be
-  bought more than once for one Thread, it repeats for one ref, as `thread_reopen` does, and D-077's
+  T-1.14's: `thread_reopen` from 3 to 2, `dm_open` from 5 to 8, `album_request` from 5 to 1; the
+  `gifts` rows become D-231's four; `gift_free_daily_limit` gives way to fifteen free sends a week.
+  03-SCHEMA's seed lines and `tests/test_reference_data.py` change with them. The new priced
+  actions, Extend and each private message after the first, are debit reasons of their own: an
+  addition to `ledger_reason_t` with D-077's direction and `ref_type`, and T-5.1's test that the
+  debit reasons are exactly the priced actions plus `gift` grows to match. If Extend can be bought
+  more than once for one Thread, it repeats for one ref, as `thread_reopen` does, and D-077's
   per-event index leaves it out.
 - [ ] **Not this task's:** the 1-hour Thread (D-097): `thread_hours` stays 24 until its own task.
   Women's limits (D-098: 30 men and 30 private messages a day) are rate limits for the tasks that
   send messages, not prices. No charging path for women is built, enabled or disabled (D-098).
-  Refunds aren't this task's either: Velas spent on an unanswered message are never returned, and
-  the existing refunds stay with T-8.2, T-8.3, T-8.4 and T-9.3, unchanged (D-100).
+  Refunds aren't this task's either: there are none for a product (D-230), and a chargeback
+  reversal and a duplicate charge stay with T-8.2 and T-8.3.
 - [ ] `pricing.service.price_for(user, action)`:
   - women 0; men the `action_prices` value;
   - no gender raises; an inactive row gives `NOT_ALLOWED`; a missing row is a 500; never 0 by
@@ -1952,8 +1956,9 @@ then prices show nothing. T-4.4 and T-4.6 come first.
   history (infinite scroll). It follows the prototype with these departures, written into 08-DESIGN:
   - no "Request a refund on unspent credits" and no "Unspent credits refundable within 7 days" (the
     cash-out D-050 removed; D-076), just a quiet link to `/refunds`;
-  - the price list is `/prices`' seven actions plus "Tie the knot · Free" and "Messaging in a knot ·
-    Free". Not Wink, Boost, calls or "Gifts 20–500" (D-016's prices are 0, 2 and 4);
+  - the price list is `/prices`' nine actions (D-098, D-231) plus "Tie the knot · Free" and
+    "Messaging in a knot · Free". Not Wink, Boost, calls or "Gifts 20–500" (D-231's gifts are 5,
+    10, 15 and 20);
   - "credits" becomes Velas (D-049), and the women's screen drops "calls" (after beta).
 - [ ] The pill reads one wallet query, refreshed after anything that spends or credits and when the
   window regains focus. No polling; the socket arrives with T-7.12.
@@ -2036,6 +2041,7 @@ then prices show nothing. T-4.4 and T-4.6 come first.
 - [ ] `POST /threads` from `{match_id}` (origin `match`) or `{user_id, first_message}` (origin `dm`, first message required, 1–500 chars).
 - [ ] Rules: not blocked; both onboarded; if a thread already exists for the pair → `active`/`knotted` returns it (no charge), `expired` → `THREAD_EXPIRED` (client offers re-open). That refusal is his alone: an expired Thread accepts her sends (D-097).
 - [ ] In one transaction: debit (men only, `thread_open` or `dm_open`), insert thread (`expires_at = now + thread_hours`), link match, insert first message if dm. Notify the other person.
+- [ ] **The `dm` origin is a private message (D-231):** sent from a profile with no swipe and no match, 8 Velas for the first and 2 for each after, and it never expires. This task proposes how that lives beside 03-SCHEMA's rule that an active Thread always expires, and where each later message's 2 Velas are charged.
 - [ ] Tests: man pays once; woman pays nothing; double-tap race creates one thread and one charge.
 - [ ] **Commit:** `feat(threads): open thread [T-7.1]`
 
@@ -2117,7 +2123,7 @@ then prices show nothing. T-4.4 and T-4.6 come first.
 # Sprint 8 — Payments, album, kudos, referrals (week 13)
 
 ### T-8.1 · Packs and orders
-- [ ] **Needs:** T-5.1, T-1.21, and P-0.17: a chartered accountant has confirmed how prepaid Velas are treated, before any real sale can happen
+- [ ] **Needs:** T-5.1, T-1.21, and P-0.17: a chartered accountant has confirmed how prepaid Velas are treated, before any real sale can happen; and **P-130**: no Velas are sold while `/refunds` promises returns that don't exist (D-230)
 - [ ] `GET /packs`: active packs for the user's price-test variant (`users.id` hash → A/B, stable). `POST /payments/orders {pack_id}` + `Idempotency-Key`: copy amount + `credits` from the pack, compute first-purchase bonus, create provider order, insert `payments` (`created`), return checkout params.
 - [ ] **A woman can't order Velas** → `NOT_ALLOWED` (D-076). The database would refuse her credit anyway; the route says so first, before she pays for something she could never use.
 - [ ] Fake provider: returns a fake order and exposes a local-only endpoint that simulates the webhook.
@@ -2148,8 +2154,8 @@ then prices show nothing. T-4.4 and T-4.6 come first.
 
 ### T-8.4 · Private album
 - [ ] **Needs:** T-4.4, T-5.1; **P-79**: an approved private photo can't be swapped for an unmoderated one through its upload URL
-- [ ] Requests (debit 5 for men, `credits_charged` stored), incoming list for owner, decide (grant → enqueue `watermark_album`; decline → `wallet.credit(refund_album_declined)`), revoke (delete watermarked copies, status `revoked`).
-- [ ] **A decline refunds only when `credits_charged > 0`.** A woman's request is free, `credit()` refuses an amount of 0, and the database refuses any ledger row for her (D-076).
+- [ ] Requests (debit 1 for men, D-231: viewing private pictures; `credits_charged` stored), incoming list for owner, decide (grant → enqueue `watermark_album`; decline → nothing is returned, D-230), revoke (delete watermarked copies, status `revoked`).
+- [ ] **A decline returns nothing** (D-230, superseding D-050's refund on a decline). `refund_album_declined` stays unused, never repurposed.
 - [ ] `watermark_album`: for each private photo render a copy with the viewer's `@username` tiled diagonally at ~20% opacity.
 - [ ] `GET /users/{id}/album` → signed URLs of the viewer's copies only.
 - [ ] **Commit:** `feat(album): requests, grants, watermarking [T-8.4]`
@@ -2165,7 +2171,9 @@ then prices show nothing. T-4.4 and T-4.6 come first.
 - [ ] `POST /gifts/send {recipient_id, gift_id}` with `Idempotency-Key`. Rules, each with a test:
   recipient must be a woman with onboarding `done` (else `NOT_ALLOWED`); sender must be a man
   (women sending → `NOT_ALLOWED`); blocked either way → `BLOCKED`; frozen sender → `ACCOUNT_FROZEN`;
-  free gifts capped by `gift_free_daily_limit` per IST day → `GIFT_LIMIT_REACHED`;
+  fifteen free sends a week, then each send costs its gift's price (D-231: the daily cap and
+  `gift_free_daily_limit` are gone, so this task says whether `GIFT_LIMIT_REACHED` keeps a case,
+  and proposes where the week starts);
   same gift to the same person inside `gift_same_recipient_cooldown_h` → `GIFT_COOLDOWN`.
 - [ ] Paid gifts: `wallet.debit(reason="gift", ref_type="gift_send")` **in the same transaction**
   as the `gift_sends` insert. Price read from the `gifts` row, never a literal.
@@ -2177,8 +2185,8 @@ then prices show nothing. T-4.4 and T-4.6 come first.
 
 ### T-8.10 · Web gifts
 - [ ] **Needs:** T-8.9, T-5.5
-- [ ] Gift button on a woman's profile → sheet with the 6 gifts in a 3×2 grid: asset, label, and
-  either "Free" or the price in Velas. Free ones show the remaining daily count.
+- [ ] Gift button on a woman's profile → sheet with D-231's four gifts: asset, label and the price
+  in Velas, and the free sends left this week. (Was six in a 3×2 grid, with a daily count.)
 - [ ] Sending: optimistic disable, success toast, balance updates from `wallet.updated`.
   `GIFT_LIMIT_REACHED` / `GIFT_COOLDOWN` → friendly inline copy with when they can send again.
   `INSUFFICIENT_CREDITS` → store sheet.
@@ -2187,7 +2195,9 @@ then prices show nothing. T-4.4 and T-4.6 come first.
 - [ ] **Commit:** `feat(web): gifts on profile [T-8.10]`
 
 ### T-8.6 · Referrals
-- [ ] **Needs:** T-8.2
+- [ ] **Needs:** T-8.2; and **P-63, if one transaction credits two men** (the referrer and a
+  referee who is a man, or a reward inside T-8.2's webhook transaction): moved here from T-9.3,
+  dropped by D-230, 4 October 2026
 - [ ] `POST /referrals/apply {code}` only before onboarding `done`, not own code, once. Reward both (Velas from `app_config`) when the referee completes selfie verification or first purchase, whichever first; idempotent. `GET /referrals/me`. Apply looks a code up and never checks its format: the seed's three test accounts carry readable codes outside the generated one (T-3.3).
 - [ ] **A woman's referral reward is never Velas** (D-076): the database refuses any ledger row for her, and "Reward both" would otherwise reach every referred woman, since every woman verifies her selfie (D-008). Decide here what she gets instead, if anything, and write it down.
 - [ ] **D-078 (P-54):** an under-18 refusal deletes `referrals` rows naming the user, as referrer or
@@ -2197,7 +2207,7 @@ then prices show nothing. T-4.4 and T-4.6 come first.
 
 ### T-8.7 · Web store and checkout
 - [ ] **Needs:** T-8.2, T-5.5
-- [ ] Store sheet from the prototype (packs, per-Vela and per-thread price, first-purchase banner). Load Razorpay Checkout script on demand. On success callback → poll `/payments/{id}` every 1.5 s (max 60 s) → toast + wallet refresh. Failure/dismiss → "Payment didn't go through" sheet with retry.
+- [ ] Store sheet from the prototype (packs, per-Vela and per-thread price, first-purchase banner), with D-099's packs, not the prototype's (08-DESIGN §5). **"Most popular" stays on the ₹4,500 pack, the dominated one, chosen knowingly (D-231); whether the words can be shown when nobody has bought anything yet is the founder's to settle (T-5.2's Needs line, item 8).** The 20% first-purchase bonus stays. Load Razorpay Checkout script on demand. On success callback → poll `/payments/{id}` every 1.5 s (max 60 s) → toast + wallet refresh. Failure/dismiss → "Payment didn't go through" sheet with retry.
 - [ ] **Widen the CSP here (D-059):** Razorpay Checkout's script, frame and connect hosts, exactly as Razorpay documents them. The CSP has been enforced since T-2.5, so checkout fails with a CSP error until this lands.
 - [ ] **Commit:** `feat(web): store and razorpay checkout [T-8.7]`
 
@@ -2229,9 +2239,11 @@ then prices show nothing. T-4.4 and T-4.6 come first.
 - [ ] **Commit:** `feat(safety): fraud scoring and auto-freeze [T-9.2]`
 
 ### T-9.3 · Refund when a partner is banned
-- [ ] **Needs:** T-9.2, T-5.1, and **P-63**: one ban credits several men in one transaction, and nothing yet makes their wallets lock in `user_id` order (D-077)
-- [ ] On ban: find Velas other users spent on this person in the last 7 days (threads opened with them, voice unlocks, album requests) → `wallet.credit(refund_banned_partner)` each, idempotent per ref, notify. The 7 days is also stated on `/refunds` (D-050): change both together.
-- [ ] **Commit:** `feat(safety): refunds for banned partners [T-9.3]`
+**Dropped, 4 October 2026 (D-230): nothing is returned on a ban.** Kept below as it was planned;
+`refund_banned_partner` stays unused, never repurposed.
+- [-] **Needs:** T-9.2, T-5.1, and **P-63**: one ban credits several men in one transaction, and nothing yet makes their wallets lock in `user_id` order (D-077)
+- [-] On ban: find Velas other users spent on this person in the last 7 days (threads opened with them, voice unlocks, album requests) → `wallet.credit(refund_banned_partner)` each, idempotent per ref, notify. The 7 days is also stated on `/refunds` (D-050): change both together.
+- [-] **Commit:** `feat(safety): refunds for banned partners [T-9.3]`
 
 ### T-9.4 · Notifications
 - [ ] **Needs:** T-7.4
@@ -2274,7 +2286,7 @@ then prices show nothing. T-4.4 and T-4.6 come first.
 
 ### T-9.9 · Ledger audit
 - [ ] **Needs:** everything above
-- [ ] One test per paid action (thread open, dm, re-open, voice unlock, album, super like, liked-you reveal): man → exactly one ledger entry with the right reason and amount; woman → zero entries; insufficient → nothing created.
+- [ ] One test per paid action (thread open, dm, re-open, voice unlock, album, super like, liked-you reveal, and D-098's Extend and each private message after the first): man → exactly one ledger entry with the right reason and amount; woman → zero entries; insufficient → nothing created.
 - [ ] Reconciliation test: for every user, `wallets.balance == sum(ledger.delta)`. Also as a daily cron that alerts on mismatch.
 - [ ] **Commit:** `test(wallet): paid action audit and reconciliation [T-9.9]`
 
@@ -3296,6 +3308,9 @@ The number comes from the session's own block, given in its brief, from P-100 up
   wallets it holds, and refuses (`WalletMisuse`) a lock below the highest held; or a
   `lock_wallets(ids)` that sorts them first. Test it with two transactions crediting the same two
   men in opposite orders. Found in T-5.1.
+  **Its gate moved on 4 October 2026:** T-9.3 is dropped (D-230). The next task that can lock
+  two wallets is T-8.6: its referral reward credits both men, and T-8.2's webhook runs that check
+  inside the buyer's own transaction. So P-63 is on T-8.6's Needs line now, under that condition.
 - [ ] P-64 · Let endpoint tests see the events a request publishes. **Before T-7.4,** on its Needs
   line. Worst case: T-7.4 ships with every socket event untested end to end, or a service publishes
   on its own to make one visible, which would publish before commit and under a lock. In tests the
@@ -3611,3 +3626,18 @@ The number comes from the session's own block, given in its brief, from P-100 up
   sessions follow by hand will slip. Fix: a test that parses `05-PLAN.md`'s Proposed list and
   fails on any number used twice, naming both titles, so the second session to merge finds out
   in CI. Found in T-5.4.
+- [ ] P-130 · Rewrite `/refunds` to D-230: there is no product refund. **Before REL-1 and T-8.1**
+  (on both Needs lines). Worst case: the page goes public, and Velas go on sale, promising Velas
+  back on a ban and on a declined album request that the product will never return, a published
+  promise to paying men that the code doesn't keep.
+  **What changes:** the "When Velas come back on their own" section goes, along with the opening
+  line's "and when Velas come back on their own". The page says plainly that Velas spent are spent,
+  including on someone later banned and on a declined request. "When we fix a payment" stays, since
+  a duplicate charge and a chargeback aren't product refunds (D-230). Then
+  `legal-pages.test.tsx`, which asserts the section's title, follows the page, and so does the
+  comment in `en.ts` tying its 7 days to T-9.3, which is dropped.
+  **Files:** `web/src/i18n/en.ts` (`legal.refunds`), `web/src/app/(marketing)/refunds/page.tsx`,
+  `web/src/app/(marketing)/legal-pages.test.tsx`. Copy only: nothing else promises a return (read
+  4 October 2026). Decided by the founder, 4 October 2026; filed by Claude.
+
+  Found writing D-230.

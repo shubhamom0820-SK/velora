@@ -286,12 +286,14 @@ Unique `(from_id, to_id)`. Check `from_id <> to_id` — self-kudos would manufac
 | id | text pk | slug, e.g. `rose` |
 | label | text not null | shown in UI |
 | asset | text not null | emoji or icon key |
-| credits | int not null check (credits >= 0) | 0, 2 or 4 |
+| credits | int not null check (credits >= 0) | 0, 2 or 4 as seeded; 5, 10, 15 or 20 by D-231 |
 | sort | smallint not null default 0 | display order |
 | active | boolean not null default true | |
 
 Seed (D-016): `smile` 0 · `wave` 0 · `rose` 2 · `coffee` 2 · `chocolate` 4 · `teddy` 4.
 Labels are the ids capitalised; assets are emoji (😊 👋 🌹 ☕ 🍫 🧸).
+**Decided since** (D-231): four gifts at 5, 10, 15 and 20 replace these six, and fifteen free
+sends a week replace `gift_free_daily_limit`; T-5.2's data migrations apply them.
 
 ### gift_sends
 | column | type | notes |
@@ -381,8 +383,8 @@ wipe the money record. Both raise `restrict_violation` (23001) (T-1.12).
 | `referral_reward` | credit | `referral` | the referee's id (`referrals`' key) |
 | `admin_grant` | credit | `audit_log`, **optional** | named by the caller |
 | `refund` | credit | `ledger_entry` | refused by the service until a task gives it a meaning |
-| `refund_banned_partner` | credit | `ledger_entry` | the original debit's id |
-| `refund_album_declined` | credit | `album_request` | the request's id |
+| `refund_banned_partner` | credit | `ledger_entry` | unused since D-230: never repurposed |
+| `refund_album_declined` | credit | `album_request` | unused since D-230: never repurposed |
 | `gift` | debit | `gift_send` | the send's id |
 | `thread_open`, `dm_open` | debit | `thread` | the thread's id |
 | `thread_reopen` | debit | `thread` | named by the caller |
@@ -413,6 +415,9 @@ database agrees with it, reason by reason. Change one, change both.
 Seed (D-004): the keys are the seven debit reasons of `ledger_reason_t` — `thread_open` 5 ·
 `dm_open` 5 · `thread_reopen` 3 · `voice_unlock` 5 · `album_request` 5 · `super_like` 5 ·
 `liked_you_reveal` 20. The free knot actions have no row: permanence is never bought (D-003).
+**Decided since, applied by T-5.2's data migrations** (D-098, D-231): `thread_reopen` 2, `dm_open`
+8 (the first private message), `album_request` 1 (viewing private pictures), and new rows for
+Extend (10) and each private message after the first (2).
 
 ### credit_packs
 `id text pk, credits int not null, price_paise int not null, bonus_first_pct smallint not null default 20,
@@ -421,6 +426,8 @@ active boolean not null default true, sort smallint not null default 0, variant 
 `bonus_first_pct between 0 and 100`. The values themselves stay free to tune (D-005).
 Seed (D-005): `pack-25` 25/₹1,500 · `pack-50` 50/₹2,500 · `pack-75` 75/₹3,375 · `pack-100`
 100/₹4,000 (variant A, sort 1–4); `entry-25` 25/₹999 (variant B, the beta price test, T-10.4).
+**Decided since** (D-099, D-231): ₹1,500 → 30 · ₹4,500 → 100 · ₹6,000 → 250 · ₹10,000 → 450,
+with the 20% bonus kept; T-5.2's data migrations apply them. T-10.4's variant is open.
 
 ### payments
 | column | type | notes |
@@ -489,7 +496,8 @@ trace is exactly the person with admin access (T-1.13).
 ### app_config  (key/value, cached 60 s)
 `key text pk, value jsonb not null, updated_at`. Seeds: `swipe_daily_limit_men=50`,
 `discovery_radius_km=25`, `thread_hours=24`, `mask_first_n_messages=20`, `kudos_min_messages=6`,
-`gift_free_daily_limit=3`, `gift_same_recipient_cooldown_h=24`; and, by its own data migration
+`gift_free_daily_limit=3` (fifteen free sends a week replace it, D-231, T-5.2),
+`gift_same_recipient_cooldown_h=24`; and, by its own data migration
 (T-3.2), `otp_sms_daily_cap=500`: the most Path B sign-in codes sent in one IST day across every
 number, ₹100 a day at D-035's unconfirmed ₹0.20 an SMS (D-066).
 Two settings are also promised in copy, in `web/src/i18n/en.ts`, written out because copy is a

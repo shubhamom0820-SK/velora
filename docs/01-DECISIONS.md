@@ -57,6 +57,9 @@ Women pay nothing for any action.
 **Superseded in part, 4 October 2026, by D-098:** re-opening is 2, and Extend (10), private messages
 (8, then 2) and viewing private pictures (1) are added. Whether the rows D-098 doesn't name stay is
 open, on T-5.2's Needs line.
+**Superseded in part, 4 October 2026, by D-231:** the direct message above is the private message,
+now 8 and then 2; the album request is viewing private pictures, now 1, and a decline returns
+nothing (D-230). The voice-note unlock, Super Like and "liked you" reveal stay, by default.
 
 ### D-005 · Credit packs — Locked
 | Credits | Price | Per credit | Cost of one thread (5 cr) |
@@ -81,6 +84,8 @@ for his first real conversation: ₹300 at the entry pack, ₹200 at the largest
 **Superseded, 4 October 2026, by D-099:** four new packs, ₹1,500 to ₹10,000 for 30 to 450 Velas, and
 the number to watch is now ₹250 and ₹111. The first-purchase bonus and T-10.4's variant are open,
 on T-5.2's Needs line.
+**Noted 4 October 2026, D-231:** the first-purchase bonus above stays, on D-099's packs. T-10.4's
+variant is still open.
 
 ### D-006 · Clearing is one-sided — Locked
 Clearing hides a chat from *your* list only. The other person keeps their copy. The server keeps
@@ -109,6 +114,8 @@ ledger reason (D-076, D-077).
 **Superseded in part, 4 October 2026, by D-098:** a paid gift costs 5, 10, 15 or 20 Velas, and 15
 gifts a week are free, in place of the prices above and `gift_free_daily_limit = 3`. The
 catalogue's shape is open, on T-5.2's Needs line.
+**Superseded in part, 4 October 2026, by D-231:** four gifts at 5, 10, 15 and 20 replace the six,
+with no free kind, and fifteen free sends a week replace the daily cap. The rest stands.
 
 ### D-007 · Kudos, not reviews — Locked
 After a few messages the sender may pick one of four fixed positive notes. It goes privately to
@@ -638,9 +645,9 @@ and cancellation policy for merchant approval; P-0.8 confirms each gateway's exa
 handles broken-transaction claims only. Decided by the founder on 1 October 2026.
 **Noted 3 October 2026:** money goes back only for a payment with no Velas still standing against
 it (D-076, rule 3).
-**Noted 4 October 2026:** D-100 adds one case: Velas spent on a message that goes unanswered are
-not returned. This entry's returns and its fixes for broken payments stand unchanged, and so does
-`/refunds`.
+**Superseded in part, 4 October 2026, by D-230:** neither automatic return above stands; there is
+no product refund of any kind (and D-100: an unanswered message's Velas aren't returned). The
+fixes for a broken payment stand. `/refunds` is wrong until P-130 rewrites it.
 
 ### D-051 · What deleting an account erases, and what it keeps — Locked
 **Erased:** the profile, photos, private album and everything else other people can see of the
@@ -2311,6 +2318,7 @@ and free-gift limit (`gift_free_daily_limit`, 3 a day, now 15 a week). D-016's o
 **What this entry leaves open** is on T-5.2's Needs line, each question with the files it touches:
 D-004's other rows, what a private message is, viewing private pictures, and the gifts. This entry
 supersedes only what it names, so until the founder rules, D-004 and D-016 still say the rest.
+**Answered 4 October 2026 by D-231,** all but whether a Super Like counts as swiping.
 
 The prices and the rules are the founder's decision, 4 October 2026. The reasoning beside them
 (re-open and Extend moving together) is the advisor's write-up (Claude, in a separate chat),
@@ -2339,6 +2347,8 @@ larger pack is still cheaper per Vela, as D-005 required.
 **What this entry leaves open** is on T-5.2's Needs line, each question with the files it touches:
 the first-purchase bonus, T-10.4's price test, the prototype's packs and its "Most popular" tag on
 the dominated pack, and 09-RESEARCH's "about ₹300".
+**Answered 4 October 2026 by D-231,** all but T-10.4's price test and whether "Most popular" can
+be true on day one.
 
 The packs are the founder's decision, 4 October 2026. The reasoning beside them (the dominated
 pack, the ₹250 and ₹111) is the advisor's write-up (Claude, in a separate chat), relayed by the
@@ -2373,6 +2383,85 @@ the record than a clean one that was lucky.
 
 The rules are the founder's decision, 4 October 2026. The words are the advisor's (Claude, in a
 separate chat), relayed by the founder, as corrected above.
+**Superseded in part, 4 October 2026, by D-230:** of "the existing refunds" above, the declined
+album request and the banned user's return are gone, and `/refunds` stops being accurate until
+P-130. The chargeback reversal and the duplicate charge stand.
+
+### D-230 · No product refunds: nothing comes back on a ban or a declined request — Locked
+**Nothing is returned on a ban. Nothing is returned when an album request is declined. There is no
+product refund of any kind:** Velas spent are spent.
+
+**Supersedes** D-050's "Two cases return Velas automatically" (a declined album request, and Velas
+spent on someone banned, for the 7 days before the ban), and D-100's "the existing refunds stand
+unchanged" for those two. T-9.3 is dropped; T-8.4's decline returns nothing; 02-ARCHITECTURE's
+banned-partner refund goes.
+
+**Two things are not product refunds, and stay:**
+- **A chargeback reversal** (D-076 rule 3, T-8.2). The bank takes the money back, not us, and the
+  payment's Velas are reversed in the same step.
+- **A duplicate charge** (D-050, T-8.3). Our own billing error, where we took money and gave
+  nothing; it goes back to the payment method.
+
+Keeping money from either is not a pricing choice: it is a mistake left unfixed. The plan agrees on
+both (read 4 October 2026: D-050, D-076 rule 3, T-8.2, T-8.3, and `/refunds`' "When we fix a
+payment").
+
+**The two ledger reasons that served the returns stay unused.** `refund_album_declined` and
+`refund_banned_partner` are in `ledger_reason_t` and `wallet/rules.py`; nothing writes either, and
+neither is ever repurposed for something else. The bare `refund` stays unused too (D-100).
+
+**`/refunds` is wrong as published,** and is rewritten to say this plainly: its "When Velas come
+back on their own" section, and the opening line that promises it. It is on staging only today,
+since production isn't public yet (REL-1). **P-130 rewrites it, and REL-1 and T-8.1 both need
+P-130:** the page can't go public, and no Velas can be sold, while it promises returns that don't
+exist.
+
+The rule is the founder's decision, 4 October 2026. The words are the advisor's write-up (Claude,
+in a separate chat), relayed by the founder.
+
+### D-231 · Private messages, private pictures, gifts and packs, answered — Locked (values tunable)
+The founder's answers, 4 October 2026, to the questions D-098 and D-099 left open.
+
+**A private message is sent from a profile directly, with no swipe and no match.** That is what it
+is, and why it costs what it does: 8 Velas for the first, 2 for each after it, and it never expires.
+D-004's "Direct message (no match), 5" is the same thing under an older name and an older price: 5
+is dead, it is 8. Its identifiers today are `dm_open` and the `dm` origin (T-7.1).
+
+**Private pictures are one thing, not two.** The album request (T-8.4) and "view private pictures"
+are the same, at 1 Vela. The 5-Vela request is gone, and so is its refund on a decline (D-230).
+
+**Gifts:** four, at 5, 10, 15 and 20 Velas. The old six (0, 0, 2, 2, 4 and 4) are gone, and so is
+the cap of three free a day. **Fifteen gift sends a week are free,** and the sixteenth costs its
+price. They are free sends, not a grant of Velas: a free send moves no Vela and writes no ledger
+row.
+
+**Packs:** D-099's four stand. The prototype's 30, 100, 150 and 250 Velas are stale: 08-DESIGN §5
+records the departure, since the prototype itself is never edited (P-22). **The first-purchase
+bonus, +20%, stays, and applies to these packs.** It gives whole Velas on each (6, 20, 50 and 90),
+and on a first purchase it moves D-099's number: opening a Thread then costs about ₹208 at the
+entry pack and ₹93 at the largest, rather than ₹250 and ₹111 (arithmetic checked by Claude).
+
+**"Most popular" stays on the ₹4,500 pack, chosen knowingly.** It is the dominated pack (D-099):
+₹1,500 more buys 150 more Velas. The tag was kept with that arithmetic in front of us. **A separate
+problem, the founder's to settle:** at launch nobody has bought anything, so the words are not true
+of the world on day one. That is not the value question, and it is open on T-5.2's Needs line.
+
+**Carried by default, not by decision:** unlocking a voice note (5), a Super Like (5) and
+revealing one "liked you" (20) stay at D-004's prices. The founder had no preference, so they
+survived because nobody said to remove them; recorded so it is visible to anyone revisiting.
+Whether a Super Like counts as "swiping", free under D-098, is still open.
+
+**Supersedes** D-004's direct-message row (5) and album-request row (5, refunded if declined);
+D-016's six gifts, its two free kinds and `gift_free_daily_limit`; and the questions D-098 and
+D-099 left open on these. D-005's bonus stands. 09-RESEARCH's "about ₹300" was stale, not a
+decision, and now says ₹250.
+
+**Still open, on T-5.2's Needs line:** whether a Super Like is swiping; the "Most popular" tag on
+day one; T-10.4's price test, which these answers didn't reach; and four things about how a Thread
+lives (D-097).
+
+The answers are the founder's decision, 4 October 2026. The words are the advisor's write-up
+(Claude, in a separate chat), relayed by the founder.
 
 ### D-101 · What moderation's scores mean — Open
 **The proposal (T-4.4, Claude, 4 October 2026; the founder's to lock or change):** the worker

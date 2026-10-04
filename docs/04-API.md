@@ -77,7 +77,7 @@ public photo at `PUBLIC_CDN_URL`, any other live one by a 10-minute signed link 
 | Method | Path | Auth | Body → Response | Task |
 |---|---|---|---|---|
 | GET | /threads | ✅ | `?tier=threads|knots&filter=all|unread|recent&q=&cursor=` → `Page<ThreadRow>` | T-7.2 |
-| POST | /threads | ✅ | `{match_id}` or `{user_id, first_message}` → `Thread` (5 Velas) | T-7.1 |
+| POST | /threads | ✅ | `{match_id}` or `{user_id, first_message}` → `Thread` (5 Velas from a match; 8 for a private message, D-231) | T-7.1 |
 | GET | /threads/{id} | ✅ | → `Thread` | T-7.2 |
 | GET | /threads/{id}/messages | ✅ | `?cursor=` → `Page<Message>` | T-7.3 |
 | POST | /threads/{id}/messages | ✅ | `{client_msg_id, kind, body?, media_key?, duration_s?}` → `Message` | T-7.3 |
@@ -95,9 +95,9 @@ public photo at `PUBLIC_CDN_URL`, any other live one by a 10-minute signed link 
 ## Album, kudos, safety
 | Method | Path | Auth | Body → Response | Task |
 |---|---|---|---|---|
-| POST | /album-requests | ✅ | `{owner_id}` → `AlbumRequest` (5 Velas) | T-8.4 |
+| POST | /album-requests | ✅ | `{owner_id}` → `AlbumRequest` (1 Vela, D-231) | T-8.4 |
 | GET | /album-requests/incoming | ✅ | → `AlbumRequest[]` | T-8.4 |
-| POST | /album-requests/{id}/decide | ✅ | `{grant: bool}` → `AlbumRequest` (decline → refund) | T-8.4 |
+| POST | /album-requests/{id}/decide | ✅ | `{grant: bool}` → `AlbumRequest` (a decline returns nothing, D-230) | T-8.4 |
 | POST | /album-requests/{id}/revoke | ✅ | → 204 | T-8.4 |
 | GET | /users/{id}/album | ✅ | → `{photos: [{url}]}` watermarked, only if granted | T-8.4 |
 | GET | /gifts | ✅ | → `Gift[]` (id, label, asset, credits) | T-8.9 |
@@ -198,7 +198,7 @@ API sent nothing to (D-073) gets `null`, as its phone would. The E2E is its only
 | `IMMUTABLE_FIELD` | 422 | gender/dob change; a username after onboarding (D-068) |
 | `MESSAGE_REJECTED` | 422 | abuse or payment-solicitation filter; `details.rule` |
 | `NOT_ALLOWED` | 422 | man sending voice note, kudos too early, woman sending a gift, verifying a PIN when none is set (D-069) |
-| `GIFT_LIMIT_REACHED` | 429 | free gifts used up today; `details.resets_at` |
+| `GIFT_LIMIT_REACHED` | 429 | free gifts used up today; `details.resets_at`. D-231 charges the sixteenth send a week rather than refusing it, so T-8.9 says whether this keeps a case |
 | `GIFT_COOLDOWN` | 429 | same gift to same person too soon; `details.retry_after_s` |
 | `SWIPE_LIMIT_REACHED` | 429 | daily cap |
 | `RATE_LIMITED` | 429 | `details.retry_after_s` |

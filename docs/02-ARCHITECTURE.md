@@ -244,8 +244,9 @@ Indexes that make this fast are listed in `03-SCHEMA.md`. Target: p95 < 80 ms at
    Else in one transaction: mark `paid`, credit pack + bonus via `wallet.credit()`.
 4. Browser polls `GET /v1/payments/{id}` until `paid`, then refreshes wallet.
 
-**Refund when a partner is banned:** admin ban → service finds Velas the reporter/others spent on
-that person in the last 7 days → `wallet.credit(reason=refund_banned_partner)`.
+**Nothing is returned on a ban** (D-230, 4 October 2026): there is no product refund, so T-9.3 is
+dropped and `refund_banned_partner` stays unused. Money goes back only for a chargeback (D-076
+rule 3, T-8.2) or a duplicate charge (T-8.3).
 
 ## 10. Uploads and moderation
 

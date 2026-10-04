@@ -97,8 +97,9 @@ If any of these fails, nothing ships.
 4. **Webhook signature** (T-8.2): bad signature → no credit.
 5. **Ledger reconciliation** (T-9.9): `balance == sum(delta)` for every wallet.
 6. **Women never pay** (T-9.9): every paid action by a woman → zero ledger entries.
-6b. **Free gifts stay free** (T-8.9): a free gift creates a `gift_sends` row and **zero** ledger
-    entries; a paid gift creates exactly one with the price from the `gifts` table.
+6b. **Free sends stay free** (T-8.9, D-231): each of a week's fifteen free sends creates a
+    `gift_sends` row and **zero** ledger entries; the sixteenth creates exactly one, with the price
+    from the `gifts` table.
 6c. **A woman has no ledger rows** (T-5.1, D-076): the database refuses any ledger row, and any
     non-zero balance, for a user whose gender isn't `male`, including one with no gender yet.
     Proved by breaking each trigger, and by turning each into a blacklist.
