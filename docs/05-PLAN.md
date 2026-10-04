@@ -1719,10 +1719,63 @@ committed rows.
 ### T-5.2 · Prices
 **Held by the founder, 4 October 2026:** not started until the wallet has a screen, since until
 then prices show nothing. T-4.4 and T-4.6 come first.
-- [ ] **Needs:** T-5.1, and the founder's answers to what D-098 and D-099 leave open (raised 4
-  October 2026): which of D-004's other actions stay, what a private message is, what viewing
-  private pictures replaces, the gift catalogue and the free fifteen, the first-purchase bonus and
-  T-10.4's variant.
+- [ ] **Needs:** T-5.1, and the founder's answer to each question below, found by Claude on 4 October
+  2026 while writing D-097 to D-100. They are his calls: none is resolved here, and none is to be
+  guessed at. **The first two change published pages**, so neither is answered in passing.
+  1. **Changes `/terms`, a published page. Can an expired Thread still be read?** D-097 says its
+     messages become unavailable, without saying whether to him alone or to both. `/terms` says an
+     expired Thread "is kept, read-only", and so do D-003, 06-TESTING's J7 and the prototype.
+     T-7.11's expired panel offers re-open or tie, though her side may show no locked state and no
+     prompt. And T-7.3, 06-TESTING's case 12 and the 410 `THREAD_EXPIRED` refuse any send on an
+     expired Thread, where her later message must be delivered. Touches: `web/src/i18n/en.ts`
+     (`/terms`), 01-DECISIONS (D-003, D-097), 02-ARCHITECTURE, 04-API, 05-PLAN (T-7.3, T-7.6,
+     T-7.11), 06-TESTING, the prototype.
+  2. **Changes `/refunds`, a published page. What replaces the album request, and what does a ban
+     give back?** If viewing private pictures (1 Vela) replaces the album request (5, returned on a
+     decline), the return `/refunds` promises for a declined request goes with it; and is the 1 Vela
+     paid per view or once per grant? Separately, `/refunds` promises back "the Velas you spent on
+     them" when someone is banned, but T-9.3 lists only Threads opened, voice unlocks and album
+     requests: not gifts, which are priced today, and not private messages, re-opens, Extends or
+     picture views. Touches: `web/src/i18n/en.ts` (`/refunds`), 01-DECISIONS (D-004, D-050,
+     D-098), 02-ARCHITECTURE (a banned partner's refund), 03-SCHEMA (`album_requests`,
+     `refund_album_declined`, `refund_banned_partner`), 04-API (the album rows), 05-PLAN (T-8.4,
+     T-8.8, T-9.3).
+  3. **D-004's prices that D-098 doesn't mention:** a direct message without a match (5), unlocking
+     a voice note (5), Super Like (5) and revealing one "liked you" (20). Kept, repriced or dropped?
+     And "swiping, either way, free" doesn't say whether a Super Like, a swipe kind, is free.
+     Touches: 01-DECISIONS (D-004, D-098), 03-SCHEMA (`ledger_reason_t`, `swipe_dir_t`,
+     `action_prices`), 04-API (`/threads`, `/messages/{id}/unlock`, `/likes/{user_id}/reveal`),
+     05-PLAN (T-5.5's "seven actions", T-6.4, T-6.7, T-7.1, T-7.9, T-7.13, T-9.3, T-9.9),
+     06-TESTING (J5), `api/app/modules/wallet/rules.py`, T-1.14's migration and
+     `api/tests/test_reference_data.py`, the prototype's price list.
+  4. **What a private message is.** Nothing defines it: how it differs from a Thread's messages and
+     from D-004's direct message (`dm_open`, a Thread with origin `dm`), where it is kept (no table
+     or task holds one), and what "never expire" means beside a Thread's hour. Women's limit of 30
+     a day counts them. Touches: 01-DECISIONS (D-098), 03-SCHEMA (`threads`, `messages`,
+     `thread_origin_t`), 04-API, 05-PLAN (T-7.1, T-7.3).
+  5. **The gifts.** How many, at which of 5, 10, 15 and 20 Velas; whether free gifts stay a kind of
+     their own; and whether the 15 free a week are sends at no price, which move no Vela, or a
+     weekly grant of Velas to men, which would be a credit with a reason of its own. Today there
+     are six, at 0, 0, 2, 2, 4 and 4, with free ones capped at 3 a day. Touches: 01-DECISIONS
+     (D-016, D-098), 03-SCHEMA (`gifts`, `app_config`'s `gift_free_daily_limit`), 05-PLAN (T-5.5,
+     T-8.9, T-8.10), 08-DESIGN (GiftGrid), T-1.14's migration and
+     `api/tests/test_reference_data.py`, the prototype's gifts.
+  6. **The 20% first-purchase bonus** (D-005) isn't in D-099: kept or dropped? Touches:
+     01-DECISIONS (D-005, D-099), 03-SCHEMA (`credit_packs.bonus_first_pct`, default 20), 05-PLAN
+     (T-8.1, T-8.2, T-8.7's first-purchase banner), the prototype.
+  7. **The packs around D-099.** T-10.4's price test, ₹1,500 against ₹999 for 25 Velas, matches no
+     pack now. The prototype's packs are 30, 100, 150 and 250 Velas, and T-8.7 builds the store
+     from the prototype. Touches: 03-SCHEMA (`credit_packs`, its `variant`), 05-PLAN (T-8.1, T-8.7,
+     T-10.4), T-1.14's migration and `api/tests/test_reference_data.py`, the prototype.
+  8. **The prototype tags the ₹4,500 pack "Most popular":** the pack D-099 records as dominated on
+     purpose. Touches: the prototype, 05-PLAN (T-8.7), 08-DESIGN.
+  9. **09-RESEARCH's R1 says a man pays "about ₹300"** to open a Thread at the entry pack; under
+     D-099 it is ₹250. Touches: 09-RESEARCH §3.
+  10. **The rest of how a Thread lives** (D-097): whether his messages restart the hour too, or only
+      hers; how the hour runs on a Thread a woman opens; whether Extend on an expired Thread
+      re-opens it, and at what price; and how the hour runs once Extend's 24 hours end. Touches:
+      01-DECISIONS (D-097), 03-SCHEMA (`threads`), 05-PLAN (T-7.1, T-7.6, T-7.7), and the 1-hour
+      task D-097 names.
 - [ ] **The prices are D-097 to D-099's** (the founder, 4 October 2026). Velas, for men; 0 for a
   woman, for every action:
   - open a Thread 5 · re-open an expired Thread 2, every time · Extend, 24 hours, 10 · first
@@ -1741,8 +1794,9 @@ then prices show nothing. T-4.4 and T-4.6 come first.
   per-event index leaves it out.
 - [ ] **Not this task's:** the 1-hour Thread (D-097): `thread_hours` stays 24 until its own task.
   Women's limits (D-098: 30 men and 30 private messages a day) are rate limits for the tasks that
-  send messages, not prices. No charging path for women is built, enabled or disabled (D-098), and
-  `charge` never refunds, reverses or holds a pending balance (D-100).
+  send messages, not prices. No charging path for women is built, enabled or disabled (D-098).
+  Refunds aren't this task's either: Velas spent on an unanswered message are never returned, and
+  the existing refunds stay with T-8.2, T-8.3, T-8.4 and T-9.3, unchanged (D-100).
 - [ ] `pricing.service.price_for(user, action)`:
   - women 0; men the `action_prices` value;
   - no gender raises; an inactive row gives `NOT_ALLOWED`; a missing row is a 500; never 0 by
