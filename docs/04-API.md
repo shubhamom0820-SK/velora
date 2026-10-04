@@ -49,8 +49,8 @@ number: no screen shows either, so neither leaves the server (D-067's discipline
 ## Photos & verification
 | Method | Path | Auth | Body → Response | Task |
 |---|---|---|---|---|
-| POST | /photos/upload-url | 🔐 | `{kind, position?}` → `{photo_id, put_url, headers}` | T-4.2 |
-| POST | /photos/{id}/complete | 🔐 | → `Photo` (pending) | T-4.2 |
+| POST | /photos/upload-url | 🔐 | `{kind, position?, content_type}` → `{photo_id, put_url, headers}`. `content_type` is `image/jpeg`, `image/png` or `image/webp`, signed into the PUT, so send `headers` with it; a hint, never what decides (D-089). Public: `position` 0–5, one per place; private: up to 6; selfie: one waiting. Each at its step or after (D-068). 30 an hour per user | T-4.2 |
+| POST | /photos/{id}/complete | 🔐 | → `Photo` (pending). The object's bytes decide: a JPEG, PNG or WebP is queued for moderation (a selfie waits for T-4.5); anything else is `UNSUPPORTED_IMAGE`, over 8 MB `IMAGE_TOO_LARGE`, each rejecting the photo and removing its file. Saying it twice is harmless | T-4.2 |
 | GET | /me/photos | 🔐 | → `Photo[]` with status | T-4.3 |
 | PATCH | /me/photos/order | 🔐 | `{photo_ids[]}` → `Photo[]` | T-4.3 |
 | DELETE | /photos/{id} | 🔐 | → 204 (soft) | T-4.3 |
@@ -177,6 +177,8 @@ API sent nothing to (D-073) gets `null`, as its phone would. The E2E is its only
 | Code | HTTP | Meaning |
 |---|---|---|
 | `VALIDATION_ERROR` | 400 | body failed schema |
+| `UNSUPPORTED_IMAGE` | 422 | not a JPEG, PNG or WebP, by its bytes; `details.accepted`. The message says what to do (D-089) |
+| `IMAGE_TOO_LARGE` | 422 | over 8 MB; `details.max_bytes` |
 | `AUTH_REQUIRED` / `TOKEN_EXPIRED` / `SESSION_REVOKED` | 401 | |
 | `INSUFFICIENT_CREDITS` | 402 | `details.required`, `details.balance` |
 | `FORBIDDEN` | 403 | wrong role; a `deleted` account until T-9.6 (D-067) |

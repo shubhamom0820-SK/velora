@@ -325,6 +325,40 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/photos/upload-url": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Upload Url */
+        post: operations["upload_url_v1_photos_upload_url_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/photos/{photo_id}/complete": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Complete */
+        post: operations["complete_v1_photos__photo_id__complete_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/auth/otp/send": {
         parameters: {
             query?: never;
@@ -541,6 +575,28 @@ export interface components {
             /** Otp */
             otp: string;
         };
+        /**
+         * Photo
+         * @description A photo as its owner sees it. T-4.3 adds where to view it.
+         */
+        Photo: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            kind: components["schemas"]["PhotoKind"];
+            /** Position */
+            position: number | null;
+            status: components["schemas"]["ReviewStatus"];
+            /** Reject Reason */
+            reject_reason: string | null;
+        };
+        /**
+         * PhotoKind
+         * @enum {string}
+         */
+        PhotoKind: "public" | "private" | "selfie";
         /** PinSet */
         PinSet: {
             /** Pin */
@@ -593,6 +649,11 @@ export interface components {
             checks: components["schemas"]["ReadinessChecks"];
         };
         /**
+         * ReviewStatus
+         * @enum {string}
+         */
+        ReviewStatus: "pending" | "approved" | "rejected";
+        /**
          * Role
          * @enum {string}
          */
@@ -617,6 +678,28 @@ export interface components {
             /** Access Token */
             access_token: string;
             user: components["schemas"]["Me"];
+        };
+        /** UploadUrl */
+        UploadUrl: {
+            /**
+             * Photo Id
+             * Format: uuid
+             */
+            photo_id: string;
+            /** Put Url */
+            put_url: string;
+            /** Headers */
+            headers: {
+                [key: string]: string;
+            };
+        };
+        /** UploadUrlRequest */
+        UploadUrlRequest: {
+            kind: components["schemas"]["PhotoKind"];
+            /** Position */
+            position?: number | null;
+            /** Content Type */
+            content_type: string;
         };
         /**
          * UserStatus
@@ -1148,6 +1231,70 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["Me"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    upload_url_v1_photos_upload_url_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UploadUrlRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["UploadUrl"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    complete_v1_photos__photo_id__complete_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                photo_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Photo"];
                 };
             };
             /** @description Validation Error */

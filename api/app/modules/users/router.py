@@ -8,8 +8,10 @@ from typing import Annotated
 from fastapi import APIRouter, Depends
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.config import Settings
 from app.core.db import get_session
-from app.core.deps import current_user
+from app.core.deps import app_settings, current_user
+from app.core.queue import Queue, get_queue
 from app.modules.users import service
 from app.modules.users.models import User
 from app.modules.users.schemas import DobSet, GenderSet, Me
@@ -30,8 +32,12 @@ async def set_dob(
     body: DobSet,
     user: Annotated[User, Depends(current_user)],
     session: Annotated[AsyncSession, Depends(get_session)],
+    queue: Annotated[Queue, Depends(get_queue)],
+    settings: Annotated[Settings, Depends(app_settings)],
 ) -> Me:
-    return await service.set_dob(session, user, body.dob)
+    return await service.set_dob(
+        session, user, body.dob, queue=queue, settings=settings
+    )
 
 
 @router.post("/me/gender")

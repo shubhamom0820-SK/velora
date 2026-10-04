@@ -7,7 +7,7 @@ from __future__ import annotations
 
 import uuid
 from collections.abc import Awaitable, Callable
-from datetime import UTC, date, datetime
+from datetime import UTC, date, datetime, timedelta
 from types import ModuleType
 from typing import Any
 
@@ -19,19 +19,23 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm.attributes import set_committed_value
 
 from app.core import clock as clock_module
-from app.core.enums import BanKind, Gender, OnboardingStep
+from app.core.enums import BanKind, Gender, OnboardingStep, PhotoKind
 from app.core.errors import AppError
 from app.core.providers import FakeProviders
+from app.core.queue import DELETE_FILES, FakeQueue
 from app.core.security import E164, hash_phone, make_access_token
 from app.modules.auth import service as auth_service
 from app.modules.auth.models import BannedIdentity, Session
 from app.modules.notifications.models import NotificationPrefs
+from app.modules.photos.models import Photo
 from app.modules.profiles.models import Profile, ProfileIntent, ProfileInterest
 from app.modules.users import repository as users_repository
 from app.modules.users import service as users_service
 from app.modules.users.models import User
 from app.modules.wallet.models import Wallet
+from app.workers.tasks import delete_files as delete_files_job
 from tests.conftest import CapturedLogs, MakeUser, make_test_settings
+from tests.workers.test_delete_files import SharedSession
 
 pytestmark = pytest.mark.usefixtures("test_redis")
 
@@ -860,3 +864,148 @@ def _ways_to_write(phone: E164) -> list[str]:
 
 def _phone_hash(phone: E164 = PHONE) -> str:
     return hash_phone(phone, SETTINGS)
+
+
+# --- D-078's file half, in D-090's order (T-4.2) ----------------------------------------
+
+CHECK_FILES_AFTER = timedelta(seconds=60)
+
+
+async def _photos_with_files(
+    db: AsyncSession, fake_providers: FakeProviders, minor: uuid.UUID
+) -> list[list[str]]:
+    """Two photos, one approved with a public copy, each file in storage. A
+    user at the dob step can't have them (D-068): this is the defence behind
+    that rule, so it is tested with them there."""
+    stored: list[list[str]] = []
+    for position, public in ((0, True), (1, False)):
+        photo_id = uuid.uuid4()
+        raw = f"raw/{minor}/{photo_id}"
+        public_key = f"p/{photo_id}.jpg" if public else None
+        db.add(
+            Photo(
+                id=photo_id,
+                user_id=minor,
+                kind=PhotoKind.PUBLIC,
+                position=position,
+                raw_key=raw,
+                public_key=public_key,
+            )
+        )
+        await fake_providers.storage.put_bytes(
+            "velora-private", raw, b"x", "image/jpeg"
+        )
+        stored.append(["velora-private", raw])
+        if public_key:
+            await fake_providers.storage.put_bytes(
+                "velora-public", public_key, b"x", "image/jpeg"
+            )
+            stored.append(["velora-public", public_key])
+    await db.flush()
+    return sorted(stored)
+
+
+@pytest.mark.critical
+async def test_under_eighteen_queues_its_files_deletion_before_the_rows_go(
+    db: AsyncSession,
+    client: AsyncClient,
+    new_account: NewAccount,
+    fake_providers: FakeProviders,
+    fake_queue: FakeQueue,
+    clock: ModuleType,
+) -> None:
+    """🔒 7, files included (D-078, D-090): the keys read before the rows go,
+    the job queued with them, the refusal's record kept; and the job, run once
+    the user is gone, takes every file and reads each back as gone."""
+    clock.freeze(NOON_IST)
+    minor, token = await new_account()
+    minor_id = minor.id
+    stored = await _photos_with_files(db, fake_providers, minor_id)
+
+    response = await _post_dob(client, token, "2010-01-01")
+
+    assert _error(response)["code"] == "UNDERAGE"
+    assert await _count(db, Photo, user_id=minor_id) == 0
+    ban = await db.scalar(select(BannedIdentity))
+    assert ban is not None and ban.reason == "underage"
+    [job] = fake_queue.named(DELETE_FILES)
+    assert (job.job_id, job.defer_by) == (f"delete_files:{minor_id}", CHECK_FILES_AFTER)
+    assert job.kwargs["user_id"] == str(minor_id)
+    assert job.kwargs["banned_id"] == str(ban.id)
+    assert sorted(job.kwargs["objects"]) == stored
+    # Queued, not done: the files wait for the job.
+    assert len(fake_providers.storage.objects) == len(stored)
+
+    done = await delete_files_job.delete_files(
+        {
+            "sessionmaker": SharedSession(db),
+            "storage": fake_providers.storage,
+            "queue": fake_queue,
+        },
+        **job.kwargs,
+    )
+
+    assert done == "deleted"
+    assert fake_providers.storage.objects == {}
+    # The image goes; the record that a refusal happened stays (rule 12).
+    assert await _count(db, BannedIdentity, id=ban.id) == 1
+
+
+@pytest.mark.critical
+async def test_a_refusal_whose_deletion_cant_be_queued_fails_whole(
+    db: AsyncSession,
+    client: AsyncClient,
+    new_account: NewAccount,
+    fake_providers: FakeProviders,
+    fake_queue: FakeQueue,
+    clock: ModuleType,
+) -> None:
+    """D-090: queued before the commit, so a queue that refuses takes the
+    refusal with it: nothing deleted, no file loses its row, no ban written."""
+    clock.freeze(NOON_IST)
+    minor, token = await new_account()
+    minor_id = minor.id
+    await _photos_with_files(db, fake_providers, minor_id)
+    fake_queue.fail = True
+
+    response = await _post_dob(client, token, "2010-01-01")
+
+    assert response.status_code == 500
+    assert await _count(db, User, id=minor_id) == 1
+    assert await _count(db, Photo, user_id=minor_id) == 2
+    assert await _count(db, BannedIdentity) == 0
+
+
+async def test_a_refusal_with_no_files_queues_nothing(
+    db: AsyncSession,
+    client: AsyncClient,
+    new_account: NewAccount,
+    fake_queue: FakeQueue,
+    clock: ModuleType,
+) -> None:
+    clock.freeze(NOON_IST)
+    _, token = await new_account()
+
+    response = await _post_dob(client, token, "2010-01-01")
+
+    assert _error(response)["code"] == "UNDERAGE"
+    assert fake_queue.jobs == []
+
+
+def test_every_storage_key_on_a_deleted_table_is_in_the_file_list() -> None:
+    """D-078: any file stored behind a user row joins the list, read before
+    the rows go. A `*_key` column on a table the deletion takes, left off the
+    list, would leave its file behind: this fails first."""
+    listed = {
+        (f.model.__tablename__, f.column) for f in users_repository.UNDERAGE_FILES
+    }
+    on_deleted_tables = {
+        (attached.model.__tablename__, column.name)
+        for attached in users_repository.UNDERAGE_DELETES
+        for column in attached.model.__table__.columns
+        if column.name.endswith("_key")
+    }
+
+    assert (
+        listed == on_deleted_tables == {("photos", "raw_key"), ("photos", "public_key")}
+    )

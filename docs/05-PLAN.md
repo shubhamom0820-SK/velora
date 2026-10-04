@@ -1326,17 +1326,17 @@ exist yet. The batch is a chain, T-3.10 → T-3.11 → T-3.12 → T-3.13, each n
 - [x] **Commit:** `feat(storage): r2 presigned urls [T-4.1]`
 
 ### T-4.2 · Upload URL and complete
-- [ ] **Needs:** T-4.1, T-3.5, and **P-54's row half** (D-078: an under-18 refusal deletes every
+- [x] **Needs:** T-4.1, T-3.5, and **P-54's row half** (D-078: an under-18 refusal deletes every
   table the app may delete from; this task adds the files)
-- [ ] `POST /photos/upload-url {kind, position?, content_type}` — public max 6 (positions 0–5), private max 6, selfie 1 active. Creates `photos` row `pending`, returns presigned PUT (image/jpeg|png|webp, ≤ 8 MB; no HEIC, D-089).
-- [ ] `POST /photos/{id}/complete` — object exists and size ok → enqueue `moderate_photo` (public/private) or leave for `verify_selfie` (selfie).
-- [ ] **The bytes decide, not the declared type (D-089).** `complete` reads the object's first bytes:
+- [x] `POST /photos/upload-url {kind, position?, content_type}` — public max 6 (positions 0–5), private max 6, selfie 1 active. Creates `photos` row `pending`, returns presigned PUT (image/jpeg|png|webp, ≤ 8 MB; no HEIC, D-089).
+- [x] `POST /photos/{id}/complete` — object exists and size ok → enqueue `moderate_photo` (public/private) or leave for `verify_selfie` (selfie).
+- [x] **The bytes decide, not the declared type (D-089).** `complete` reads the object's first bytes:
   a JPEG, PNG or WebP goes on, as what its bytes say; anything else is rejected, its object deleted,
   and the error says what to do: "JPEG, PNG or WebP". The declared `content_type` is signed into the
   PUT and used for a clearer message, never to decide. Proved by a test that fails if the code
   trusts the header: bytes of a PNG declared `image/jpeg` handled as a PNG, and bytes of something
   else declared `image/jpeg` refused.
-- [ ] **D-078 (P-54's file half, built here), in D-090's order:** an under-18 refusal deletes `photos`
+- [x] **D-078 (P-54's file half, built here), in D-090's order:** an under-18 refusal deletes `photos`
   rows and the files behind them. The keys are read in the deleting transaction before the rows go;
   the deletion job is queued **before** the commit (D-090 supersedes D-078's "after"), 60 seconds
   out, and deletes only once the user is gone, checking again at 5 minutes. The object goes; the
@@ -1346,7 +1346,7 @@ exist yet. The batch is a chain, T-3.10 → T-3.11 → T-3.12 → T-3.13, each n
   signed URL (rule 15); a final failure logs at error level. Until T-4.4's worker runs, the job
   waits in Redis; T-4.4 registers it. Any file this task stores behind a user row joins the list,
   with a test. The upload URL still waits for its step (D-068).
-- [ ] **Commit:** `feat(photos): upload url and completion [T-4.2]`
+- [x] **Commit:** `feat(photos): upload url and completion [T-4.2]`
 
 ### T-4.3 · Manage photos
 - [ ] **Needs:** T-4.2

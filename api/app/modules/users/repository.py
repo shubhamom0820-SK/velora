@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Any
+from typing import Any, Literal
 from uuid import UUID
 
 from sqlalchemy import delete, exists, func, or_, select, update
@@ -92,8 +92,8 @@ UNDERAGE_DELETES = (
     Attached(PushSubscription, ("user_id",)),
     Attached(FraudEvent, ("user_id",)),
     Attached(FraudScore, ("user_id",)),
-    # Rows only: no file is stored behind either yet. T-4.2 adds the files,
-    # their keys read before these rows are deleted (D-078).
+    # A selfie is a photo (kind `selfie`), so its file is a photo's: listed in
+    # UNDERAGE_FILES below, read before these rows go (D-078, T-4.2).
     Attached(Verification, ("user_id",)),
     Attached(Photo, ("user_id",)),
     Attached(Thread, ("user_low", "user_high", "opened_by")),
@@ -114,6 +114,44 @@ UNDERAGE_KEEPS = {
     "payments": "rule 12; money",
     "reports": "rule 12",
 }
+
+
+@dataclass(frozen=True)
+class FileColumn:
+    """A column holding a storage key behind a user's row, and which bucket
+    that key is in (D-027)."""
+
+    model: type[Any]
+    column: str
+    bucket: Literal["public", "private"]
+
+
+# D-078's file half (T-4.2): every storage key behind a row the deletion takes,
+# read in the deleting transaction before the rows go. A test holds it to the
+# schema: every `*_key` column on a table in UNDERAGE_DELETES is here.
+UNDERAGE_FILES = (
+    FileColumn(Photo, "raw_key", "private"),
+    FileColumn(Photo, "public_key", "public"),
+)
+
+
+async def files_of(
+    session: AsyncSession, user_id: UUID
+) -> list[tuple[Literal["public", "private"], str]]:
+    """Every stored file behind the user's rows, as (bucket, key)."""
+    found: list[tuple[Literal["public", "private"], str]] = []
+    for file in UNDERAGE_FILES:
+        column = getattr(file.model, file.column)
+        keys = await session.scalars(
+            select(column).where(file.model.user_id == user_id, column.is_not(None))
+        )
+        found.extend((file.bucket, key) for key in keys)
+    return found
+
+
+async def user_exists(session: AsyncSession, user_id: UUID) -> bool:
+    found: bool = bool(await session.scalar(select(exists().where(User.id == user_id))))
+    return found
 
 
 async def delete_account(session: AsyncSession, user_id: UUID) -> None:
@@ -144,14 +182,24 @@ async def delete_account(session: AsyncSession, user_id: UUID) -> None:
         raise LookupError("no such user to delete")
 
 
-async def ban_phone_hash(session: AsyncSession, phone_hash: str, reason: str) -> None:
-    """Keep a number's hash in `banned_identities` (D-009). A hash already
-    there keeps its row and reason: one row per number, whatever banned it."""
+async def ban_phone_hash(session: AsyncSession, phone_hash: str, reason: str) -> UUID:
+    """Keep a number's hash in `banned_identities` (D-009), and return its row's
+    id. A hash already there keeps its row and reason: one row per number,
+    whatever banned it."""
     await session.execute(
         insert(BannedIdentity)
         .values(kind=BanKind.PHONE_HASH, value=phone_hash, reason=reason)
         .on_conflict_do_nothing(index_elements=["kind", "value"])
     )
+    row_id = await session.scalar(
+        select(BannedIdentity.id).where(
+            BannedIdentity.kind == BanKind.PHONE_HASH,
+            BannedIdentity.value == phone_hash,
+        )
+    )
+    if row_id is None:  # inserted or kept just above, in this transaction
+        raise LookupError("the ban was neither written nor found")
+    return row_id
 
 
 async def take_pin_try(session: AsyncSession, user_id: UUID, limit: int) -> int | None:

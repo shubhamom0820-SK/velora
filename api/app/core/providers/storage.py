@@ -70,6 +70,12 @@ class StorageProvider(Protocol):
         """The object's size and type; raises `ObjectNotFound` if there is none."""
         ...
 
+    async def read_prefix(self, bucket: str, key: str, length: int) -> bytes:
+        """The object's first `length` bytes, or all of it if shorter; raises
+        `ObjectNotFound` if there is none. What an upload is, by its bytes
+        (D-089), without reading the whole file."""
+        ...
+
     async def aclose(self) -> None:
         """Release connections. Safe to call more than once."""
         ...
@@ -117,6 +123,9 @@ class FakeStorage:
     async def head(self, bucket: str, key: str) -> ObjectInfo:
         stored = self._get(bucket, key)
         return ObjectInfo(size=len(stored.data), content_type=stored.content_type)
+
+    async def read_prefix(self, bucket: str, key: str, length: int) -> bytes:
+        return self._get(bucket, key).data[:length]
 
     async def aclose(self) -> None:
         return None
@@ -250,6 +259,18 @@ class S3Storage:
             size=int(response["ContentLength"]),
             content_type=str(response.get("ContentType", "")),
         )
+
+    async def read_prefix(self, bucket: str, key: str, length: int) -> bytes:
+        s3 = await self._s3()
+        try:
+            response = await s3.get_object(
+                Bucket=bucket, Key=key, Range=f"bytes=0-{length - 1}"
+            )
+        except ClientError as error:
+            raise _not_found_or(error, bucket, key) from None
+        async with response["Body"] as body:
+            data: bytes = await body.read()
+        return data
 
 
 def _not_found_or(error: Any, bucket: str, key: str) -> Exception:

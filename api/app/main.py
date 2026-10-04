@@ -20,11 +20,13 @@ from app.core.errors import register_error_handlers
 from app.core.headers import SecurityHeadersMiddleware
 from app.core.logging import RequestIDMiddleware, configure_logging
 from app.core.providers import build_providers
+from app.core.queue import ArqQueue
 from app.core.redis import build_redis
 from app.modules.auth.router import firebase_router, otp_router
 from app.modules.auth.router import router as auth_router
 from app.modules.e2e.router import router as e2e_router
 from app.modules.health.router import router as health_router
+from app.modules.photos.router import router as photos_router
 from app.modules.profiles.router import router as profiles_router
 from app.modules.users.router import router as users_router
 from app.modules.waitlist.router import router as waitlist_router
@@ -117,6 +119,8 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     )
     app.state.sessionmaker = build_sessionmaker(app.state.engine)
     app.state.redis = build_redis(settings.REDIS_URL)
+    # Jobs for the worker (T-4.2), on the same Redis pool: no connections of its own.
+    app.state.queue = ArqQueue(app.state.redis)
     # External services (D-028): fakes locally and in tests, real ones elsewhere.
     app.state.providers = build_providers(settings)
 
@@ -126,6 +130,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.include_router(auth_router, prefix="/v1")
     app.include_router(users_router, prefix="/v1")
     app.include_router(profiles_router, prefix="/v1")
+    app.include_router(photos_router, prefix="/v1")
     for sign_in_router, served_for in SIGN_IN_PATHS:
         if settings.AUTH_PHONE_PROVIDER in served_for:
             app.include_router(sign_in_router, prefix="/v1")

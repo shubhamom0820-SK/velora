@@ -15,6 +15,7 @@ from app.core import clock, ratelimit
 from app.core.config import Settings
 from app.core.enums import Gender, OnboardingStep, UserStatus
 from app.core.errors import AppError, invalid_field
+from app.core.queue import DELETE_FILES, DELETE_FILES_FIRST_CHECK, Queue
 from app.core.security import E164, encrypt_phone, hash_phone
 from app.modules.profiles.models import Profile
 from app.modules.users import repository
@@ -240,12 +241,18 @@ OLDEST_DOB_YEARS = 100
 UNDERAGE_REASON = "underage"
 
 
-async def set_dob(session: AsyncSession, user: User, dob: date) -> Me:
+async def set_dob(
+    session: AsyncSession, user: User, dob: date, *, queue: Queue, settings: Settings
+) -> Me:
     """Set the date of birth once, at the dob step.
 
     Under 18 is D-072: the account and everything attached are deleted in this
     transaction, only the number's hash is kept in `banned_identities`, and the
     answer is `UNDERAGE`, sent once the deletion has committed.
+
+    Files go too, in D-090's order: their keys read before the rows go, and
+    their deletion queued before the commit, to run once the user is gone. A
+    refusal with no files queues nothing.
     """
     today = clock.today_ist()
     async with session.begin():
@@ -260,14 +267,36 @@ async def set_dob(session: AsyncSession, user: User, dob: date) -> Me:
                 advance_past(user, OnboardingStep.DOB)
             await _flush_identity(session)
             return await me(session, user)
-        await repository.ban_phone_hash(session, user.phone_hash, UNDERAGE_REASON)
+        files = await repository.files_of(session, user.id)
+        banned_id = await repository.ban_phone_hash(
+            session, user.phone_hash, UNDERAGE_REASON
+        )
         await repository.delete_account(session, user.id)
+        if files:
+            buckets = {
+                "public": settings.R2_BUCKET_PUBLIC,
+                "private": settings.R2_BUCKET_PRIVATE,
+            }
+            await queue.enqueue(
+                DELETE_FILES,
+                job_id=f"{DELETE_FILES}:{user.id}",
+                defer_by=DELETE_FILES_FIRST_CHECK,
+                user_id=str(user.id),
+                banned_id=str(banned_id),
+                objects=[[buckets[bucket], key] for bucket, key in files],
+            )
     session.expunge(user)
     raise AppError(
         "UNDERAGE",
         "You must be 18 or older to sign up.",
         status=422,
     )
+
+
+async def account_exists(session: AsyncSession, user_id: UUID) -> bool:
+    """Whether the user still has an account: D-090's deletion job asks before
+    it deletes a file."""
+    return await repository.user_exists(session, user_id)
 
 
 def _refuse_an_impossible_dob(dob: date, today: date) -> None:

@@ -242,9 +242,9 @@ that person in the last 7 days → `wallet.credit(reason=refund_banned_partner)`
 
 ## 10. Uploads and moderation
 
-1. `POST /v1/photos/upload-url {kind}` → `{photo_id, put_url, headers}` (5 min, max 8 MB, image/*).
+1. `POST /v1/photos/upload-url {kind, position?, content_type}` → `{photo_id, put_url, headers}` (5 min; JPEG, PNG or WebP; the declared type is signed in, a hint only, D-089).
 2. Browser PUTs directly to `velora-private/raw/{user_id}/{photo_id}`.
-3. `POST /v1/photos/{id}/complete` → status `pending`, enqueue `moderate_photo`.
+3. `POST /v1/photos/{id}/complete` → the object's size (at most 8 MB) and its first bytes decide; status `pending`, enqueue `moderate_photo` (a selfie waits for T-4.5).
 4. Worker: download, verify it's really an image, re-encode to JPEG (max 1600 px, strips EXIF/GPS),
    run moderation. Approved → write to `velora-public/p/{photo_id}.jpg`, status `approved`.
    Rejected → status `rejected` with reason code, notify user.

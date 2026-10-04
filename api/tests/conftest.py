@@ -82,6 +82,7 @@ from app.core.enums import (
     UserStatus,
 )
 from app.core.providers import FakeProviders
+from app.core.queue import FakeQueue
 from app.core.ratelimit import KEY_PREFIX as RATE_LIMIT_KEY_PREFIX
 from app.core.redis import build_redis
 from app.core.security import make_access_token, normalize_phone
@@ -227,17 +228,27 @@ def _unpublished_here(*args: Any, **kwargs: Any) -> NoReturn:
 
 
 @pytest.fixture
+def fake_queue() -> FakeQueue:
+    """The job queue as a recorder: `fake_queue.named("moderate_photo")` lists
+    what a request queued. Nothing runs; a worker test runs a job directly."""
+    return FakeQueue()
+
+
+@pytest.fixture
 async def app(
-    fake_providers: FakeProviders, monkeypatch: pytest.MonkeyPatch
+    fake_providers: FakeProviders,
+    fake_queue: FakeQueue,
+    monkeypatch: pytest.MonkeyPatch,
 ) -> AsyncIterator[FastAPI]:
     """The app, built from test settings; requests share the test's `db`, and
-    every provider is the test's fake.
+    every provider is the test's fake, and the job queue `fake_queue`.
 
     While it's up, listening on Redis raises, naming P-64: through this app
     nothing is ever published, and a test that listened would pass blind."""
     application = create_app(make_test_settings())
     application.dependency_overrides[get_session] = session_for_the_app
     application.state.providers = fake_providers.as_providers()
+    application.state.queue = fake_queue
     for owner, listen in LISTENING:
         monkeypatch.setattr(owner, listen, _unpublished_here)
     try:

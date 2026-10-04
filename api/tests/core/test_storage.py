@@ -212,6 +212,30 @@ async def test_a_missing_object_is_object_not_found(
     await storage.delete(PRIVATE, missing)  # not an error
 
 
+async def test_read_prefix_reads_only_the_first_bytes(
+    storage: S3Storage, prefix: str
+) -> None:
+    """What `complete` sniffs (D-089): the first bytes, not the whole upload."""
+    key, short = f"{prefix}/upload", f"{prefix}/short"
+    try:
+        await storage.put_bytes(
+            PRIVATE, key, b"\x89PNG\r\n\x1a\n" + b"x" * 1000, "image/png"
+        )
+        await storage.put_bytes(PRIVATE, short, b"abc", "image/png")
+
+        assert (
+            await storage.read_prefix(PRIVATE, key, 16) == b"\x89PNG\r\n\x1a\nxxxxxxxx"
+        )
+        assert await storage.read_prefix(PRIVATE, short, 16) == b"abc"
+        with pytest.raises(ObjectNotFound):
+            await storage.read_prefix(PRIVATE, f"{prefix}/missing", 16)
+        fake = FakeStorage()
+        await fake.put_bytes(PRIVATE, "k", b"abcdef", "image/png")
+        assert await fake.read_prefix(PRIVATE, "k", 3) == b"abc"
+    finally:
+        await _cleanup(storage, (PRIVATE, key), (PRIVATE, short))
+
+
 async def test_one_client_is_kept_and_closing_twice_is_safe(
     storage: S3Storage, prefix: str
 ) -> None:
