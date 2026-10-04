@@ -2131,6 +2131,48 @@ propose and the founder's to decide; the poll interval doesn't change for it.
 **If 10 seconds ever exceeds Free,** report the number and stop; never quietly pick a paid plan
 (the founder).
 
+### D-092 · Pillow re-encodes every photo, pinned, bounded and proved — Locked
+**The decision (T-4.4; approved by the founder, 4 October 2026, with three conditions):** Pillow, a
+new dependency (rule 4), opens and re-encodes every uploaded photo on the worker. It is an image
+parser reading hostile input, the most dangerous code we run, so:
+1. **A full decode and re-encode, never a metadata strip.** Decoding to pixels and encoding a new
+   JPEG drops EXIF, stray ICC data and anything appended after the image. **Proved with a photo
+   that genuinely carries GPS EXIF:** the test fails if any location survives. Of the three, this
+   one matters most (the founder's message: a woman's photo carrying her home coordinates is the
+   worst bug this product could ship).
+2. **The decompression is bounded.** A small file can expand to gigabytes and take the worker down,
+   so Pillow's pixel limit is set explicitly, never left to its default, and **tested with an actual
+   bomb file**, not by reading the docs.
+3. **The version is pinned exactly** (`==` in `api/pyproject.toml`, where the rest use `>=` and the
+   lock pins them), **and it is updated when CVEs land:** this line is the reminder, and T-9.13's
+   security review checks it.
+
+### D-093 · A possible-minor photo is rejected and recorded as a signal, never an accusation — Locked
+**The decision (T-4.4; option (a) of Sprint 4's plan, approved by the founder, 4 October 2026, with
+four conditions):** a photo Sightengine scores as possibly showing a minor is rejected, and a
+`fraud_events` row records it; the internal report itself waits for T-9.2's system user. It is a
+probability, not a finding, and young-looking adults will be caught by it, so:
+1. **The message doesn't accuse.** The person is told "We couldn't verify this photo — try a
+   different one", and nothing that says they look underage: getting that wrong to a real woman is
+   a harm we would inflict ourselves.
+2. **Repeated flags never auto-ban.** They escalate to a human, the founder at this size. No human
+   path exists yet, so it is a named open item, P-72, not a silent auto-action left to grow into one.
+3. **The fraud event is a signal, not proof:** its `signal` and `meta` say it is a model's score for
+   one photo, and nothing downstream (T-9.2's scoring, T-9.5's queue) may read it as an established
+   fact about the person.
+4. **D-090's shape: the photo goes, the record stays.** The image and every copy of it are deleted;
+   the record holds the minimal thing (the user, when, the score and the model), never the image.
+
+### D-094 · Sightengine is built on a fake and proved by one real check of its response's shape — Locked
+**The decision (T-4.4; approved by the founder, 4 October 2026, with one condition):** T-4.4 builds
+and tests moderation against a fake shaped like Sightengine's documented responses, and its last
+step is one real call. **The real call compares the shape, not only the status:** field names,
+nesting and types of Sightengine's actual response against the fake's. A fake that spells a field
+differently makes every green test a fiction, and a call that returns 200 wouldn't catch it. **The
+date of that check and the shape seen are recorded** (on T-4.4), so that when Sightengine changes
+something, the record shows whether it was us who went stale or them. The plain image moderation
+API only, as T-4.4 already constrains: never hybrid review, never the Feedback API.
+
 ---
 
 ## Adding a decision

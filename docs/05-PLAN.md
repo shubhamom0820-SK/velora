@@ -633,6 +633,8 @@ waits on the founder's decisions, so it is a task of its own, outside the sprint
     the trial ends ("a month" is Claude's reading of the founder's "anywhere near it", approved).
   - **T-4.11, if REL-1's tag includes T-3.14.** Liveness before the first real user (the founder,
     4 October 2026): D-008 makes it mandatory for women, and T-4.5 ships without it.
+  - **P-72, if REL-1's tag includes T-4.4.** A human for repeated possible-minor flags (D-093), so
+    a model's probability never becomes an automatic action against a real woman.
   - **P-68, if REL-1's tag includes T-3.14.** App Check enforced on Authentication, proved by its
     effect, before the site is public for sign-in (the founder, 4 October 2026): it is what makes
     an SMS flood need our web app rather than a script. A backstop only: P-68 is the very next
@@ -1377,8 +1379,15 @@ exist yet. The batch is a chain, T-3.10 → T-3.11 → T-3.12 → T-3.13, each n
   Add its pool to the connection budget in `infra/STAGING.md`. It shares `Settings`, so it needs
   the API's four keys as secrets, the same values (from the Keychain, `infra/STAGING.md`):
   otherwise it can't read the numbers or hashes the API wrote, or doesn't start (D-060, D-061).
-- [ ] `moderate_photo(photo_id)`: fetch raw → Pillow open (reject if not an image) → `ImageOps.exif_transpose` → resize longest side 1600 → save JPEG q85 **without EXIF** → `ModerationProvider.check()` → approve (write public copy for `public` kind) or reject with reason (`nudity`, `minor_suspected`, `no_face`, `text_overlay`, `other`). `minor_suspected` also opens an internal report.
+- [ ] `moderate_photo(photo_id)`: fetch raw → Pillow open (reject if not an image) → `ImageOps.exif_transpose` → resize longest side 1600 → save JPEG q85 **without EXIF** → `ModerationProvider.check()` → approve (write public copy for `public` kind) or reject with reason (`nudity`, `minor_suspected`, `no_face`, `text_overlay`, `other`). `minor_suspected` is D-093's: rejected without an accusation ("We couldn't verify this photo — try a different one"), the image deleted, a `fraud_events` signal kept; the internal report waits for T-9.2's system user.
 - [ ] Idempotent: re-running on an approved photo does nothing.
+- [ ] **Pillow under D-092's three conditions:** a full decode and re-encode, proved with a photo
+  that genuinely carries GPS EXIF (the test fails if any location survives); the pixel limit set
+  explicitly and tested with an actual bomb file; the version pinned exactly, and updated when CVEs
+  land.
+- [ ] **Sightengine under D-094:** built on a fake shaped like its documented responses; the last
+  step one real call whose response's shape (field names, nesting, types) is compared with the
+  fake's, and the date and the shape seen recorded here.
 - [ ] **Sightengine keeps nothing by default, and this task stays on that default.** There is no
   setting to turn on: deleting is Sightengine's default, which `/privacy`'s "deleted there after the
   check" (D-048) rests on. Its FAQ, "What happens to our images, videos and audio files after
@@ -1439,6 +1448,10 @@ exist yet. The batch is a chain, T-3.10 → T-3.11 → T-3.12 → T-3.13, each n
   actually remove people."; the badge, `verified: "Verified"`; and `/terms`' "Women verify with a
   selfie before their profile goes live". (The code screen's "Verify" is the sign-in code's, not
   this.)
+- [ ] **No woman sits watching a spinner** (the founder, 4 October 2026, on D-091's 10-second
+  pickup): either she gets the result quickly, or she is told plainly it will take a moment and is
+  free to do something else. This task proposes how; lowering one site's poll interval and calling
+  it solved isn't an answer.
 - [ ] **Measure the worker's peak memory on the actual Fly machine** (D-088's first condition), with
   face matching loaded, beside this Mac's 290 to 330 MB; the 1 GB size is locked on that number.
 - [ ] **Accuracy is ours: how it's measured** (D-088; at the founder's direction, 4 October 2026:
@@ -2006,6 +2019,8 @@ committed rows.
 - [ ] **Needs:** T-9.1
 - [ ] Signals written as `fraud_events` by services: report received, contact-info masked, message rejected (abuse / solicitation), > 30 new threads in 24 h, identical first message to > 10 people, > 3 devices in 7 days, location jumps > 500 km in 1 h.
 - [ ] Sessions store no IP address or user agent (D-067), and "> 3 devices in 7 days" needs one of them. Add what this task needs here, with a line on `/privacy`, which lists neither today.
+- [ ] **A possible-minor photo's event is a signal, not proof** (D-093): it weighs in the score, and
+  nothing here acts on it alone. Repeated ones go to a human (P-72), never to an automatic ban.
 - [ ] `recompute_fraud` worker: weighted sum with 7-day decay → `fraud_scores` + band. Actions: `shadow` → shown only to other shadowed users; `freeze` → status `frozen`, sessions revoked, admin notified. 3 reports from different users in 24 h → freeze immediately.
 - [ ] **D-078 (P-54):** an under-18 refusal deletes `fraud_events` and `fraud_scores` rows, once P-54's
   row half has landed; check it has, since a location jump can come before dob is set.
@@ -2081,6 +2096,8 @@ committed rows.
 
 ### T-9.13 · Security review
 - [ ] **Needs:** T-9.9
+- [ ] **Pillow's pinned version against its CVEs** (D-092): an image parser reading hostile input;
+  update it if any has landed since it was pinned.
 - [ ] Walk the security checklist in `07-CHECKLISTS.md` line by line; fix findings; run Claude Code `/security-review` on the branch; commission the external review of auth + wallet + payments (budget line in cost doc).
 - [ ] **Commit:** `fix(security): review findings [T-9.13]`
 
@@ -2090,7 +2107,7 @@ committed rows.
 - [ ] **Commit:** `docs(ops): backup and restore runbook [T-9.14]`
 
 ### T-9.15 · Go live
-- [ ] **Needs:** T-9.13, T-9.14, P-0.5, P-0.7, P-0.8; **T-4.11**: liveness before the first real user (the founder, 4 October 2026); **P-66**: until staging has a Firebase project of its own, its sign-ins land in production's user pool, which is not acceptable after launch (the founder, 3 October 2026, on T-3.14); **P-0.18**: the billing account converted from its free trial, after App Check (P-68), since after launch the trial's end is an outage with no warning (the founder, 3 October 2026); and **P-68**: App Check enforced on Authentication and proved by its effect, before the site is public for sign-in (the founder, 4 October 2026)
+- [ ] **Needs:** T-9.13, T-9.14, P-0.5, P-0.7, P-0.8; **P-72**: a human path for repeated possible-minor flags (D-093); **T-4.11**: liveness before the first real user (the founder, 4 October 2026); **P-66**: until staging has a Firebase project of its own, its sign-ins land in production's user pool, which is not acceptable after launch (the founder, 3 October 2026, on T-3.14); **P-0.18**: the billing account converted from its free trial, after App Check (P-68), since after launch the trial's end is an outage with no warning (the founder, 3 October 2026); and **P-68**: App Check enforced on Authentication and proved by its effect, before the site is public for sign-in (the founder, 4 October 2026)
 - [ ] Production env: real SMS, real Razorpay live keys + webhook URL, real moderation and face match, VAPID keys. Run the pre-launch checklist in `07-CHECKLISTS.md`. Do one real ₹ purchase yourself and refund it, under D-076's rule 3: the refund reverses that purchase's Velas in the ledger in the same step (T-8.2), so money never goes back while its Velas stand.
 - [ ] **Write to the waitlist** (T-2.3): its copy promises to tell people when Velora opens near them. Nothing can send bulk email yet, so choose how before launch day, or the list is one we can't write to. A sending service is a new dependency and another processor `/privacy` must name, and its From address needs SPF and DKIM, like the mailboxes (P-0.3). B-14, a second city, writes to it again, by city.
   **DKIM before the first send, or the launch email goes to spam:** our DMARC record says
@@ -3242,3 +3259,13 @@ Claude Code adds items here instead of doing unplanned work. Format:
   that changes a published page, not a tuning knob someone enables for better accuracy.** Sightengine
   changes its retention on request, so "default" is a state we must not drift out of, not a
   guarantee. At the direction of the advisor (Claude, in a separate chat), relayed by the founder.
+- [ ] P-72 · Give repeated possible-minor flags a human to go to. **Before the first real user** (on
+  T-9.15's Needs line, and REL-1's if its tag includes T-4.4). Worst case without it: a model's
+  probability, which catches young-looking adults, grows into an automatic action against a real
+  woman, or into nothing at all. D-093: repeated `minor_suspected` flags on one person never
+  auto-ban; they escalate to a human, the founder at this size, and no path for that exists yet
+  (T-9.5's admin panel is the eventual one). Decide what "repeated" means, how the founder learns of
+  it (with no image: D-093 deletes it), and what he can do. At the founder's direction, 4 October
+  2026.
+
+  Found planning T-4.4.
