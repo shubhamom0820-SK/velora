@@ -4,7 +4,9 @@ Every decision that shapes the code. **Locked** means do not re-open it in a cod
 if it seems wrong, raise it with the founder, don't change it. **Open** means a default is in
 place so work can continue; the founder will confirm.
 
-Format: Decision · Why · Rejected alternatives.
+Format: Decision · Why · Rejected alternatives. The number comes from the session's own block,
+given in its brief, from D-200 up (CLAUDE.md, "P- and D-numbers: a block per session"); never from
+scanning branches.
 
 ---
 

@@ -170,20 +170,23 @@ touches no other session.
     **Vela**, the unit of paid balance (D-049): it derives from the brand and is renamed with it,
     in copy and prose only, never in identifiers.
 
-## P-numbers: a block per session
+## P- and D-numbers: a block per session
 
-Each session is given a block of ten P-numbers in its opening brief, and numbers its Proposed tasks
-only inside that block, never outside it. A session with no block asks for one before filing.
-Numbers are never claimed by scanning branches. Blocks start at P-100, a clear gap above every
-number held on `main` or any branch when this was written (P-85). Numbers a block doesn't use stay
-unused: a gap in the list costs nothing. Blocks are assigned outside the repo, in the brief, so
-there is no race to resolve. **Why (4 October 2026):** with five sessions filing at once, two items
-of T-5.6's were renumbered three times in an hour, each time onto numbers another live branch
-already held. Every renumbering risks a stale reference surviving where nobody re-reads. And once
-a single command pushed the branch before its scan's result could stop it, so `6764a90` went up
-carrying numbers T-4.6's branch held. The process was right and one command's ordering defeated
-it: a rule that survives only careful sequencing isn't a rule. At the direction of the advisor
-(Claude, in a separate chat), relayed by the founder.
+Each session is given a block of ten P-numbers and a block of ten D-numbers in its opening brief,
+and numbers its Proposed tasks and decisions only inside them, never outside. A session with no
+block asks for one before filing. Numbers are never claimed by scanning branches. P blocks start
+at P-100 and D blocks at D-200, each a clear gap above every number held on `main`, any branch or
+any worktree when this was written (P-85, D-101). The two pair up: P-100 to P-109 goes with D-200
+to D-209, P-110 to P-119 with D-210 to D-219. Numbers a block doesn't use stay unused: a gap in the
+list costs nothing. Blocks are assigned outside the repo, in the brief, so there is no race to
+resolve. **Why (4 October 2026):** with five sessions filing at once, two items of T-5.6's were
+renumbered three times in an hour, each time onto numbers another live branch already held. Every
+renumbering risks a stale reference surviving where nobody re-reads. And once a single command
+pushed the branch before its scan's result could stop it, so `6764a90` went up carrying numbers
+T-4.6's branch held. The process was right and one command's ordering defeated it: a rule that
+survives only careful sequencing isn't a rule. D-numbers raced the same way that day: `main` holds
+D-097 to D-100 with D-096 left to T-4.6's unlanded branch. At the direction of the advisor (Claude,
+in a separate chat), relayed by the founder; extended to D-numbers the same day.
 
 ## Naming
 
