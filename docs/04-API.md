@@ -124,7 +124,7 @@ turns them into copy.
 |---|---|---|---|---|
 | GET | /wallet | ✅ | → `{balance}` | T-5.3 |
 | GET | /wallet/ledger | ✅ | `?cursor=` → `Page<LedgerEntry>` | T-5.3 |
-| GET | /prices | 🔓 | → `{action: credits}` | T-5.2 |
+| GET | /prices | 🔓 | → `{action: credits}`: every active action's price for a man; a woman pays 0 for each (D-098). Never gifts (`GET /gifts`), never an inactive action. No rate limit (02-ARCHITECTURE §12) | T-5.2 |
 | GET | /packs | ✅ | → `Pack[]` (variant-aware) | T-8.1 |
 | POST | /payments/orders | ✅ | `{pack_id}` + Idempotency-Key → `{payment_id, order_id, key_id, amount_paise}` | T-8.1 |
 | POST | /payments/webhook | 🔓 signature | Razorpay events → 200 | T-8.2 |

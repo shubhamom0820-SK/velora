@@ -2304,8 +2304,8 @@ then.
 
 **What this entry leaves open** is on T-5.2's Needs line, with every pricing question, each with
 the files it touches. **Answered or moved 4 October 2026 by D-250:** a man answering her first
-message pays the 2-Vela re-open; Extend can be bought again and again; (a), (d) and (c)'s own two
-questions went to P-150.
+message pays the 2-Vela re-open; Extend can be bought again and again; (a) and (d) went to
+P-150. (c)'s own two were answered by D-253, 5 October 2026: Extend from expired is 10 in all.
 
 **Answered 4 October 2026 (the founder): an expired Thread stays readable.** "Unavailable" means he
 can't send, not that he can't read: the history he paid 5 Velas for stays visible to both of them.
@@ -2540,6 +2540,8 @@ which owns the screen, on its Needs line; the tag stays on the ₹4,500 pack, ch
 (D-231). D-097's (a), whether his own message restarts the hour, and (d), when the hour starts
 after Extend, go to P-150, the 1-hour task, with a pointer at T-7.6; (c)'s two questions go with
 them, moved by Claude (the founder to confirm), since they touch no file of T-5.2's either.
+**(c)'s two were answered instead, 5 October 2026, by D-253,** and never moved: P-150 keeps (a)
+and (d).
 
 **Supersedes** D-005's beta entry variant (₹999 for 25).
 
@@ -2562,6 +2564,52 @@ Like every reason, each is an `action_prices` key, so `pricing.service` prices i
 
 The names are the founder's decision, 4 October 2026, relayed by the advisor (Claude, in a separate
 chat); the shape is Claude's, in T-5.2.
+
+**Built 4 October 2026 (T-5.2).** `ledger_reason_t` is rebuilt both ways rather than given `ALTER
+TYPE ... ADD VALUE` (migration 4a7e20790605 says why), and the downgrade refuses once the ledger
+holds either reason, since the ledger keeps every row. Its first version read the type's values
+through a `'ledger_reason_t'::regtype` literal, which a prepared statement fixes to an OID: on a
+connection that had rebuilt the type once, it read the dropped type's values, none, and built a type
+of two. T-5.2's own round-trip test caught it before anything landed; it now joins on the type's
+name. P-151 carries the general case.
+
+### D-252 · The four gifts: a coffee, a rose, chocolates, a teddy — Locked (values tunable)
+D-231's four gifts at 5, 10, 15 and 20 Velas are four of D-016's six, repriced in place (T-5.2):
+
+| id | label | asset | Velas | sort |
+|---|---|---|---|---|
+| `coffee` | Coffee | ☕ | 5 | 1 |
+| `rose` | Rose | 🌹 | 10 | 2 |
+| `chocolate` | Chocolate | 🍫 | 15 | 3 |
+| `teddy` | Teddy | 🧸 | 20 | 4 |
+
+`smile` and `wave`, D-016's two free kinds, are retired: `active = false`, never deleted, since
+`gift_sends` points at gifts (rule 12).
+
+**Why these four:** they are the ones D-016 already charged for (2, 2, 4 and 4), and a smile at 5
+Velas reads wrong. The ladder reads as a casual hello, a romantic one, a treat and a big one.
+**Why in place, not new ids:** `gift_sends.credits_charged` copies the price when a gift is sent,
+so repricing a row rewrites no history, and no `gift_sends` row existed anywhere when this was
+written (T-8.9 builds sending). Every id stays what `gift_sends` points at, and no new artwork is
+needed. **Rejected:** a chai and a bouquet, the advisor's first proposal, which would have needed
+new assets to say the same thing.
+
+Proposed by Claude in T-5.2, 4 October 2026; confirmed 5 October 2026 in the advisor's relay
+(Claude, in a separate chat), with the reasons above.
+
+### D-253 · Extend is one price, at any time, an expired Thread included — Locked (values tunable)
+**Extend costs 10 Velas and can be bought at any time, on an expired Thread too. From expired, the
+10 both re-opens the Thread and extends it: he never pays 2 and then 10.** In the ledger that is
+one `thread_extend` debit (D-251), never a `thread_reopen` beside it.
+
+**Why:** any other rule makes a man who wants a day of conversation pay 12 instead of 10 for the
+privilege of deciding slowly, and leaves us explaining a stacking rule to people who just want to
+talk. One price, one effect, always available.
+
+It answers T-5.2's item 10(c), whose two questions Claude had moved to P-150 (D-250); they were
+answerable, so P-150 keeps only (a) and (d). Building it is P-150's: no task sells Extend yet.
+
+The rule and its reason came 5 October 2026 in the advisor's relay (Claude, in a separate chat).
 
 ### D-101 · What moderation's scores mean — Locked (the minor threshold revisited from real scores)
 **The decision (T-4.4; proposed by Claude, decided by the founder, 4 October 2026):** the worker

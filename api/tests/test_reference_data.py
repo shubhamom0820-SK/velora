@@ -1,6 +1,8 @@
 """Reference data (T-1.14): the catalogues match D-004, D-005, D-016 and
 03-SCHEMA.md §8, and seeding twice changes nothing. P-25 adds the intents
 catalogue (D-041), and T-3.2 the OTP daily cap (D-066), tested the same way.
+T-5.2's data migrations reprice them (D-098, D-099, D-231, D-250): the tests
+read the head, and one goes back to T-1.14's values to check its downgrades.
 
 Expected values are written out here, not read from the migration, so a wrong
 value in the migration fails a test instead of agreeing with itself.
@@ -9,21 +11,22 @@ value in the migration fails a test instead of agreeing with itself.
 from __future__ import annotations
 
 import importlib.util
+import json
 from itertools import pairwise
 from types import ModuleType
 
 import pytest
 from sqlalchemy import Text, text
 from sqlalchemy.dialects.postgresql import JSONB
-from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession
+from sqlalchemy.ext.asyncio import AsyncConnection, AsyncEngine, AsyncSession
 
 from alembic import command
 from app.core.enums import LedgerReason
 from tests.infra import API_DIR, run_alembic
 
 COUNTS = {
-    "action_prices": 7,
-    "credit_packs": 5,
+    "action_prices": 9,
+    "credit_packs": 8,
     "gifts": 6,
     "app_config": 8,
     "interests": 24,
@@ -56,21 +59,26 @@ async def test_counts_match(db: AsyncSession, table: str, expected: int) -> None
     assert await db.scalar(text(f"select count(*) from {table}")) == expected
 
 
-# Prices (D-004).
+# Prices (D-004, then D-098, D-231 and D-250: T-5.2).
 
 
-async def test_action_prices_are_d004(db: AsyncSession) -> None:
-    rows = await db.execute(text("select action, credits from action_prices"))
+async def test_action_prices_are_d098_and_d231(db: AsyncSession) -> None:
+    rows = await db.execute(
+        text("select action, credits from action_prices where active")
+    )
 
     assert dict(rows.tuples().all()) == {
         "thread_open": 5,
-        "dm_open": 5,
-        "thread_reopen": 3,
-        "voice_unlock": 5,
-        "album_request": 5,
-        "super_like": 5,
-        "liked_you_reveal": 20,
+        "thread_reopen": 2,  # D-098, was D-004's 3
+        "thread_extend": 10,  # D-097, D-098: re-open and Extend move together
+        "dm_open": 8,  # D-231, the first private message, was 5
+        "dm_message": 2,  # D-231, each private message after it
+        "album_request": 1,  # D-231, viewing private pictures, was 5
+        "voice_unlock": 5,  # D-004's, by default (D-231)
+        "super_like": 5,  # D-004's, by default: not swiping (D-250)
+        "liked_you_reveal": 20,  # D-004's, by default (D-231)
     }
+    assert await db.scalar(text("select count(*) from action_prices")) == 9
 
 
 async def test_every_priced_action_is_a_ledger_reason(db: AsyncSession) -> None:
@@ -91,68 +99,77 @@ async def test_the_knot_has_no_price(db: AsyncSession) -> None:
     assert priced == 0
 
 
-# Packs (D-005).
+# Packs (D-005, then D-099 and D-250: T-5.2).
 
 
-async def test_variant_a_is_the_d005_ladder(db: AsyncSession) -> None:
+async def test_the_active_packs_are_the_d099_ladder(db: AsyncSession) -> None:
     rows = (
         await db.execute(
             text(
-                "select id, credits, price_paise from credit_packs "
-                "where variant = 'A' order by sort"
+                "select id, credits, price_paise, variant from credit_packs "
+                "where active order by sort"
             )
         )
     ).all()
 
     assert [tuple(row) for row in rows] == [
+        ("pack-30", 30, 150_000, "A"),
+        # Dominated on purpose (D-099): ₹1,500 more buys 150 more Velas.
+        ("pack-100", 100, 450_000, "A"),
+        ("pack-250", 250, 600_000, "A"),
+        ("pack-450", 450, 1_000_000, "A"),
+    ]
+    # Each larger pack is cheaper per Vela — compared in integers (D-029).
+    assert all(
+        price * next_credits > next_price * credits
+        for (_, credits, price, _), (_, next_credits, next_price, _) in pairwise(rows)
+    )
+
+
+async def test_the_old_packs_are_retired_never_deleted(db: AsyncSession) -> None:
+    """D-005's three that D-099 dropped, and `entry-25`, T-10.4's variant B:
+    ₹40 a Vela, below the new entry pack's ₹50 (D-250). Kept, since
+    `payments` points at packs (rule 12)."""
+    rows = await db.execute(
+        text("select id, credits, price_paise from credit_packs where not active")
+    )
+
+    assert sorted(tuple(row) for row in rows) == [
+        ("entry-25", 25, 99_900),
         ("pack-25", 25, 150_000),
         ("pack-50", 50, 250_000),
         ("pack-75", 75, 337_500),
-        ("pack-100", 100, 400_000),
     ]
-    # Each larger pack is cheaper per credit — compared in integers (D-029).
-    assert all(
-        price * next_credits > next_price * credits
-        for (_, credits, price), (_, next_credits, next_price) in pairwise(rows)
-    )
 
 
-async def test_variant_b_is_the_entry_pack(db: AsyncSession) -> None:
-    rows = (
-        await db.execute(
-            text(
-                "select id, credits, price_paise from credit_packs where variant = 'B'"
-            )
-        )
-    ).all()
+async def test_every_pack_has_the_first_purchase_bonus(db: AsyncSession) -> None:
+    """20%, kept on D-099's packs (D-231)."""
+    rows = await db.execute(text("select distinct bonus_first_pct from credit_packs"))
 
-    assert [tuple(row) for row in rows] == [("entry-25", 25, 99_900)]
+    assert rows.scalars().all() == [20]
 
 
-async def test_every_pack_is_active_with_the_first_purchase_bonus(
-    db: AsyncSession,
-) -> None:
+# Gifts (D-016, then D-231 and D-252: T-5.2).
+
+
+async def test_the_active_gifts_are_d231s_four(db: AsyncSession) -> None:
     rows = await db.execute(
-        text("select distinct bonus_first_pct, active from credit_packs")
+        text("select id, label, asset, credits from gifts where active order by sort")
     )
-
-    assert [tuple(row) for row in rows] == [(20, True)]
-
-
-# Gifts (D-016).
-
-
-async def test_gifts_are_d016(db: AsyncSession) -> None:
-    rows = await db.execute(text("select id, credits from gifts order by sort"))
 
     assert [tuple(row) for row in rows] == [
-        ("smile", 0),
-        ("wave", 0),
-        ("rose", 2),
-        ("coffee", 2),
-        ("chocolate", 4),
-        ("teddy", 4),
+        ("coffee", "Coffee", "☕", 5),
+        ("rose", "Rose", "🌹", 10),
+        ("chocolate", "Chocolate", "🍫", 15),
+        ("teddy", "Teddy", "🧸", 20),
     ]
+
+
+async def test_the_free_gifts_are_retired_never_deleted(db: AsyncSession) -> None:
+    """`gift_sends` points at gifts (rule 12)."""
+    rows = await db.execute(text("select id from gifts where not active order by id"))
+
+    assert rows.scalars().all() == ["smile", "wave"]
 
 
 # app_config (03-SCHEMA.md §8).
@@ -174,7 +191,8 @@ async def test_app_config_seeds(db: AsyncSession) -> None:
         # changing it changes that copy too.
         "mask_first_n_messages": 20,
         "kudos_min_messages": 6,
-        "gift_free_daily_limit": 3,
+        # D-231, T-5.2: free sends a week, replacing D-016's 3 a day.
+        "gift_free_weekly_limit": 15,
         "gift_same_recipient_cooldown_h": 24,
         # T-3.2, D-066: at most ₹100 a day of Path B SMS at ₹0.20 each.
         "otp_sms_daily_cap": 500,
@@ -246,6 +264,11 @@ async def test_areas_are_in_the_launch_city(db: AsyncSession) -> None:
 
 
 async def test_seeding_again_changes_nothing(db: AsyncSession) -> None:
+    """Run twice: a later migration may remove a seeded row, which the first
+    run puts back (T-5.2 retired `gift_free_daily_limit`); the second must
+    change nothing."""
+    for statement in REVISION.reference_data():
+        await db.execute(statement)
     before = await _counts(db)
 
     for statement in REVISION.reference_data():
@@ -293,6 +316,57 @@ async def test_downgrade_removes_the_seeds(test_engine: AsyncEngine) -> None:
         await run_alembic(test_engine, command.upgrade, "head")
 
     assert left == dict.fromkeys(COUNTS, 0)
+
+
+# --- T-5.2: the data migrations go back to T-1.14's values --------------------
+
+T52_SCHEMA = "a1d7de534ef7"  # the last of T-5.2's schema migrations
+
+
+async def _catalogues(
+    connection: AsyncConnection,
+) -> dict[str, set[tuple[object, ...]]]:
+    queries = {
+        "action_prices": "select action, credits, active from action_prices",
+        "credit_packs": (
+            "select id, credits, price_paise, sort, variant, active from credit_packs"
+        ),
+        "gifts": "select id, label, asset, credits, sort, active from gifts",
+        "app_config": "select key, value::text from app_config",
+    }
+    return {
+        table: {tuple(row) for row in await connection.execute(text(query))}
+        for table, query in queries.items()
+    }
+
+
+async def test_t52_data_downgrades_restore_t114s_values(
+    test_engine: AsyncEngine,
+) -> None:
+    """Each of T-5.2's data migrations undone puts back exactly what T-1.14
+    seeded, with nothing of T-5.2's left over, active or not."""
+    try:
+        await run_alembic(test_engine, command.downgrade, T52_SCHEMA)
+        async with test_engine.connect() as connection:
+            found = await _catalogues(connection)
+    finally:
+        await run_alembic(test_engine, command.upgrade, "head")
+
+    assert found["action_prices"] == {
+        (action, credits, True) for action, credits in REVISION.ACTION_PRICES.items()
+    }
+    assert found["credit_packs"] == {
+        (pack_id, credits, price, sort, variant, True)
+        for pack_id, credits, price, sort, variant in REVISION.CREDIT_PACKS
+    }
+    assert found["gifts"] == {
+        (gift_id, label, asset, credits, sort, True)
+        for sort, (gift_id, label, asset, credits) in enumerate(REVISION.GIFTS, start=1)
+    }
+    assert found["app_config"] == {
+        (key, json.dumps(value))
+        for key, value in {**REVISION.APP_CONFIG, "otp_sms_daily_cap": 500}.items()
+    }
 
 
 # --- P-25: intents (D-041) ----------------------------------------------------

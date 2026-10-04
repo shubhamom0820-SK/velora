@@ -289,8 +289,9 @@ def test_the_rules_cover_every_reason_and_nothing_else() -> None:
 async def test_the_debit_reasons_are_the_priced_actions_and_gift(
     db: AsyncSession,
 ) -> None:
-    """D-004's action_prices name every paid action; `gift` is priced by the
-    gifts table (D-016), and is a debit too (D-076)."""
+    """action_prices name every paid action, D-004's and T-5.2's two (D-098,
+    D-251); `gift` is priced by the gifts table (D-016), and is a debit too
+    (D-076)."""
     priced = set(await db.scalars(text("select action from action_prices")))
     debits = {r.value for r, rule in RULES.items() if rule.direction is Direction.DEBIT}
 
@@ -346,11 +347,12 @@ async def test_each_reason_has_exactly_one_ref_type_in_the_database(
     assert outcomes == expected
 
 
-async def test_one_entry_per_event_except_the_two_reasons_that_repeat(
+async def test_one_entry_per_event_except_the_reasons_that_repeat(
     db: AsyncSession,
 ) -> None:
     """One event under two keys, as two code paths might spell it: refused by
-    the per-event index for every reason but the two that repeat for one ref."""
+    the per-event index for every reason but the three that repeat for one ref
+    (Extend since T-5.2, D-250)."""
     man = await _person(db, Gender.MALE)
     repeated: set[LedgerReason] = set()
 
@@ -365,7 +367,11 @@ async def test_one_entry_per_event_except_the_two_reasons_that_repeat(
         else:
             assert again == "uq_ledger_entries_one_per_event", reason
 
-    assert repeated == {LedgerReason.ADMIN_GRANT, LedgerReason.THREAD_REOPEN}
+    assert repeated == {
+        LedgerReason.ADMIN_GRANT,
+        LedgerReason.THREAD_REOPEN,
+        LedgerReason.THREAD_EXTEND,
+    }
     assert repeated == {r for r, rule in RULES.items() if rule.caller_names_event}
 
 

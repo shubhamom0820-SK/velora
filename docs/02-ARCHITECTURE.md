@@ -225,13 +225,16 @@ Indexes that make this fast are listed in `03-SCHEMA.md`. Target: p95 < 80 ms at
 ## 9. Money flows
 
 **Spend (e.g. open a thread):**
-1. Service reads the price from `action_prices` inside the same transaction, with no cache, so it
-   charges the price as it is now (T-5.2).
-2. `async with db.begin():` → `wallet.debit(session, user_id, amount, reason, ref=Ref(...))`
-   locks the wallet row, checks balance, updates balance, inserts ledger entry. The caller never
-   builds the key: the wallet does, from the reason and the ref, or from an event the caller names
-   for the two reasons that repeat (`thread_reopen`, `admin_grant`). A retry returns the first
-   entry with `applied=False` (D-077, T-5.1).
+1. `async with db.begin():` → `pricing.service.charge(session, user, action, ref=Ref(...))` reads
+   the price from `action_prices` inside that transaction, with no cache, so it charges the price
+   as it is now: 0 for a woman, the row's value for a man (T-5.2). Only above 0 does it call
+   `wallet.debit()`, and nothing else may, but gift sending (T-8.9, priced from `gifts`); a test
+   holds that as an allowlist.
+2. `wallet.debit(session, user_id, amount, reason, ref=Ref(...))` locks the wallet row, checks
+   balance, updates balance, inserts ledger entry. The caller never builds the key: the wallet
+   does, from the reason and the ref, or from an event the caller names for the reasons that
+   repeat (`thread_reopen`, `thread_extend`, `admin_grant`). A retry returns the first entry with
+   `applied=False` (D-077, T-5.1).
 3. The thing being bought (thread row) is created **in the same transaction**. Either both happen
    or neither does.
 
@@ -356,6 +359,7 @@ secret is left empty. Real secret values are never committed.
 | Reports | 10 / day / user |
 | Username check | 30 / min / user |
 | Waitlist | 5 / min / IP, invalid tries included (D-056) |
+| `GET /prices` | None (T-5.2): public and read-only, one read of a table of about ten rows, as `/readyz` with none; a per-IP limit would mostly catch men behind one carrier's shared address. Flooding is the edge's to stop |
 | Everything else | 300 / min / user, in `current_user`, so every authenticated route has it (T-3.5) |
 
 - Logs are structured JSON with `request_id`; never log phone, OTP, tokens, message bodies.

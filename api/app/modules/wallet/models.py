@@ -12,8 +12,9 @@ From T-5.1 it also holds the ledger's shape (D-077: each reason's direction and
 ref type, and one entry per event), and only men hold credits (D-076): two
 triggers, `ledger_entries_only_men` and `wallets_only_men`, which a model can't
 express, refuse a ledger row or a non-zero balance for anyone else. The CHECKs
-below say in SQL what `rules.RULES` says; the migration (97ddae55f597) wrote its
-own copy, and tests/modules/wallet/test_guards.py proves the database agrees.
+below say in SQL what `rules.RULES` says; the migrations (97ddae55f597, and
+a1d7de534ef7 for T-5.2's two reasons) wrote their own copies, and
+tests/modules/wallet/test_guards.py proves the database agrees.
 """
 
 from __future__ import annotations
@@ -118,7 +119,7 @@ class LedgerEntry(CreatedAt, Base):
 class ActionPrice(Timestamps, Base):
     """Prices are data, not code (D-004): tunable without a deploy.
 
-    Read through `price_for()`; never a literal in a service.
+    Read through `pricing.service.price_for()`; never a literal in a service.
     """
 
     __tablename__ = "action_prices"

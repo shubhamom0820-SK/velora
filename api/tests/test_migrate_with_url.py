@@ -184,12 +184,20 @@ async def test_a_version_the_upgrade_did_not_leave_is_refused(
     )
 
 
+# D-076's migration, which builds the two triggers. It was the head when this
+# test was written; T-5.2's migrations followed it, so "-1" from head no longer
+# reaches it, and the case goes down to the revision before it instead.
+D076 = "190d7bebf133"
+
+
 async def test_a_head_stamped_without_its_migration_is_refused(
     case: AsyncEngine,
 ) -> None:
-    """`alembic stamp head` on a database one migration short: the head
-    matches, and the guards the last migration builds aren't there."""
-    await run_alembic(case, command.downgrade, "-1")
+    """`alembic stamp head` on a database short of D-076's migration: the head
+    matches, and the guards that migration builds aren't there."""
+    revision = SCRIPTS.get_revision(D076)
+    assert revision is not None and isinstance(revision.down_revision, str)
+    await run_alembic(case, command.downgrade, revision.down_revision)
     await execute(case, f"update alembic_version set version_num = '{HEAD}'")
 
     run = await run_script(CASE)

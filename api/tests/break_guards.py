@@ -71,6 +71,12 @@ CONCURRENCY = "tests/modules/wallet/test_concurrency.py"
 
 MONEY = "alembic/versions/20260926_60978dcfef93_money.py"
 SHAPE = "alembic/versions/20261003_97ddae55f597_ledger_shape.py"
+# From T-5.2 the direction CHECK, the ref-type CHECK and the per-event index are
+# re-created by this migration, so a weakening of 97ddae55f597's copies never
+# reaches the head: T-5.1's three cases for them weaken this file instead.
+SHAPE_T52 = (
+    "alembic/versions/20261004_a1d7de534ef7_ledger_shape_names_the_new_reasons.py"
+)
 MEN = "alembic/versions/20261003_190d7bebf133_only_men_hold_credits.py"
 SERVICE = "app/modules/wallet/service.py"
 RULES = "app/modules/wallet/rules.py"
@@ -134,7 +140,7 @@ T51: list[Case] = [
         what="D-077 layer 3: the per-event index no longer unique (migration and model)",
         edits=[
             (
-                SHAPE,
+                SHAPE_T52,
                 """        ["user_id", "reason", "ref_type", "ref_id"],
         unique=True,""",
                 """        ["user_id", "reason", "ref_type", "ref_id"],
@@ -149,7 +155,7 @@ T51: list[Case] = [
             ),
         ],
         expect=[
-            "test_one_entry_per_event_except_the_two_reasons_that_repeat",
+            "test_one_entry_per_event_except_the_reasons_that_repeat",
             "test_one_payment_credited_under_two_keys_is_refused",
         ],
     ),
@@ -170,9 +176,9 @@ T51: list[Case] = [
         what="D-077 layer 3: ck_ledger_entries_reason_ref_type made vacuous (ref type unpinned)",
         edits=[
             (
-                SHAPE,
-                """REF_TYPE = "ref_type IS NULL OR (reason, ref_type) IN ({})".format(""",
-                """REF_TYPE = "true OR (reason, ref_type) IN ({})".format(""",
+                SHAPE_T52,
+                """    return "ref_type IS NULL OR (reason, ref_type) IN ({})".format(""",
+                """    return "true OR (reason, ref_type) IN ({})".format(""",
             )
         ],
         expect=["test_each_reason_has_exactly_one_ref_type_in_the_database"],
@@ -283,12 +289,12 @@ T51: list[Case] = [
         what="D-077: ck_ledger_entries_reason_direction made a bare non-zero check",
         edits=[
             (
-                SHAPE,
-                """DIRECTION = (
-    f"(reason IN ({_sql_list(CREDITS)}) AND delta > 0) "
-    f"OR (reason IN ({_sql_list(DEBITS)}) AND delta < 0)"
-)""",
-                '''DIRECTION = "delta <> 0"''',
+                SHAPE_T52,
+                """    return (
+        f"(reason IN ({_sql_list(CREDITS)}) AND delta > 0) "
+        f"OR (reason IN ({_sql_list(debits)}) AND delta < 0)"
+    )""",
+                '''    return "delta <> 0"''',
             )
         ],
         expect=["test_each_reason_has_one_direction_in_the_database"],
@@ -1436,12 +1442,325 @@ LAND: list[tuple[Case, list[str]]] = [
     ),
 ]
 
+# --- T-5.2: prices, charge(), the debit's callers, the two reasons ---------------
+
+PRICING = "app/modules/pricing/service.py"
+PRICING_REPO = "app/modules/pricing/repository.py"
+RETYPE = "alembic/versions/20261004_4a7e20790605_ledger_reasons_for_extend_and_dms.py"
+REOPEN = "alembic/versions/20261004_e0a0c47fa4ff_price_reopen_and_extend_together.py"
+DMS = "alembic/versions/20261004_134555ebf46f_price_private_messages.py"
+PACKS = "alembic/versions/20261004_cc564bfd728e_packs_become_d099s_four.py"
+CALLERS = "tests/modules/pricing/test_debit_callers.py"
+T52_SELECTION = [
+    "tests/modules/pricing",
+    "tests/modules/wallet",
+    "--ignore=tests/modules/wallet/test_concurrency.py",
+    "tests/test_reference_data.py",
+    "tests/test_migrations.py",
+    "tests/test_schema.py",
+]
+NO_GENDER_CHECK = "    if user.gender not in (Gender.MALE, Gender.FEMALE):\n        raise PricingMisuse("
+
+T52: list[Case] = [
+    Case(
+        id="t52-01-a-woman-priced",
+        what="price_for: a woman pays the row's price",
+        edits=[
+            (
+                PRICING,
+                "    return credits if user.gender is Gender.MALE else 0\n",
+                "    return credits\n",
+            )
+        ],
+        expect=[
+            "test_a_woman_pays_nothing_for_any_action",
+            "test_a_woman_is_charged_nothing_and_no_row_is_written",
+        ],
+    ),
+    Case(
+        id="t52-02-a-missing-row-priced-0",
+        what="price_for: a missing row priced 0, not a 500",
+        edits=[
+            (
+                PRICING,
+                '        raise PricingMisuse(f"{action} has no price: never 0 by default (T-5.2)")\n',
+                "        return 0\n",
+            )
+        ],
+        expect=["test_an_action_with_no_row_is_a_500_never_0"],
+    ),
+    Case(
+        id="t52-03-an-inactive-row-priced",
+        what="price_for: an inactive row priced like an active one",
+        edits=[
+            (
+                PRICING,
+                "    if not active:\n        raise AppError(",
+                "    if False:\n        raise AppError(",
+            )
+        ],
+        expect=[
+            "test_an_inactive_action_is_not_allowed_for_anyone",
+            "test_an_inactive_action_charges_nothing",
+        ],
+    ),
+    Case(
+        id="t52-04-no-gender-priced",
+        what="price_for: a user with no gender priced (the check removed)",
+        edits=[
+            (PRICING, NO_GENDER_CHECK, "    if False:\n        raise PricingMisuse(")
+        ],
+        expect=[
+            "test_a_user_with_no_gender_is_never_priced",
+            "test_a_gender_nobody_has_named_is_never_priced",
+        ],
+    ),
+    Case(
+        id="t52-05-no-gender-check-a-blacklist",
+        what="price_for: the gender check made a blacklist, `is None`",
+        edits=[
+            (
+                PRICING,
+                NO_GENDER_CHECK,
+                "    if user.gender is None:\n        raise PricingMisuse(",
+            )
+        ],
+        expect=["test_a_gender_nobody_has_named_is_never_priced"],
+    ),
+    Case(
+        id="t52-06-a-cached-price",
+        what="price_for: the row cached per action, missing a changed row",
+        edits=[
+            (
+                PRICING,
+                "class PricingMisuse(Exception):",
+                "_CACHE: dict[LedgerReason, tuple[int, bool] | None] = {}\n\n\nclass PricingMisuse(Exception):",
+            ),
+            (
+                PRICING,
+                "    row = await repository.price_row(session, action.value)\n",
+                "    if action not in _CACHE:\n        _CACHE[action] = await repository.price_row(session, action.value)\n    row = _CACHE[action]\n",
+            ),
+        ],
+        expect=[
+            "test_the_price_is_read_fresh_every_time",
+            "test_a_man_is_charged_the_price_now",
+        ],
+    ),
+    Case(
+        id="t52-07-charge-debits-0",
+        what="charge: debits whatever the price, 0 included",
+        edits=[(PRICING, "    if price == 0:\n        return None\n", "")],
+        expect=[
+            "test_a_woman_is_charged_nothing_and_no_row_is_written",
+            "test_a_price_of_0_debits_nothing",
+        ],
+    ),
+    Case(
+        id="t52-08-a-priced-action-with-no-reason",
+        what="a data migration prices an action that is no ledger reason",
+        edits=[
+            (
+                REOPEN,
+                'PRICES = {"thread_reopen": 2, "thread_extend": 10}',
+                'PRICES = {"thread_reopen": 2, "thread_extend": 10, "thread_boost": 10}',
+            )
+        ],
+        expect=[
+            "test_every_priced_action_is_a_ledger_reason",
+            "test_the_debit_reasons_are_the_priced_actions_and_gift",
+            "test_prices_are_public_and_exactly_the_active_actions",
+            "test_the_rows_are_exactly_the_tested_actions",
+        ],
+    ),
+    Case(
+        id="t52-09-a-debit-reason-with-no-price",
+        what="dm_message a debit reason with no price row",
+        edits=[
+            (
+                DMS,
+                'PRICES = {"dm_open": 8, "dm_message": 2}',
+                'PRICES = {"dm_open": 8}',
+            )
+        ],
+        expect=[
+            "test_the_debit_reasons_are_the_priced_actions_and_gift",
+            "test_prices_are_public_and_exactly_the_active_actions",
+        ],
+    ),
+    Case(
+        id="t52-10-the-reasons-cant-go-down",
+        what="4a7e20790605's downgrade leaves the two values in the type",
+        edits=[
+            (
+                RETYPE,
+                "    _retype([label for label in _labels() if label not in ADDED])\n",
+                "    pass\n",
+            )
+        ],
+        expect=["test_the_reasons_go_down_and_up_and_keep_what_stood"],
+    ),
+    Case(
+        id="t52-11-the-downgrade-drops-a-reason-in-use",
+        what="4a7e20790605's downgrade no longer refuses a reason the ledger holds",
+        edits=[
+            (
+                RETYPE,
+                "    if used:\n        raise RuntimeError(",
+                "    if False:\n        raise RuntimeError(",
+            )
+        ],
+        expect=["test_the_reasons_refuse_to_go_down_once_the_ledger_holds_one"],
+    ),
+    Case(
+        id="t52-12-the-rebuild-loses-a-check",
+        what="the rebuild re-creates every CHECK on reason but ref_required",
+        edits=[
+            (
+                RETYPE,
+                "    for name, definition in checks:\n",
+                '    for name, definition in [c for c in checks if "ref_required" not in c[0]]:\n',
+            )
+        ],
+        expect=[
+            "test_the_reasons_go_down_and_up_and_keep_what_stood",
+            "test_each_reason_has_exactly_one_ref_type_in_the_database",
+        ],
+    ),
+    Case(
+        id="t52-13-a-data-migration-cant-go-down",
+        what="the packs' downgrade does nothing",
+        edits=[
+            (
+                PACKS,
+                '    """Downgrade schema: D-005\'s ladder."""\n',
+                '    """Downgrade schema: D-005\'s ladder."""\n    return\n',
+            )
+        ],
+        expect=["test_t52_data_downgrades_restore_t114s_values"],
+    ),
+    Case(
+        id="t52-14-extend-once-per-thread-in-the-database",
+        what="the per-event index no longer leaves thread_extend out",
+        edits=[
+            (
+                SHAPE_T52,
+                'REPEATS = (*REPEATS_BEFORE, "thread_extend")',
+                "REPEATS = REPEATS_BEFORE",
+            )
+        ],
+        expect=[
+            "test_one_entry_per_event_except_the_reasons_that_repeat",
+            "test_extend_can_be_bought_again_for_one_thread",
+        ],
+    ),
+    Case(
+        id="t52-15-extend-once-per-thread-in-the-rules",
+        what="RULES: thread_extend no longer repeats (model and service)",
+        edits=[
+            (
+                RULES,
+                "    LedgerReason.THREAD_EXTEND: Rule(DEBIT, RefType.THREAD, caller_names_event=True),",
+                "    LedgerReason.THREAD_EXTEND: Rule(DEBIT, RefType.THREAD),",
+            )
+        ],
+        expect=[
+            "test_one_entry_per_event_except_the_reasons_that_repeat",
+            "test_extend_can_be_bought_again_for_one_thread",
+        ],
+    ),
+    Case(
+        id="t52-16-dm-message-refs-a-thread",
+        what="the database pins dm_message to `thread`, not `message`",
+        edits=[
+            (
+                SHAPE_T52,
+                '    ("dm_message", "message"),',
+                '    ("dm_message", "thread"),',
+            )
+        ],
+        expect=["test_each_reason_has_exactly_one_ref_type_in_the_database"],
+    ),
+    Case(
+        id="t52-17-direction-misses-a-new-reason",
+        what="the direction CHECK leaves dm_message out of the debits",
+        edits=[
+            (
+                SHAPE_T52,
+                'DEBITS = (*DEBITS_BEFORE, "thread_extend", "dm_message")',
+                'DEBITS = (*DEBITS_BEFORE, "thread_extend")',
+            )
+        ],
+        expect=["test_each_reason_has_one_direction_in_the_database"],
+    ),
+    Case(
+        id="t52-18-a-caller-nobody-named",
+        what="app code reaches the debit outside charge()",
+        edits=[
+            (
+                PRICING,
+                "    return await repository.active_prices(session)\n",
+                "    _ = wallet_service.debit\n    return await repository.active_prices(session)\n",
+            )
+        ],
+        expect=["test_only_charge_reaches_the_debit"],
+    ),
+    Case(
+        id="t52-19-the-scan-blind-to-attributes",
+        what="the callers' scan ignores `.debit` attributes",
+        edits=[
+            (
+                CALLERS,
+                '    if isinstance(node, ast.Attribute) and node.attr == "debit":\n        return True\n',
+                "    if False:\n        return True\n",
+            )
+        ],
+        expect=[
+            "test_only_charge_reaches_the_debit",
+            "test_a_caller_nobody_has_named_is_found",
+            "test_the_allowlist_names_a_function_not_a_file",
+        ],
+    ),
+    Case(
+        id="t52-20-the-allowlist-by-file",
+        what="the callers' scan records a file, not the function in it",
+        edits=[
+            (
+                CALLERS,
+                "                (rel, scope)\n",
+                '                (rel, "charge")\n',
+            )
+        ],
+        expect=["test_the_allowlist_names_a_function_not_a_file"],
+    ),
+    Case(
+        id="t52-21-prices-list-an-inactive-action",
+        what="GET /prices lists inactive actions too",
+        edits=[(PRICING_REPO, "        .where(ActionPrice.active.is_(True))\n", "")],
+        expect=["test_an_inactive_action_is_left_out_and_gifts_are_never_in"],
+    ),
+    Case(
+        id="t52-22-price-for-outside-a-transaction",
+        what="price_for reads outside its caller's transaction",
+        edits=[
+            (
+                PRICING,
+                "    if not session.in_transaction():\n        raise PricingMisuse(",
+                "    if False:\n        raise PricingMisuse(",
+            )
+        ],
+        expect=["test_price_for_refuses_outside_a_transaction"],
+    ),
+]
+
+
 CASES: list[tuple[Case, list[str]]] = (
     [(c, T51_SELECTION) for c in T51]
     + [(c, T54_SELECTION) for c in T54]
     + T44
     + T46
     + LAND
+    + [(c, T52_SELECTION) for c in T52]
 )
 
 # The fifty-connection fixture's own message when Postgres refuses a connection.

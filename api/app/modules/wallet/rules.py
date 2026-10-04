@@ -7,13 +7,14 @@ are the seed and `make_user`.
 
 The key is `{user_id}:{reason}:{event}`, built here and never by a caller. The
 event is the ref's id, so a webhook's retry, a concurrent delivery and a manual
-repair all compute the same key. Two reasons legitimately repeat for one ref
-(`admin_grant`, `thread_reopen`), so for them the caller names the event: a
-client's `Idempotency-Key` only ever fills that part.
+repair all compute the same key. Three reasons legitimately repeat for one ref
+(`admin_grant`, `thread_reopen`, `thread_extend`), so for them the caller names
+the event: a client's `Idempotency-Key` only ever fills that part.
 
-The database pins the same directions and ref types (migration 97ddae55f597,
-`ck_ledger_entries_*`), and `tests/modules/wallet/test_guards.py` proves the two
-agree, reason by reason. Change one, change both.
+The database pins the same directions and ref types (migrations 97ddae55f597
+and a1d7de534ef7, `ck_ledger_entries_*`), and
+`tests/modules/wallet/test_guards.py` proves the two agree, reason by reason.
+Change one, change both.
 """
 
 from __future__ import annotations
@@ -79,6 +80,10 @@ RULES: dict[LedgerReason, Rule] = {
     LedgerReason.ALBUM_REQUEST: Rule(DEBIT, RefType.ALBUM_REQUEST),
     LedgerReason.SUPER_LIKE: Rule(DEBIT, RefType.USER),
     LedgerReason.LIKED_YOU_REVEAL: Rule(DEBIT, RefType.USER),
+    # D-251: Extend repeats for one Thread, as often as he likes (D-250); each
+    # private message after the first is charged once, by its own id.
+    LedgerReason.THREAD_EXTEND: Rule(DEBIT, RefType.THREAD, caller_names_event=True),
+    LedgerReason.DM_MESSAGE: Rule(DEBIT, RefType.MESSAGE),
 }
 
 # Nothing writes it until a task gives it a meaning, and its name reads as

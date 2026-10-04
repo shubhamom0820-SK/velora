@@ -133,6 +133,9 @@ class LedgerReason(StrEnum):
     ALBUM_REQUEST = "album_request"
     SUPER_LIKE = "super_like"
     LIKED_YOU_REVEAL = "liked_you_reveal"
+    # D-251, T-5.2: Extend, and each private message after the first.
+    THREAD_EXTEND = "thread_extend"
+    DM_MESSAGE = "dm_message"
 
 
 class PaymentStatus(StrEnum):

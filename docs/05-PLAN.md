@@ -1922,7 +1922,7 @@ committed rows.
 **Not held** (the founder, 4 October 2026). It was held earlier that day until the wallet had a
 screen, behind T-4.4 and T-4.6; that order was the sprint's sequence, not a dependency, since
 prices don't depend on the web photos step, and the hold is lifted.
-- [ ] **Needs:** T-5.1, and the founder's answer to each question below. Claude found all ten on 4
+- [x] **Needs:** T-5.1, and the founder's answer to each question below. Claude found all ten on 4
   October 2026 while writing D-097 to D-100; the founder answered them the same day (D-097's note,
   D-230, D-231, D-250), and moved the parts that touch no file of this task's to the tasks they
   touch. Answered ones keep their numbers, so references to them hold.
@@ -1975,20 +1975,20 @@ prices don't depend on the web photos step, and the hold is lifted.
   9. **Answered: 09-RESEARCH's "about ₹300" was stale,** not a decision, and now says ₹250.
   10. **Four things about how a Thread lives** (D-097), none answered by its five steps. **(b)
       answered (D-250); (a) and (d) moved** to P-150, the 1-hour task D-097 names, with a pointer
-      at T-7.6 (the founder, 4 October 2026): they touch no file of this task's. **(c) partly
-      answered, and its own two questions moved there too** (Claude, the founder to confirm).
+      at T-7.6 (the founder, 4 October 2026): they touch no file of this task's. **(c) answered,
+      in two parts** (D-250, D-253).
       - (a) **Moved, open: does his own message restart the hour?** Step 2 says hers does and is
         silent on his. If his did, he could keep a Thread open alone, free, by writing every 59
         minutes, and would never re-open one.
       - (b) **Answered: when she sends the first message, he pays to answer,** and that is the
         2-Vela re-open, `thread_reopen`: a priced action with a ledger reason of its own.
-      - (c) **Moved, open: can he Extend a Thread that has already expired, and if so do the 10
-        Velas include the 2 to re-open it?** "At any point" doesn't say. **What was answered**
-        (D-250): Extend can be bought more than once for one Thread, 10 Velas for another 24 hours
-        each time, so its reason repeats for one ref. Claude's summary to the founder put (c) as
-        that question, so his "yes" answered it and not (c)'s two as written. Those touch no file
-        of this task's, so they went to P-150 with (a) and (d) (Claude, 4 October 2026, correcting
-        its own summary the same evening).
+      - (c) **Answered: can he Extend a Thread that has already expired, and if so do the 10
+        Velas include the 2 to re-open it?** Yes, and yes (D-253): Extend is 10 at any time, and
+        from expired the 10 both re-opens and extends, never 2 then 10. **And** (D-250) Extend can
+        be bought more than once for one Thread, 10 Velas for another 24 hours each time, so its
+        reason repeats for one ref. Claude's summary to the founder had put (c) as that second
+        question, so the first answer didn't reach (c)'s two as written; Claude moved them to
+        P-150 on 4 October 2026, and they were answered instead on 5 October, never moved.
       - (d) **Moved, open: when Extend's 24 hours end, does the hour start then, or run from her
         last message,** which could expire the Thread the moment Extend ends?
 - **Estimate, 4 October 2026: about 5½ hours of working time** (4½ to 7), Claude's, made before
@@ -1997,8 +1997,17 @@ prices don't depend on the web photos step, and the hold is lifted.
   the ledger's three reason checks, its per-event index and its append-only triggers, and refusing
   once any row uses a new reason, since no row can be deleted. **It stands over the advisor's 2½ to
   3½ hours** (Claude, in a separate chat), which was wrong because it didn't account for the
-  enum's one-way nature (the founder). The measured time is recorded here at `/done`.
-- [ ] **The prices are D-097 to D-099's and D-231's** (the founder, 4 October 2026). Velas, for men;
+  enum's one-way nature (the founder).
+  **Measured: about 1¼ hours of working time,** from the answers arriving (about 22:57, 4 October)
+  to this task's code commit, leaving out about 12 minutes spent waiting for the gifts to be
+  confirmed; the gate and the landing come after it. **Both estimates were high:** Claude's 5½ hours
+  by about four times, the advisor's 2½ to 3½ by about two. The slowest part was the one named:
+  the enum held the task's one real bug (D-251's note), but it cost about twenty minutes, not
+  hours. Claude's estimate priced the work at a person's pace and the gate cycles one after
+  another, when tests and CI ran beside the work. So the line above is half right: the advisor's
+  estimate did leave out the enum, and it was still the nearer number (Claude, correcting its own
+  estimate, 5 October 2026).
+- [x] **The prices are D-097 to D-099's and D-231's** (the founder, 4 October 2026). Velas, for men;
   0 for a woman, for every action:
   - open a Thread 5 · re-open an expired Thread 2, every time · Extend, 24 hours, 10 · first
     private message 8 · each private message after it 2 · view private pictures 1 · unlock a voice
@@ -2008,7 +2017,7 @@ prices don't depend on the web photos step, and the hold is lifted.
   - packs: ₹1,500 → 30 · ₹4,500 → 100 · ₹6,000 → 250 · ₹10,000 → 450, with the 20% first-purchase
     bonus. The ₹4,500 pack is dominated on purpose (D-099): don't "fix" it.
   - re-open (2) and Extend (10) change together or not at all (D-098).
-- [ ] **Written by data migrations of this task's own,** one change each (rule 11), never by editing
+- [x] **Written by data migrations of this task's own,** one change each (rule 11), never by editing
   T-1.14's: `thread_reopen` from 3 to 2, `dm_open` from 5 to 8, `album_request` from 5 to 1; the
   `gifts` rows become D-231's four; `gift_free_daily_limit` gives way to fifteen free sends a week;
   **the packs become D-099's four and `entry-25` is retired** (D-250: this task replaces the packs,
@@ -2019,22 +2028,39 @@ prices don't depend on the web photos step, and the hold is lifted.
   actions plus `gift` grows to match. **Extend can be bought more than once for one Thread**
   (D-250), so it repeats for one ref, as `thread_reopen` does, and D-077's per-event index leaves
   it out.
-- [ ] **Not this task's:** the 1-hour Thread (D-097): `thread_hours` stays 24 until its own task.
+- [x] **Not this task's:** the 1-hour Thread (D-097): `thread_hours` stays 24 until its own task.
   Women's limits (D-098: 30 men and 30 private messages a day) are rate limits for the tasks that
   send messages, not prices. No charging path for women is built, enabled or disabled (D-098).
   Refunds aren't this task's either: there are none for a product (D-230), and a chargeback
   reversal and a duplicate charge stay with T-8.2 and T-8.3.
-- [ ] `pricing.service.price_for(user, action)`:
+- [x] `pricing.service.price_for(user, action)`:
   - women 0; men the `action_prices` value;
   - no gender raises; an inactive row gives `NOT_ALLOWED`; a missing row is a 500; never 0 by
     default;
   - read fresh inside the debit's transaction, with no cache. P-47 puts any cache on the app, and
     P-50 adds one only where something is measured slow.
-- [ ] `pricing.service.charge(...)` reads the price and debits only when it is above 0, since a
+- [x] `pricing.service.charge(...)` reads the price and debits only when it is above 0, since a
   debit of 0 raises. A test allows `wallet.service.debit` to be called only from `charge` and from
   gift sending (T-8.9, priced from `gifts`), so no literal price can reach it.
-- [ ] `GET /prices` (public): list prices for active actions only. Gifts aren't in it (`GET /gifts`).
-- [ ] **Commit:** `feat(pricing): server-side prices [T-5.2]`
+- [x] `GET /prices` (public): list prices for active actions only. Gifts aren't in it (`GET /gifts`).
+- **Broken once each, 4 October 2026,** with the script committed (`uv run python -m
+  tests.break_guards t52- t51-L3 t51-L-direction t54-per-event-index`): T-5.2's 22 cases and the
+  five of T-5.1's and T-5.4's that its migrations took over, **each red in 1 of 1**, every file
+  restored and none differing by SHA-256 after, no bytecode in the tree. Read from each red:
+  - **The gender check made a blacklist** (`is None`) went red on the gender nobody has named
+    only; the no-gender case stayed green, as it must. That case is what tells the allowlist apart.
+  - **The downgrade's refusal removed** went red, but the database still refuses, by its cast of
+    `thread_extend` into the older type: the guard adds the reason, not the only stop.
+  - **The enum's downgrade made a no-op** went red in 28: the next upgrade then refuses ("already
+    has"), stranding the run's database below head, which is what such a migration does.
+  - **The debit's allowlist:** a stray `wallet_service.debit` in pricing's own module went red;
+    the scan made blind to attributes went red on the attribute-shaped callers and on the live
+    allowlist (`charge` vanished), the name-shaped callers staying green as they should; and the
+    allowlist made per-file went red.
+  - **T-5.1's direction, ref-type and per-event cases now weaken a1d7de534ef7,** which re-creates
+    those three: weakened in 97ddae55f597 they would never reach the head. Its `ref_required` case
+    still weakens 97ddae55f597 and still went red, carried across by the enum's rebuild.
+- [x] **Commit:** `feat(pricing): server-side prices [T-5.2]`
 
 ### T-5.3 · Wallet endpoints
 - [ ] **Needs:** T-5.1
@@ -2198,11 +2224,11 @@ prices don't depend on the web photos step, and the hold is lifted.
 
 ### T-7.6 · Expiry and re-open
 - [ ] **Needs:** T-7.4
-- **Questions of how a Thread lives are P-150's,** moved from T-5.2's item 10 on 4 October 2026,
-  and still open: does his own message restart the hour; can he Extend a Thread that has expired,
-  and do the 10 Velas include this task's 2-Vela re-open; and when Extend's 24 hours end, does the
-  hour start then or run from her last message? They decide what this task's re-open charges and
-  when its cron expires a Thread once the 1-hour task lands.
+- **Two questions of how a Thread lives are P-150's,** moved from T-5.2's item 10 on 4 October
+  2026, and still open: does his own message restart the hour, and when Extend's 24 hours end,
+  does the hour start then or run from her last message? They decide when this task's cron expires
+  a Thread once the 1-hour task lands. **Settled beside them (D-253):** Extend on an expired Thread
+  re-opens it too, for 10 in all, never this task's 2 and then 10.
 - [ ] Cron `expire_threads` (every minute, batches of 500, `FOR UPDATE SKIP LOCKED`) → `expired` + event. Cron `warn_expiring` (< 2 h, once) → push + event.
 - [ ] `POST /threads/{id}/reopen` (expired only) → debit 2 (men; D-098), `active`, `expires_at = now + 24h`, reset warning.
 - [ ] Tests using a controllable clock.
@@ -2313,6 +2339,10 @@ prices don't depend on the web photos step, and the hold is lifted.
   same gift to the same person inside `gift_same_recipient_cooldown_h` → `GIFT_COOLDOWN`.
 - [ ] Paid gifts: `wallet.debit(reason="gift", ref_type="gift_send")` **in the same transaction**
   as the `gift_sends` insert. Price read from the `gifts` row, never a literal.
+- [ ] **Name gift sending in the debit's allowlist:** `ALLOWED` in
+  `api/tests/modules/pricing/test_debit_callers.py` (T-5.2). Until it is named, that test fails on
+  any call to `wallet.service.debit` outside `pricing.service.charge`, this task's included. The
+  free sends' setting is `app_config.gift_free_weekly_limit` (15, T-5.2).
 - [ ] Links `thread_id` if an active or knotted thread already exists. Never creates a thread.
 - [ ] Publishes `gift.received` on the socket and a notification (respects prefs).
 - [ ] `GET /me/gifts` (received, paginated, sender card) and `GET /users/{id}/gifts` (counts only,
@@ -3891,22 +3921,18 @@ The number comes from the session's own block, given in its brief, from P-100 up
   filter (4 scenarios), its read-back check (1), `release-gate`'s filter (3); each restored and
   checked by SHA-256.
 - [ ] P-150 · Write the 1-hour task D-097 names, which moves a Thread from 24 hours to 1 and lists
-  every place that says 24 hours. **Needs:** the founder's answers to the questions moved here from
-  T-5.2's item 10 on 4 October 2026, still open: (a) and (d) by the founder, (c) by Claude, the
-  founder to confirm (T-5.2's item 10 says why):
+  every place that says 24 hours. **Needs:** the founder's answers to the two questions moved here
+  from T-5.2's item 10 on 4 October 2026 (the founder), still open:
   - (a) **Does his own message restart the hour?** D-097's step 2 says hers does and is silent on
     his. Worst case if it's guessed: his did, so he keeps a Thread open alone, free, by writing
     every 59 minutes, and never pays a re-open.
-  - (c) **Can he Extend a Thread that has already expired, and if so do the 10 Velas include the 2
-    to re-open it?** Worst case if it's guessed: he's charged 12 Velas where 10 were meant, or
-    gets a re-open free inside Extend where it was meant to cost 2.
   - (d) **When Extend's 24 hours end, does the hour start then, or run from her last message?**
     Worst case if it's guessed: from her last message, so a Thread he paid 10 Velas to extend can
     expire the instant the extension ends.
 
   **Also unowned: no task sells Extend yet.** T-5.2 prices it (`thread_extend`, 10 Velas, as many
-  times as he likes for one Thread, D-250), but no endpoint charges it; this task is its natural
-  home, the founder to confirm. T-7.6 points here. Found in T-5.2; filed from this session's block
+  times as he likes for one Thread, D-250, and at any time: from expired the 10 re-opens it too,
+  D-253), but no endpoint charges it; this task is its natural home, the founder to confirm. T-7.6 points here. Found in T-5.2; filed from this session's block
   (P-150 to P-159).
 - [x] P-141 · Let only `main` deploy to staging. **Before the next session that can push a
   branch.** Worst case: a workflow file edited on any branch runs with staging's secrets, among
@@ -3926,3 +3952,19 @@ The number comes from the session's own block, given in its brief, from P-100 up
   first job that uses the environment: `Branch "ci-staging-policy-probe" is not allowed to deploy
   to staging due to environment protection rules.` `migrate` was rejected and nothing after it
   ran; only the gate job ran, and it holds no environment secret.
+- [ ] P-151 · Name tables and types in catalogue queries by `to_regclass()` or a join, never a
+  `'name'::regclass` or `'name'::regtype` literal, wherever the object can be dropped and made
+  again in one test run. **Before the next task whose tests read the catalogue.** Worst case: a
+  check reads an object that no longer exists and finds nothing. Written as "these, exactly", it
+  fails loudly in some test orders and someone hunts a bug that isn't there (P-84's cost); written
+  as "no row breaks X", it passes having looked at nothing. **Why:** Postgres fixes such a literal
+  to an OID when the statement is prepared, and asyncpg keeps prepared statements per connection,
+  keyed by their text. After `test_migrations_round_trip` (base and back) on a pooled connection,
+  `users` and every other table has a new OID, and a statement that connection prepared before
+  still asks about the old one. **Seen in T-5.2,** not in today's tests: migration 4a7e20790605's
+  first label query read the dropped type's values, none, on a connection that had rebuilt it
+  once, and wrote a type of two values; reproduced, and fixed there with a join by name and
+  `to_regclass()`. **Not seen:** `tests/modules/users/test_dob_gender.py`'s three
+  `'users'::regclass` reads (D-072's check), which would report every listed table as holding no
+  key, a loud false red, if such an order ever happened. Found in T-5.2; filed from this
+  session's block (P-150 to P-159).

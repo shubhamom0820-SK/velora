@@ -68,7 +68,8 @@ async def credit(
     """Add `amount` to a man's balance for `reason`.
 
     `ref` names the row that justifies it; `event` is named only by reasons
-    that repeat (`admin_grant`, `thread_reopen`). The key is built here.
+    that repeat (`admin_grant`, `thread_reopen`, `thread_extend`). The key is
+    built here.
     """
     return await _apply(session, user_id, amount, reason, Direction.CREDIT, ref, event)
 

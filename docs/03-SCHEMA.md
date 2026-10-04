@@ -41,7 +41,8 @@ kudos_t           ('great_conversation','genuinely_funny','easy_to_talk_to','rea
 ledger_reason_t   ('purchase','purchase_bonus','referral_reward','admin_grant','refund','gift',
                    'refund_banned_partner','refund_album_declined',
                    'thread_open','dm_open','thread_reopen','voice_unlock','album_request',
-                   'super_like','liked_you_reveal')
+                   'super_like','liked_you_reveal',
+                   'thread_extend','dm_message')   -- the last two T-5.2's (D-251)
 payment_status_t  ('created','paid','failed','refunded')
 fraud_band_t      ('normal','monitor','shadow','freeze')
 ban_kind_t        ('phone_hash','device_id')
@@ -292,8 +293,10 @@ Unique `(from_id, to_id)`. Check `from_id <> to_id` — self-kudos would manufac
 
 Seed (D-016): `smile` 0 · `wave` 0 · `rose` 2 · `coffee` 2 · `chocolate` 4 · `teddy` 4.
 Labels are the ids capitalised; assets are emoji (😊 👋 🌹 ☕ 🍫 🧸).
-**Decided since** (D-231): four gifts at 5, 10, 15 and 20 replace these six, and fifteen free
-sends a week replace `gift_free_daily_limit`; T-5.2's data migrations apply them.
+**Since T-5.2** (D-231, D-252), by a data migration of its own: four active gifts, `coffee` 5 ·
+`rose` 10 · `chocolate` 15 · `teddy` 20, sorted 1–4 and repriced in place (`gift_sends` copies
+the price at send time). `smile` and `wave` are retired, `active = false`, never deleted (rule 12).
+Fifteen free sends a week replace `gift_free_daily_limit` (`app_config`).
 
 ### gift_sends
 | column | type | notes |
@@ -388,6 +391,8 @@ wipe the money record. Both raise `restrict_violation` (23001) (T-1.12).
 | `gift` | debit | `gift_send` | the send's id |
 | `thread_open`, `dm_open` | debit | `thread` | the thread's id |
 | `thread_reopen` | debit | `thread` | named by the caller |
+| `thread_extend` | debit | `thread` | named by the caller: Extend repeats for one Thread (D-250, D-251) |
+| `dm_message` | debit | `message` | the message's id: each private message after the first, once (D-251) |
 | `voice_unlock` | debit | `message` | the message's id |
 | `album_request` | debit | `album_request` | the request's id |
 | `super_like`, `liked_you_reveal` | debit | `user` | the other person: once per pair, ever, as a swipe is (the founder, 3 October 2026) |
@@ -398,7 +403,8 @@ wipe the money record. Both raise `restrict_violation` (23001) (T-1.12).
 - `ck_ledger_entries_reason_ref_type`: the pinned `ref_type` or none, so a credit naming a payment
   can only be `purchase` or `purchase_bonus`.
 - `uq_ledger_entries_one_per_event`: partial unique index on `(user_id, reason, ref_type, ref_id)`
-  where the reason is not `admin_grant` or `thread_reopen`, the two that repeat for one ref: one
+  where the reason is not `admin_grant`, `thread_reopen` or `thread_extend`, the three that repeat
+  for one ref (the third since T-5.2's a1d7de534ef7): one
   entry per event, even if a key is built wrong.
 - `idempotency_key` is `{user_id}:{reason}:{event}`, built by the wallet module, never by a caller;
   a client's `Idempotency-Key` only ever fills the event part.
@@ -415,9 +421,12 @@ database agrees with it, reason by reason. Change one, change both.
 Seed (D-004): the keys are the seven debit reasons of `ledger_reason_t` — `thread_open` 5 ·
 `dm_open` 5 · `thread_reopen` 3 · `voice_unlock` 5 · `album_request` 5 · `super_like` 5 ·
 `liked_you_reveal` 20. The free knot actions have no row: permanence is never bought (D-003).
-**Decided since, applied by T-5.2's data migrations** (D-098, D-231): `thread_reopen` 2, `dm_open`
-8 (the first private message), `album_request` 1 (viewing private pictures), and new rows for
-Extend (10) and each private message after the first (2).
+**Since T-5.2** (D-098, D-231, D-250), by data migrations of its own: `thread_reopen` 2 and
+`thread_extend` 10 (Extend), in one migration since they move together (D-098); `dm_open` 8 (the
+first private message) and `dm_message` 2 (each one after it); `album_request` 1 (viewing private
+pictures). `super_like` stays 5, by default: it isn't swiping (D-250). Read only through
+`pricing.service.price_for()` (T-5.2): fresh, in the debit's transaction, 0 for a woman, a missing
+row a 500 and an inactive one `NOT_ALLOWED`.
 
 ### credit_packs
 `id text pk, credits int not null, price_paise int not null, bonus_first_pct smallint not null default 20,
@@ -426,8 +435,11 @@ active boolean not null default true, sort smallint not null default 0, variant 
 `bonus_first_pct between 0 and 100`. The values themselves stay free to tune (D-005).
 Seed (D-005): `pack-25` 25/₹1,500 · `pack-50` 50/₹2,500 · `pack-75` 75/₹3,375 · `pack-100`
 100/₹4,000 (variant A, sort 1–4); `entry-25` 25/₹999 (variant B, the beta price test, T-10.4).
-**Decided since** (D-099, D-231): ₹1,500 → 30 · ₹4,500 → 100 · ₹6,000 → 250 · ₹10,000 → 450,
-with the 20% bonus kept; T-5.2's data migrations apply them, and retire `entry-25` (D-250).
+**Since T-5.2** (D-099, D-231, D-250), by data migrations of its own: variant A's active packs are
+`pack-30` 30/₹1,500 · `pack-100` 100/₹4,500 (repriced in place) · `pack-250` 250/₹6,000 ·
+`pack-450` 450/₹10,000, sort 1–4, with the 20% bonus kept. `pack-25`, `pack-50`, `pack-75` and
+`entry-25` are retired, `active = false`, never deleted (`payments` points at packs): `entry-25`
+was ₹40 a Vela, below the ladder's ₹50 (D-250), so variant B has no active pack (T-8.1).
 
 ### payments
 | column | type | notes |
@@ -496,7 +508,8 @@ trace is exactly the person with admin access (T-1.13).
 ### app_config  (key/value, cached 60 s)
 `key text pk, value jsonb not null, updated_at`. Seeds: `swipe_daily_limit_men=50`,
 `discovery_radius_km=25`, `thread_hours=24`, `mask_first_n_messages=20`, `kudos_min_messages=6`,
-`gift_free_daily_limit=3` (fifteen free sends a week replace it, D-231, T-5.2),
+`gift_free_daily_limit=3` (replaced by T-5.2's data migration with `gift_free_weekly_limit=15`,
+fifteen free sends a week, D-231),
 `gift_same_recipient_cooldown_h=24`; and, by its own data migration
 (T-3.2), `otp_sms_daily_cap=500`: the most Path B sign-in codes sent in one IST day across every
 number, ₹100 a day at D-035's unconfirmed ₹0.20 an SMS (D-066).
