@@ -16,7 +16,10 @@ seed's own (`SEED_EVENT`), so a second run finds the entry and changes nothing.
 And everyone past the photos step gets an approved public photo at place 0
 (T-4.4) if no live one holds that place, someone from before T-4.4 included:
 the prototype's gradient, re-encoded like any upload and stored through
-`StorageProvider`, so a second run finds it and adds nothing.
+`StorageProvider`, so a second run finds it and adds nothing. Likewise everyone
+marked verified gets an approved verification with a placeholder selfie in the
+private bucket (T-4.5) if they have no approved verification yet: never
+compared with anything, and its record says so (`{"decided_by": "seed"}`).
 """
 
 from __future__ import annotations
@@ -67,6 +70,8 @@ from app.modules.profiles.models import (
 from app.modules.swipes.models import Swipe
 from app.modules.users import service as users_service
 from app.modules.users.models import User
+from app.modules.verification import rules as verification_rules
+from app.modules.verification.models import Verification
 from app.modules.wallet import service as wallet_service
 from app.modules.wallet.service import WalletMisuse
 from seed.data import PEOPLE, SWIPES, Person, SeedSwipe
@@ -326,6 +331,7 @@ class SeedReport:
     credited: list[str] = field(default_factory=list)
     already_credited: list[str] = field(default_factory=list)
     photos_added: list[str] = field(default_factory=list)
+    verifications_added: list[str] = field(default_factory=list)
 
 
 async def write_seed(
@@ -466,6 +472,11 @@ async def write_seed(
             await _photo(
                 session, settings, storage, person, user_ids[person.key], report
             )
+    for person in people:
+        if person.verified and person.gradient is not None:
+            await _verification(
+                session, settings, storage, person, user_ids[person.key], report
+            )
     return report
 
 
@@ -512,6 +523,57 @@ async def _photo(
     )
     await session.flush()
     report.photos_added.append(person.key)
+
+
+async def _verification(
+    session: AsyncSession,
+    settings: Settings,
+    storage: StorageProvider,
+    person: Person,
+    user_id: UUID,
+    report: SeedReport,
+) -> None:
+    """An approved verification and its selfie (T-4.5), unless one is there:
+    the profile's gradient turned round, in the private bucket only, where
+    every selfie lives. Never compared with anything, and recorded as the
+    seed's, not as a match (D-263)."""
+    approved = await session.scalar(
+        select(Verification.id).where(
+            Verification.user_id == user_id,
+            Verification.status == ReviewStatus.APPROVED,
+        )
+    )
+    if approved is not None:
+        return
+    assert person.gradient is not None
+    c1, c2 = person.gradient
+    clean = placeholder(c2, c1)
+    selfie_id = uuid4()
+    key = raw_key(user_id, selfie_id)
+    await storage.put_bytes(settings.R2_BUCKET_PRIVATE, key, clean.data, "image/jpeg")
+    session.add(
+        Photo(
+            id=selfie_id,
+            user_id=user_id,
+            kind=PhotoKind.SELFIE,
+            raw_key=key,
+            status=ReviewStatus.APPROVED,
+            moderation={"decided_by": "seed"},
+            width=clean.width,
+            height=clean.height,
+        )
+    )
+    await session.flush()
+    session.add(
+        Verification(
+            user_id=user_id,
+            challenge=verification_rules.NO_CHALLENGE,
+            selfie_photo_id=selfie_id,
+            status=ReviewStatus.APPROVED,
+        )
+    )
+    await session.flush()
+    report.verifications_added.append(person.key)
 
 
 async def _grant(
@@ -581,11 +643,16 @@ def summary(report: SeedReport) -> str:
         lines.append(
             f"  Placeholder photos added for {len(report.photos_added)} people."
         )
+    if report.verifications_added:
+        lines.append(
+            "  Placeholder selfies, approved, added for "
+            f"{len(report.verifications_added)} people."
+        )
     if report.existing:
         lines.append(
             "  Anyone already there was left as they are, even if seed/data.py "
             "changed since, except that seeded credits are granted once, and a "
-            "missing placeholder photo added once"
+            "missing placeholder photo or selfie added once"
             + (
                 f" ({', '.join(report.already_credited)} had them already)."
                 if report.already_credited

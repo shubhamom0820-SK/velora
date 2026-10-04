@@ -428,6 +428,57 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/verification/start": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Start */
+        post: operations["start_v1_verification_start_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/verification/{verification_id}/submit": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Submit */
+        post: operations["submit_v1_verification__verification_id__submit_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/verification/latest": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Latest */
+        get: operations["latest_v1_verification_latest_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/auth/otp/send": {
         parameters: {
             query?: never;
@@ -768,6 +819,14 @@ export interface components {
             access_token: string;
             user: components["schemas"]["Me"];
         };
+        /** SubmitSelfie */
+        SubmitSelfie: {
+            /**
+             * Photo Id
+             * Format: uuid
+             */
+            photo_id: string;
+        };
         /** UploadUrl */
         UploadUrl: {
             /**
@@ -819,6 +878,26 @@ export interface components {
             input?: unknown;
             /** Context */
             ctx?: Record<string, never>;
+        };
+        /**
+         * Verification
+         * @description A verification as its owner sees it. Never a number, a link or the
+         *     selfie itself: how closely the faces matched stays on the server, so the
+         *     answer can't be used to tune an impostor's next try (D-263).
+         */
+        Verification: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            status: components["schemas"]["ReviewStatus"];
+            /** Submitted */
+            submitted: boolean;
+            /** Reject Reason */
+            reject_reason: string | null;
+            /** Attempts Left */
+            attempts_left: number;
         };
         /** WaitlistJoin */
         WaitlistJoin: {
@@ -1526,6 +1605,81 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["Prices"];
+                };
+            };
+        };
+    };
+    start_v1_verification_start_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Verification"];
+                };
+            };
+        };
+    };
+    submit_v1_verification__verification_id__submit_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                verification_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SubmitSelfie"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Verification"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    latest_v1_verification_latest_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Verification"];
                 };
             };
         };

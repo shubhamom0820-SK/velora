@@ -3,15 +3,22 @@
 It runs the jobs the API queues (02-ARCHITECTURE §7), from the same image and
 the same `Settings` as the API, as the same least-privilege database role. Its
 context holds what the jobs need: `settings`, `sessionmaker`, `storage`,
-`moderation` and `queue` (for jobs that queue a later try of themselves).
+`moderation`, `facematch` and `queue` (for jobs that queue a later try of
+themselves).
 
 - **It polls every `WORKER_POLL_DELAY_S`, 10 seconds** (D-091): on Upstash's
   Free plan that is 260,640 commands a month idle; ARQ's default 0.5 seconds
   would be over five million. The health key is written once an hour, the sum
   D-091 counted; abort and cron are off.
+- **A wake runs `verify_selfie` at once** (D-261): a listener on a Redis
+  channel of its own (`app/workers/wake.py`), started with the worker, so a
+  woman's selfie is decided in seconds, not at the next look at the queue. The
+  queued job stays the path that is sure to run.
 - **It refuses to start** without what its jobs need: Sightengine's two keys
   where `MODERATION_PROVIDER` is `sightengine` (the API never moderates, so it
-  needs neither). `Settings` has already refused anything else.
+  needs neither), and both face models, exactly D-088's, where
+  `FACEMATCH_PROVIDER` is `sface`. `Settings` has already refused anything
+  else.
 - **Logs keep rule 15.** ARQ logs each job's arguments as it starts it, and
   `delete_files`' arguments are storage keys: the worker logs the job's name and
   id instead. Its engine keeps query values out of errors (`hide_parameters`).
@@ -19,29 +26,40 @@ context holds what the jobs need: `settings`, `sessionmaker`, `storage`,
 
 from __future__ import annotations
 
+import asyncio
+import contextlib
 import logging
 import sys
 from collections.abc import MutableMapping, Sequence
 from typing import Any, Final
+from uuid import UUID
 
 import structlog
 from arq import func
 from arq.connections import RedisSettings
 from arq.worker import Function, run_worker
 
+from app.core import facemodels
 from app.core.config import Settings, get_settings
 from app.core.db import build_engine, build_sessionmaker
 from app.core.logging import configure_logging
 from app.core.providers import Providers, build_providers
-from app.core.queue import DELETE_FILES, MODERATE_PHOTO, ArqQueue
+from app.core.queue import DELETE_FILES, MODERATE_PHOTO, VERIFY_SELFIE, ArqQueue
+from app.workers.tasks import verify_selfie as verify_selfie_job
 from app.workers.tasks.delete_files import delete_files
 from app.workers.tasks.moderate_photo import MODERATE_TRIES, moderate_photo
+from app.workers.wake import WakeListener, connect_to
 
 log = structlog.get_logger(__name__)
 
 JOBS: Final[Sequence[Function]] = (
     func(moderate_photo, name=MODERATE_PHOTO, max_tries=MODERATE_TRIES),
     func(delete_files, name=DELETE_FILES),
+    func(
+        verify_selfie_job.verify_selfie,
+        name=VERIFY_SELFIE,
+        max_tries=verify_selfie_job.VERIFY_TRIES,
+    ),
 )
 # Jobs at once. Decoding is synchronous on the event loop, so only one image is
 # ever decoded at a time, whatever this says (D-092, D-088's 1 GB); the others
@@ -58,6 +76,13 @@ class WorkerMisconfigured(Exception):
 
 
 def refuse_unless_ready(settings: Settings) -> None:
+    if settings.FACEMATCH_PROVIDER == "sface":
+        wrong = facemodels.problems()
+        if wrong:
+            raise WorkerMisconfigured(
+                f"FACEMATCH_PROVIDER=sface needs both face models: {'; '.join(wrong)}. "
+                "The image fetches them; locally, `make models` (D-088)."
+            )
     if settings.MODERATION_PROVIDER == "sightengine":
         missing = [
             name
@@ -93,13 +118,17 @@ async def open_resources(
         queue=ArqQueue(ctx["redis"]),
         storage=providers.storage,
         moderation=providers.moderation,
+        facematch=providers.facematch,
     )
+    # The models are read now, once, not at the first selfie.
+    providers.facematch.load()
 
 
 async def startup(ctx: MutableMapping[str, Any]) -> None:
     settings = get_settings()
     refuse_unless_ready(settings)
     await open_resources(ctx, settings, build_providers(settings))
+    ctx["wake"] = asyncio.create_task(listen_for_wakes(ctx, settings).run())
     log.info(
         "worker.started",
         jobs=[job.name for job in JOBS],
@@ -108,8 +137,19 @@ async def startup(ctx: MutableMapping[str, Any]) -> None:
     )
 
 
+def listen_for_wakes(ctx: MutableMapping[str, Any], settings: Settings) -> WakeListener:
+    async def handle(verification_id: UUID) -> object:
+        return await verify_selfie_job.run(ctx, verification_id, via="wake")
+
+    return WakeListener(connect_to(settings.REDIS_URL), handle)
+
+
 async def shutdown(ctx: MutableMapping[str, Any]) -> None:
-    """Release what `open_resources` opened. Safe if it never ran."""
+    """Release what `startup` opened. Safe if it never ran."""
+    if "wake" in ctx:
+        ctx["wake"].cancel()
+        with contextlib.suppress(asyncio.CancelledError):
+            await ctx["wake"]
     if "engine" in ctx:
         await ctx["engine"].dispose()
     for name in ("storage", "moderation"):

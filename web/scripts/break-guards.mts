@@ -37,6 +37,7 @@ const STEP_TEST = "src/components/onboarding/PhotosStep.test.tsx";
 const UPLOAD_TEST = "src/lib/upload.test.ts";
 const HOOKS_TEST = "src/lib/queries/photos.test.tsx";
 const LINT_TEST = "src/lib/no-fetch-rule.test.ts";
+const CLAIMS_TEST = "src/i18n/claims.test.ts";
 
 const HEADERS = "src/lib/security-headers.ts";
 const CONNECT = "connect: ` ${storage.privateBucket}`,";
@@ -261,6 +262,40 @@ export const CASES: BreakCase[] = [
     new: "  if (longest > 0) return { width, height };",
     run: ["src/lib/resize-image.test.ts"],
     expect: ["draws a large photo at 2000 px"],
+  },
+
+  // --- T-4.5: the words claim no more than a selfie compared (D-262) ---
+  {
+    id: "t45-copy-01-the-badge-says-verified",
+    file: "src/i18n/en.ts",
+    old: '    selfieMatched: "Selfie matches photos",',
+    new: '    selfieMatched: "Verified",',
+    run: [CLAIMS_TEST],
+    expect: ["says none of the claims anywhere but the two named keys"],
+  },
+  {
+    id: "t45-copy-02-the-landing-page-says-verification",
+    file: "src/i18n/en.ts",
+    old: '        body: "Selfies compared with profile photos, and every photo checked.",',
+    new: '        body: "Selfie verification, and every photo checked.",',
+    run: [CLAIMS_TEST],
+    expect: ["says none of the claims anywhere but the two named keys"],
+  },
+  {
+    id: "t45-copy-03-the-team-may-look-softened",
+    file: "src/i18n/en.ts",
+    old: "Other people on {app} never see it; our team may look at it to check a comparison.",
+    new: "Other people on {app} never see it.",
+    run: [CLAIMS_TEST],
+    expect: ["keeps the sentence that says the team may look"],
+  },
+  {
+    id: "t45-badge-01-a-shield-again",
+    file: "src/components/ui/Avatar.tsx",
+    old: 'import { ScanFace } from "lucide-react";',
+    new: 'import { Shield as ScanFace } from "lucide-react";',
+    run: ["src/components/ui/Avatar.test.tsx"],
+    expect: ["marks a matched selfie with a face, never a shield"],
   },
 ];
 

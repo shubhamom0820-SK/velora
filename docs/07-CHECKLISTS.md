@@ -77,6 +77,7 @@
       caps SMS: Firebase's fixed 3,000 a day is inherited, and only on plain Firebase
       Authentication.
 - [ ] Legal pages reviewed by the founder (P-0.7), every legal fact filled in (D-053), Grievance Officer published
+- [ ] **No published word claims verification** — in the app, the site, the stores, ads or posts: nothing says a person is verified, real, live or who they say they are, unless P-160 has measured the face-match threshold and the founder has decided what may be said (D-260, D-262). `en.ts` is held by `web/src/i18n/claims.test.ts`; words outside the repo are this line's to check
 - [ ] Sign-in works on 3 networks (Jio, Airtel, Vi) on the live provider; if using Path B, DLT template approved
 - [ ] Firebase App Check rejects a request from an unauthorised domain
 - [ ] Razorpay live keys; webhook URL set to production; one real purchase + refund done

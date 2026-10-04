@@ -35,6 +35,9 @@ yarn-error.log*
 /web/test-results/
 /web/blob-report/
 
+# --- The face models (D-088): fetched by `make models`, never committed ---
+/api/models/
+
 # --- Environment (real values never committed) ---
 .env
 .env.*

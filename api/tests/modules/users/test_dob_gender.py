@@ -32,6 +32,7 @@ from app.modules.profiles.models import Profile, ProfileIntent, ProfileInterest
 from app.modules.users import repository as users_repository
 from app.modules.users import service as users_service
 from app.modules.users.models import User
+from app.modules.verification.models import Verification
 from app.modules.wallet.models import Wallet
 from app.workers.tasks import delete_files as delete_files_job
 from tests.conftest import CapturedLogs, MakeUser, make_test_settings
@@ -974,6 +975,39 @@ async def test_a_refusal_whose_deletion_cant_be_queued_fails_whole(
     assert await _count(db, User, id=minor_id) == 1
     assert await _count(db, Photo, user_id=minor_id) == 2
     assert await _count(db, BannedIdentity) == 0
+
+
+@pytest.mark.critical
+async def test_a_refusals_selfie_and_its_verification_go_with_it(
+    db: AsyncSession,
+    client: AsyncClient,
+    new_account: NewAccount,
+    fake_providers: FakeProviders,
+    fake_queue: FakeQueue,
+    clock: ModuleType,
+) -> None:
+    """D-078, as T-4.5 inherits it: a selfie is a photo, so its key is read
+    before the rows go and its file queued for deletion with the rest, and its
+    verification goes with the user. (D-068 keeps a selfie from existing at
+    the dob step; this is the defence behind that rule.)"""
+    clock.freeze(NOON_IST)
+    minor, token = await new_account()
+    minor_id = minor.id
+    selfie_id = uuid.uuid4()
+    raw = f"raw/{minor_id}/{selfie_id}"
+    db.add(Photo(id=selfie_id, user_id=minor_id, kind=PhotoKind.SELFIE, raw_key=raw))
+    await db.flush()
+    db.add(Verification(user_id=minor_id, challenge="none", selfie_photo_id=selfie_id))
+    await db.flush()
+    await fake_providers.storage.put_bytes("velora-private", raw, b"x", "image/jpeg")
+
+    response = await _post_dob(client, token, "2010-01-01")
+
+    assert _error(response)["code"] == "UNDERAGE"
+    assert await _count(db, Verification, user_id=minor_id) == 0
+    assert await _count(db, Photo, user_id=minor_id) == 0
+    [job] = fake_queue.named(DELETE_FILES)
+    assert job.kwargs["objects"] == [["velora-private", raw]]
 
 
 async def test_a_refusal_with_no_files_queues_nothing(

@@ -1,0 +1,536 @@
+"""Selfie verification (T-4.5): a selfie compared with the person's approved
+profile photos, on our own worker (D-088), and nothing claimed beyond that.
+
+The API's half: `start` opens a verification, at D-068's `selfie` step or after;
+the selfie is uploaded as a photo of kind `selfie` (T-4.2); `submit` attaches
+it and queues `verify_selfie`, then wakes the worker (D-261) so the person
+isn't left waiting on its 10-second look at the queue; `latest` says how the
+newest one went.
+
+The worker's half: `verify`, run by the `verify_selfie` job and by a wake. It
+re-encodes the selfie (D-092) and writes it back over itself, compares it with
+the public copies of the approved public photos (the bytes moderation scored,
+never an upload that could have been replaced since), and records the decision
+with the user's row locked, once, however many runs reach it. What the
+numbers mean is `rules`'; the numbers themselves go in the selfie's
+`moderation` record (D-263), and the owner is told only an outcome and a
+reason from a list.
+"""
+
+from __future__ import annotations
+
+import asyncio
+import math
+from collections.abc import Awaitable, Callable
+from contextlib import AbstractAsyncContextManager
+from dataclasses import dataclass
+from datetime import datetime, timedelta
+from typing import Any, Final
+from uuid import UUID
+
+import structlog
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from app.core import clock, images
+from app.core.config import Settings
+from app.core.enums import OnboardingStep, PhotoKind, ReviewStatus
+from app.core.errors import AppError
+from app.core.images import SNIFF_BYTES, sniff
+from app.core.providers.facematch import FaceMatch, FaceMatchProvider
+from app.core.providers.storage import ObjectNotFound, StorageProvider
+from app.core.queue import VERIFY_SELFIE, Queue
+from app.modules.photos import repository as photos_repository
+from app.modules.photos.models import Photo
+from app.modules.photos.service import MAX_UPLOAD_BYTES
+from app.modules.users import service as users_service
+from app.modules.users.models import User
+from app.modules.verification import repository, rules
+from app.modules.verification.models import Verification
+from app.modules.verification.schemas import Verification as VerificationOut
+
+log = structlog.get_logger(__name__)
+
+
+def _not_found() -> AppError:
+    return AppError("NOT_FOUND", "Not found.", status=404)
+
+
+# --- The API's half -----------------------------------------------------------------
+
+
+async def start(session: AsyncSession, user: User) -> VerificationOut:
+    """A verification waiting for its selfie: the one already open, if there
+    is one, else a new one. Not while one is being compared, not once the
+    selfie has matched, and not past the day's attempts."""
+    async with session.begin():
+        user = await users_service.locked_user(session, user.id)
+        users_service.at_step(user, OnboardingStep.SELFIE)
+        if user.is_verified:
+            raise AppError("NOT_ALLOWED", "Your selfie already matches your photos.")
+        waiting = await repository.pending(session, user.id)
+        if any(v.selfie_photo_id is not None for v in waiting):
+            raise AppError("NOT_ALLOWED", "Your selfie is being compared already.")
+        if waiting:
+            return await _out(session, waiting[0])
+        await _refuse_past_attempts(session, user.id)
+        verification = Verification(user_id=user.id, challenge=rules.NO_CHALLENGE)
+        repository.add(session, verification)
+        await session.flush()
+        return await _out(session, verification)
+
+
+async def submit(
+    session: AsyncSession,
+    user: User,
+    verification_id: UUID,
+    photo_id: UUID,
+    *,
+    storage: StorageProvider,
+    queue: Queue,
+    settings: Settings,
+) -> VerificationOut:
+    """Attach an uploaded selfie and queue its comparison; then wake the worker,
+    after the commit, so it finds what it was woken for. Saying it twice with
+    the same selfie is once."""
+    async with session.begin():
+        user = await users_service.locked_user(session, user.id)
+        users_service.at_step(user, OnboardingStep.SELFIE)
+        verification = await repository.for_update(session, user.id, verification_id)
+        if verification is None:
+            raise _not_found()
+        if verification.selfie_photo_id is not None:
+            if verification.selfie_photo_id == photo_id:
+                return await _out(session, verification)
+            raise AppError("NOT_ALLOWED", "This verification has its selfie already.")
+        photo = await photos_repository.photo_for_update(session, user.id, photo_id)
+        if photo is None or photo.kind is not PhotoKind.SELFIE:
+            raise _not_found()
+        if photo.status is not ReviewStatus.PENDING:
+            raise AppError("NOT_ALLOWED", "Take a new selfie and send that one.")
+        if await repository.selfies_submitted(session, [photo.id]):
+            raise AppError("NOT_ALLOWED", "Take a new selfie and send that one.")
+        await _refuse_past_attempts(session, user.id)
+        try:
+            await storage.head(settings.R2_BUCKET_PRIVATE, photo.raw_key)
+        except ObjectNotFound:
+            raise AppError(
+                "NOT_ALLOWED", "Upload the selfie before sending it."
+            ) from None
+        verification.selfie_photo_id = photo.id
+        await queue.enqueue(
+            VERIFY_SELFIE,
+            job_id=f"{VERIFY_SELFIE}:{verification.id}",
+            verification_id=str(verification.id),
+        )
+        out = await _out(session, verification)
+    await queue.wake(VERIFY_SELFIE, str(verification.id))
+    return out
+
+
+async def latest(session: AsyncSession, user: User) -> VerificationOut:
+    async with session.begin():
+        verification = await repository.latest(session, user.id)
+        if verification is None:
+            raise _not_found()
+        return await _out(session, verification)
+
+
+async def _attempts(session: AsyncSession, user_id: UUID) -> list[datetime]:
+    since = clock.now() - rules.ATTEMPT_WINDOW
+    return await repository.submitted_since(session, user_id, since)
+
+
+async def _refuse_past_attempts(session: AsyncSession, user_id: UUID) -> None:
+    counted = await _attempts(session, user_id)
+    if len(counted) < rules.ATTEMPTS:
+        return
+    # A place frees when the oldest of the last five leaves the window.
+    frees_at = counted[-rules.ATTEMPTS] + rules.ATTEMPT_WINDOW
+    wait = max(1, math.ceil((frees_at - clock.now()).total_seconds()))
+    raise AppError(
+        "RATE_LIMITED",
+        f"You can send {rules.ATTEMPTS} selfies a day. Try again later.",
+        status=429,
+        details={"retry_after_s": wait},
+    )
+
+
+async def _out(session: AsyncSession, verification: Verification) -> VerificationOut:
+    reason = None
+    if (
+        verification.status is ReviewStatus.REJECTED
+        and verification.selfie_photo_id is not None
+    ):
+        selfie = await photos_repository.photo_by_id(
+            session, verification.selfie_photo_id
+        )
+        reason = rules.owner_reason(selfie.reject_reason if selfie else None)
+    attempts = await _attempts(session, verification.user_id)
+    return VerificationOut(
+        id=verification.id,
+        status=verification.status,
+        submitted=verification.selfie_photo_id is not None,
+        reject_reason=reason,
+        attempts_left=max(0, rules.ATTEMPTS - len(attempts)),
+    )
+
+
+# --- The worker's half ----------------------------------------------------------------
+
+Sessions = Callable[[], AbstractAsyncContextManager[AsyncSession]]
+
+# How long a job waits before its next try, by what it waits for.
+NOT_SUBMITTED_YET: Final = timedelta(seconds=5)
+PHOTOS_WAITING: Final = timedelta(seconds=20)
+STORAGE_FAILED: Final = timedelta(seconds=10)
+
+
+class TryAgain(Exception):
+    """Not decidable yet. The `verify_selfie` job tries again after `defer`;
+    its last try records `final` (if any) rather than leave the person stuck
+    waiting. A wake leaves it to the job."""
+
+    def __init__(
+        self,
+        event: str,
+        what: str,
+        *,
+        defer: timedelta,
+        final: rules.Reason | None,
+    ) -> None:
+        super().__init__(what)
+        self.event = event
+        self.defer = defer
+        self.final = final
+
+
+@dataclass(frozen=True)
+class _Compared:
+    match: FaceMatch | None
+    references: tuple[Photo, ...]
+    width: int | None = None
+    height: int | None = None
+
+
+async def verify(
+    sessions: Sessions,
+    verification_id: UUID,
+    *,
+    storage: StorageProvider,
+    facematch: FaceMatchProvider,
+    settings: Settings,
+    via: str,
+) -> str:
+    """Compare one submitted selfie and decide, once: what happened, in words.
+    `via` is `wake` or `queue`, recorded with the decision."""
+    async with sessions() as session, session.begin():
+        verification = await repository.by_id(session, verification_id)
+        selfie: Photo | None = None
+        references: list[Photo] = []
+        waiting = 0
+        if verification is not None and verification.selfie_photo_id is not None:
+            selfie = await photos_repository.photo_by_id(
+                session, verification.selfie_photo_id
+            )
+            references = await repository.approved_public_photos(
+                session, verification.user_id
+            )
+            waiting = await repository.public_photos_waiting(
+                session, verification.user_id
+            )
+    if verification is None:
+        return "no such verification: its user was refused, and it went with them"
+    if verification.status is not ReviewStatus.PENDING:
+        return f"already {verification.status.value}: nothing to do"
+    if selfie is None:
+        # Queued before its submit committed, or never committed at all.
+        raise TryAgain(
+            "verification.not_submitted",
+            "no selfie submitted yet",
+            defer=NOT_SUBMITTED_YET,
+            final=None,
+        )
+    if not references and waiting:
+        raise TryAgain(
+            "verification.photos_waiting",
+            "the profile's photos are still being checked",
+            defer=PHOTOS_WAITING,
+            final=rules.NO_PHOTOS,
+        )
+    done = Recorder(sessions, verification, selfie, via, storage, settings)
+    if not references:
+        return await done(rules.NO_PHOTOS, _Compared(None, ()))
+
+    private = settings.R2_BUCKET_PRIVATE
+    try:
+        data = await storage.read_prefix(private, selfie.raw_key, MAX_UPLOAD_BYTES + 1)
+    except ObjectNotFound:
+        return await done(rules.UNREADABLE, _Compared(None, ()))
+    except Exception as error:  # noqa: BLE001 — storage is down: try again
+        raise _storage_failed(error) from None
+    image_type = sniff(data[:SNIFF_BYTES])
+    try:
+        if image_type is None or len(data) > MAX_UPLOAD_BYTES:
+            raise images.UnreadableImage
+        clean = images.reencode(data, image_type)
+    except images.UnreadableImage:
+        outcome = await done(rules.UNREADABLE, _Compared(None, ()))
+        await storage.delete(private, selfie.raw_key)
+        return outcome
+    del data
+    # Written back over itself before anything else, so no original with its
+    # location is kept, whatever happens next (D-092).
+    await _stored(storage.put_bytes(private, selfie.raw_key, clean.data, "image/jpeg"))
+
+    read = await asyncio.gather(
+        *(_public_copy(storage, settings, photo) for photo in references)
+    )
+    found = [(photo, ref) for photo, ref in zip(references, read, strict=True) if ref]
+    if not found:
+        return await done(rules.NO_PHOTOS, _Compared(None, ()))
+    match = await facematch.compare(clean.data, [ref for _, ref in found])
+    compared = _Compared(
+        match, tuple(photo for photo, _ in found), clean.width, clean.height
+    )
+    return await done(rules.decide(match), compared)
+
+
+async def give_up(
+    sessions: Sessions,
+    verification_id: UUID,
+    reason: rules.Reason,
+    *,
+    storage: StorageProvider,
+    settings: Settings,
+    via: str,
+) -> str:
+    """The job's last try failed: reject, so the person can start again rather
+    than wait on a comparison that won't come. Only a submitted, pending one."""
+    async with sessions() as session, session.begin():
+        verification = await repository.by_id(session, verification_id)
+        selfie = None
+        if verification is not None and verification.selfie_photo_id is not None:
+            selfie = await photos_repository.photo_by_id(
+                session, verification.selfie_photo_id
+            )
+    if verification is None or selfie is None:
+        return "nothing submitted: nothing to give up on"
+    done = Recorder(sessions, verification, selfie, via, storage, settings)
+    return await done(reason, _Compared(None, ()))
+
+
+async def _public_copy(
+    storage: StorageProvider, settings: Settings, photo: Photo
+) -> bytes | None:
+    """An approved photo's public copy: the bytes moderation scored and wrote
+    there itself (T-4.4). None if it has gone."""
+    assert photo.public_key is not None  # approved_public_photos says so
+    try:
+        return await storage.read_prefix(
+            settings.R2_BUCKET_PUBLIC, photo.public_key, MAX_UPLOAD_BYTES + 1
+        )
+    except ObjectNotFound:
+        return None
+    except Exception as error:  # noqa: BLE001 — storage is down: try again
+        raise _storage_failed(error) from None
+
+
+@dataclass(frozen=True)
+class Recorder:
+    """Writes one verification's decision."""
+
+    sessions: Sessions
+    verification: Verification
+    selfie: Photo
+    via: str
+    storage: StorageProvider
+    settings: Settings
+
+    async def __call__(self, reason: rules.Reason | None, compared: _Compared) -> str:
+        return await _record(self, reason, compared)
+
+
+async def _record(
+    to: Recorder, reason: rules.Reason | None, compared: _Compared
+) -> str:
+    """Write the decision with the user's row locked, unless it stopped
+    waiting for one: once, whoever gets here first."""
+    verification, selfie, via = to.verification, to.selfie, to.via
+    async with to.sessions() as session, session.begin():
+        try:
+            user = await users_service.locked_user(session, verification.user_id)
+            locked = await repository.for_update(session, user.id, verification.id)
+            photo = await photos_repository.photo_for_update(
+                session, user.id, selfie.id
+            )
+        except LookupError:
+            locked = photo = None
+        if locked is None or photo is None:
+            # Refused while this ran: the rows went, and D-078's deletion may
+            # have run before the copy above was written back. Don't leave it.
+            await to.storage.delete(to.settings.R2_BUCKET_PRIVATE, selfie.raw_key)
+            return "its user was refused while it was compared: its selfie removed"
+        if locked.status is not ReviewStatus.PENDING:
+            return f"{locked.status.value} while it was compared: left as it is"
+        photo.moderation = _summary(compared, via)
+        if compared.width is not None:
+            photo.width, photo.height = compared.width, compared.height
+        if reason is None:
+            locked.status = ReviewStatus.APPROVED
+            photo.status = ReviewStatus.APPROVED
+            user.is_verified = True
+        else:
+            locked.status = ReviewStatus.REJECTED
+            photo.status = ReviewStatus.REJECTED
+            photo.reject_reason = reason
+    outcome = reason or ReviewStatus.APPROVED.value
+    log.info(
+        "verification.decided",
+        verification_id=str(verification.id),
+        outcome=outcome,
+        via=via,
+    )
+    return outcome
+
+
+def _summary(compared: _Compared, via: str) -> dict[str, Any]:
+    """The selfie's `moderation` record (D-263): the numbers the decision read,
+    exactly, and which photos they came from; never an image, a key or a URL."""
+    record: dict[str, Any] = {
+        "threshold": rules.MATCH_THRESHOLD,
+        "decided_by": via,
+    }
+    match = compared.match
+    if match is not None:
+        record |= {
+            "provider": match.model,
+            "faces": match.faces_in_selfie,
+            "best": match.best,
+            "compared": [
+                {"photo_id": str(photo.id), "similarity": similarity}
+                for photo, similarity in zip(
+                    compared.references, match.similarities, strict=True
+                )
+            ],
+        }
+    return record
+
+
+def _storage_failed(error: Exception) -> TryAgain:
+    return TryAgain(
+        "verification.storage_failed",
+        type(error).__name__,
+        defer=STORAGE_FAILED,
+        final=rules.UNAVAILABLE,
+    )
+
+
+async def _stored(write: Awaitable[None]) -> None:
+    try:
+        await write
+    except Exception as error:  # noqa: BLE001 — storage is down: try again
+        raise _storage_failed(error) from None
+
+
+# --- The founder's review (D-264) -------------------------------------------------------
+#
+# Until the threshold is measured (P-160), a person looks at every decision:
+# face matching alone doesn't stop a man with a woman's photos and one real
+# selfie of her, which matches her photos closely, nowhere near the threshold.
+# `app/tools/selfie_review.py` lists what to look at; the verdicts written here,
+# same person or not, are the measurement P-160 needs, gathered from real
+# decisions as they are made.
+
+
+@dataclass(frozen=True)
+class Compared:
+    photo_id: str
+    similarity: float | None
+    public_key: str | None
+
+
+@dataclass(frozen=True)
+class ForReview:
+    verification_id: UUID
+    decided_at: datetime
+    gender: str | None
+    outcome: str  # approved, or the reason it was rejected
+    best: float | None
+    threshold: float | None
+    near: bool
+    mixed: bool
+    verdict: str | None
+    selfie_key: str
+    compared: tuple[Compared, ...]
+
+
+async def for_review(
+    sessions: Sessions, since: datetime, *, include_reviewed: bool = False
+) -> list[ForReview]:
+    """Every decision since `since` the founder hasn't given a verdict on
+    (all of them, with `include_reviewed`), newest first. The seed's aren't
+    decisions, so they aren't listed."""
+    async with sessions() as session, session.begin():
+        rows = await repository.decided_since(session, since)
+        wanted = {
+            UUID(c["photo_id"])
+            for _, selfie, _ in rows
+            for c in (selfie.moderation or {}).get("compared", [])
+        }
+        photos = {p.id: p for p in await repository.photos_by_id(session, list(wanted))}
+    found: list[ForReview] = []
+    for verification, selfie, gender in rows:
+        record = selfie.moderation or {}
+        if record.get("decided_by") == "seed":
+            continue
+        verdict = (record.get("review") or {}).get("verdict")
+        if verdict is not None and not include_reviewed:
+            continue
+        compared = tuple(
+            Compared(
+                photo_id=c["photo_id"],
+                similarity=c["similarity"],
+                public_key=getattr(photos.get(UUID(c["photo_id"])), "public_key", None),
+            )
+            for c in record.get("compared", [])
+        )
+        approved = verification.status is ReviewStatus.APPROVED
+        best = record.get("best")
+        found.append(
+            ForReview(
+                verification_id=verification.id,
+                decided_at=verification.updated_at,
+                gender=None if gender is None else gender.value,
+                outcome="approved"
+                if approved
+                else (selfie.reject_reason or "rejected"),
+                best=best,
+                threshold=record.get("threshold"),
+                near=rules.near_the_threshold(best),
+                mixed=rules.mixed(approved, [c.similarity for c in compared]),
+                verdict=verdict,
+                selfie_key=selfie.raw_key,
+                compared=compared,
+            )
+        )
+    return found
+
+
+async def record_verdict(
+    sessions: Sessions, verification_id: UUID, verdict: rules.Verdict
+) -> bool:
+    """Write the founder's verdict into the selfie's record: whether the
+    selfie and the photos show the same person. Changes nothing else: undoing
+    a decision is P-163's. False if there is no such verification."""
+    async with sessions() as session, session.begin():
+        selfie = await repository.selfie_of(session, verification_id)
+        if selfie is None:
+            return False
+        selfie.moderation = {
+            **(selfie.moderation or {}),
+            "review": {"verdict": verdict, "at": clock.now().isoformat()},
+        }
+    log.info(
+        "verification.reviewed", verification_id=str(verification_id), verdict=verdict
+    )
+    return True

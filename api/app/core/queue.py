@@ -8,20 +8,42 @@ worker can't disagree about a name. Every job is idempotent and safe to retry
 The queue shares the app's Redis connection pool (`app.state.redis`), so it
 opens no connections of its own. Tests install a `FakeQueue`, which records
 what was queued and runs nothing.
+
+**A wake** (D-261, T-4.5) tells the worker a queued job is waiting now, for the
+one job a person waits on: `verify_selfie`. It is a Redis PUBLISH, sent after
+the job's transaction commits, which the worker hears at once instead of at its
+next look at the queue, 10 seconds apart (D-091). It only makes the job sooner:
+the queued job is still the one that is sure to run, so a wake that is lost
+costs those 10 seconds, never the job. A failed or hung wake (1 second) is
+logged and never fails the request.
 """
 
 from __future__ import annotations
 
+import asyncio
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from datetime import timedelta
 from typing import Any, Protocol
 
+import structlog
 from arq.connections import ArqRedis
 from fastapi import Request
 from redis.asyncio import Redis
 
+log = structlog.get_logger(__name__)
+
 MODERATE_PHOTO = "moderate_photo"
 DELETE_FILES = "delete_files"
+VERIFY_SELFIE = "verify_selfie"
+WAKE_TIMEOUT_S = 1.0
+
+
+def wake_channel(job: str) -> str:
+    """The Redis channel the worker listens on for `job`'s wakes."""
+    return f"wake:{job}"
+
+
 # D-090: a refusal's files are deleted 60 seconds after it is queued, before its
 # commit, once the user is gone; still there then, it checks once more.
 DELETE_FILES_FIRST_CHECK = timedelta(seconds=60)
@@ -40,6 +62,12 @@ class Queue(Protocol):
         queued under that id isn't queued again."""
         ...
 
+    async def wake(self, job: str, value: str) -> None:
+        """Tell the worker `job` is waiting for `value` (an id, never a key or
+        anything rule 15 keeps out of logs). Call it only after the queuing
+        transaction has committed. Never raises."""
+        ...
+
 
 class ArqQueue:
     def __init__(self, redis: Redis) -> None:
@@ -55,6 +83,14 @@ class ArqQueue:
     ) -> None:
         await self._arq.enqueue_job(job, _job_id=job_id, _defer_by=defer_by, **kwargs)
 
+    async def wake(self, job: str, value: str) -> None:
+        try:
+            await asyncio.wait_for(
+                self._arq.publish(wake_channel(job), value), WAKE_TIMEOUT_S
+            )
+        except Exception as error:  # noqa: BLE001 — the queued job still runs
+            log.warning("queue.wake_failed", job=job, error=type(error).__name__)
+
 
 @dataclass(frozen=True)
 class QueuedJob:
@@ -66,11 +102,14 @@ class QueuedJob:
 
 @dataclass
 class FakeQueue:
-    """Records every job queued; `fail = True` makes the next `enqueue` raise,
-    as Redis being down would."""
+    """Records every job queued and every wake; `fail = True` makes the next
+    `enqueue` raise, as Redis being down would. `on_wake`, if set, runs at
+    each wake, so a test can see what was true when it was sent."""
 
     jobs: list[QueuedJob] = field(default_factory=list)
     fail: bool = False
+    woken: list[tuple[str, str]] = field(default_factory=list)
+    on_wake: Callable[[], None] | None = None
 
     async def enqueue(
         self,
@@ -86,6 +125,11 @@ class FakeQueue:
         if job_id is not None and any(q.job_id == job_id for q in self.jobs):
             return
         self.jobs.append(QueuedJob(job, job_id, defer_by, kwargs))
+
+    async def wake(self, job: str, value: str) -> None:
+        if self.on_wake is not None:
+            self.on_wake()
+        self.woken.append((job, value))
 
     def named(self, job: str) -> list[QueuedJob]:
         return [q for q in self.jobs if q.job == job]

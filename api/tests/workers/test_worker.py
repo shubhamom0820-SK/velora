@@ -5,8 +5,12 @@ own code run end to end by a real ARQ worker, on this run's Redis and database.
 
 from __future__ import annotations
 
+import asyncio
+import contextlib
 import io
 import logging
+import re
+import shutil
 import tomllib
 import uuid
 from collections.abc import AsyncIterator, MutableMapping
@@ -32,15 +36,17 @@ from app.core.config import Settings
 from app.core.db import build_engine
 from app.core.enums import OnboardingStep, PhotoKind, ReviewStatus
 from app.core.providers import FakeProviders
-from app.core.queue import DELETE_FILES, MODERATE_PHOTO, ArqQueue
+from app.core.queue import DELETE_FILES, MODERATE_PHOTO, VERIFY_SELFIE, ArqQueue
 from app.core.redis import build_redis
 from app.modules.photos import service as photos_service
 from app.modules.photos.models import Photo
 from app.modules.users.models import User
+from app.modules.verification import service as verification_service
+from app.modules.verification.models import Verification
 from app.workers import main as worker
 from tests.committed import fresh_man
 from tests.conftest import CapturedLogs, make_test_settings
-from tests.infra import TEST_DATABASE_URL, TEST_REDIS_URL
+from tests.infra import TEST_DATABASE_URL, TEST_REDIS_URL, require_models
 from tests.keys import random_keys
 
 PUBLIC, PRIVATE = "velora-public", "velora-private"
@@ -79,8 +85,9 @@ def _settings(**values: Any) -> Settings:
 def test_it_runs_exactly_the_jobs_the_api_queues() -> None:
     jobs = {job.name: job for job in worker.JOBS}
 
-    assert set(jobs) == {MODERATE_PHOTO, DELETE_FILES}
+    assert set(jobs) == {MODERATE_PHOTO, DELETE_FILES, VERIFY_SELFIE}
     assert jobs[MODERATE_PHOTO].max_tries == 3
+    assert jobs[VERIFY_SELFIE].max_tries == 5
 
 
 def test_it_polls_every_10_seconds_which_is_d091s_sum() -> None:
@@ -165,6 +172,42 @@ def test_sightengine_without_its_keys_is_refused_naming_them(
 )
 def test_with_what_it_needs_it_starts(values: dict[str, str]) -> None:
     worker.refuse_unless_ready(_settings(**values))
+
+
+@pytest.mark.parametrize(
+    ("damage", "named"),
+    [
+        ("missing", "face_recognition_sface_2021dec.onnx is missing from"),
+        ("altered", "face_recognition_sface_2021dec.onnx is not D-088's SHA-256"),
+        ("cut short", "face_recognition_sface_2021dec.onnx is 1024 bytes, not"),
+    ],
+)
+def test_sface_without_d088s_exact_models_is_refused_naming_them(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path, damage: str, named: str
+) -> None:
+    """D-088: OpenCV parses only the two files whose SHA-256 D-088 records.
+    A model missing, altered (same size, one byte changed) or cut short stops
+    the worker before any selfie is compared, as Fly's release command runs
+    `--check` before a deploy."""
+    from app.core import facemodels
+
+    require_models()
+    shutil.copy(facemodels.MODEL_DIR / facemodels.DETECTOR.name, tmp_path)
+    recognizer = tmp_path / facemodels.RECOGNIZER.name
+    if damage != "missing":
+        data = bytearray(
+            (facemodels.MODEL_DIR / facemodels.RECOGNIZER.name).read_bytes()
+        )
+        if damage == "altered":
+            data[len(data) // 2] ^= 0xFF
+        else:
+            data = data[:1024]
+        recognizer.write_bytes(bytes(data))
+    monkeypatch.setattr(facemodels, "MODEL_DIR", tmp_path)
+
+    with pytest.raises(worker.WorkerMisconfigured, match=re.escape(named)):
+        worker.refuse_unless_ready(_settings(FACEMATCH_PROVIDER="sface"))
+    worker.refuse_unless_ready(_settings(FACEMATCH_PROVIDER="fake"))
 
 
 def test_check_says_why_it_wouldnt_start_and_never_echoes_a_value(
@@ -285,6 +328,105 @@ async def test_a_photo_the_api_completes_is_moderated_by_the_worker_through_arq(
         f"p/{photo_id}.jpg",
     )
     assert (PUBLIC, f"p/{photo_id}.jpg") in fake.storage.objects
+
+
+async def test_a_submitted_selfie_is_decided_by_the_wake_and_the_job_finds_it_done(
+    test_engine: AsyncEngine, arq_redis: Redis
+) -> None:
+    """D-261's chain, on this run's Redis and database: `submit` commits,
+    queues the job and publishes the wake; the listener the worker starts
+    decides it at once, long before ARQ's next look; the queued job, run
+    after, finds it decided and does nothing. Committed, on a fresh man."""
+    fake = FakeProviders()
+    settings = make_test_settings()
+    man = await fresh_man(test_engine)
+    photo_id, selfie_id = uuid.uuid4(), uuid.uuid4()
+    async with AsyncSession(test_engine, expire_on_commit=False) as session:
+        async with session.begin():
+            await session.execute(
+                update(User)
+                .where(User.id == man)
+                .values(onboarding_step=OnboardingStep.SELFIE)
+            )
+            session.add_all(
+                [
+                    Photo(
+                        id=photo_id,
+                        user_id=man,
+                        kind=PhotoKind.PUBLIC,
+                        position=0,
+                        raw_key=f"raw/{man}/{photo_id}",
+                        public_key=f"p/{photo_id}.jpg",
+                        status=ReviewStatus.APPROVED,
+                    ),
+                    Photo(
+                        id=selfie_id,
+                        user_id=man,
+                        kind=PhotoKind.SELFIE,
+                        raw_key=f"raw/{man}/{selfie_id}",
+                    ),
+                ]
+            )
+        await fake.storage.put_bytes(PUBLIC, f"p/{photo_id}.jpg", _jpeg(), "image/jpeg")
+        await fake.storage.put_bytes(
+            PRIVATE, f"raw/{man}/{selfie_id}", _jpeg(), "image/jpeg"
+        )
+        user = await session.get(User, man)
+        assert user is not None
+        await session.commit()
+        started = await verification_service.start(session, user)
+
+    ctx: dict[str, Any] = {"redis": arq_redis}
+    await worker.open_resources(ctx, settings, fake.as_providers())
+    listener = worker.listen_for_wakes(ctx, settings)
+    listening = asyncio.create_task(listener.run())
+    try:
+        async with asyncio.timeout(5):
+            await listener.subscribed.wait()
+        async with AsyncSession(test_engine, expire_on_commit=False) as session:
+            user = await session.get(User, man)
+            assert user is not None
+            await session.commit()
+            sent = await verification_service.submit(
+                session,
+                user,
+                started.id,
+                selfie_id,
+                storage=fake.storage,
+                queue=ArqQueue(arq_redis),
+                settings=settings,
+            )
+        assert (sent.status, sent.submitted) == (ReviewStatus.PENDING, True)
+
+        decided = None
+        async with asyncio.timeout(5):
+            while decided is None:
+                async with AsyncSession(test_engine) as session:
+                    row = await session.get(Verification, started.id)
+                    assert row is not None
+                    if row.status is not ReviewStatus.PENDING:
+                        decided = row.status
+                        selfie = await session.get(Photo, selfie_id)
+                await asyncio.sleep(0.05)
+    finally:
+        listening.cancel()
+        with contextlib.suppress(asyncio.CancelledError):
+            await listening
+        await worker.shutdown(ctx)
+
+    assert decided is ReviewStatus.APPROVED
+    assert selfie is not None and selfie.moderation is not None
+    assert selfie.moderation["decided_by"] == "wake"
+    # The queued job is still there, the path sure to run; run, it finds it done.
+    assert await arq_redis.zrange(default_queue_name, 0, -1) == [
+        f"verify_selfie:{started.id}".encode()
+    ]
+    ran = await _run_burst(fake)
+    assert (ran.jobs_complete, ran.jobs_failed) == (1, 0)
+    async with AsyncSession(test_engine) as session:
+        selfie = await session.get(Photo, selfie_id)
+    assert selfie is not None and selfie.moderation is not None
+    assert selfie.moderation["decided_by"] == "wake"
 
 
 async def test_arq_never_logs_a_jobs_arguments_which_can_be_storage_keys(

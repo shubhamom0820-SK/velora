@@ -185,7 +185,7 @@ a failed or hung publish (1 s) is logged without failing the request (`core/even
 |---|---|---|
 | `moderate_photo` | photo upload completed | re-encode (D-092: decoded and encoded afresh, so no EXIF survives), score with Sightengine (D-094), decide: approve → the scored bytes to the public bucket; a possible minor → rejected, a `fraud_events` score, every copy deleted (D-093) |
 | `delete_files` | under-18 refusal, before its commit | delete the refused user's files once they're gone, each read back (D-090) |
-| `verify_selfie` | selfie submitted | face match vs approved photos, on the worker itself: YuNet and SFace (D-088), no third party (D-087); liveness is T-4.11's, and nothing claims it until then |
+| `verify_selfie` | selfie submitted, then a wake (D-261) | the selfie re-encoded, then face match vs the approved photos' public copies, on the worker itself: YuNet and SFace (D-088), no third party (D-087), at SFace's published 0.363 (D-260); approved → `is_verified`. A wake on `wake:verify_selfie`, published after the submit commits, runs it at once; the queued job is the path sure to run. Liveness is T-4.11's, and nothing claims it until then (D-262) |
 | `watermark_album` | album access granted | render per-viewer watermarked copies |
 | `send_push` | any notification | Web Push, drop dead subscriptions on 404/410 |
 | `expire_threads` | cron, every minute | active threads past `expires_at` → `expired`, emit event |
@@ -255,7 +255,7 @@ rule 3, T-8.2) or a duplicate charge (T-8.3).
 
 1. `POST /v1/photos/upload-url {kind, position?, content_type}` → `{photo_id, put_url, headers}` (5 min; JPEG, PNG or WebP; the declared type is signed in, a hint only, D-089).
 2. Browser PUTs directly to `velora-private/raw/{user_id}/{photo_id}`.
-3. `POST /v1/photos/{id}/complete` → the object's size (at most 8 MB) and its first bytes decide; status `pending`, enqueue `moderate_photo` (a selfie waits for T-4.5).
+3. `POST /v1/photos/{id}/complete` → the object's size (at most 8 MB) and its first bytes decide; status `pending`, enqueue `moderate_photo` (a selfie waits for its verification's submit, T-4.5).
 4. Worker (T-4.4): read at most 8 MB and judge the bytes again (the PUT URL outlives `complete`);
    decode with Pillow, only as that format, refusing more than 40 megapixels before decoding
    (D-092); turn it upright, longest side 1600, a new JPEG at quality 85 from the pixels alone
@@ -297,7 +297,7 @@ rule 3, T-8.2) or a duplicate charge (T-8.3).
 | `WORKER_POLL_DELAY_S` | worker | seconds between the worker's looks at the queue, default 10 (D-091): 260,640 Redis commands a month idle on Upstash Free, 52% of its 500K. Redo that sum before changing it |
 | `MODERATION_PROVIDER` | worker | `sightengine` \| `fake` |
 | `SIGHTENGINE_API_USER`, `SIGHTENGINE_API_SECRET` | worker | with `sightengine`, the worker refuses to start without both, naming them (`python -m app.workers --check`, Fly's release command). The API never moderates, so it needs neither |
-| `FACEMATCH_PROVIDER` | worker | `sface` \| `fake`: on the worker, no keys and no third party (D-087, D-088) |
+| `FACEMATCH_PROVIDER` | worker | `sface` \| `fake`: on the worker, no keys and no third party (D-087, D-088). With `sface` the worker refuses to start unless both models in `api/models` are exactly D-088's (`make models`; the image fetches its own) |
 | `R2_ACCOUNT_ID`, `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY`, `R2_BUCKET_PUBLIC`, `R2_BUCKET_PRIVATE`, `PUBLIC_CDN_URL` | api, worker | all required with `s3`, named at startup (T-4.1). The account ID and the CDN aren't secrets (each Fly config's `[env]`); the token is, scoped to its environment's two buckets. `PUBLIC_CDN_URL` is `https://` with no trailing slash outside local |
 | `STORAGE_PROVIDER` | api, worker | `s3` \| `fake` (`s3` covers R2 and the local S3, SeaweedFS, T-4.1, D-086; `api/.env.example` uses the local one) |
 | `R2_ENDPOINT_URL` | api, worker | the local S3 (D-086), and only where `ENV` is local: refused anywhere else, an allowlist (rule 16), so storage goes to R2's own endpoint for `R2_ACCOUNT_ID` (T-4.1) |

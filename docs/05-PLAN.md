@@ -674,6 +674,9 @@ waits on the founder's decisions, so it is a task of its own, outside the sprint
   - **P-81, if REL-1's tag includes T-4.4.** The lawyer's answer on a photo that scores as both a
     possible minor and sexual, which D-093 deletes: the one legal question the founder put before
     the first real user, since getting it wrong is not a commercial mistake (4 October 2026).
+  - **P-162 and P-163, if REL-1's tag includes T-4.5.** Whether one matching photo may carry a
+    profile of someone else's photos (P-162), and an undo for a selfie decision the founder's
+    review finds wrong (P-163): both reach real women once a selfie can be decided for one.
   - **P-68, if REL-1's tag includes T-3.14.** App Check enforced on Authentication, proved by its
     effect, before the site is public for sign-in (the founder, 4 October 2026): it is what makes
     an SMS flood need our web app rather than a script. A backstop only: P-68 is the very next
@@ -1562,71 +1565,90 @@ exist yet. The batch is a chain, T-3.10 → T-3.11 → T-3.12 → T-3.13, each n
 - [x] **Commit:** `feat(worker): photo moderation pipeline [T-4.4]`
 
 ### T-4.5 · Selfie verification
-- [ ] **Needs:** T-4.4; D-088 (approved by the founder, 4 October 2026: the model and
-  `opencv-python-headless`); **the measurement set** (below), which the founder gathers; and **the
-  founder's answer on how `verify_selfie` avoids D-091's 10-second pickup**, since a woman waits on
-  its result: this task proposes. No third party matches faces (D-087). Liveness isn't here: it is
-  T-4.11.
-- [ ] **No pose** (the founder, 4 October 2026: liveness is T-4.11's, and the pose challenge is
-  rejected). `POST /verification/challenge` and the `challenge` column (`text not null`, "the random
-  pose asked for", 03-SCHEMA) were for a pose: this task's plan says what they become, without a
-  migration if it can, and 04-API changes with it. `POST /verification/{id}/submit {photo_id}` →
-  enqueue `verify_selfie`.
-- [ ] `verify_selfie`: re-encode; `FaceMatchProvider.compare(selfie, approved_public_photos)` on the
-  worker (D-088): YuNet finds exactly one face, SFace's cosine similarity against each approved
-  public photo, the best one counted; at or above the threshold (below) → `approved`,
-  `users.is_verified = true`; else `rejected` with reason. Max 5 attempts / day. (The plan's first
-  "similarity ≥ 85" was the dropped vendor's 0–100 scale; SFace has none, and the number comes from the
-  measurement below.)
-- [ ] **T-4.5 ships without liveness, and claims nothing it doesn't do** (the founder, 4 October
-  2026; liveness is T-4.11). Face matching is a real check: it proves the selfie matches the profile
-  photos. It does not prove a live person was in front of the camera, and we must not claim it does.
-  **The hard constraint:** nothing in `/privacy`, the UI copy or any badge may say or imply that we
-  confirm a real person, a live person, or that someone "is who they say they are". Describe exactly
-  what we do: the selfie is compared with the profile photos. A word that promises more than face
-  matching delivers is wrong, the way the Sightengine retention wording would have been.
-  **Already in `web/src/i18n/en.ts` (read 4 October 2026), each rewritten here or shown to the
-  founder before this task ships:** `/privacy`'s "Your selfie, to check that you're really you.";
-  the landing page's "Verified, moderated" and "Selfie verification, photo checks, and reports that
-  actually remove people."; the badge, `verified: "Verified"`; and `/terms`' "Women verify with a
-  selfie before their profile goes live". (The code screen's "Verify" is the sign-in code's, not
-  this.)
-- [ ] **No woman sits watching a spinner** (the founder, 4 October 2026, on D-091's 10-second
-  pickup): either she gets the result quickly, or she is told plainly it will take a moment and is
-  free to do something else. This task proposes how; lowering one site's poll interval and calling
-  it solved isn't an answer.
+- [x] **Needs:** T-4.4; D-088 (approved by the founder, 4 October 2026: the model and
+  `opencv-python-headless`). No third party matches faces (D-087). Liveness isn't here: it is
+  T-4.11. **The measurement set this line once named is dropped, and isn't happening before
+  launch** (D-260, Locked on the founder's words, 4 October 2026: "test kiye bina aage badho").
+  **The 10-second pickup is answered** by D-261's wake (Open).
+- [x] **No pose** (the founder, 4 October 2026: liveness is T-4.11's, and the pose challenge is
+  rejected). **Built as D-263, no migration:** `POST /verification/challenge` became
+  `POST /verification/start`, returning `Verification`; the `challenge` column holds `none`, and
+  `liveness_ok` stays null until T-4.11. `POST /verification/{id}/submit {photo_id}` attaches the
+  uploaded selfie, queues `verify_selfie` and, after the commit, wakes the worker (D-261). 04-API
+  changed with it.
+- [x] `verify_selfie`: the selfie re-encoded (D-092) and written back over itself, then compared
+  on the worker (D-088): YuNet finds the faces, and the selfie must hold exactly one; SFace's
+  cosine similarity against each approved public photo's public copy (the bytes moderation scored,
+  never an upload a second PUT could have replaced, P-79), by each photo's largest face; the best
+  counted. At or above 0.363 (D-260) → `approved`, `users.is_verified = true`; else `rejected`
+  with a reason from D-263's list. Max 5 a rolling 24 hours, at start and at submit. Pillow decodes
+  every image and OpenCV gets only pixels, so OpenCV's image decoders never see an upload; the API
+  never imports OpenCV (tested). The numbers, exactly, go in the selfie's `moderation` record;
+  `verifications.similarity` stays empty (D-263, P-164). (The plan's first "similarity ≥ 85" was
+  the dropped vendor's 0–100 scale.)
+- [x] **T-4.5 ships without liveness, and claims nothing it doesn't do** (the founder, 4 October
+  2026; liveness is T-4.11). Face matching compares the selfie with the profile's photos. It does
+  not prove a live person was in front of the camera, and **it does not stop a man holding a
+  woman's photos and one real selfie of her: that selfie matches her photos closely, nowhere near
+  the threshold** (D-260). Only T-4.11 or a person looking stops that; until one exists, the person
+  isn't optional (D-264). **The hard constraint:** nothing in `/privacy`, the UI copy or any badge
+  may say or imply that we confirm a real person, a live person, or that someone "is who they say
+  they are". **Done as D-262:** the four strings found on 4 October 2026 rewritten (`/privacy`'s
+  selfie line, which now says our team may look at it; the landing page's "Verified, moderated" and
+  its body, whose "reports that actually remove people" is cut, since reporting isn't built; the
+  badge, now "Selfie matches photos" with a face, not a shield; `/terms`' selfie sentence), and
+  `web/src/i18n/claims.test.ts` fails on a fifth.
+- [x] **No woman sits watching a spinner** (the founder, 4 October 2026, on D-091's 10-second
+  pickup). **Done as D-261:** the wake decides a selfie the moment its submit commits; the queued
+  job stays the path sure to run, so a lost wake costs 10 seconds, never the selfie. Proved end to
+  end on this run's Redis (`test_a_submitted_selfie_is_decided_by_the_wake_and_the_job_finds_it_done`).
+  What she sees while she waits is T-4.7's (its line says how).
 - [ ] **Measure the worker's peak memory on the actual Fly machine** (D-088's first condition), with
   face matching loaded, beside this Mac's 290 to 330 MB; the 1 GB size is locked on that number.
-- [ ] **Accuracy is ours: how it's measured** (D-088; at the founder's direction, 4 October 2026:
-  "there is no longer a vendor to blame when it is wrong").
-  - **A right match:** the same person, accepted. **A wrong match:** a different person accepted,
-    a false accept: someone verified behind a face that isn't theirs, which is what a catfish
-    needs, so it is the error that matters most. **A wrong refusal:** the same person refused, a
-    false reject: friction for anyone, and for a woman a profile that can't go live.
-  - **The measurement set, never users' data:** people who agree in writing, the founder and
-    volunteers, each giving profile-style photos and selfies taken the way T-4.7 takes them,
-    across phones, light and angles. At least 50 people with 5 selfies each, spread across the
-    people the app is for (women and men, skin tones, glasses, beards, a dupatta or a turban),
-    since the model learned mostly from other faces. Every pair of two different people is an
-    impostor pair. Stored privately, used for nothing else, deleted when the founder says.
-  - **Measured as `verify_selfie` decides:** each selfie against all of one person's photos, the
-    best match counted, so the threshold is calibrated for the decision actually made, not for
-    single pairs.
-  - **The threshold it starts at:** OpenCV's published 0.363 cosine, calibrated on LFW
-    (celebrities' photos), only while building on the fake and the set. **This task's real step
-    replaces it:** the lowest threshold at which at most 1 in 1,000 impostor pairs is accepted,
-    reported with the false-reject rate there. If that rate is above 5%, stop and tell the founder
-    before anything ships.
-  - **After launch:** every verification records its similarity and outcome, numbers only, never
-    an image (rule 15). A refused woman passing on a retry is the false-reject signal; a report of
-    a fake profile among verified users the false-accept one. Reviewed monthly until T-9.5's
-    moderators can look at disputed pairs.
-- [ ] Selfies are never public and never shown to other users.
-- [ ] Extend `make seed` (T-1.15): an approved verification row, with a placeholder selfie in the private bucket, for every seeded user marked verified — 15: the test woman, and the prototype's 14 `v` profiles (7 women, 7 men). Ishita, Riya and Pooja stop at the selfie step, unverified, with no row: they're who this task verifies against (the advisor directing T-1.15, Claude in a separate chat, 3 October 2026).
-- [ ] **D-078 (P-54):** an under-18 refusal deletes `verifications` rows and the selfies behind them,
+  **Measured so far, not on Fly:** in the image this task builds, on this Mac's Docker (arm64
+  Linux), 5 October 2026, one comparison of a 1,600-pixel selfie against three 1,600-pixel photos
+  peaks at **403 MB** (118 MB before the models load; 235 MB with 600-pixel images). That is above
+  D-088's 290 to 330 MB estimate, measured on macOS without the image's own baseline. The Fly
+  figure is the condition, measured after the deploy.
+- [x] **Accuracy: there is no measurement, and the record says so** (D-260). The threshold is
+  SFace's published 0.363 on LFW, the model's authors' number on their data, not ours on ours; our
+  false-accept rate is unknown. **What stands in for it:** the words (D-262), and the founder
+  looking at every decision with `app.tools.selfie_review` (D-264), whose `same`/`different`
+  verdicts, written into each selfie's record, are the measurement P-160 needs, built from real
+  decisions as they happen. **Before any published word claims verification, P-160 measures it**
+  (on 07-CHECKLISTS §F, the release checklist). Every decision records its numbers, never an image
+  (rule 15).
+- [x] Selfies are never public and never shown to other users. **Critical #14:**
+  `test_a_matched_selfie_is_never_public_and_never_shown` (no public copy or key, not in `/me/photos`,
+  `GET /photos/{id}` 404, no link, key or number in `GET /verification/latest`) and
+  `test_a_located_selfie_is_stored_with_no_location`. Staff see them only through D-264's tool.
+- [x] Extend `make seed` (T-1.15): an approved verification row, with a placeholder selfie in the private bucket, for every seeded user marked verified — 15: the test woman, and the prototype's 14 `v` profiles (7 women, 7 men). Ishita, Riya and Pooja stop at the selfie step, unverified, with no row: they're who this task verifies against (the advisor directing T-1.15, Claude in a separate chat, 3 October 2026).
+  **Built:** each selfie the profile's gradient turned round, private only; its record says
+  `{"decided_by": "seed"}`, never a comparison; a re-run adds none, and someone seeded before
+  T-4.5 gets theirs once.
+- [x] **D-078 (P-54):** an under-18 refusal deletes `verifications` rows and the selfies behind them,
   keys read in the deleting transaction before the rows go. Any file this task stores behind a user
   row joins that list, with a test. The challenge still waits for the selfie step (D-068).
-- [ ] **Commit:** `feat(verification): selfie challenge and face match [T-4.5]`
+  **Held:** a selfie is a photo, so `UNDERAGE_FILES` already reads its key, and T-4.5 stores no
+  other file (the re-encoded selfie is written back over its own key);
+  `test_a_refusals_selfie_and_its_verification_go_with_it` (critical). A selfie uploaded and never
+  sent is replaced by the next and its file deleted (D-263); one compared after its user was
+  refused is removed by the run that wrote it back.
+- [x] **Tests, and every guard broken once:** `tests/modules/verification/`, `tests/core/test_facematch.py`
+  (the real models on NASA's public-domain portraits in `tests/fixtures/faces/`, which prove the
+  mechanism, never accuracy), `tests/core/test_queue.py`, `tests/workers/test_verify_selfie.py`,
+  `tests/workers/test_wake.py`, `tests/workers/test_worker.py`, `tests/tools/test_selfie_review.py`,
+  `tests/seed/test_seed.py`, and the web's `src/i18n/claims.test.ts` and `Avatar.test.tsx`.
+  **All 32 API cases red and 4 web cases red,** each file restored by SHA-256, 5 October 2026:
+  `uv run python -m tests.break_guards t45-` and `node scripts/break-guards.mts t45-`, kept
+  applicable by `tests/test_break_guards.py` and `src/lib/break-guards.test.ts`. **Two breaks
+  stayed green at first, each now a finding fixed:** counting every selfie ever sent, not the last
+  24 hours' (no test sent only old selfies: `test_selfies_sent_over_24_hours_ago_no_longer_count`
+  added); and the wake sent inside the submit's transaction, which the end-to-end test can't see
+  (the commit lands microseconds after the publish, long before the listener reads), so only the
+  in-transaction check proves the order, and t45-14 names that one. Nothing held the badge's icon
+  either: `marks a matched selfie with a face, never a shield` added.
+- [x] **Commit:** `feat(verification): selfie face match [T-4.5]`
 
 ### T-4.6 · Web photos step
 - [x] **Needs:** T-4.3, T-3.12
@@ -1730,6 +1752,14 @@ exist yet. The batch is a chain, T-3.10 → T-3.11 → T-3.12 → T-3.13, each n
 - [ ] Men: "Skip for now". Women: cannot skip.
 - [ ] **The copy claims face matching only** (T-4.5's hard constraint): the screen says the selfie
   is compared with the profile photos, never that it confirms a real or live person.
+- [ ] **No spinner to watch** (D-261, the founder's constraint on T-4.5): the result usually comes
+  in seconds, by the wake. While she waits, the screen says what is happening ("comparing your
+  selfie with your photos"); if nothing has come after about 15 seconds, it says plainly that it
+  can take a minute and she can leave, and the result is there when she is back (the queued job
+  decides it within D-091's 10 seconds, or tries again). Never a bare spinner. A rejection's reason
+  comes from D-263's list, in words that say what to change, never an accusation; `attempts_left`
+  says how many tries remain today. The prototype's "Face matched — verified" is overridden
+  (D-262); `web/src/i18n/claims.test.ts` fails on it.
 - [ ] Built in T-3.11's `StepFrame`, at D-080's `/onboarding/selfie`, replacing T-3.12's placeholder.
 - [ ] **Allow the camera here (D-059):** T-2.5's Permissions-Policy has `camera=()`, so `getUserMedia` is refused until this task makes it `camera=(self)`; add `blob:` wherever the captured frame shows. T-4.9's fake-camera E2E fails until then.
 - [ ] **Commit:** `feat(web): selfie verification step [T-4.7]`
@@ -2155,6 +2185,8 @@ prices don't depend on the web photos step, and the hold is lifted.
 ### T-6.2 · Discovery query
 - [ ] **Needs:** T-4.10, T-4.8; **P-75**: public photo places kept 0 onwards by the server, or
   "main" defined as the lowest place, before a `Card` carries a main photo (found building T-4.6)
+  **P-161**: a public photo added after a verification compared with the selfie, or the badge
+  cleared, before a `Card` carries `is_verified` to anyone (found building T-4.5)
 - [ ] Repository implements the query in `02-ARCHITECTURE.md §8` with feeds: `foryou` (ranked), `new` (joined ≤ 7 days first), `online` (active ≤ 5 min). Filters: `intent_ids` (any overlap, D-041), verified.
 - [ ] Excludes: self, swiped, blocked either way, hidden, not `done`, status ≠ active, fraud band `freeze`; `shadow` band users only shown to others in `shadow`.
 - [ ] Response `Card`: id, first_name, age (null if hide_age), username, city, hometown, distance_km (null if hide_distance, else ≥ 1), intent_ids, bio line (first 90 chars of about), main photo URL, is_verified, is_online, is_new.
@@ -2208,6 +2240,9 @@ prices don't depend on the web photos step, and the hold is lifted.
 ### T-6.9 · Filters
 - [ ] **Needs:** T-6.5
 - [ ] Filter sheet: intent multi-select, verified only, online now; active count badge; stored in URL search params.
+  **The "verified only" chip's words follow D-262** (T-4.5): it filters on a selfie matched to
+  photos, so it says that ("Selfie matched", or the founder's choice), never "Verified only", which
+  the prototype says and `web/src/i18n/claims.test.ts` refuses.
 - [ ] **Commit:** `feat(web): discovery filters [T-6.9]`
 
 ---
@@ -2525,7 +2560,7 @@ prices don't depend on the web photos step, and the hold is lifted.
 - [ ] **Commit:** `docs(ops): backup and restore runbook [T-9.14]`
 
 ### T-9.15 · Go live
-- [ ] **Needs:** T-9.13, T-9.14, P-0.5, P-0.7, P-0.8; **P-80**: no query value in the API's database errors (rule 15); **P-81**: the lawyer's answer on a possible minor's photo that is also sexual (D-093); **P-73**: who the two unidentified staging accounts are; **P-74** and **P-76**: a photo rejected after the person left the photos step reaches them, and an upload that never arrived stops showing as "Checking…" (found building T-4.6); **P-72**: a human path for repeated possible-minor flags (D-093); **T-4.11**: liveness before the first real user (the founder, 4 October 2026); **P-66**: until staging has a Firebase project of its own, its sign-ins land in production's user pool, which is not acceptable after launch (the founder, 3 October 2026, on T-3.14); **P-0.18**: the billing account converted from its free trial, after App Check (P-68), since after launch the trial's end is an outage with no warning (the founder, 3 October 2026); and **P-68**: App Check enforced on Authentication and proved by its effect, before the site is public for sign-in (the founder, 4 October 2026)
+- [ ] **Needs:** T-9.13, T-9.14, P-0.5, P-0.7, P-0.8; **P-80**: no query value in the API's database errors (rule 15); **P-81**: the lawyer's answer on a possible minor's photo that is also sexual (D-093); **P-73**: who the two unidentified staging accounts are; **P-74** and **P-76**: a photo rejected after the person left the photos step reaches them, and an upload that never arrived stops showing as "Checking…" (found building T-4.6); **P-72**: a human path for repeated possible-minor flags (D-093); **T-4.11**: liveness before the first real user (the founder, 4 October 2026); **P-66**: until staging has a Firebase project of its own, its sign-ins land in production's user pool, which is not acceptable after launch (the founder, 3 October 2026, on T-3.14); **P-0.18**: the billing account converted from its free trial, after App Check (P-68), since after launch the trial's end is an outage with no warning (the founder, 3 October 2026); and **P-68**: App Check enforced on Authentication and proved by its effect, before the site is public for sign-in (the founder, 4 October 2026); **P-162**: whether one matching photo may carry a whole profile (T-4.5); and **P-163**: the founder able to undo a selfie decision his review finds wrong, since until then a woman he marks "different" stays live with the badge (T-4.5, D-264)
 - [ ] Production env: real SMS, real Razorpay live keys + webhook URL, real moderation and face match, VAPID keys. Run the pre-launch checklist in `07-CHECKLISTS.md`. Do one real ₹ purchase yourself and refund it, under D-076's rule 3: the refund reverses that purchase's Velas in the ledger in the same step (T-8.2), so money never goes back while its Velas stand.
 - [ ] **Write to the waitlist** (T-2.3): its copy promises to tell people when Velora opens near them. Nothing can send bulk email yet, so choose how before launch day, or the list is one we can't write to. A sending service is a new dependency and another processor `/privacy` must name, and its From address needs SPF and DKIM, like the mailboxes (P-0.3). B-14, a second city, writes to it again, by city.
   **DKIM before the first send, or the launch email goes to spam:** our DMARC record says
@@ -4163,3 +4198,46 @@ The number comes from the session's own block, given in its brief, from P-100 up
   confirm. Moving a centroid can shrink the closest gap: the seed's test reads it from the database
   and fails if `SCATTER_RADIUS_M` (250 m) is no longer under half of it. Found in P-38; filed from
   this session's block (P-190 to P-199).
+- [ ] P-160 · Measure the face-match threshold on real data **before the product claims
+  verification in any published word** (on 07-CHECKLISTS §F, the release checklist, not a someday
+  list). Worst case: a published "verified" resting on a false-accept rate nobody knows, so a man
+  holding a woman's photos passes as her under a badge that says we checked. **Not before launch:**
+  the founder dropped the 50-person measurement set (D-260), and nothing claims verification until
+  this is done (D-262, held by `web/src/i18n/claims.test.ts`). **It completes itself:** every
+  `same`/`different` verdict the founder records with `app.tools.selfie_review` (D-264) is a
+  labelled pair from a real decision, written into the selfie's record, so the reviews that protect
+  people at launch also build the data a set of volunteers would have. **What's still missing, and
+  isn't Claude's to decide:** a false-accept rate also needs pairs of *different* people compared,
+  which means comparing users' faces with each other for a purpose `/privacy` doesn't name; the
+  founder decides, with P-0.7's lawyer, before it is done. Then: the lowest threshold accepting at
+  most 1 in 1,000 such pairs, with the false-reject rate there (T-4.5's original standard; above 5%,
+  stop and tell the founder). Filed from T-4.5's block (P-160 to P-169), at the direction of the
+  advisor directing T-4.5 (Claude, in a separate chat), relayed by the founder, 5 October 2026.
+- [ ] P-161 · Compare a public photo added after a verification with the selfie, or say the match
+  no longer holds. **Before T-6.2's `Card` carries `is_verified` to anyone.** Worst case: a woman's
+  badge says "Selfie matches photos" while every photo on her profile was replaced, after the
+  check, with someone else's; the comparison ran once, against the photos she had then. Options:
+  re-run `verify_selfie` against the kept selfie when a public photo is approved after a
+  verification, and clear `is_verified` if it no longer matches; or show the badge only while the
+  photos are the ones compared. The founder decides which (a cleared badge on a live woman's
+  profile is a product rule, T-4.8's). Found building T-4.5.
+- [ ] P-162 · Decide whether one matching photo may carry a whole profile. **Before real users**
+  (on T-9.15's Needs line, and REL-1's if its tag includes T-4.5). Worst
+  case: a man verifies with a selfie of himself against one photo of himself among five of a
+  woman's; the profile shows her, and the badge says the selfie matches. T-4.5 counts the best
+  photo, as the plan said, and D-264's review marks such approvals `MIXED` meanwhile. Options:
+  require the main photo (place 0) to match, or every photo with one face; each is unmeasured
+  (D-260), and each turns away real women whose other photos are in sunglasses or in profile. The
+  founder decides, ideally with P-160's numbers. Found in T-4.5's plan.
+- [ ] P-163 · Let the founder undo a decision his review finds wrong. **Before real users** (on
+  T-9.15's Needs line, and REL-1's if its tag includes T-4.5). Worst case: he records "different" for a woman's approved
+  selfie, and she stays live with the badge until someone edits production's database by hand.
+  T-4.5 records the verdict (D-264) and changes nothing else. Fix: an action that rejects the
+  verification, clears `is_verified` and writes `audit_log`, through `selfie_review` or T-9.5's
+  panel; what happens to a woman's live profile then is the founder's call (T-4.8). Found in
+  T-4.5's plan.
+- [ ] P-164 · Widen `verifications.similarity` to hold a cosine exactly (`numeric(6,5)`), if
+  anything ever wants it there. **No deadline.** Worst case if never done: none; the exact numbers
+  live in the selfie's `moderation` record (D-263), and the column stays empty. A migration, so P-65
+  (landed) applies. Filed so the empty column reads as a decision, not an oversight. Found in
+  T-4.5's plan.

@@ -40,6 +40,13 @@ use the **fake** providers from `app/core/providers/`.
   database without the `db` fixture fails instead of writing for real.
 - Postgres or Redis down: **skipped locally, listed by `-ra`; a hard failure when `CI` is
   set.** A missing database in CI must never pass quietly.
+- The face models (T-4.5) the same way: the real face match's tests (`tests/core/test_facematch.py`,
+  the worker's model refusals) skip locally until `make models` has fetched them, and fail in CI,
+  which fetches them first. They run on NASA's public-domain portraits in
+  `tests/fixtures/faces/`, which prove the mechanism, never accuracy (D-260).
+- Redis shares pub/sub channels across its databases, so a run's slot doesn't separate them: a
+  test that listens for a wake (T-4.5) uses a channel of its own, never `wake:verify_selfie`, except
+  the one end-to-end test that must, which reads only its own ids.
 
 ### Tests that commit rows (from T-5.1)
 
@@ -121,7 +128,10 @@ If any of these fails, nothing ships.
     any public response. From T-4.4: photos that genuinely carry a location
     (`tests/fixtures/located/`, confirmed by two readers that aren't Pillow) come out with none,
     in JPEG, PNG and WebP, and through the whole pipeline, every stored copy and what Sightengine
-    is sent.
+    is sent. From T-4.5: an approved selfie has no public copy or key, isn't among its owner's
+    photos, can't be read as one, and `GET /verification/latest` carries no link, key or number;
+    a selfie carrying a location is stored, and compared, with none; an under-18 refusal takes a
+    selfie's file and its verification with the rest.
 15. **Refresh reuse** (T-3.4): replaying a refresh token rotated more than 10 seconds ago revokes
     the family; within 10 seconds it's refused without that (D-067).
 16. **Firebase token** (T-3.14): forged, expired, wrong-audience and already-used ID tokens are all

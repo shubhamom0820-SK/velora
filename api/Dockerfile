@@ -12,6 +12,12 @@ WORKDIR /app
 # Dependencies first, so a code-only change reuses this layer.
 COPY pyproject.toml uv.lock ./
 RUN uv sync --locked --no-dev --no-install-project
+# The face models (D-088, T-4.5): fetched from OpenCV Zoo at a pinned commit and
+# checked against D-088's sizes and SHA-256s, never committed; the worker
+# refuses to start without exactly these. Before the code, so a code change
+# doesn't fetch 39 MB again. api/.dockerignore keeps any local copy out.
+COPY app/core/facemodels.py app/core/facemodels.py
+RUN .venv/bin/python app/core/facemodels.py
 COPY . .
 RUN uv sync --locked --no-dev
 

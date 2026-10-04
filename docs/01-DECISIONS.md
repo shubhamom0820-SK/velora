@@ -2695,6 +2695,154 @@ recording it now, superseding rather than editing, is at the direction of the ad
 T-4.6 (Claude, in a separate chat), relayed by the founder, 5 October 2026. **Open until the
 founder approves it.**
 
+### D-260 · The face-match threshold is SFace's published number, unmeasured on our users — Locked
+**The decision (T-4.5; the founder, 4 October 2026, in his own words: "test kiye bina aage
+badho", go ahead without testing):** selfie face matching ships at **0.363 cosine similarity**,
+and **the measurement set T-4.5 planned (50 consenting people, 5 selfies each) is dropped. It is
+not happening before launch,** and no task pretends otherwise.
+
+**Whose number it is, plainly.** OpenCV's face recognition tutorial
+(`doc/tutorials/dnn/dnn_face/dnn_face.markdown`, read by Claude on 5 October 2026) publishes
+SFace's thresholds per dataset: LFW 0.363, CALFW 0.340, CPLFW 0.275, AgeDB-30 0.277, CFP-FP 0.212,
+and says two faces are the same identity "if the cosine distance is greater than or equal to
+0.363". It doesn't say how the thresholds were chosen. The model was trained and provided by the
+SFace paper's authors (the tutorial's thanks). **So 0.363 is the model's authors' number, measured
+on their data (LFW: photos of celebrities), not a number we chose or measured on ours.** It is the
+strictest of their five. Nobody knows our false-accept rate.
+
+**Supersedes** D-088's "Rejected: … OpenCV's published threshold as the final one". D-088 is
+Locked and not edited; the rest of it stands. It is final until P-160 measures one.
+
+**What carries the risk instead** (the advisor directing T-4.5, Claude in a separate chat,
+relayed by the founder; D-262 and D-264 record each):
+1. **The words.** Nothing published says "verified" or anything read as a guarantee (D-262).
+2. **A human.** The founder looks at every decision, at launch volumes (D-264).
+
+**What face matching does and doesn't do, said plainly so nobody reads more into it.** It
+catches a careless impostor: a selfie of someone other than the person in the profile's photos.
+**It does not stop a man who has a woman's photos and one real selfie of her:** that selfie
+matches her photos closely, nowhere near the threshold. Only liveness (T-4.11) or a person looking
+at the selfie stops that. Until one of them exists, the human isn't optional. Found by Claude in
+T-4.5's plan: it refuted the near-threshold review the advisor first proposed as the stand-in for
+the measurement set, since that list would have shown nothing and felt like cover.
+
+**Locked** on the founder's words, confirmed by him on 5 October 2026 as his own (the
+surrounding reasoning is the advisor's, relayed).
+
+### D-261 · A selfie is woken onto the worker, and the queue still guarantees it — Open
+**The decision (T-4.5, answering D-091's "how the selfie avoids the 10 seconds"):** after
+`POST /verification/{id}/submit` commits, the API publishes the verification's id on the Redis
+channel `wake:verify_selfie` (`core/queue.py`, `Queue.wake`). The worker keeps one subscribed
+connection (`app/workers/wake.py`) and runs the comparison the moment it hears it, one at a time.
+**The queued `verify_selfie` job is still queued, and is the path sure to run:** a wake lost while
+the listener reconnects or the worker restarts costs those 10 seconds, never the selfie. Both may
+compare the same selfie; the decision is written once, with the user's row locked (tested with the
+overlap forced, `test_race.py`). D-091's poll interval doesn't change.
+
+**What it costs Upstash's Free plan** (D-091's budget): nothing while idle. The connection is kept
+alive by PING every 30 seconds, which Upstash doesn't charge. Per selfie: one PUBLISH, plus its
+delivery if Upstash counts deliveries (its pricing and billing pages don't say; measured on
+staging). Per reconnect: one SUBSCRIBE, backing off to one every 5 minutes, and back to a second
+only after a connection held 5 minutes, so even a connection that never holds costs at most 8,640
+a month (1.7% of Free). A wake that fails or hangs (1 second) is logged and never fails the
+request. A test listens on a channel of its own, since Redis shares channels across databases.
+
+**What she sees** (T-4.7's line): what is happening, "comparing your selfie with your photos";
+and if no result has come after about 15 seconds, plainly that it can take a minute and she can
+leave, the result there when she is back.
+
+**Rejected:** lowering the poll interval (D-091's arithmetic: 2 seconds is 1.3 million commands a
+month); comparing faces in the API (it would put the image parser that reads uploads, and about
+300 MB of models, into the API: D-092's reasons); a second ARQ worker polling a selfie queue fast
+(the same arithmetic); `BLPOP` (a blocked call can't be health-checked on its connection, and
+needs a timeout loop that costs commands while idle); an HTTP port on the worker (a second way in).
+
+Proposed by Claude in T-4.5's plan; approved by the advisor directing T-4.5 (Claude, in a
+separate chat), relayed by the founder, 5 October 2026. **Open** until the founder approves it in
+his own words.
+
+### D-262 · What we say about the selfie: what is done, never a guarantee — Open
+**The decision (T-4.5):** no word we publish (the UI, `/privacy`, `/terms`, the landing page, any
+badge, onboarding copy) says or implies that a person is verified, real, live, or who they say
+they are. It says what happens: the selfie is compared with the profile's photos. The four strings
+T-4.5 found, rewritten:
+- `/privacy`: "Your selfie, which we compare with the photos on your profile. Other people on
+  {app} never see it; our team may look at it to check a comparison." **"Our team may look at it"
+  must stay, and is never softened later:** it is literally true, since the founder looks at every
+  one (D-264). The old "It's never shown to anyone" was false the day review began.
+- The landing page: "Checked and moderated"; "Selfies compared with profile photos, and every
+  photo checked." **The old clause "reports that actually remove people" is cut:** reporting is
+  T-9.1 and acting on a report T-9.5, neither built, so it promised something that doesn't exist.
+  It comes back with them, in words they make true.
+- The badge: "Selfie matches photos", **with a face (lucide's `ScanFace`), not a shield**: a
+  shield reads as a security guarantee, beside words that say only that a selfie matched photos.
+- `/terms`: "Before a woman's profile goes live, she takes a selfie, which we compare with her
+  profile photos; for men it's optional."
+
+**Held by a test** (`web/src/i18n/claims.test.ts`): every string in `en.ts` and the share image's
+alt text is searched for "verif", "really you", "who you say", "real person", "live person",
+"liveness", "genuine", "authentic", "guarantee" and identity "confirm"s; two strings are allowed
+by name, each with why (the sign-in code's "Verify"; D-093's Locked "We couldn't verify this
+photo"), and the allowed list is held exact. The API's field `is_verified` and the query `verified=`
+are identifiers, not copy, and stay. The prototype's "Face matched — verified" and "verified
+profiles get noticeably more replies" are overridden here (08-DESIGN).
+
+**When it may change:** only after P-160 measures the threshold, and then by the founder's decision.
+
+Rewrites proposed by Claude; approved with two changes (the reports clause, the icon) by the
+advisor directing T-4.5 (Claude, in a separate chat), relayed by the founder, 5 October 2026.
+**Open** until the founder approves it in his own words.
+
+### D-263 · A verification's shape, without a migration — Open
+**The decision (T-4.5):**
+- **No pose** (the founder, 4 October 2026). `POST /verification/challenge` becomes
+  `POST /verification/start`, returning `Verification`; the `challenge` column, `text not null`,
+  holds the literal `none`. `liveness_ok` stays null: nothing checks it until T-4.11.
+- **`Verification`** is `{id, status, submitted, reject_reason, attempts_left}`: never a number, a
+  link or the selfie, so an answer can't tune an impostor's next try. The owner hears a reason by
+  name only from a list (`no_face`, `many_faces`, `no_match`, `no_photos`, `unreadable`,
+  `unavailable`); anything else reads `other`.
+- **The numbers go in the selfie's `moderation` record** (`photos.moderation`, already "the scores
+  the decision read"): each compared photo's id and cosine similarity, exactly; the best; the
+  threshold at the time; the model; whether a wake or the queue decided; and, later, the founder's
+  verdict. **`verifications.similarity` stays empty:** `numeric(5,2)` stores two places, so an
+  approved 0.3634 would read 0.36, below the threshold that approved it. Widening it is a
+  migration, P-164, when it is wanted; T-4.5 doesn't wait on P-65 for it.
+- **Five selfies in a rolling 24 hours,** counted at start and at submit: `RATE_LIMITED` with
+  `retry_after_s`. A selfie uploaded and never sent is replaced by the next upload (`replaced`, its
+  file deleted), so nobody is stuck behind one.
+
+Proposed by Claude in T-4.5's plan; option (a) of its precision question chosen by the advisor
+directing T-4.5 (Claude, in a separate chat), relayed by the founder, 5 October 2026. **Open**
+until the founder approves it in his own words.
+
+### D-264 · The founder looks at every selfie, by `fly ssh` — Open
+**The decision (T-4.5):** until P-160 measures the threshold, the founder looks at every decision at
+launch volumes, a woman's whatever its number, with `python -m app.tools.selfie_review` run over
+`flyctl ssh` ("Looking at selfies" in infra/STAGING.md and PRODUCTION.md). It lists every decision
+of the last 7 days without a verdict, newest first, marking those near the threshold (0.25 to 0.50,
+a guess) and approved profiles whose other photos didn't match ("mixed", P-162); `--near` narrows to
+those. Decisions are made automatically and reviewed after: holding them needs someone online
+whenever anyone signs up, which is not a system, and holding wouldn't catch the attack D-260 names
+anyway.
+
+**Each verdict is the measurement.** `--verdict <id> same|different` writes into the selfie's
+record whether the selfie and the photos show the same person. Those verdicts, gathered from real
+decisions while protecting the people in them, build the data the dropped measurement set would
+have (P-160). It changes nothing else; overturning a decision is P-163.
+
+**An exception to `storage_probe`'s house style, recorded so nobody "fixes" it:** this tool
+prints links. The founder has to see each selfie, and a selfie is never public, so each is a
+signed link to the private bucket lasting 10 minutes, printed to the terminal of whoever runs it
+behind Fly's own login, and never logged. **Rejected:** an admin API endpoint and page listing
+women's selfies: more convenient, but a role check is a weaker gate than Fly's login, and a bug in
+it would expose every selfie. Claude never runs the tool against real people's selfies; on
+staging, only its own test accounts'.
+
+Proposed by Claude in T-4.5's plan; chosen, with the verdicts, by the advisor directing T-4.5
+(Claude, in a separate chat), relayed by the founder, 5 October 2026. **Open** until the founder
+approves it in his own words.
+
 ---
 
 ## Adding a decision

@@ -49,15 +49,15 @@ number: no screen shows either, so neither leaves the server (D-067's discipline
 ## Photos & verification
 | Method | Path | Auth | Body → Response | Task |
 |---|---|---|---|---|
-| POST | /photos/upload-url | 🔐 | `{kind, position?, content_type}` → `{photo_id, put_url, headers}`. `content_type` is `image/jpeg`, `image/png` or `image/webp`, signed into the PUT, so send `headers` with it; a hint, never what decides (D-089). Public: `position` 0–5, one per place; private: up to 6; selfie: one waiting. Each at its step or after (D-068). 30 an hour per user | T-4.2 |
-| POST | /photos/{id}/complete | 🔐 | → `Photo` (pending). The object's bytes decide: a JPEG, PNG or WebP is queued for moderation (a selfie waits for T-4.5); anything else is `UNSUPPORTED_IMAGE`, over 8 MB `IMAGE_TOO_LARGE`, each rejecting the photo and removing its file. Saying it twice is harmless | T-4.2 |
+| POST | /photos/upload-url | 🔐 | `{kind, position?, content_type}` → `{photo_id, put_url, headers}`. `content_type` is `image/jpeg`, `image/png` or `image/webp`, signed into the PUT, so send `headers` with it; a hint, never what decides (D-089). Public: `position` 0–5, one per place; private: up to 6; selfie: one being compared, and one never sent to a verification is replaced, as `replaced`, its file deleted (D-263). Each at its step or after (D-068). 30 an hour per user | T-4.2 |
+| POST | /photos/{id}/complete | 🔐 | → `Photo` (pending). The object's bytes decide: a JPEG, PNG or WebP is queued for moderation (a selfie waits for its verification's submit, T-4.5); anything else is `UNSUPPORTED_IMAGE`, over 8 MB `IMAGE_TOO_LARGE`, each rejecting the photo and removing its file. Saying it twice is harmless | T-4.2 |
 | GET | /me/photos | 🔐 | → `Photo[]`: the owner's live public photos by place, then private; never selfies, rejected photos or anyone else's | T-4.3 |
 | PATCH | /me/photos/order | 🔐 | `{photo_ids[]}`, exactly the live public photos, each once, the first the main one → `Photo[]`, places 0 onwards | T-4.3 |
 | DELETE | /photos/{id} | 🔐 | → 204 (soft): rejected as `user_deleted`, its public copy removed; twice is once. A selfie, or the last public photo once past the `photos` step, is `NOT_ALLOWED` | T-4.3 |
 | GET | /photos/{id} | 🔐 | → `Photo`: one of the owner's public or private photos, in any status, rejected included, so the photos step can say why one left `/me/photos` (D-096). Someone else's, a selfie, or none: the same `NOT_FOUND` | T-4.6 |
-| POST | /verification/challenge | 🔐 | → `{verification_id, pose}` | T-4.5 |
-| POST | /verification/{id}/submit | 🔐 | `{photo_id}` → `Verification` (pending) | T-4.5 |
-| GET | /verification/latest | 🔐 | → `Verification` | T-4.5 |
+| POST | /verification/start | 🔐 | → `Verification`, waiting for its selfie: the one already open, or a new one. No pose (D-263). At the `selfie` step or after (D-068). Once matched, or while one is being compared, `NOT_ALLOWED`; 5 selfies sent in a rolling 24 hours, `RATE_LIMITED` with `retry_after_s`. 20 an hour per user | T-4.5 |
+| POST | /verification/{id}/submit | 🔐 | `{photo_id}`, a selfie uploaded through `/photos/upload-url` → `Verification` (pending, `submitted`), its comparison queued, then the worker woken (D-261). Someone else's verification or selfie, or none: `NOT_FOUND`; a selfie decided, held by another verification or never uploaded, or another selfie for one already sent: `NOT_ALLOWED`; the day's five: `RATE_LIMITED`. The same selfie twice is once. 20 an hour per user | T-4.5 |
+| GET | /verification/latest | 🔐 | → `Verification`, the newest; none: `NOT_FOUND` | T-4.5 |
 
 `Photo` (T-4.2, T-4.3): `id`, `kind`, `position`, `status`, `reject_reason`, and `url`: an approved
 public photo at `PUBLIC_CDN_URL`, any other live one by a 10-minute signed link to its private copy,
@@ -65,6 +65,14 @@ public photo at `PUBLIC_CDN_URL`, any other live one by a 10-minute signed link 
 `reject_reason` names only `abandoned`, `too_large`, `unsupported_format`, `user_deleted`, `nudity`,
 `no_face` and `text_overlay`; any other reason, a possible minor's included, reads `other` (D-096,
 D-093).
+
+`Verification` (T-4.5, D-263): `id`, `status` (`pending`, `approved`, `rejected`), `submitted`
+(a selfie is attached: pending and submitted means being compared), `reject_reason` and
+`attempts_left` (selfies that may still be sent in the next 24 hours). Never a similarity, a link or
+the selfie. `reject_reason` names only `no_face`, `many_faces`, `no_match`, `no_photos`,
+`unreadable` and `unavailable`; anything else reads `other`. `approved` means the selfie's face
+matched one of the profile's approved photos at SFace's published threshold (D-260), and nothing
+more: no published word calls it verification (D-262).
 
 ## Discovery
 | Method | Path | Auth | Body → Response | Task |

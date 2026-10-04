@@ -135,7 +135,7 @@ export function UiGallery() {
             active={verifiedOnly}
             onClick={() => setVerifiedOnly(!verifiedOnly)}
           >
-            Verified only
+            Selfie matched only
           </Chip>
           <Chip
             icon={Sparkles}

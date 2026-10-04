@@ -42,6 +42,7 @@ from app.modules.photos.models import Photo
 from app.modules.profiles.models import Profile, ProfileIntent, ProfileInterest
 from app.modules.swipes.models import Swipe
 from app.modules.users.models import User
+from app.modules.verification.models import Verification
 from app.modules.wallet.models import LedgerEntry, Wallet
 from seed import run
 from seed.data import (
@@ -852,9 +853,15 @@ async def test_the_output_never_has_a_phone_number_or_the_pin(
 PUBLIC, PRIVATE = "velora-public", "velora-private"
 
 
-async def _photos_of(db: AsyncSession, person: Person) -> list[Photo]:
+async def _photos_of(
+    db: AsyncSession, person: Person, kind: PhotoKind = PhotoKind.PUBLIC
+) -> list[Photo]:
     user = await _user(db, person.phone)
-    return list(await db.scalars(select(Photo).where(Photo.user_id == user.id)))
+    return list(
+        await db.scalars(
+            select(Photo).where(Photo.user_id == user.id, Photo.kind == kind)
+        )
+    )
 
 
 async def test_everyone_past_the_photos_step_has_an_approved_photo_at_place_0(
@@ -888,7 +895,8 @@ async def test_everyone_past_the_photos_step_has_an_approved_photo_at_place_0(
         # but JFIF, its tables and its frame.
         header = private.data[: private.data.index(b"\xff\xda")]
         assert b"JFIF" in header and b"Exif" not in header
-    assert len(storage.objects) == 2 * len(past)
+    public = [key for bucket, key in storage.objects if bucket == PUBLIC]
+    assert len(public) == len(past)
 
 
 async def test_each_photo_is_its_profiles_prototype_gradient(db: AsyncSession) -> None:
@@ -917,10 +925,13 @@ async def test_a_second_run_adds_no_photo(db: AsyncSession) -> None:
 
     again = await write_seed(db, make_test_settings(), storage=storage)
 
-    assert again.photos_added == []
+    assert (again.photos_added, again.verifications_added) == ([], [])
     assert storage.objects == before
     for person in PEOPLE:
         assert len(await _photos_of(db, person)) == (1 if person.gradient else 0)
+        assert len(await _photos_of(db, person, PhotoKind.SELFIE)) == (
+            1 if person.verified else 0
+        )
 
 
 async def test_someone_seeded_before_photos_gets_one_once(db: AsyncSession) -> None:
@@ -934,7 +945,62 @@ async def test_someone_seeded_before_photos_gets_one_once(db: AsyncSession) -> N
 
     assert second.created == []
     assert len(second.photos_added) == 22
+    assert len(second.verifications_added) == 15
     assert "Placeholder photos added for 22 people." in summary(second)
+    assert "Placeholder selfies, approved, added for 15 people." in summary(second)
+
+
+# --- Placeholder selfies (T-4.5) -----------------------------------------------------
+
+
+async def test_everyone_marked_verified_has_an_approved_selfie_never_compared(
+    db: AsyncSession,
+) -> None:
+    """15: the test woman and the prototype's 14 `v` profiles, 7 women and 7
+    men. Ishita, Riya and Pooja, at the selfie step, have none: they are who
+    T-4.5 verifies. Each selfie is private only, and its record says the seed
+    put it there, never that a face was compared (D-263)."""
+    storage = FakeStorage()
+
+    report = await write_seed(db, make_test_settings(), storage=storage)
+
+    verified = [p.key for p in PEOPLE if p.verified]
+    assert report.verifications_added == verified
+    assert len(verified) == 15
+    women = [k for k in verified if BY_KEY[k].gender is Gender.FEMALE]
+    assert (len(women), "test_woman" in women) == (8, True)
+    for key in ("ishita", "riya", "pooja", "moderator"):
+        user = await _user(db, BY_KEY[key].phone)
+        assert (
+            await db.scalar(select(func.count()).where(Verification.user_id == user.id))
+            == 0
+        )
+    for key in verified:
+        user = await _user(db, BY_KEY[key].phone)
+        [verification] = list(
+            await db.scalars(
+                select(Verification).where(Verification.user_id == user.id)
+            )
+        )
+        [selfie] = await _photos_of(db, BY_KEY[key], PhotoKind.SELFIE)
+        assert (verification.status, verification.challenge) == (
+            ReviewStatus.APPROVED,
+            "none",
+        )
+        assert (verification.selfie_photo_id, verification.similarity) == (
+            selfie.id,
+            None,
+        )
+        assert (selfie.status, selfie.public_key, selfie.moderation) == (
+            ReviewStatus.APPROVED,
+            None,
+            {"decided_by": "seed"},
+        )
+        assert user.is_verified
+        assert (PRIVATE, selfie.raw_key) in storage.objects
+        assert not any(
+            k.endswith(str(selfie.id)) for b, k in storage.objects if b == PUBLIC
+        )
 
 
 async def test_a_place_0_that_already_holds_a_live_photo_gets_none(

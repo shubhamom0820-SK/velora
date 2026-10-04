@@ -4,7 +4,7 @@ The browser uploads straight to the private bucket (D-027); the server never
 handles the bytes on the way in. `complete` then checks what arrived: that it
 exists, its size, and what it is by its first bytes, never by the type the
 browser declared (D-089). An accepted public or private photo is queued for
-moderation (T-4.4); a selfie waits for T-4.5's submit.
+moderation (T-4.4); a selfie waits for its verification's submit (T-4.5).
 
 Public and private photos are D-068's `photos` step, the selfie its `selfie`
 step: each works at its step or after, never before.
@@ -47,6 +47,7 @@ from app.modules.photos.schemas import UploadUrl
 from app.modules.safety import service as safety_service
 from app.modules.users import service as users_service
 from app.modules.users.models import User
+from app.modules.verification import repository as verification_repository
 
 UPLOAD_TTL_S = 300  # D-027: a presigned PUT lasts 5 minutes
 MAX_UPLOAD_BYTES = 8 * 1024 * 1024
@@ -59,6 +60,9 @@ ABANDONED_AFTER = timedelta(seconds=UPLOAD_TTL_S + 60)
 ABANDONED = "abandoned"
 TOO_LARGE = "too_large"
 UNSUPPORTED = "unsupported_format"
+# A selfie uploaded and never sent to a verification, when the next one is
+# asked for (T-4.5): never compared, never needed, so its file goes too.
+REPLACED = "replaced"
 
 _STEP_OF = {
     PhotoKind.PUBLIC: OnboardingStep.PHOTOS,
@@ -111,6 +115,9 @@ async def upload_url(
         _check_position(kind, position)
         live = await repository.live_photos(session, user.id, kind)
         live = await _free_abandoned(live, storage, settings)
+        replaced: list[Photo] = []
+        if kind is PhotoKind.SELFIE:
+            live, replaced = await _replace_unsent_selfies(session, live)
         _check_room(kind, position, live)
         photo_id = uuid4()
         key = raw_key(user.id, photo_id)
@@ -120,6 +127,8 @@ async def upload_url(
                 id=photo_id, user_id=user.id, kind=kind, position=position, raw_key=key
             ),
         )
+    for photo in replaced:
+        await storage.delete(settings.R2_BUCKET_PRIVATE, photo.raw_key)
     signed = await storage.presign_put(
         settings.R2_BUCKET_PRIVATE,
         key,
@@ -162,6 +171,24 @@ async def _free_abandoned(
     return holding
 
 
+async def _replace_unsent_selfies(
+    session: AsyncSession, live: list[Photo]
+) -> tuple[list[Photo], list[Photo]]:
+    """Mark rejected, as `replaced`, every pending selfie no verification
+    holds: uploaded and never sent, so a new selfie can be. One a verification
+    holds is being compared, and still holds its place. (Rejected rows are
+    kept; the caller deletes their files after the commit.)"""
+    waiting = [p for p in live if p.status is ReviewStatus.PENDING]
+    sent = await verification_repository.selfies_submitted(
+        session, [p.id for p in waiting]
+    )
+    replaced = [p for p in waiting if p.id not in sent]
+    for photo in replaced:
+        photo.status = ReviewStatus.REJECTED
+        photo.reject_reason = REPLACED
+    return [p for p in live if p not in replaced], replaced
+
+
 def _check_room(kind: PhotoKind, position: int | None, live: list[Photo]) -> None:
     if kind is PhotoKind.PUBLIC:
         if any(photo.position == position for photo in live):
@@ -176,7 +203,7 @@ def _check_room(kind: PhotoKind, position: int | None, live: list[Photo]) -> Non
                 "NOT_ALLOWED", f"You can keep up to {MAX_PRIVATE} private photos."
             )
     elif any(photo.status is ReviewStatus.PENDING for photo in live):
-        raise AppError("NOT_ALLOWED", "Your selfie is already waiting to be checked.")
+        raise AppError("NOT_ALLOWED", "Your selfie is being compared already.")
 
 
 async def complete(

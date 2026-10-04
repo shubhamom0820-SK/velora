@@ -12,6 +12,7 @@ dependencies = [
     "fastapi>=0.141.1",
     "geoalchemy2>=0.20.0",
     "httpx>=0.28.1",
+    "opencv-python-headless>=5.0",
     "phonenumberslite>=9.0.40",
     # Exactly, never >= (D-092): it parses hostile images on the worker. Update it
     # when a CVE lands; T-9.13's security review checks this line.

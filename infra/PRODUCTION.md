@@ -306,6 +306,26 @@ scripts/staging-smoke https://api.veloraapp.co.in https://veloraapp.co.in
 
 The first release's own checks are T-2.6's Done-when.
 
+## Looking at selfies (D-264)
+
+Until P-160 measures the face-match threshold, the founder looks at every selfie decision
+(D-260: face matching alone doesn't stop a man holding a woman's photos and one real selfie of
+her). From his own terminal, behind Fly's login:
+
+```
+flyctl ssh console -a velora-api -C "python -m app.tools.selfie_review"
+flyctl ssh console -a velora-api -C "python -m app.tools.selfie_review --verdict <id> same"
+```
+
+It lists each decision of the last 7 days without a verdict, newest first, with the selfie as a
+signed link lasting 10 minutes and the compared photos by their public address; `NEAR` and
+`MIXED` mark the ones to look at hardest (`--near` shows only those). `same` or `different`
+records whether the selfie and the photos show the same person: those verdicts are the
+measurement P-160 needs. A verdict changes nothing else (P-163 is the undo).
+
+The links print, unlike `storage_probe`'s output, on purpose (D-264): never paste them anywhere,
+and never run this into a log or a chat. Claude runs it only on its own test accounts' selfies.
+
 ## What P-49 redoes
 
 Moving the API to Mumbai replaces, for production:

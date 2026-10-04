@@ -25,12 +25,21 @@ describe("Avatar", () => {
     expect(screen.getByRole("img", { name: "meera" })).toHaveTextContent("M");
   });
 
-  it("names its online and verified states", () => {
+  it("marks a matched selfie with a face, never a shield (D-262)", () => {
+    // A shield reads as a security guarantee; the words beside it say only
+    // that a selfie matched photos.
+    const { container } = render(<Avatar name="Kabir" verified />);
+
+    expect(container.querySelector("svg.lucide-scan-face")).not.toBeNull();
+    expect(container.querySelector("svg.lucide-shield")).toBeNull();
+  });
+
+  it("names its online and selfie-matched states", () => {
     render(<Avatar name="Kabir" online verified />);
 
     expect(
       screen.getByRole("img", {
-        name: `Kabir, ${t("ui.online")}, ${t("ui.verified")}`,
+        name: `Kabir, ${t("ui.online")}, ${t("ui.selfieMatched")}`,
       }),
     ).toBeInTheDocument();
   });

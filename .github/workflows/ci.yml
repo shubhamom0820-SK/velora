@@ -95,6 +95,18 @@ jobs:
         working-directory: api
         run: uv run alembic upgrade head
 
+      # The face models (D-088, T-4.5): fetched from OpenCV Zoo and checked
+      # against D-088's SHA-256s, cached under the file that records them. With
+      # CI=true the real face match's tests fail, never skip, without them.
+      - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: api/models
+          key: face-models-${{ hashFiles('api/app/core/facemodels.py') }}
+
+      - name: Fetch the face models
+        working-directory: api
+        run: uv run python -m app.core.facemodels
+
       # CI=true (set by GitHub) turns an unreachable database into a failure,
       # never a skip (06-TESTING). The critical tests run first.
       - name: Test (pytest)

@@ -35,6 +35,11 @@ the app has no visual design, only a prototype that shows which screens exist.
 11. **Its sizes:** 17 px fields, 26 px code digits, 15.5 px labels. The scale in §2 and §3.
 12. **A back arrow on every screen,** including onto answers that can't change (D-080).
 13. **No loading, empty or error state anywhere.** Rule 14 needs all three.
+14. **"Verified" everywhere a selfie is meant:** "Face matched — verified", "Verified only",
+    "verified profiles get noticeably more replies", and a shield beside a name. A selfie is
+    compared with the profile's photos and nothing more is claimed (D-262, T-4.5): the badge says
+    "Selfie matches photos" with a face (`ScanFace`), and `web/src/i18n/claims.test.ts` refuses the
+    prototype's words.
 
 What it is still trusted for there: the screen order (§5, D-068), the `Step` frame (back arrow,
 12-segment progress, title, body, footer, 520 px), each screen's composition, the PIN pad's layout
@@ -131,7 +136,7 @@ Checked value by value against the prototype in T-1.19, and corrected where the 
 | Toggle | on · off · disabled |
 | Sheet | bottom (mobile) / centred (desktop); title; scroll body; sticky footer |
 | Toast | info (ink) · error (accent) · with action (Undo) |
-| Avatar | photo · initial fallback · online dot · verified badge |
+| Avatar | photo · initial fallback · online dot · selfie-matched badge (a face, never a shield or "Verified": D-262) |
 | Badge | count · status pill (Online, New, Knotted, intents) |
 | Skeleton | line · card · avatar |
 | Spinner | sizes; announced as a status, pulses instead of spinning under reduced motion |

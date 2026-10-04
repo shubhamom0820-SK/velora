@@ -22,6 +22,7 @@ from app.core.queue import MODERATE_PHOTO, FakeQueue
 from app.modules.photos import service
 from app.modules.photos.models import Photo
 from app.modules.users.models import User
+from app.modules.verification.models import Verification
 from tests.conftest import MakeUser
 from tests.images import GIF, HEIC, HTML, JPEG, PNG, WEBP
 
@@ -233,17 +234,54 @@ async def test_six_private_photos_and_no_more(
     assert _error(seventh)["code"] == "NOT_ALLOWED"
 
 
-async def test_one_selfie_waits_at_a_time(
-    db: AsyncSession, client: AsyncClient, make_user: MakeUser
+async def test_a_selfie_never_sent_is_replaced_by_the_next(
+    db: AsyncSession,
+    client: AsyncClient,
+    make_user: MakeUser,
+    fake_providers: FakeProviders,
 ) -> None:
+    """T-4.5: uploaded but never sent to a verification (the app closed, a
+    submit that failed), it would otherwise hold the one selfie place forever.
+    The next one replaces it, and its file goes: never compared, never needed."""
     _, token = await _at(db, make_user, OnboardingStep.SELFIE)
-    assert (
-        await _upload_url(client, token, kind="selfie", position=None)
-    ).status_code == 200
+    first = await _uploaded(
+        client, db, fake_providers, token, JPEG, kind="selfie", position=None
+    )
+    assert (await _complete(client, token, first)).status_code == 200
+
+    second = await _upload_url(client, token, kind="selfie", position=None)
+
+    assert second.status_code == 200, second.text
+    old = await _photo(db, first)
+    assert (old.status, old.reject_reason) == (ReviewStatus.REJECTED, "replaced")
+    assert (PRIVATE, old.raw_key) not in fake_providers.storage.objects
+
+
+async def test_a_selfie_being_compared_holds_its_place(
+    db: AsyncSession,
+    client: AsyncClient,
+    make_user: MakeUser,
+    fake_providers: FakeProviders,
+) -> None:
+    user, token = await _at(db, make_user, OnboardingStep.SELFIE)
+    first = await _uploaded(
+        client, db, fake_providers, token, JPEG, kind="selfie", position=None
+    )
+    db.add(
+        Verification(
+            user_id=user.id, challenge="none", selfie_photo_id=uuid.UUID(first)
+        )
+    )
+    await db.flush()
 
     second = await _upload_url(client, token, kind="selfie", position=None)
 
     assert _error(second)["code"] == "NOT_ALLOWED"
+    assert (await _photo(db, first)).status is ReviewStatus.PENDING
+    assert (
+        PRIVATE,
+        (await _photo(db, first)).raw_key,
+    ) in fake_providers.storage.objects
 
 
 async def _age(db: AsyncSession, photo_id: str, by: timedelta) -> None:

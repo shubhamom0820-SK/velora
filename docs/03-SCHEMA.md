@@ -65,7 +65,7 @@ Intent is not an enum: it is the `intents` catalogue, picked 1 to 3 per user (D-
 | role | role_t not null default 'user' | |
 | status | user_status_t not null default 'active' | |
 | onboarding_step | onboarding_t not null default 'dob' | |
-| is_verified | boolean not null default false | selfie verified |
+| is_verified | boolean not null default false | the selfie matched the profile's photos (T-4.5, D-260); never "verified" in copy (D-262) |
 | pin_hash | text null | argon2id over a pepper kept off the database (D-062) |
 | pin_failed | smallint not null default 0 | |
 | referral_code | citext unique not null | generated at creation |
@@ -163,7 +163,7 @@ enforced in the service. Index `(intent_id)`: discovery filters on intent, match
 | public_key | text null | set when approved (public kind only) |
 | status | review_status_t default 'pending' | |
 | reject_reason | text null | |
-| moderation | jsonb | every score the decision read (T-4.4): provider, models, `minor` (the highest face's, kept below the threshold too, so D-101's is revisited from real scores), `explicit`, `faces`, `artificial_faces`, `text_artificial`; never the image or the request |
+| moderation | jsonb | every score the decision read (T-4.4): provider, models, `minor` (the highest face's, kept below the threshold too, so D-101's is revisited from real scores), `explicit`, `faces`, `artificial_faces`, `text_artificial`; never the image or the request. A selfie's (T-4.5, D-263): `threshold`, `decided_by` (`wake`, `queue`, or `seed`), `provider`, `faces`, `best`, and `compared` (each photo's id and cosine similarity, exactly); later `review` (the founder's `same`/`different`, D-264) |
 | width, height | int null | |
 
 Indexes: `(user_id, kind, position)`, `(status) where status='pending'`.
@@ -175,10 +175,10 @@ Unique `(user_id, position) where kind='public' and status <> 'rejected'`.
 | id | uuid pk | |
 | user_id | uuid fk | |
 | selfie_photo_id | uuid fk photos | |
-| challenge | text | the random pose asked for |
-| liveness_ok | boolean null | |
-| similarity | numeric(5,2) null | vs approved photos |
-| status | review_status_t default 'pending' | |
+| challenge | text | `none` since T-4.5: no pose is asked (D-263) |
+| liveness_ok | boolean null | null: nothing checks liveness until T-4.11 |
+| similarity | numeric(5,2) null | empty since T-4.5: two places can't hold a cosine near 0.363 (an approved 0.3634 would read 0.36). The exact numbers are in the selfie's `photos.moderation` (D-263); widening is P-164 |
+| status | review_status_t default 'pending' | the selfie photo's own status and `reject_reason` follow it |
 Index `(user_id, created_at desc)`.
 
 ---

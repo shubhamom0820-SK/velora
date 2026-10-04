@@ -49,7 +49,7 @@ velora/
     app/modules/<name>/ router.py service.py repository.py schemas.py models.py
     app/workers/        ARQ worker (main.py, `python -m app.workers`) + tasks/
     app/tools/          checks run by hand inside a deployed machine (storage_probe, T-4.1;
-                        sightengine_shape, T-4.4)
+                        sightengine_shape, T-4.4; selfie_review, the founder's, T-4.5, D-264)
     alembic/            migrations
     seed/               make seed: dev data, local stack only, never in the image (D-064)
     tests/              mirrors app/ (and seed/)
@@ -64,7 +64,8 @@ velora/
 `(app)` `admin`), `src/styles/tokens.css` (design tokens — the only place colours live; a pre-commit
 hook enforces it, with one exception, `src/styles/theme-color.ts`) and `src/i18n/en.ts` (every
 user-facing string, read through `t()`, with one exception, `src/app/opengraph-image.alt.txt`, which
-Next reads as a file; a test holds it to `en.ts`). `src/lib/site.ts` says where the site lives and
+Next reads as a file; a test holds it to `en.ts`); `src/i18n/claims.test.ts` holds every one to D-262:
+none says a person is verified, real, live or who they say (T-4.5). `src/lib/site.ts` says where the site lives and
 that only production is indexed (T-2.4), from `APP_ENV`, which `next build` refuses unless it is
 local, ci, staging or production (`src/lib/build-env.ts`, T-2.6). `src/lib/security-headers.ts` is
 the CSP and the other security headers, exactly as strict as today's pages: a task that needs more
@@ -93,7 +94,10 @@ make infra-up    # docker: postgres+postgis, redis, s3 (SeaweedFS, D-086); stamp
                  # sets the private bucket's CORS rule for the local web (T-4.6)   (make infra-down to stop)
 make infra-reset # stop the stack and DROP all data volumes (clean database)
 make dev         # infra + api + worker + web on 127.0.0.1
-make worker      # ARQ worker only: moderate_photo, delete_files (polls every 10 s, D-091)
+make worker      # ARQ worker only: moderate_photo, delete_files, verify_selfie (polls every 10 s,
+                 # D-091; a selfie's wake runs it at once, D-261)
+make models      # fetch the face models into api/models, checked by SHA-256 (D-088; needed
+                 # where FACEMATCH_PROVIDER=sface, and by the face-match tests)
 make seed        # dev data: 20 profiles, test users (local only; a re-run changes nothing, infra-reset starts over)
 make test        # api pytest + web vitest   (test-api / test-web for one side)
 make lint        # ruff + mypy + eslint + tsc --noEmit + prettier check   (lint-api / lint-web)

@@ -323,9 +323,12 @@ export const en = {
         title: "Tie the knot",
         body: "Both of you choose to keep it. Then it never expires.",
       },
+      // D-262: what is done, never a guarantee. Selfies are compared with the
+      // photos, not "verified" (D-260: the threshold is unmeasured). Reports
+      // aren't named until removing someone on one is built (T-9.1, T-9.5).
       safety: {
-        title: "Verified, moderated",
-        body: "Selfie verification, photo checks, and reports that actually remove people.",
+        title: "Checked and moderated",
+        body: "Selfies compared with profile photos, and every photo checked.",
       },
     },
     // The waitlist box (T-2.3), for people outside the launch city. Its city is
@@ -414,8 +417,8 @@ export const en = {
       },
       profile: {
         title: "Your profile",
-        // D-008, D-012.
-        body: "You choose your gender once, when you sign up, and you can't change it later. Women verify with a selfie before their profile goes live; for men it's optional. You can lock {app} on your device with a 4-digit PIN. After 5 wrong tries we sign you out, and you sign back in with your phone number.",
+        // D-008, D-012; the selfie in D-262's words: what is done, no guarantee.
+        body: "You choose your gender once, when you sign up, and you can't change it later. Before a woman's profile goes live, she takes a selfie, which we compare with her profile photos; for men it's optional. You can lock {app} on your device with a 4-digit PIN. After 5 wrong tries we sign you out, and you sign back in with your phone number.",
       },
       safety: {
         title: "Safety",
@@ -489,9 +492,11 @@ export const en = {
         // D-027, D-028; no hidden data: CLAUDE.md rule 15.
         photos:
           "Your photos. We re-encode every photo you upload, which removes hidden data such as where it was taken, and we check each one before it goes live.",
-        // D-008; never public: 06-TESTING's never-skip list.
+        // D-008, D-262; never public: 06-TESTING's never-skip list. "Our team
+        // may look at it" is literally true and must stay: the founder looks at
+        // every comparison until it is measured (D-264, P-160).
         selfie:
-          "Your selfie, to check that you're really you. It's never shown to anyone.",
+          "Your selfie, which we compare with the photos on your profile. Other people on {app} never see it; our team may look at it to check a comparison.",
         // D-006, D-030. "first 20 messages" promises
         // app_config.mask_first_n_messages, seeded 20: change it with the setting.
         messages:
@@ -611,7 +616,8 @@ export const en = {
     remove: "Remove {label}",
     counter: "{count}/{max}",
     online: "Online",
-    verified: "Verified",
+    // The badge (D-262): what was done, never "verified".
+    selfieMatched: "Selfie matches photos",
     errorTitle: "Something went wrong",
     retry: "Try again",
     pinProgress: "{count} of {max} digits entered",

@@ -11,7 +11,7 @@ function ToggleChip() {
   const [on, setOn] = useState(false);
   return (
     <Chip active={on} onClick={() => setOn(!on)}>
-      Verified only
+      Selfie matched only
     </Chip>
   );
 }
@@ -19,7 +19,7 @@ function ToggleChip() {
 describe("Chip", () => {
   it("is a toggle button whose pressed state flips on click", async () => {
     render(<ToggleChip />);
-    const chip = screen.getByRole("button", { name: "Verified only" });
+    const chip = screen.getByRole("button", { name: "Selfie matched only" });
     expect(chip).toHaveAttribute("aria-pressed", "false");
 
     await userEvent.click(chip);

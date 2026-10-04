@@ -307,13 +307,17 @@ async def test_a_webhook_for_an_unknown_order_is_a_test_mistake() -> None:
 
 async def test_fake_face_match_matches_until_told_otherwise_once() -> None:
     facematch = FakeFaceMatch()
-    two_faces = FaceMatch(similarity=91.0, faces_in_selfie=2)
+    two_faces = FaceMatch(model="fake", faces_in_selfie=2, similarities=(None, None))
+    one_match = FaceMatch(model="fake", faces_in_selfie=1, similarities=(0.9,))
 
-    assert await facematch.compare(b"selfie", [b"p1"]) == FakeFaceMatch.MATCH
+    assert await facematch.compare(b"selfie", [b"p1"]) == one_match
     facematch.next = two_faces
     assert await facematch.compare(b"selfie", [b"p1", b"p2"]) == two_faces
-    assert await facematch.compare(b"selfie", [b"p1"]) == FakeFaceMatch.MATCH
+    assert await facematch.compare(b"selfie", [b"p1"]) == one_match
     assert facematch.compared[1] == (b"selfie", (b"p1", b"p2"))
+    facematch.next = "fail"
+    with pytest.raises(RuntimeError):
+        await facematch.compare(b"selfie", [b"p1"])
 
 
 # --- Push --------------------------------------------------------------------------
@@ -376,7 +380,6 @@ _STUB_CALLS: list[tuple[str, Callable[[], Awaitable[object] | object], str]] = [
         lambda: RazorpayPayments().verify_webhook(b"{}", "sig"),
         "T-8.2",
     ),
-    ("facematch", lambda: SFaceFaceMatch().compare(b"s", [b"p"]), "T-4.5"),
     ("push", lambda: WebPush().send(PushSubscription("e", "k", "a"), {}), "T-9.4"),
 ]
 

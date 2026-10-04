@@ -1914,6 +1914,589 @@ P38: list[Case] = [
     ),
 ]
 
+# --- T-4.5: selfie face matching, the wake, the review, the seed's selfies ----------
+# Each case's selection is the files that must catch it.
+
+VER = "tests/modules/verification"
+RULES45 = "app/modules/verification/rules.py"
+SERVICE45 = "app/modules/verification/service.py"
+REPO45 = "app/modules/verification/repository.py"
+FACEMATCH = "app/core/providers/facematch.py"
+FACE_TESTS = "tests/core/test_facematch.py"
+WORKER_TESTS = "tests/workers/test_worker.py"
+WAKE_TESTS = "tests/workers/test_wake.py"
+JOB_TESTS = "tests/workers/test_verify_selfie.py"
+UPLOAD_TESTS = "tests/modules/photos/test_upload.py"
+PHOTOS_SERVICE = "app/modules/photos/service.py"
+WAKE = "app/workers/wake.py"
+
+T45: list[tuple[Case, list[str]]] = [
+    (
+        Case(
+            id="t45-01-the-threshold-itself-refused",
+            what="at exactly the threshold, refused (> for >=)",
+            edits=[
+                (
+                    RULES45,
+                    "    if best >= MATCH_THRESHOLD:\n",
+                    "    if best > MATCH_THRESHOLD:\n",
+                )
+            ],
+            expect=["test_at_the_threshold_it_matches_and_records_the_numbers"],
+        ),
+        [VER],
+    ),
+    (
+        Case(
+            id="t45-02-the-threshold-lowered",
+            what="the threshold lowered from D-260's 0.363 to 0.30",
+            edits=[
+                (
+                    RULES45,
+                    "MATCH_THRESHOLD: Final = 0.363\n",
+                    "MATCH_THRESHOLD: Final = 0.30\n",
+                )
+            ],
+            expect=[
+                "test_the_threshold_is_sface_s_published_lfw_number",
+                "test_just_below_the_threshold_it_doesnt",
+            ],
+        ),
+        [VER],
+    ),
+    (
+        Case(
+            id="t45-03-the-first-photo-counts-not-the-best",
+            what="the first photo's similarity counted, not the best",
+            edits=[
+                (
+                    FACEMATCH,
+                    "        return max(found) if found else None\n",
+                    "        return found[0] if found else None\n",
+                )
+            ],
+            expect=[
+                "test_the_best_photo_counts_wherever_it_is",
+                "test_each_photo_is_compared_in_order_and_the_best_counts",
+            ],
+        ),
+        [VER, FACE_TESTS],
+    ),
+    (
+        Case(
+            id="t45-04-compared-with-the-replaceable-upload",
+            what="photos compared from the private upload, not the public copy moderation scored",
+            edits=[
+                (
+                    SERVICE45,
+                    "            settings.R2_BUCKET_PUBLIC, photo.public_key, MAX_UPLOAD_BYTES + 1\n",
+                    "            settings.R2_BUCKET_PRIVATE, photo.raw_key, MAX_UPLOAD_BYTES + 1\n",
+                )
+            ],
+            expect=[
+                "test_it_compares_the_re_encoded_selfie_with_the_public_copies_only",
+                "test_a_public_copy_gone_missing_is_left_out",
+            ],
+        ),
+        [VER],
+    ),
+    (
+        Case(
+            id="t45-05-the-original-selfie-kept",
+            what="the re-encoded selfie not written back: the upload, location and all, kept",
+            edits=[
+                (
+                    SERVICE45,
+                    '    await _stored(storage.put_bytes(private, selfie.raw_key, clean.data, "image/jpeg"))\n',
+                    "",
+                )
+            ],
+            expect=["test_a_located_selfie_is_stored_with_no_location"],
+        ),
+        [VER],
+    ),
+    (
+        Case(
+            id="t45-06-the-original-selfie-compared",
+            what="the upload's own bytes compared, not the re-encoded ones",
+            edits=[
+                (SERVICE45, "    del data\n", ""),
+                (
+                    SERVICE45,
+                    "    match = await facematch.compare(clean.data, [ref for _, ref in found])\n",
+                    "    match = await facematch.compare(data, [ref for _, ref in found])\n",
+                ),
+            ],
+            expect=["test_a_located_selfie_is_stored_with_no_location"],
+        ),
+        [VER],
+    ),
+    (
+        Case(
+            id="t45-07-a-matched-selfie-published",
+            what="an approved selfie given a public key",
+            edits=[
+                (
+                    SERVICE45,
+                    "            user.is_verified = True\n",
+                    '            user.is_verified = True\n            photo.public_key = f"p/{photo.id}.jpg"\n',
+                )
+            ],
+            expect=["test_a_matched_selfie_is_never_public_and_never_shown"],
+        ),
+        [VER],
+    ),
+    (
+        Case(
+            id="t45-08-a-match-never-marks-the-user",
+            what="an approved selfie leaves is_verified false",
+            edits=[(SERVICE45, "            user.is_verified = True\n", "")],
+            expect=[
+                "test_at_the_threshold_it_matches_and_records_the_numbers",
+                "test_a_wake_and_the_job_at_once_decide_it_once",
+            ],
+        ),
+        [VER],
+    ),
+    (
+        Case(
+            id="t45-09-many-faces-allowed",
+            what="a selfie with several faces not refused as such",
+            edits=[
+                (
+                    RULES45,
+                    "    if match.faces_in_selfie > 1:\n        return MANY_FACES\n",
+                    "",
+                )
+            ],
+            expect=[
+                "test_the_selfie_must_hold_exactly_one_face[2-many_faces]",
+                "test_the_selfie_must_hold_exactly_one_face[3-many_faces]",
+                "test_a_selfie_without_exactly_one_face_compares_nothing[three_people-3]",
+            ],
+        ),
+        [VER, FACE_TESTS],
+    ),
+    (
+        Case(
+            id="t45-10-decided-again-once-decided",
+            what="the decision written without re-reading that it's still pending",
+            edits=[
+                (
+                    SERVICE45,
+                    (
+                        "        if locked.status is not ReviewStatus.PENDING:\n"
+                        '            return f"{locked.status.value} while it was compared: left as it is"\n'
+                    ),
+                    "",
+                )
+            ],
+            expect=["test_a_wake_and_the_job_at_once_decide_it_once"],
+        ),
+        [VER],
+    ),
+    (
+        Case(
+            id="t45-11-the-decision-unlocked",
+            what="the user's and the verification's row locks removed from the decision",
+            edits=[
+                (
+                    SERVICE45,
+                    "            user = await users_service.locked_user(session, verification.user_id)\n",
+                    "            user = await users_service.get_user(session, verification.user_id)\n",
+                ),
+                (
+                    REPO45,
+                    (
+                        "        .with_for_update()\n"
+                        "        .execution_options(populate_existing=True)\n"
+                        "    )\n"
+                        "    return verification\n"
+                    ),
+                    (
+                        "        .execution_options(populate_existing=True)\n"
+                        "    )\n"
+                        "    return verification\n"
+                    ),
+                ),
+            ],
+            expect=["test_a_wake_and_the_job_at_once_decide_it_once"],
+        ),
+        [VER],
+    ),
+    (
+        Case(
+            id="t45-12-every-reason-named-to-the-owner",
+            what="a reason off D-263's list reaches the owner by name",
+            edits=[
+                (
+                    RULES45,
+                    "    if reason is None or reason in OWNER_REASONS:\n",
+                    "    if True:\n",
+                )
+            ],
+            expect=[
+                "test_a_rejection_names_its_reason_only_from_the_list[something_added_later-other]"
+            ],
+        ),
+        [VER],
+    ),
+    (
+        Case(
+            id="t45-13-no-wake",
+            what="the submit never wakes the worker (D-261)",
+            edits=[
+                (
+                    SERVICE45,
+                    "    await queue.wake(VERIFY_SELFIE, str(verification.id))\n",
+                    "",
+                )
+            ],
+            expect=[
+                "test_it_queues_the_comparison_then_wakes_the_worker_after_the_commit",
+                "test_a_submitted_selfie_is_decided_by_the_wake_and_the_job_finds_it_done",
+            ],
+        ),
+        [VER, WORKER_TESTS],
+    ),
+    (
+        Case(
+            id="t45-14-the-wake-before-the-commit",
+            what="the wake sent inside the submit's transaction",
+            edits=[
+                (
+                    SERVICE45,
+                    (
+                        "        out = await _out(session, verification)\n"
+                        "    await queue.wake(VERIFY_SELFIE, str(verification.id))\n"
+                    ),
+                    (
+                        "        out = await _out(session, verification)\n"
+                        "        await queue.wake(VERIFY_SELFIE, str(verification.id))\n"
+                    ),
+                )
+            ],
+            # Only the in-transaction check catches this. The end-to-end test
+            # stays green: the commit lands microseconds after the publish,
+            # long before the listener's database read (seen, 5 October 2026).
+            expect=[
+                "test_it_queues_the_comparison_then_wakes_the_worker_after_the_commit"
+            ],
+        ),
+        [VER],
+    ),
+    (
+        Case(
+            id="t45-15-a-model-not-hash-checked",
+            what="a model's SHA-256 not checked (D-088)",
+            edits=[
+                (
+                    "app/core/facemodels.py",
+                    (
+                        "    if _sha256(path) != model.sha256:\n"
+                        '        return "not D-088\'s SHA-256"\n'
+                    ),
+                    "",
+                )
+            ],
+            expect=[
+                "test_sface_without_d088s_exact_models_is_refused_naming_them[altered",
+                "test_load_refuses_a_model_that_isnt_d088s",
+            ],
+        ),
+        [FACE_TESTS, WORKER_TESTS],
+    ),
+    (
+        Case(
+            id="t45-16-the-api-loads-opencv",
+            what="OpenCV imported where the API imports the provider",
+            edits=[
+                (
+                    FACEMATCH,
+                    "from PIL import Image\n",
+                    "import cv2  # noqa: F401\nfrom PIL import Image\n",
+                )
+            ],
+            expect=["test_the_api_never_loads_opencv"],
+        ),
+        [FACE_TESTS],
+    ),
+    (
+        Case(
+            id="t45-17-opencv-decodes-the-file",
+            what="OpenCV's decoder reading the image bytes instead of Pillow's pixels",
+            edits=[
+                (
+                    FACEMATCH,
+                    (
+                        '    with Image.open(io.BytesIO(jpeg), formats=["JPEG"]) as decoded:\n'
+                        '        rgb = decoded.convert("RGB")\n'
+                        "    return np.ascontiguousarray(np.asarray(rgb)[:, :, ::-1])\n"
+                    ),
+                    (
+                        "    import cv2\n\n"
+                        "    decoded: np.ndarray = cv2.imdecode(\n"
+                        "        np.frombuffer(jpeg, np.uint8), cv2.IMREAD_COLOR\n"
+                        "    )\n"
+                        "    return decoded\n"
+                    ),
+                )
+            ],
+            expect=["test_opencv_never_parses_an_image_file"],
+        ),
+        [FACE_TESTS],
+    ),
+    (
+        Case(
+            id="t45-18-a-sixth-selfie-a-day",
+            what="six selfies a day, not five (off by one)",
+            edits=[
+                (
+                    SERVICE45,
+                    "    if len(counted) < rules.ATTEMPTS:\n",
+                    "    if len(counted) <= rules.ATTEMPTS:\n",
+                )
+            ],
+            expect=[
+                "test_five_selfies_in_24_hours_and_the_sixth_waits",
+                "test_the_sixth_selfie_in_a_day_is_refused_at_submit_too",
+            ],
+        ),
+        [VER],
+    ),
+    (
+        Case(
+            id="t45-19-attempts-never-leave-the-window",
+            what="every selfie ever sent counted, not the last 24 hours'",
+            edits=[(REPO45, "            Verification.created_at > since,\n", "")],
+            expect=["test_selfies_sent_over_24_hours_ago_no_longer_count"],
+        ),
+        [VER],
+    ),
+    (
+        Case(
+            id="t45-20-a-refusal-leaves-the-verification",
+            what="an under-18 refusal leaves the verification rows (D-078)",
+            edits=[
+                (
+                    "app/modules/users/repository.py",
+                    '    Attached(Verification, ("user_id",)),\n',
+                    "",
+                )
+            ],
+            expect=["test_a_refusals_selfie_and_its_verification_go_with_it"],
+        ),
+        ["tests/modules/users/test_dob_gender.py"],
+    ),
+    (
+        Case(
+            id="t45-21-an-unsent-selfie-blocks-the-next",
+            what="a selfie never sent holds the selfie place forever",
+            edits=[
+                (
+                    PHOTOS_SERVICE,
+                    (
+                        "        if kind is PhotoKind.SELFIE:\n"
+                        "            live, replaced = await _replace_unsent_selfies(session, live)\n"
+                    ),
+                    "",
+                )
+            ],
+            expect=["test_a_selfie_never_sent_is_replaced_by_the_next"],
+        ),
+        [UPLOAD_TESTS],
+    ),
+    (
+        Case(
+            id="t45-22-a-selfie-being-compared-replaced",
+            what="a selfie being compared replaced by a new upload",
+            edits=[
+                (
+                    PHOTOS_SERVICE,
+                    "    replaced = [p for p in waiting if p.id not in sent]\n",
+                    "    replaced = list(waiting)\n",
+                )
+            ],
+            expect=["test_a_selfie_being_compared_holds_its_place"],
+        ),
+        [UPLOAD_TESTS],
+    ),
+    (
+        Case(
+            id="t45-23-the-seed-adds-a-second-selfie",
+            what="the seed adds a second selfie on a re-run",
+            edits=[
+                ("seed/run.py", "    if approved is not None:\n        return\n", "")
+            ],
+            expect=["test_a_second_run_adds_no_photo"],
+        ),
+        ["tests/seed/test_seed.py"],
+    ),
+    (
+        Case(
+            id="t45-24-the-review-shows-only-the-near",
+            what="the review lists only results near the threshold (the refuted design, D-260)",
+            edits=[
+                ("app/tools/selfie_review.py", "    if args.near:\n", "    if True:\n")
+            ],
+            expect=["test_every_decision_is_listed_far_from_the_threshold_too"],
+        ),
+        ["tests/tools/test_selfie_review.py"],
+    ),
+    (
+        Case(
+            id="t45-25-reconnects-never-back-off-to-a-cap",
+            what="the listener's backoff uncapped",
+            edits=[
+                (
+                    WAKE,
+                    "                backoff = min(backoff * 2, self._max_backoff_s)\n",
+                    "                backoff = backoff * 2\n",
+                )
+            ],
+            expect=[
+                "test_a_connection_that_never_holds_backs_off_to_once_in_5_minutes"
+            ],
+        ),
+        [WAKE_TESTS],
+    ),
+    (
+        Case(
+            id="t45-26-backoff-reset-on-every-drop",
+            what="the backoff restarts from a second after any drop, held or not",
+            edits=[(WAKE, "                if held:\n", "                if True:\n")],
+            expect=[
+                "test_it_starts_again_from_a_second_only_after_a_connection_held[dropping-early-keeps-backing-off]"
+            ],
+        ),
+        [WAKE_TESTS],
+    ),
+    (
+        Case(
+            id="t45-27-a-failing-comparison-stops-the-ear",
+            what="a comparison that fails takes the listener's connection with it",
+            edits=[
+                (
+                    WAKE,
+                    (
+                        "        try:\n"
+                        "            await self._handle(verification_id)\n"
+                        "        except Exception as error:  # noqa: BLE001 — the queued job still runs\n"
+                        "            log.info(\n"
+                        '                "wake.left_to_the_queue",\n'
+                        "                verification_id=str(verification_id),\n"
+                        "                why=type(error).__name__,\n"
+                        "            )\n"
+                    ),
+                    "        await self._handle(verification_id)\n",
+                )
+            ],
+            expect=["test_a_failing_comparison_never_stops_the_listening"],
+        ),
+        [WAKE_TESTS],
+    ),
+    (
+        Case(
+            id="t45-28-the-last-try-leaves-her-waiting",
+            what="the job's last try gives up without deciding, so she waits on nothing",
+            edits=[
+                (
+                    "app/workers/tasks/verify_selfie.py",
+                    "    if final is None:\n",
+                    "    if True:\n",
+                )
+            ],
+            expect=[
+                "test_the_last_failure_is_unavailable_so_she_can_start_again",
+                "test_photos_still_waiting_at_the_last_try_are_no_photos",
+            ],
+        ),
+        [JOB_TESTS],
+    ),
+    (
+        Case(
+            id="t45-29-a-refused-users-selfie-left-behind",
+            what="a selfie written back after its user was refused is left in storage",
+            edits=[
+                (
+                    SERVICE45,
+                    "            await to.storage.delete(to.settings.R2_BUCKET_PRIVATE, selfie.raw_key)\n",
+                    "",
+                )
+            ],
+            expect=["test_a_user_refused_while_it_was_compared_leaves_no_selfie"],
+        ),
+        [VER],
+    ),
+    (
+        Case(
+            id="t45-30-the-worker-starts-without-the-models",
+            what="the worker's refusal without D-088's models removed",
+            edits=[
+                (
+                    "app/workers/main.py",
+                    '    if settings.FACEMATCH_PROVIDER == "sface":\n',
+                    '    if settings.FACEMATCH_PROVIDER == "never":\n',
+                )
+            ],
+            expect=[
+                "test_sface_without_d088s_exact_models_is_refused_naming_them[missing",
+                "test_sface_without_d088s_exact_models_is_refused_naming_them[altered",
+                "test_sface_without_d088s_exact_models_is_refused_naming_them[cut short",
+            ],
+        ),
+        [WORKER_TESTS],
+    ),
+    (
+        Case(
+            id="t45-31-an-altered-download-kept",
+            what="a downloaded model kept although it isn't D-088's",
+            edits=[
+                (
+                    "app/core/facemodels.py",
+                    (
+                        "            if wrong:\n"
+                        "                partial.unlink()\n"
+                        '                raise ValueError(f"{model.name} from {model.url}: {wrong}")\n'
+                    ),
+                    "",
+                )
+            ],
+            expect=["test_fetch_refuses_an_altered_download_and_leaves_nothing"],
+        ),
+        [FACE_TESTS],
+    ),
+    (
+        Case(
+            id="t45-32-a-failed-wake-fails-the-request",
+            what="a wake that fails raises, after the submit has committed",
+            edits=[
+                (
+                    "app/core/queue.py",
+                    (
+                        "        try:\n"
+                        "            await asyncio.wait_for(\n"
+                        "                self._arq.publish(wake_channel(job), value), WAKE_TIMEOUT_S\n"
+                        "            )\n"
+                        "        except Exception as error:  # noqa: BLE001 — the queued job still runs\n"
+                        '            log.warning("queue.wake_failed", job=job, error=type(error).__name__)\n'
+                    ),
+                    (
+                        "        await asyncio.wait_for(\n"
+                        "            self._arq.publish(wake_channel(job), value), WAKE_TIMEOUT_S\n"
+                        "        )\n"
+                    ),
+                )
+            ],
+            expect=[
+                "test_a_wake_that_fails_is_logged_and_never_raises",
+                "test_a_wake_that_hangs_gives_up_after_a_second",
+            ],
+        ),
+        ["tests/core/test_queue.py"],
+    ),
+]
+
 CASES: list[tuple[Case, list[str]]] = (
     [(c, T51_SELECTION) for c in T51]
     + [(c, T54_SELECTION) for c in T54]
@@ -1924,6 +2507,7 @@ CASES: list[tuple[Case, list[str]]] = (
     + P142
     + P143
     + [(c, P38_SELECTION) for c in P38]
+    + T45
 )
 
 # The fifty-connection fixture's own message when Postgres refuses a connection.

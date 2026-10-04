@@ -2,7 +2,7 @@
 # Targets tagged [T-x.y] are stubs until that task lands. See docs/05-PLAN.md.
 
 .DEFAULT_GOAL := help
-.PHONY: help infra-up infra-down infra-reset dev worker seed test test-api test-web lint lint-api lint-web hooks migrate migrate-down migration migration-auto types e2e
+.PHONY: help infra-up infra-down infra-reset dev worker models seed test test-api test-web lint lint-api lint-web hooks migrate migrate-down migration migration-auto types e2e
 
 COMPOSE := docker compose -f infra/docker-compose.yml
 
@@ -25,15 +25,18 @@ infra-reset: ## Stop the docker stack and DROP all data volumes
 
 dev: ## Run infra + api + worker + web, all on 127.0.0.1
 	$(MAKE) infra-up
-	@echo "api http://127.0.0.1:8000  web http://127.0.0.1:3000  worker: moderates photos  (Ctrl-C stops all three)"
+	@echo "api http://127.0.0.1:8000  web http://127.0.0.1:3000  worker: moderates photos, compares selfies  (Ctrl-C stops all three)"
 	@trap 'kill 0' INT TERM; \
 	( cd api && uv run uvicorn app.main:app --host 127.0.0.1 --port 8000 --reload ) & \
 	( cd api && uv run python -m app.workers ) & \
 	( cd web && pnpm dev --port 3000 ) & \
 	wait
 
-worker: ## Run the ARQ worker only: moderate_photo, delete_files (T-4.4)
+worker: ## Run the ARQ worker only: moderate_photo, delete_files, verify_selfie (T-4.4, T-4.5)
 	cd api && uv run python -m app.workers
+
+models: ## Fetch the face models into api/models, checked against D-088's SHA-256s (T-4.5)
+	cd api && uv run python -m app.core.facemodels
 
 seed: ## Dev data, local only: 20 profiles, 3 test accounts (re-run changes nothing)
 	cd api && uv run python -m seed

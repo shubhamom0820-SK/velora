@@ -1,4 +1,4 @@
-import { Shield } from "lucide-react";
+import { ScanFace } from "lucide-react";
 
 import { t } from "@/i18n/t";
 
@@ -11,10 +11,12 @@ type AvatarProps = {
   /** Diameter in px; the prototype uses 46 in lists and 50 in chats. */
   size?: number;
   online?: boolean;
+  /** The selfie matched the profile's photos (`Me.is_verified`). Said as
+   * exactly that, with a face, never a shield or "Verified" (D-262). */
   verified?: boolean;
 };
 
-/** A round profile picture, named for screen readers with its online and verified states. */
+/** A round profile picture, named for screen readers with its online and selfie-matched states. */
 export function Avatar({
   name,
   src,
@@ -22,7 +24,11 @@ export function Avatar({
   online = false,
   verified = false,
 }: AvatarProps) {
-  const label = [name, online && t("ui.online"), verified && t("ui.verified")]
+  const label = [
+    name,
+    online && t("ui.online"),
+    verified && t("ui.selfieMatched"),
+  ]
     .filter(Boolean)
     .join(", ");
   const initial = Array.from(name.trim())[0]?.toUpperCase() ?? "";
@@ -58,7 +64,7 @@ export function Avatar({
           aria-hidden
           className="rounded-pill bg-surface text-accent absolute -top-0.5 -right-0.5 flex size-[18px] items-center justify-center"
         >
-          <Icon icon={Shield} size={12} />
+          <Icon icon={ScanFace} size={12} />
         </span>
       )}
     </span>

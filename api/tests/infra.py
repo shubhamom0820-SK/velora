@@ -289,6 +289,25 @@ S3_UP = _reachable(LOCAL_S3_URL)
 S3_DOWN_REASON = "The local S3 isn't reachable — start it with `make infra-up`"
 
 
+# The face models (D-088, T-4.5): fetched, never committed (`make models`; CI
+# fetches them before the tests). The same rule again: skip locally when they
+# aren't there, fail in CI, where the real face match must never quietly not run.
+MODELS_DOWN_REASON = (
+    "The face models aren't in api/models — fetch them with `make models`"
+)
+
+
+def require_models() -> None:
+    """Call first in a test that runs the real models."""
+    from app.core import facemodels
+
+    decision = infra_policy(reachable=not facemodels.problems(), ci=in_ci())
+    if decision == "skip":
+        pytest.skip(MODELS_DOWN_REASON)
+    if decision == "fail":
+        pytest.fail(f"CI requires the face models ({MODELS_DOWN_REASON}).")
+
+
 @asynccontextmanager
 async def transactional_session(engine: AsyncEngine) -> AsyncIterator[AsyncSession]:
     """A session inside a transaction that is always rolled back.
