@@ -24,6 +24,7 @@ import { GenderStep } from "./GenderStep";
 import { InterestsStep } from "./InterestsStep";
 import { LookingForStep } from "./LookingForStep";
 import { NameStep } from "./NameStep";
+import { PhotosStep } from "./PhotosStep";
 import { PinStep } from "./PinStep";
 import { SignIn } from "./SignIn";
 import { USERNAME_CHECK_DELAY_MS, UsernameStep } from "./UsernameStep";
@@ -810,31 +811,39 @@ describe("the PIN (T-3.12, D-069)", () => {
   });
 });
 
-describe("photos and the selfie, until Sprint 4", () => {
-  it.each([
-    ["photos", "Add your photos", "/onboarding/about"],
-    ["selfie", "Quick selfie check", "/onboarding/pin"],
-  ] as const)(
-    "%s says it's next, with a way back and a way out",
-    (step, title, back) => {
-      renderUi(<ComingNextStep step={step} />);
+describe("the selfie, until T-4.7", () => {
+  it("says it's next, with a way back and a way out", () => {
+    renderUi(<ComingNextStep />);
 
-      expect(screen.getByRole("heading", { name: title })).toBeInTheDocument();
-      expect(screen.getByText("This step is coming next.")).toBeInTheDocument();
-      expect(screen.getByRole("link", { name: "Back" })).toHaveAttribute(
-        "href",
-        back,
-      );
-      expect(
-        screen.getByRole("button", { name: "Sign out" }),
-      ).toBeInTheDocument();
-    },
-  );
+    expect(
+      screen.getByRole("heading", { name: "Quick selfie check" }),
+    ).toBeInTheDocument();
+    expect(screen.getByText("This step is coming next.")).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "Back" })).toHaveAttribute(
+      "href",
+      "/onboarding/pin",
+    );
+    expect(
+      screen.getByRole("button", { name: "Sign out" }),
+    ).toBeInTheDocument();
+  });
 });
 
 describe("production's CSP allows no inline style (P-41)", () => {
-  it("no screen renders a style attribute", () => {
-    fakeApi({});
+  it("no screen renders a style attribute", async () => {
+    fakeApi({
+      "GET /v1/me/photos": () =>
+        json(200, [
+          {
+            id: "p1",
+            kind: "public",
+            position: 0,
+            status: "approved",
+            reject_reason: null,
+            url: "https://cdn.test/p/p1.jpg",
+          },
+        ]),
+    });
     const screens = [
       <SignIn key="s" />,
       <BirthdayStep key="b" me={me()} />,
@@ -847,13 +856,14 @@ describe("production's CSP allows no inline style (P-41)", () => {
         host="h"
       />,
       <AboutStep key="a" me={me({ onboarding_step: "about" })} />,
-      <ComingNextStep key="p" step="photos" />,
+      <PhotosStep key="p" me={me({ onboarding_step: "photos" })} />,
       <InterestsStep key="i" me={me({ onboarding_step: "interests" })} />,
       <PinStep key="pin" me={me({ onboarding_step: "pin" })} />,
-      <ComingNextStep key="s" step="selfie" />,
+      <ComingNextStep key="s" />,
     ];
     for (const ui of screens) {
       const { container, unmount } = renderUi(ui);
+      if (ui.key === "p") await screen.findByRole("list");
       expect(container.querySelector("[style]")).toBeNull();
       unmount();
     }

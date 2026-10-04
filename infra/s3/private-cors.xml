@@ -1,0 +1,18 @@
+<!--
+  The private bucket's CORS rule, for the local web (T-4.6). The browser PUTs a
+  photo straight to the bucket from another origin, http://127.0.0.1:3000, with
+  a Content-Type header, so it asks first, and SeaweedFS would otherwise answer
+  any origin. This is staging's rule in Cloudflare, with the local web's
+  origin: PUT and Content-Type only, nothing else. s3-init sets it, and
+  api/tests/test_local_s3_cors.py holds the bucket to it.
+  The E2E's web, http://127.0.0.1:3100, isn't admitted: T-4.9 adds it when its
+  journey uploads a photo (its Needs line says so).
+-->
+<CORSConfiguration>
+  <CORSRule>
+    <AllowedOrigin>http://127.0.0.1:3000</AllowedOrigin>
+    <AllowedMethod>PUT</AllowedMethod>
+    <AllowedHeader>Content-Type</AllowedHeader>
+    <MaxAgeSeconds>3600</MaxAgeSeconds>
+  </CORSRule>
+</CORSConfiguration>

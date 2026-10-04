@@ -1,5 +1,6 @@
 """`POST /v1/photos/upload-url` and `POST /v1/photos/{id}/complete` (T-4.2);
-`GET /v1/me/photos`, `PATCH /v1/me/photos/order`, `DELETE /v1/photos/{id}` (T-4.3)."""
+`GET /v1/me/photos`, `PATCH /v1/me/photos/order`, `DELETE /v1/photos/{id}` (T-4.3);
+`GET /v1/photos/{id}` (T-4.6, D-096)."""
 
 from __future__ import annotations
 
@@ -107,3 +108,16 @@ async def delete_photo(
         session, user, photo_id, storage=providers.storage, settings=settings
     )
     return Response(status_code=204)
+
+
+@router.get("/photos/{photo_id}")
+async def my_photo(
+    photo_id: UUID,
+    user: Annotated[User, Depends(current_user)],
+    session: Annotated[AsyncSession, Depends(get_session)],
+    providers: Annotated[Providers, Depends(get_providers)],
+    settings: Annotated[Settings, Depends(app_settings)],
+) -> Photo:
+    return await service.owners_photo(
+        session, user, photo_id, storage=providers.storage, settings=settings
+    )

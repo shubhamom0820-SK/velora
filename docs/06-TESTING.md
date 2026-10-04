@@ -201,7 +201,10 @@ red only when every test it names failed; a run where Postgres refused the fifty
 inconclusive. `--list` names the cases (T-5.1's thirty-five, T-5.4's six), a prefix runs some
 (`t54-`), and `--repeat N` reports a scheduler-dependent red as red in N of N (P-58).
 `tests/test_break_guards.py` fails if a case's anchor leaves its file, so the claims stay
-re-runnable. Not in CI: a full pass takes about twenty minutes.
+re-runnable. Not in CI: a full pass takes about twenty minutes. The web's are
+`node scripts/break-guards.mts` (from `web/`, T-4.6: the CSP, the photo slots' states, the
+transport boundary, the upload), the same shape with vitest, a prefix runs some (`t46-csp`), and
+`src/lib/break-guards.test.ts` keeps their anchors honest.
 
 Running CI's commands locally does not prove CI will pass, because the infrastructure differs:
 T-1.20's first run failed only because the postgis image built CI's test database differently

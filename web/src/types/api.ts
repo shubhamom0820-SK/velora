@@ -400,7 +400,8 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        get?: never;
+        /** My Photo */
+        get: operations["my_photo_v1_photos__photo_id__get"];
         put?: never;
         post?: never;
         /** Delete Photo */
@@ -1411,6 +1412,37 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["Photo"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    my_photo_v1_photos__photo_id__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                photo_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Photo"];
                 };
             };
             /** @description Validation Error */

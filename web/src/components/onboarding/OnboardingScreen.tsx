@@ -10,6 +10,7 @@ import { GenderStep } from "./GenderStep";
 import { InterestsStep } from "./InterestsStep";
 import { LookingForStep } from "./LookingForStep";
 import { NameStep } from "./NameStep";
+import { PhotosStep } from "./PhotosStep";
 import { PinStep } from "./PinStep";
 import { UsernameStep } from "./UsernameStep";
 
@@ -40,13 +41,13 @@ export function OnboardingScreen({
     case "about":
       return <AboutStep me={me} />;
     case "photos":
-      return <ComingNextStep step="photos" />;
+      return <PhotosStep me={me} />;
     case "interests":
       return <InterestsStep me={me} />;
     case "pin":
       return <PinStep me={me} />;
     case "selfie":
-      return <ComingNextStep step="selfie" />;
+      return <ComingNextStep />;
     case null:
       return null;
   }

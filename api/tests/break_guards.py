@@ -1225,8 +1225,59 @@ T44: list[tuple[Case, list[str]]] = [
     ),
 ]
 
+# --- T-4.6: D-096's read, and what an owner is told ------------------------------
+
+OUTCOME = ["tests/modules/photos/test_outcome.py"]
+T46: list[tuple[Case, list[str]]] = [
+    (
+        Case(
+            id="t46-01-every-reason-reaches-the-owner-by-name",
+            what="every reason reaches the owner by name",
+            edits=[
+                (
+                    "app/modules/photos/service.py",
+                    "    if reason is None or reason in OWNER_REASONS:\n",
+                    "    if True:\n",
+                )
+            ],
+            expect=["test_any_other_reason_reaches_its_owner_as_other"],
+        ),
+        OUTCOME,
+    ),
+    (
+        Case(
+            id="t46-02-someone-else-s-photo-readable",
+            what="someone else's photo readable",
+            edits=[
+                (
+                    "app/modules/photos/repository.py",
+                    "            Photo.id == photo_id,\n            Photo.user_id == user_id,\n            Photo.kind.in_(",
+                    "            Photo.id == photo_id,\n            Photo.kind.in_(",
+                )
+            ],
+            expect=["test_someone_elses_photo_a_selfie_and_no_photo_answer_alike"],
+        ),
+        OUTCOME,
+    ),
+    (
+        Case(
+            id="t46-03-a-selfie-readable",
+            what="a selfie readable",
+            edits=[
+                (
+                    "app/modules/photos/repository.py",
+                    "            Photo.user_id == user_id,\n            Photo.kind.in_((PhotoKind.PUBLIC, PhotoKind.PRIVATE)),\n        )\n    )\n    return photo\n",
+                    "            Photo.user_id == user_id,\n        )\n    )\n    return photo\n",
+                )
+            ],
+            expect=["test_someone_elses_photo_a_selfie_and_no_photo_answer_alike"],
+        ),
+        OUTCOME,
+    ),
+]
+
 CASES: list[tuple[Case, list[str]]] = (
-    [(c, T51_SELECTION) for c in T51] + [(c, T54_SELECTION) for c in T54] + T44
+    [(c, T51_SELECTION) for c in T51] + [(c, T54_SELECTION) for c in T54] + T44 + T46
 )
 
 # The fifty-connection fixture's own message when Postgres refuses a connection.

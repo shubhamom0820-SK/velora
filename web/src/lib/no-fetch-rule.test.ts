@@ -3,8 +3,9 @@ import { ESLint } from "eslint";
 import { describe, expect, it } from "vitest";
 
 // Proves eslint.config.mjs's fetch ban both ways (CLAUDE.md rule 14): it flags
-// fetch outside src/lib, and leaves src/lib and look-alikes alone. Loading the
-// Next.js ESLint config takes a few seconds, hence the timeout.
+// fetch, and since T-4.6 XMLHttpRequest, outside src/lib, and leaves src/lib
+// and look-alikes alone. Loading the Next.js ESLint config takes a few seconds,
+// hence the timeout.
 const eslint = new ESLint({ cwd: process.cwd() });
 
 async function banned(filePath: string, code: string): Promise<string[]> {
@@ -28,6 +29,33 @@ describe("the fetch ban", { timeout: 30_000 }, () => {
     ["src/store/session.ts", "export const load = () => self.fetch('/x');"],
   ])("flags fetch in %s", async (filePath, code) => {
     expect(await banned(filePath, code)).toHaveLength(1);
+  });
+
+  it.each([
+    [
+      "src/components/onboarding/PhotosStep.tsx",
+      "export const put = () => new XMLHttpRequest();",
+    ],
+    [
+      "src/app/(auth)/onboarding/[step]/page.tsx",
+      "export const put = () => new window.XMLHttpRequest();",
+    ],
+    [
+      "src/components/x.tsx",
+      "export const put = () => new globalThis.XMLHttpRequest();",
+    ],
+    ["src/store/x.ts", "export const put = () => new self.XMLHttpRequest();"],
+  ])("flags XMLHttpRequest in %s (T-4.6)", async (filePath, code) => {
+    expect(await banned(filePath, code)).toHaveLength(1);
+  });
+
+  it("allows XMLHttpRequest inside src/lib, where the upload is", async () => {
+    expect(
+      await banned(
+        "src/lib/upload.ts",
+        "export const put = () => new XMLHttpRequest();",
+      ),
+    ).toEqual([]);
   });
 
   it("allows fetch inside src/lib", async () => {

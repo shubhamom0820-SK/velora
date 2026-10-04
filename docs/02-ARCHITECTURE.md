@@ -329,8 +329,14 @@ secret is left empty. Real secret values are never committed.
   `https://www.gstatic.com/recaptcha/`), a `frame-src 'self' https://www.google.com/recaptcha/
   https://recaptcha.google.com/recaptcha/`, and to `connect-src` reCAPTCHA's and Firebase Auth's
   (`https://www.google.com/recaptcha/`, `https://identitytoolkit.googleapis.com`,
-  `https://securetoken.googleapis.com`); Path B builds have none of them (D-085). Each task that
-  needs more widens it there, deliberately: App Check (P-68), R2 and the CDN (T-4.6), the camera
+  `https://securetoken.googleapis.com`); Path B builds have none of them (D-085). T-4.6 adds
+  photos, on builds with photo storage by `APP_ENV` (`web/src/lib/storage-origins.ts`): to
+  `connect-src` the private bucket, by its path on the storage endpoint, for the presigned PUT
+  (staging's `https://<R2_ACCOUNT_ID>.r2.cloudflarestorage.com/velora-staging-private/`); and an
+  `img-src 'self' blob: <the private bucket> <the CDN>`, for previews, the signed links pending and
+  private photos are shown by, and approved public photos (`https://cdn.staging.veloraapp.co.in`).
+  Never the whole endpoint, which staging and production share, and never a wildcard. Each task
+  that needs more widens it there, deliberately: App Check (P-68), the camera
   (T-4.7), location (T-4.10), the microphone
   (T-7.11), WebSockets (T-7.12), Razorpay (T-8.7), Sentry (T-9.12) and analytics (T-10.2). This
   line changes with each.

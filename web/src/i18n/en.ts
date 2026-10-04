@@ -141,9 +141,47 @@ export const en = {
       placeholder: "What you do, what you're into, who you'd like to meet…",
       moreNeeded: "{count} more characters",
     },
-    // Photos and the selfie arrive in Sprint 4 (T-4.6, T-4.7).
+    // The photos step (T-4.6), from the prototype's; the per-photo states and
+    // reasons are Claude's, for the founder's review. No reason accuses the
+    // person: a possible minor reads as `other`, D-093's own words, and so does
+    // any reason not listed here (D-096).
     photos: {
       title: "Add your photos",
+      sub: "At least one to be visible. Every photo is checked before it goes live.",
+      needOne: "Add at least one photo",
+      grid: "Your photos",
+      add: "Add a photo",
+      slot: "Photo {n}",
+      main: "Main",
+      uploading: "Uploading {percent}%",
+      checking: "Checking…",
+      approved: "Approved",
+      remove: "Remove photo {n}",
+      dismiss: "Clear photo {n}",
+      moveEarlier: "Move photo {n} earlier",
+      moveLater: "Move photo {n} later",
+      chooseAnother: "Choose another",
+      tryAgain: "Try again",
+      loadFailed: "We couldn't load your photos.",
+      privateAlbum:
+        "You can add a private album later. Nobody sees it unless you approve them, and you can take access back any time.",
+      // Why a photo isn't on the profile: the API's `reject_reason`, or what
+      // went wrong on the way up. Each says what to do next.
+      reasons: {
+        unsupported_format:
+          "We can't use this file — choose a JPEG, PNG or WebP photo",
+        too_large: "This photo is over 8 MB — choose a smaller one",
+        abandoned: "This upload didn't finish — try again",
+        nudity: "This photo can't go on your profile — try a different one",
+        no_face:
+          "We couldn't find a face in this photo — try one that shows yours clearly",
+        text_overlay:
+          "Photos with text over them can't be used — try one without",
+        // D-093's wording, fixed: a possible minor, and anything unlisted.
+        other: "We couldn't verify this photo — try a different one",
+        network:
+          "This photo didn't upload — check your connection and try again",
+      },
     },
     interests: {
       title: "What are you into?",

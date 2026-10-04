@@ -3,9 +3,12 @@ import nextVitals from "eslint-config-next/core-web-vitals";
 import nextTs from "eslint-config-next/typescript";
 
 // CLAUDE.md rule 14: server data reaches components only through the api client
-// and the query hooks in src/lib/, never a stray fetch (T-1.18).
+// and the query hooks in src/lib/, never a stray fetch (T-1.18). The same holds
+// for XMLHttpRequest, the photo upload's transport since T-4.6 (src/lib/upload.ts):
+// a request is made in src/lib or not at all.
 const NO_FETCH =
   "Server data goes through src/lib: the api client and the TanStack Query hooks in src/lib/queries (CLAUDE.md rule 14).";
+const TRANSPORTS = ["fetch", "XMLHttpRequest"];
 
 // zod only through src/lib/zod.ts, which turns its eval probe off: production's
 // CSP reports the probe as a violation (T-3.11).
@@ -33,14 +36,19 @@ const eslintConfig = defineConfig([
     files: ["src/**/*.{js,jsx,mjs,ts,tsx}"],
     ignores: ["src/lib/**"],
     rules: {
-      "no-restricted-globals": ["error", { name: "fetch", message: NO_FETCH }],
+      "no-restricted-globals": [
+        "error",
+        ...TRANSPORTS.map((name) => ({ name, message: NO_FETCH })),
+      ],
       "no-restricted-properties": [
         "error",
-        ...["window", "globalThis", "self"].map((object) => ({
-          object,
-          property: "fetch",
-          message: NO_FETCH,
-        })),
+        ...["window", "globalThis", "self"].flatMap((object) =>
+          TRANSPORTS.map((property) => ({
+            object,
+            property,
+            message: NO_FETCH,
+          })),
+        ),
       ],
     },
   },

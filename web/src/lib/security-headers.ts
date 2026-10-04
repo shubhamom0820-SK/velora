@@ -19,8 +19,10 @@
  *           reCAPTCHA's script, frame and connect hosts, and Firebase Auth's
  *           two API hosts. Path B builds keep the policy as it was.
  *   P-68    App Check: its hosts, the way T-3.14 added Firebase's.
- *   T-4.6   Photos: connect-src for R2's upload endpoint; img-src for the CDN
- *           and blob: previews.
+ *   T-4.6   Done: photos (storage-origins.ts). connect-src for the private
+ *           bucket, the presigned PUT; img-src for blob: previews, the private
+ *           bucket's signed links (pending and private photos) and the CDN
+ *           (approved ones). Each bucket by its path, never the whole endpoint.
  *   T-4.7   Selfie: camera=(self); blob: for the captured frame.
  *   T-4.10  Location: geolocation=(self).
  *   T-7.11  Voice notes: microphone=(self); media-src for voice notes and
@@ -40,6 +42,7 @@
  */
 
 import { signInPathFor } from "./sign-in-path";
+import { photoStorageFor } from "./storage-origins";
 
 /** `process.env` at build time, or a stand-in in tests. */
 type BuildEnv = Readonly<Record<string, string | undefined>>;
@@ -105,10 +108,28 @@ export function apiOrigin(env: BuildEnv = process.env): string | null {
   return url ? new URL(url).origin : null;
 }
 
+/**
+ * Photos' sources (T-4.6), on builds that have photo storage only. A CSP error
+ * on the photos step is this list, not an upload bug.
+ */
+function photoSources(env: BuildEnv): { connect: string; img: string } {
+  const storage = photoStorageFor(env, { dev: isDev(env) });
+  if (!storage) return { connect: "", img: "" };
+  return {
+    // The presigned PUT, from src/lib/upload.ts, to the private bucket.
+    connect: ` ${storage.privateBucket}`,
+    // blob: the resized photo's preview before it uploads; the private
+    // bucket: signed links to pending and private photos; the CDN: approved
+    // public ones.
+    img: ` blob: ${storage.privateBucket} ${storage.cdn}`,
+  };
+}
+
 export function contentSecurityPolicy(env: BuildEnv = process.env): string {
   const dev = isDev(env);
   const api = apiOrigin(env);
   const firebase = signsInByFirebase(env);
+  const photos = photoSources(env);
   const extra = (sources: readonly string[]) =>
     firebase ? ` ${sources.join(" ")}` : "";
   return [
@@ -120,10 +141,12 @@ export function contentSecurityPolicy(env: BuildEnv = process.env): string {
     // user's own; re-examined when a screen first renders another user's
     // (D-059's amendment, T-6.5 today).
     `script-src 'self' 'unsafe-inline'${dev ? " 'unsafe-eval'" : ""}${extra(FIREBASE.script)}`,
-    ...(dev
-      ? ["style-src 'self' 'unsafe-inline'", "img-src 'self' data:"]
+    ...(dev ? ["style-src 'self' 'unsafe-inline'"] : []),
+    // Images fall back to default-src 'self' on a build without photos.
+    ...(dev || photos.img
+      ? [`img-src 'self'${dev ? " data:" : ""}${photos.img}`]
       : []),
-    `connect-src 'self'${api ? ` ${api}` : ""}${extra(FIREBASE.connect)}`,
+    `connect-src 'self'${api ? ` ${api}` : ""}${photos.connect}${extra(FIREBASE.connect)}`,
     // Frames fall back to default-src 'self' everywhere else; a Firebase build
     // keeps that and adds reCAPTCHA's.
     ...(firebase ? [`frame-src 'self'${extra(FIREBASE.frame)}`] : []),

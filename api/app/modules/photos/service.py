@@ -247,6 +247,29 @@ async def complete(
 
 USER_DELETED = "user_deleted"
 
+# The reasons an owner is told, by name (D-096): this module's, and the
+# moderation reasons that say what to change (D-101). Every other reason
+# reaches the owner as `other`, so a reason added later is never shown until it
+# is listed here, and a possible minor (D-093) is never named to the person,
+# not even in the response a browser's tools can read.
+OWNER_REASONS = frozenset(
+    {
+        ABANDONED,
+        TOO_LARGE,
+        UNSUPPORTED,
+        USER_DELETED,
+        moderation_rules.NUDITY,
+        moderation_rules.NO_FACE,
+        moderation_rules.TEXT_OVERLAY,
+    }
+)
+
+
+def owner_reason(reason: str | None) -> str | None:
+    if reason is None or reason in OWNER_REASONS:
+        return reason
+    return moderation_rules.OTHER
+
 
 async def _out(photo: Photo, storage: StorageProvider, settings: Settings) -> PhotoOut:
     """The photo for its owner, with where to view it: an approved public photo
@@ -262,17 +285,34 @@ async def _out(photo: Photo, storage: StorageProvider, settings: Settings) -> Ph
         kind=photo.kind,
         position=photo.position,
         status=photo.status,
-        reject_reason=photo.reject_reason,
+        reject_reason=owner_reason(photo.reject_reason),
         url=url,
     )
+
+
+async def owners_photo(
+    session: AsyncSession,
+    user: User,
+    photo_id: UUID,
+    *,
+    storage: StorageProvider,
+    settings: Settings,
+) -> PhotoOut:
+    """One of the user's public or private photos, in any status (D-096): how
+    a photo that left `GET /me/photos` ended, so its slot can say why."""
+    async with session.begin():
+        photo = await repository.owners_photo(session, user.id, photo_id)
+    if photo is None:
+        raise _not_found()
+    return await _out(photo, storage, settings)
 
 
 async def owners_photos(
     session: AsyncSession, user: User, *, storage: StorageProvider, settings: Settings
 ) -> list[PhotoOut]:
     """Every live public and private photo of the user's, and nobody else's.
-    Selfies are T-4.5's; rejected photos aren't live (T-4.6 decides how a
-    rejection's reason is shown)."""
+    Selfies are T-4.5's; rejected photos aren't live (`owners_photo` says how
+    one ended, D-096)."""
     async with session.begin():
         photos = await repository.owners_view(session, user.id)
     return [await _out(photo, storage, settings) for photo in photos]

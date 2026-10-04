@@ -18,8 +18,25 @@ function header(env: Record<string, string | undefined>, key: string) {
   return securityHeaders(env).find((h) => h.key === key)?.value;
 }
 
+/** Each environment's photo storage (T-4.6, storage-origins.ts). */
+const R2 = "https://82f9b26266ddb6b491a623971f87d3c7.r2.cloudflarestorage.com";
+const LOCAL_S3 = {
+  img: "img-src 'self' blob: http://127.0.0.1:9000/velora-private/ http://127.0.0.1:9000/velora-public/",
+  upload: "http://127.0.0.1:9000/velora-private/",
+};
+const R2_FOR = {
+  staging: {
+    img: `img-src 'self' blob: ${R2}/velora-staging-private/ https://cdn.staging.veloraapp.co.in`,
+    upload: `${R2}/velora-staging-private/`,
+  },
+  production: {
+    img: `img-src 'self' blob: ${R2}/velora-prod-private/ https://cdn.veloraapp.co.in`,
+    upload: `${R2}/velora-prod-private/`,
+  },
+} as const;
+
 describe("the CSP in a production build (D-059)", () => {
-  it("is exactly what today's pages need, and no more", () => {
+  it("is exactly what a build without photo storage needs, and no more", () => {
     expect(contentSecurityPolicy(STAGING)).toBe(
       [
         "default-src 'self'",
@@ -34,24 +51,36 @@ describe("the CSP in a production build (D-059)", () => {
   });
 
   it.each(["local", "ci"])(
-    "is the same on a Path B build, APP_ENV=%s: no Google host at all",
+    "adds exactly the local S3's photo sources on a Path B build, APP_ENV=%s: no Google host at all (T-4.6)",
     (appEnv) => {
       const csp = contentSecurityPolicy({ ...STAGING, APP_ENV: appEnv });
 
-      expect(csp).toBe(contentSecurityPolicy(STAGING));
+      expect(csp).toBe(
+        [
+          "default-src 'self'",
+          "script-src 'self' 'unsafe-inline'",
+          LOCAL_S3.img,
+          `connect-src 'self' https://api.staging.veloraapp.co.in ${LOCAL_S3.upload}`,
+          "object-src 'none'",
+          "base-uri 'none'",
+          "form-action 'self'",
+          "frame-ancestors 'none'",
+        ].join("; "),
+      );
       expect(csp).not.toContain("google");
       expect(csp).not.toContain("frame-src");
     },
   );
 
-  it.each(["staging", "production"])(
-    "adds exactly Firebase sign-in's hosts on a Firebase build, APP_ENV=%s (T-3.14)",
+  it.each(["staging", "production"] as const)(
+    "adds exactly Firebase sign-in's hosts (T-3.14) and this environment's photo storage (T-4.6) on a Firebase build, APP_ENV=%s",
     (appEnv) => {
       expect(contentSecurityPolicy({ ...STAGING, APP_ENV: appEnv })).toBe(
         [
           "default-src 'self'",
           "script-src 'self' 'unsafe-inline' https://www.google.com/recaptcha/ https://www.gstatic.com/recaptcha/",
-          "connect-src 'self' https://api.staging.veloraapp.co.in https://www.google.com/recaptcha/ https://identitytoolkit.googleapis.com https://securetoken.googleapis.com",
+          R2_FOR[appEnv].img,
+          `connect-src 'self' https://api.staging.veloraapp.co.in ${R2_FOR[appEnv].upload} https://www.google.com/recaptcha/ https://identitytoolkit.googleapis.com https://securetoken.googleapis.com`,
           "frame-src 'self' https://www.google.com/recaptcha/ https://recaptcha.google.com/recaptcha/",
           "object-src 'none'",
           "base-uri 'none'",
@@ -59,6 +88,19 @@ describe("the CSP in a production build (D-059)", () => {
           "frame-ancestors 'none'",
         ].join("; "),
       );
+    },
+  );
+
+  it.each(["local", "ci", "staging", "production"])(
+    "names each bucket by its path, never a whole storage endpoint or a wildcard, APP_ENV=%s",
+    (appEnv) => {
+      const csp = contentSecurityPolicy({ ...STAGING, APP_ENV: appEnv });
+
+      expect(csp).not.toContain("*");
+      expect(csp).not.toMatch(/r2\.cloudflarestorage\.com[ ;]/);
+      expect(csp).not.toMatch(/127\.0\.0\.1:9000[ ;]/);
+      // Uploads only ever go to the private bucket.
+      expect(csp).not.toMatch(/connect-src[^;]*-public/);
     },
   );
 
@@ -110,9 +152,13 @@ describe("under next dev only", () => {
 
     expect(csp).toContain("script-src 'self' 'unsafe-inline' 'unsafe-eval'");
     expect(csp).toContain("style-src 'self' 'unsafe-inline'");
-    // /dev/ui's offline sample photo.
-    expect(csp).toContain("img-src 'self' data:");
-    expect(csp).toContain("connect-src 'self' http://127.0.0.1:8000;");
+    // /dev/ui's offline sample photo, and the local S3's photos (T-4.6).
+    expect(csp).toContain(
+      "img-src 'self' data: blob: http://127.0.0.1:9000/velora-private/ http://127.0.0.1:9000/velora-public/;",
+    );
+    expect(csp).toContain(
+      "connect-src 'self' http://127.0.0.1:8000 http://127.0.0.1:9000/velora-private/;",
+    );
   });
 });
 

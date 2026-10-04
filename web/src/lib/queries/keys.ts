@@ -11,4 +11,6 @@ export const queryKeys = {
   interests: () => ["interests"] as const,
   usernameAvailable: (username: string) =>
     ["usernames", username, "available"] as const,
+  myPhotos: () => ["photos", "mine"] as const,
+  photo: (id: string) => ["photos", id] as const,
 };

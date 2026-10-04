@@ -54,6 +54,7 @@ number: no screen shows either, so neither leaves the server (D-067's discipline
 | GET | /me/photos | 🔐 | → `Photo[]`: the owner's live public photos by place, then private; never selfies, rejected photos or anyone else's | T-4.3 |
 | PATCH | /me/photos/order | 🔐 | `{photo_ids[]}`, exactly the live public photos, each once, the first the main one → `Photo[]`, places 0 onwards | T-4.3 |
 | DELETE | /photos/{id} | 🔐 | → 204 (soft): rejected as `user_deleted`, its public copy removed; twice is once. A selfie, or the last public photo once past the `photos` step, is `NOT_ALLOWED` | T-4.3 |
+| GET | /photos/{id} | 🔐 | → `Photo`: one of the owner's public or private photos, in any status, rejected included, so the photos step can say why one left `/me/photos` (D-096). Someone else's, a selfie, or none: the same `NOT_FOUND` | T-4.6 |
 | POST | /verification/challenge | 🔐 | → `{verification_id, pose}` | T-4.5 |
 | POST | /verification/{id}/submit | 🔐 | `{photo_id}` → `Verification` (pending) | T-4.5 |
 | GET | /verification/latest | 🔐 | → `Verification` | T-4.5 |
@@ -61,6 +62,9 @@ number: no screen shows either, so neither leaves the server (D-067's discipline
 `Photo` (T-4.2, T-4.3): `id`, `kind`, `position`, `status`, `reject_reason`, and `url`: an approved
 public photo at `PUBLIC_CDN_URL`, any other live one by a 10-minute signed link to its private copy,
 `null` for a rejected one. A pending public photo completes the `photos` step (T-4.3).
+`reject_reason` names only `abandoned`, `too_large`, `unsupported_format`, `user_deleted`, `nudity`,
+`no_face` and `text_overlay`; any other reason, a possible minor's included, reads `other` (D-096,
+D-093).
 
 ## Discovery
 | Method | Path | Auth | Body → Response | Task |

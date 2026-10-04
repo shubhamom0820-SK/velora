@@ -72,15 +72,25 @@ services:
       retries: 24
 
   # One-shot: creates whichever of the two buckets is missing, claims each one's
-  # volumes, then exits.
-  # Inside s3's network, so its master answers on localhost; creating a bucket
-  # that exists is an error in `weed shell`, hence the check first.
+  # volumes, sets the private bucket's CORS rule, then exits. Inside s3's
+  # network, so its master, filer and S3 gateway answer on localhost; creating a
+  # bucket that exists is an error in `weed shell`, hence the check first.
+  #
+  # The CORS rule (T-4.6, ./s3/private-cors.xml): the local web uploads photos
+  # straight to velora-private, and SeaweedFS answers every origin unless a
+  # bucket has a rule of its own, which would let a local upload pass that
+  # staging refuses. `weed shell` can't set one, so curl does, signed with the
+  # development credentials in ./s3/s3.json: public by design, local and CI
+  # only, which is why their line carries gitleaks' allow marker. Setting the
+  # rule again replaces it.
   s3-init:
     image: chrislusf/seaweedfs:4.48@sha256:4e61d15fd35994cb1e43e1e553dff106794841fd9a99ade2fc8c8bfce4d7872d
     network_mode: "service:s3"
     depends_on:
       s3:
         condition: service_healthy
+    volumes:
+      - ./s3/private-cors.xml:/init/private-cors.xml:ro
     entrypoint:
       - /bin/sh
       - -c
@@ -102,6 +112,16 @@ services:
         done
         echo "init: each bucket's volumes claimed"
         echo s3.bucket.list | weed shell -master=localhost:9333
+        s3() {
+          curl -fsS --aws-sigv4 "aws:amz:auto:s3" \
+            --user velora-local:velora-local-secret "$$@" # gitleaks:allow
+        }
+        s3 -X PUT -H "Content-Type: application/xml" \
+          --data-binary @/init/private-cors.xml \
+          "http://localhost:9000/velora-private?cors"
+        echo "init: velora-private CORS:"
+        s3 "http://localhost:9000/velora-private?cors"
+        echo
 
 volumes:
   velora_pgdata:

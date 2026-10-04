@@ -192,6 +192,12 @@ line is as binding: `velora-prod-public` and `velora-prod-private`, location hin
   names read by Claude on 4 October 2026, never the values). The token's TTL is Forever, so
   **it is rotated before the first production deploy** (the founder, on REL-1's list), and the
   rotated values are the ones that go to Fly.
+- **The private bucket's CORS rule, before REL-1** (T-4.6, on REL-1's Needs line): staging's
+  (`infra/STAGING.md` §3) with production's origin, set by the founder in R2 →
+  `velora-prod-private` → Settings → CORS policy, exactly:
+  `[{"AllowedOrigins": ["https://veloraapp.co.in"], "AllowedMethods": ["PUT"], "AllowedHeaders": ["Content-Type"], "MaxAgeSeconds": 3600}]`.
+  Without it no browser can upload a photo, so nobody gets past the photos step. Checked as
+  staging's is, by a preflight from `https://veloraapp.co.in`.
 
 ### 4. Fly (until P-49)
 

@@ -2224,6 +2224,46 @@ founder chose the reversal.
 **Supersedes** the advisor's direction of 3 October 2026 that P-49 come before Sprint 4 so the
 worker is built once on its new host (on T-4.1's Needs line, waived there for T-4.1).
 
+### D-096 · A rejected photo's reason reaches its slot by a read of that photo, and never names a possible minor — Open
+**The decision (T-4.6, which the plan asked to decide before building the "rejected" state):**
+- **`GET /v1/photos/{id}`:** one of the owner's public or private photos, in any status, rejected
+  ones included, as `Photo`. Someone else's photo, a selfie, or no photo: the same 404, so ids
+  can't be probed.
+- **How the step uses it:** while any photo is pending, the photos step asks `GET /me/photos`
+  again every 5 seconds, only while the tab is visible. A photo it saw pending that leaves the list
+  is read once by this endpoint; if it was rejected, other than by its owner (`user_deleted`), the
+  slot that showed it says why, with "Choose another" and a cross that clears it. Clearing closes
+  the gap, so place 0 stays the main photo (03-SCHEMA).
+- **The owner hears a reason by name only from a list,** in every `Photo` the API returns:
+  `abandoned`, `too_large`, `unsupported_format`, `user_deleted`, `nudity`, `no_face`,
+  `text_overlay`. Every other reason, `minor_suspected` included, reaches the owner as `other`,
+  which the web says in D-093's words: "We couldn't verify this photo — try a different one". The
+  row keeps the true reason for moderation (rule 12).
+
+**Why a read of the one photo:** `GET /me/photos` stays the grid's one source, listing live photos
+only, as T-4.3 made it. A rejection is a fact about one photo, which never changes, so it is read
+once.
+
+**Why the API masks the reason, not only the web's copy:** D-093's first condition is that nothing
+tells the person they look underage, and `"reject_reason": "minor_suspected"` in the response is
+exactly that, one tap away in any browser's tools. A list fails closed: a reason T-4.4 or T-9.5 adds
+later reaches the owner as `other` until someone decides to name it.
+
+**What it doesn't do:** the page remembers which photos it watched only while it is open. A
+rejection that lands after a reload, or after the person has gone on, isn't shown on the photos
+step: the slot is simply empty again. Telling them then is P-74.
+
+**Rejected:**
+- `GET /me/photos` listing recent rejections too: it changes T-4.3's contract, needs a time window
+  or a "seen" flag (a migration), and every caller would have to drop them before reordering.
+- Reading the reason from `POST /photos/{id}/complete`, which returns a decided photo as it stands:
+  no API change, but a POST used as a read, and it would have handed out `minor_suspected` as it
+  was.
+- One message for every moderation rejection: no API change, but "no face" and "text over the
+  photo" are things the person can fix if told.
+
+Recommended and built by Claude in T-4.6, 4 October 2026. **Open until the founder approves it.**
+
 ### D-097 · A Thread lasts an hour; Extend buys a day; a Knot is unchanged — Locked
 **The names.** One word, one meaning: CLAUDE.md rule 17 exists for exactly this.
 - **Thread** is the live chat. One thing, one name, and it lasts **1 hour**.

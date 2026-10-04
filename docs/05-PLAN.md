@@ -636,6 +636,10 @@ waits on the founder's decisions, so it is a task of its own, outside the sprint
   **And P-130, with no condition** (D-230, 4 October 2026): `/refunds` rewritten to say there is no
   product refund. As published it promises Velas back on a ban and on a declined album request,
   which the product will never return.
+  **And one found building T-4.6, with no condition:** production's private bucket's CORS rule
+  (`infra/PRODUCTION.md` §3), set by the founder and checked by a preflight from
+  `https://veloraapp.co.in`. Without it no browser can upload a photo, so nobody gets past the
+  photos step.
   **And three that block only under their condition** (the founder, 3 and 4 October 2026), each
   condition written beside it so nobody reads it as unconditional and blocks a release that
   doesn't need it:
@@ -1602,18 +1606,38 @@ exist yet. The batch is a chain, T-3.10 → T-3.11 → T-3.12 → T-3.13, each n
 - [ ] **Commit:** `feat(verification): selfie challenge and face match [T-4.5]`
 
 ### T-4.6 · Web photos step
-- [ ] **Needs:** T-4.3, T-3.12
-- [ ] 6-slot grid; tap empty slot → file picker (`accept="image/*"`, `capture` not forced); client resize to ≤ 2000 px before upload (canvas) to save data; PUT to presigned URL with progress; states per slot: uploading %, checking, approved, rejected (with reason + retry). Drag to reorder (or up/down buttons on mobile).
-- [ ] Women see the private-album note.
-- [ ] **A rejection's reason on screen:** `GET /me/photos` lists only live photos (T-4.3), so a photo
+- [x] **Needs:** T-4.3, T-3.12
+- [x] 6-slot grid; tap empty slot → file picker (`accept="image/*"`, `capture` not forced); client resize to ≤ 2000 px before upload (canvas) to save data; PUT to presigned URL with progress; states per slot: uploading %, checking, approved, rejected (with reason + retry). Drag to reorder (or up/down buttons on mobile).
+  **Built** (`PhotosStep`, `PhotoSlot`, `usePhotoSlots`; hooks in `src/lib/queries/photos.ts`):
+  every photo the browser can read goes up as a JPEG drawn on a canvas, at most 2000 px
+  (`src/lib/resize-image.ts`); one it can't read goes up as it is, and the API's answer says what
+  it is (D-089, D-082). The PUT is `src/lib/upload.ts`, an XMLHttpRequest for its progress, the
+  web's only one: ESLint now bans `XMLHttpRequest` outside `src/lib` as it bans `fetch`. A photo
+  goes in the first free place, and removing or clearing one closes the gap, as the prototype's
+  grid does, so place 0 stays the main photo. Up and down buttons sit beside every photo, always
+  shown on a touch screen.
+- [x] Women see the private-album note.
+- [x] **A rejection's reason on screen:** `GET /me/photos` lists only live photos (T-4.3), so a photo
   moderation rejects drops out of it. This task decides how its reason (D-093's wording for a
   possible minor) reaches the slot that showed it, before building the "rejected" state.
-- [ ] Built in T-3.11's `StepFrame`, at D-080's `/onboarding/photos`, replacing T-3.12's placeholder.
-- [ ] **Widen the CSP here (D-059):** `connect-src` for R2's upload endpoint (the presigned PUT), and `img-src` for `PUBLIC_CDN_URL` and `blob:` previews. Uploads and previews fail with a CSP error until then.
+  **Decided as D-096 (Open, for the founder's approval):** `GET /photos/{id}` reads that one photo,
+  and the API names a reason only from a list, so `minor_suspected` reaches the person as `other`,
+  in D-093's words.
+- [x] Built in T-3.11's `StepFrame`, at D-080's `/onboarding/photos`, replacing T-3.12's placeholder.
+- [x] **Widen the CSP here (D-059):** `connect-src` for R2's upload endpoint (the presigned PUT), and `img-src` for `PUBLIC_CDN_URL` and `blob:` previews. Uploads and previews fail with a CSP error until then.
   **And `img-src` for R2's own endpoint too** (found 4 October 2026): `GET /me/photos` gives a
   pending or private photo as a signed link to the private bucket, on R2's endpoint
   (`https://<R2_ACCOUNT_ID>.r2.cloudflarestorage.com`, path-style, T-4.1), not the CDN. Without it a
   photo shows only once approved.
+  **Done** (`src/lib/storage-origins.ts`, by `APP_ENV`): each bucket by its path, never the whole
+  endpoint, which staging and production share. **Proved locally by its effect, 4 October 2026,** in
+  Playwright's Chromium against a production build (`APP_ENV=local`): the upload, its preview and
+  the signed link all loaded, and the browser refused the rest in its own words, e.g. "Connecting
+  to 'http://127.0.0.1:9000/velora-public/probe' violates the following Content Security Policy
+  directive: "connect-src 'self' http://127.0.0.1:8001 http://127.0.0.1:9000/velora-private/". The
+  action has been blocked.", and "Loading the image 'http://127.0.0.1:9000/other-bucket/x.jpg'
+  violates the following Content Security Policy directive: "img-src 'self' blob:
+  http://127.0.0.1:9000/velora-private/ http://127.0.0.1:9000/velora-public/"".
 - [ ] **CORS on the private bucket, or no browser can upload at all** (found 4 October 2026). The
   presigned PUT goes from the web's origin to R2's endpoint: cross-origin, with a `Content-Type`
   header, so the browser asks first, and R2 refuses without a CORS rule. Our tokens are Object Read
@@ -1624,11 +1648,22 @@ exist yet. The batch is a chain, T-3.10 → T-3.11 → T-3.12 → T-3.13, each n
   Signed links shown in `<img>` need no CORS. Locally the web (`127.0.0.1:3000`) and the S3
   (`127.0.0.1:9000`) are different origins too, so the local S3 (D-086) needs the same rule for the
   local web: proved by a real upload from the browser, not assumed.
+  **Local: done.** SeaweedFS answers every origin unless a bucket has a rule of its own, so
+  `s3-init` sets `infra/s3/private-cors.xml` on `velora-private` at every `make infra-up` and in
+  CI, and `api/tests/test_local_s3_cors.py` holds the bucket to it by preflight. Proved on 4 October
+  2026 by a real upload in Playwright's Chromium from `http://127.0.0.1:3000`: the PUT went with
+  `Content-Type: image/jpeg` and nothing else, and the API received a 2000 × 1500 JPEG; Chrome
+  refused DELETE ("Method DELETE is not allowed by Access-Control-Allow-Methods in preflight
+  response") and another origin ("No 'Access-Control-Allow-Origin' header is present on the
+  requested resource"). **Staging: set by the founder the same day, with `GET` as well as `PUT`,
+  and checked from outside at 15:48 UTC** (`infra/STAGING.md` §3): the staging origin's PUT
+  preflight passes, every other origin, method and header gets R2's 403. Ticked once a real
+  browser's upload on staging works.
 - [ ] **Done when, on a real iPhone, on this control (D-089):** iOS Safari's upload sends JPEG, not
   HEIC, read from what the API received (its bytes), never reasoned about. If it sends HEIC, "no
   HEIC" breaks every iPhone sign-up: stop and tell the founder before anything ships. D-089 is
   Locked when this passes.
-- [ ] **Commit:** `feat(web): photo upload step [T-4.6]`
+- [x] **Commit:** `feat(web): photo upload step [T-4.6]`
 
 ### T-4.7 · Web selfie step
 - [ ] **Needs:** T-4.5, T-4.6
@@ -1647,6 +1682,10 @@ exist yet. The batch is a chain, T-3.10 → T-3.11 → T-3.12 → T-3.13, each n
 
 ### T-4.9 · E2E onboarding
 - [ ] **Needs:** T-4.7, T-4.8, T-4.10
+  **Uploads need two things the E2E doesn't have yet** (found building T-4.6): the local S3's CORS
+  rule (`infra/s3/private-cors.xml`) admits only `make dev`'s web, `http://127.0.0.1:3000`, and
+  the E2E's is on 3100; and CI's e2e job starts Postgres and Redis but no S3, and its API
+  (`api/tests/e2e_server.py`) stores to the fake. Each upload fails until both change.
 - [ ] Playwright with fake camera flags: man completes without selfie; woman is blocked until selfie approved.
 - [ ] **Commit:** `test(e2e): full onboarding [T-4.9]`
 
@@ -2009,7 +2048,8 @@ then prices show nothing. T-4.4 and T-4.6 come first.
 > Location lives in Sprint 4 as T-4.10, because onboarding needs it first. Discovery starts at T-6.2.
 
 ### T-6.2 · Discovery query
-- [ ] **Needs:** T-4.10, T-4.8
+- [ ] **Needs:** T-4.10, T-4.8; **P-75**: public photo places kept 0 onwards by the server, or
+  "main" defined as the lowest place, before a `Card` carries a main photo (found building T-4.6)
 - [ ] Repository implements the query in `02-ARCHITECTURE.md §8` with feeds: `foryou` (ranked), `new` (joined ≤ 7 days first), `online` (active ≤ 5 min). Filters: `intent_ids` (any overlap, D-041), verified.
 - [ ] Excludes: self, swiped, blocked either way, hidden, not `done`, status ≠ active, fraud band `freeze`; `shadow` band users only shown to others in `shadow`.
 - [ ] Response `Card`: id, first_name, age (null if hide_age), username, city, hometown, distance_km (null if hide_distance, else ≥ 1), intent_ids, bio line (first 90 chars of about), main photo URL, is_verified, is_online, is_new.
@@ -2354,7 +2394,7 @@ then prices show nothing. T-4.4 and T-4.6 come first.
 - [ ] **Commit:** `docs(ops): backup and restore runbook [T-9.14]`
 
 ### T-9.15 · Go live
-- [ ] **Needs:** T-9.13, T-9.14, P-0.5, P-0.7, P-0.8; **P-80**: no query value in the API's database errors (rule 15); **P-81**: the lawyer's answer on a possible minor's photo that is also sexual (D-093); **P-73**: who the two unidentified staging accounts are; **P-72**: a human path for repeated possible-minor flags (D-093); **T-4.11**: liveness before the first real user (the founder, 4 October 2026); **P-66**: until staging has a Firebase project of its own, its sign-ins land in production's user pool, which is not acceptable after launch (the founder, 3 October 2026, on T-3.14); **P-0.18**: the billing account converted from its free trial, after App Check (P-68), since after launch the trial's end is an outage with no warning (the founder, 3 October 2026); and **P-68**: App Check enforced on Authentication and proved by its effect, before the site is public for sign-in (the founder, 4 October 2026)
+- [ ] **Needs:** T-9.13, T-9.14, P-0.5, P-0.7, P-0.8; **P-80**: no query value in the API's database errors (rule 15); **P-81**: the lawyer's answer on a possible minor's photo that is also sexual (D-093); **P-73**: who the two unidentified staging accounts are; **P-74** and **P-76**: a photo rejected after the person left the photos step reaches them, and an upload that never arrived stops showing as "Checking…" (found building T-4.6); **P-72**: a human path for repeated possible-minor flags (D-093); **T-4.11**: liveness before the first real user (the founder, 4 October 2026); **P-66**: until staging has a Firebase project of its own, its sign-ins land in production's user pool, which is not acceptable after launch (the founder, 3 October 2026, on T-3.14); **P-0.18**: the billing account converted from its free trial, after App Check (P-68), since after launch the trial's end is an outage with no warning (the founder, 3 October 2026); and **P-68**: App Check enforced on Authentication and proved by its effect, before the site is public for sign-in (the founder, 4 October 2026)
 - [ ] Production env: real SMS, real Razorpay live keys + webhook URL, real moderation and face match, VAPID keys. Run the pre-launch checklist in `07-CHECKLISTS.md`. Do one real ₹ purchase yourself and refund it, under D-076's rule 3: the refund reverses that purchase's Velas in the ledger in the same step (T-8.2), so money never goes back while its Velas stand.
 - [ ] **Write to the waitlist** (T-2.3): its copy promises to tell people when Velora opens near them. Nothing can send bulk email yet, so choose how before launch day, or the list is one we can't write to. A sending service is a new dependency and another processor `/privacy` must name, and its From address needs SPF and DKIM, like the mailboxes (P-0.3). B-14, a second city, writes to it again, by city.
   **DKIM before the first send, or the launch email goes to spam:** our DMARC record says
@@ -3556,6 +3596,29 @@ The number comes from the session's own block, given in its brief, from P-100 up
   direction, 4 October 2026.
 
   Found preparing T-4.6.
+- [ ] P-74 · Tell a person whose photo was rejected after they left the photos step. **Before the
+  first real user.** Worst case: a woman whose only public photo is rejected while she is on the
+  next screen is past the photos step with no live photo, so nobody sees her profile, and nothing
+  anywhere says why. T-4.6 shows a rejection only in the slot that showed it, while that page is
+  open (D-096); a reload, or going on, forgets it. Where it belongs (a notification, the You
+  screen, a gate before discovery) is a product decision.
+
+  Found building T-4.6.
+- [ ] P-75 · Keep public photo places 0 onwards on the server. **Before T-6.2 serves `Card`s with a main photo URL.**
+  Worst case: a profile shown in discovery with no main photo, because its place 0 was rejected by
+  moderation or removed by a client other than ours, and nothing moved the next one up. 03-SCHEMA
+  says 0 is the main one; the API allows gaps (upload to any free place, delete without closing
+  up), and only the web closes them (after a delete, a cleared rejection, and at Continue, T-4.6).
+  Either the API closes gaps itself, or "main" becomes the lowest place, decided once.
+
+  Found building T-4.6.
+- [ ] P-76 · Free an upload that never arrived when the owner's photos are listed, not only at the
+  next upload URL. **Before the first real user.** Worst case: someone who closed the tab mid-upload
+  comes back to a slot saying "Checking…" over a broken image, for a photo that will never be
+  checked, until they remove it or upload another. `GET /me/photos` lists it as pending; only
+  `POST /photos/upload-url` marks it `abandoned` (T-4.2).
+
+  Found building T-4.6.
 - [x] P-77 · Give CI's fresh SeaweedFS room for both buckets. **Done, 4 October 2026,** at the
   direction of the advisor directing Sprint 5, relayed by the founder. Worst case, as it happened:
   every session's storage tests go red on CI the day its suite grows, with nothing of theirs at

@@ -203,6 +203,24 @@ undo without a decision:
   Claude on 4 October 2026 by SHA-256 prefix on the machine and from the Keychain (T-4.1).
 - **`R2_ENDPOINT_URL` is never set here.** Settings refuse it anywhere but local, so storage goes to
   R2's own endpoint for the account in `R2_ACCOUNT_ID` (`infra/fly.api.toml`; not a secret).
+- **The private bucket's CORS rule, or no browser can upload a photo** (T-4.6). The web PUTs each
+  photo straight to `velora-staging-private` on R2's endpoint, from another origin with a
+  `Content-Type`, so the browser asks first, and R2 refuses without a rule. Our token is Object
+  Read & Write and can't set one, so the founder sets it, in R2 → `velora-staging-private` →
+  Settings → CORS policy, exactly this and nothing wider:
+  `[{"AllowedOrigins": ["https://staging.veloraapp.co.in"], "AllowedMethods": ["PUT"], "AllowedHeaders": ["Content-Type"], "MaxAgeSeconds": 3600}]`.
+  The public bucket needs none: an `<img>` needs no CORS. **Checked by a preflight**, R2's own
+  answer: from `https://staging.veloraapp.co.in` for `PUT` with `content-type`, a 200 naming that
+  origin, `PUT` and `content-type`; from any other origin, R2's 403.
+  **Set by the founder on 4 October 2026, with `GET` as well as `PUT`,** added for the signed links
+  pending photos are shown by. Checked by Claude from outside at 15:48 UTC: from the staging
+  origin, `PUT` with `content-type` answered 204 naming that origin, `content-type`, `PUT, GET` and
+  3600; another site, production's origin, plain `http://` staging and the local web each got R2's
+  `403 … CORS not configured for this bucket`, and so did `DELETE`, `POST` and an extra header.
+  (At 14:49 UTC, before it was set, the staging origin got that 403 too.) **`GET` is wider than
+  the photos need:** an `<img>` sends no preflight and needs no rule, which the local S3 shows,
+  where the rule allows `PUT` only and a pending photo still shows by its signed link (T-4.6).
+  Whether it stays is the founder's.
 
 **The proof is the probe, run inside the machine with its own keys** (T-4.1), after any change to
 the token, the buckets or the domain:

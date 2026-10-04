@@ -50,6 +50,22 @@ async def photo_for_update(
     return photo
 
 
+async def owners_photo(
+    session: AsyncSession, user_id: UUID, photo_id: UUID
+) -> Photo | None:
+    """One public or private photo of the user's, in any status; None if
+    there's none, it's someone else's, or it's a selfie: the same answer for
+    each, so ids can't be probed."""
+    photo: Photo | None = await session.scalar(
+        select(Photo).where(
+            Photo.id == photo_id,
+            Photo.user_id == user_id,
+            Photo.kind.in_((PhotoKind.PUBLIC, PhotoKind.PRIVATE)),
+        )
+    )
+    return photo
+
+
 async def owners_view(session: AsyncSession, user_id: UUID) -> list[Photo]:
     """The user's live public and private photos, public first by place, then
     private oldest first. Selfies are T-4.5's, never listed here."""
