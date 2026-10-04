@@ -1925,7 +1925,7 @@ separate chat), relayed by the founder on 4 October 2026: "PyJWT and httpx it is
 Open; I'm approving it now in these words." That line is the advisor's (the founder, the same
 day). **Open** until the founder locks it in his own words.
 
-### D-086 · The local S3 is SeaweedFS, because MinIO is archived — Open
+### D-086 · The local S3 is SeaweedFS, because MinIO is archived — Locked
 **The decision (T-4.1):** local development and CI stand in for R2 with **SeaweedFS**
 (`chrislusf/seaweedfs`, Apache-2.0) in `infra/docker-compose.yml`: its S3 gateway on
 `127.0.0.1:9000`, path-style; credentials, and anonymous read on `velora-public` only (it mirrors
@@ -1945,9 +1945,9 @@ Docker Hub refused, so T-4.1's first CI run (37195913766) couldn't start it. Any
 the founder's Mac worked only from its image cache.
 
 **Why not a rebuilt MinIO.** Chainguard's free MinIO images pull without a login and passed the
-same checks as SeaweedFS below, but chosen in the founder's message of 4 October 2026, with this
-reasoning: "it's about expectation, not purity". They pin us to someone else's build of a dead
-project, and a server calling itself RELEASE.2026-09-22 when the repository was archived in
+same checks as SeaweedFS below. The founder chose against them; **the reasoning is advice he
+adopted, not words he wrote** (his correction, 4 October 2026): "it's about expectation, not
+purity". They pin us to someone else's build of a dead project, and a server calling itself RELEASE.2026-09-22 when the repository was archived in
 February 2026 means nobody here can say whose source it came from. They are free today and cost a
 day on whatever morning the image goes, which can't be predicted; switching costs an hour or two
 once, and the work was already stopped. The risk is contained: local and CI only, never
@@ -1964,17 +1964,19 @@ step against it; an expired presigned PUT and an unsigned read of the private bu
 time creates nothing and exits 0.
 
 **If it stops emulating S3 well enough for our tests,** that shows in a local run, never in
-production: fall back to Chainguard's MinIO, pinned by digest, and tell the founder (his
-instruction with the choice).
+production: fall back to Chainguard's MinIO, pinned by digest, and tell the founder (the
+instruction that came with the choice).
 
 **Rejected:** Chainguard's MinIO (above); our cached MinIO images copied to GitHub's registry
 (frozen without MinIO's October 2025 security fix, and every fresh clone would need a GitHub login
 to pull); building MinIO from source in CI (a dead project, rebuilt on every run).
 
-The options were Claude's (T-4.1). Chosen in the founder's message of 4 October 2026. **Open**
-until the founder locks it in his own words, as D-085.
+The options were Claude's (T-4.1). **The choice is the founder's** (option (c), picked after the
+options were laid out for him); **its reasoning is advice he accepted**, recorded as advice, not as
+his words: "Don't attribute reasoning to me that I didn't write. The record is more useful accurate
+than flattering" (the founder, 4 October 2026). Locked on his word the same day.
 
-### D-087 · AWS is out of Velora entirely — Open
+### D-087 · AWS is out of Velora entirely — Locked
 **The decision, in the founder's words, 4 October 2026:** "AWS is out of Velora entirely. Not
 Rekognition, not an IAM user, not a payment verification." He had said it on 3 October 2026 too,
 and it was never written down, which is how it survived.
@@ -2000,10 +2002,10 @@ plan, never recorded here, so there is no D- entry to supersede). D-048 is Locke
 it names AWS `ap-south-1` as a deferred home for the API, an option this decision closes, as it
 closes P-49's AWS host.
 
-**Open** until the founder confirms these words are his own: they arrived pasted, and pasted text
-has been taken for his before when it wasn't (T-3.14).
+Asked whether the pasted words were his, the founder confirmed it on 4 October 2026: "my own
+words, twice, in my own language". **Locked** on his word.
 
-### D-088 · Selfie face matching runs on our own worker: YuNet and SFace — Open
+### D-088 · Selfie face matching runs on our own worker: YuNet and SFace — Locked
 **The decision (T-4.5):** at the founder's direction (4 October 2026), face matching moves onto our
 own worker, with no third party; the model is Claude's pick:
 - **Detection: YuNet**, `face_detection_yunet_2023mar.onnx` (232,589 bytes, SHA-256
@@ -2041,7 +2043,93 @@ only"); a hosted face-match API (D-087's reason, and the selfie leaving our serv
 published threshold as the final one (it is calibrated on LFW, celebrities' photos, not on
 selfies against profile photos of people in India).
 
-**Open** until the founder approves the model and its dependency.
+**Approved by the founder, 4 October 2026, with two conditions:** YuNet and SFace through OpenCV,
+`opencv-python-headless` as a dependency, and the 1 GB Fly machine at about $8.50 a month ("the
+$3.80 is not worth optimising").
+1. **The machine's size is locked only once its peak is measured on the actual Fly machine**, not
+   transferred from this Mac's arm64 figure: "1 GB has headroom, but a measured number beats a
+   transferred one." T-4.5 measures it where the worker runs.
+2. **The training-data flag stays on P-0.7 exactly as written above, and is never softened:** the
+   weights' licence permits commercial use, and the datasets behind the paper are a separate, real
+   concern; both facts stay in the record.
+
+The InsightFace rejection, on its licence, stands and isn't revisited. **Locked**, the machine size
+excepted until condition 1 is met.
+
+### D-089 · Uploads are JPEG, PNG or WebP, judged by their bytes — Open
+**The decision (T-4.2; the founder, 4 October 2026, correcting Claude's recommendation):**
+- **Formats: JPEG, PNG and WebP. No HEIC**, which Pillow can't open without pillow-heif and its
+  LGPL and GPL codecs.
+- **The server judges the bytes.** When an upload completes, it reads the object's first bytes and
+  decides from them. The type the browser declares is sent with the request, because a presigned PUT
+  signs it and the upload must carry it, but it is **a hint for a better error message, never the
+  authority**: the client supplies it, and it can say anything. A file whose bytes are a PNG
+  declared as `image/jpeg` is handled as a PNG; bytes that are none of the three are refused
+  whatever they are declared as. Proved by a test that fails if the code trusts the declared type.
+- **The refusal says what to do:** "JPEG, PNG or WebP", not only that the format is unsupported.
+
+**Claude's recommendation was "with the type sent in the request".** The founder's correction: the
+declared type is the client's to choose, so it can't be what decides (CLAUDE.md rule 6, the server
+decides).
+
+**Open until one check, on a real iPhone, on our own control:** does iOS Safari send JPEG from
+T-4.6's upload control, or HEIC? Tested on the real control, not reasoned about. If it sends HEIC,
+"no HEIC" silently breaks every iPhone sign-up, and we would find out from users, not from tests. On
+T-4.6's Done-when; if HEIC arrives, stop and tell the founder before anything ships. Locked when
+that check passes.
+
+### D-090 · An under-18 refusal queues its files' deletion before it commits — Locked
+**Supersedes one sentence of D-078:** "The enqueue comes after the commit, so a refusal that rolls
+back deletes no file a kept row still points to". D-078 is Locked and not edited; the rest of it
+stands, the keys read in the deleting transaction before the rows go among it.
+
+**The decision (T-4.2; option (a) of Sprint 4's plan, approved by the founder, 4 October 2026):**
+- The storage keys are read in the refusing transaction, before the rows go (D-078).
+- **The deletion job is queued before the commit,** delayed 60 seconds, and **deletes only if the
+  user is gone.** Precisely, since the queue is Redis and the refusal is Postgres: they don't
+  commit together; the order is what makes it safe. If queuing fails, the refusal fails with it and
+  nothing is deleted. If the commit fails, or the process dies between queuing and committing, the
+  job finds the user still there and deletes nothing. So a refusal that committed always has its
+  job, and the guard stops us deleting a photo of someone who was never refused. A user still
+  present at 60 seconds is checked once more at 5 minutes, in case the transaction was slow; after
+  that, present means rolled back.
+- **The object goes; the record that a refusal happened stays.** Rule 12 applies to the record,
+  not the image: D-072's `banned_identities` row (the number's hash, reason `underage`) is kept, and
+  is both the legally useful thing and the correct one.
+- **The log line keeps rule 15:** no phone number, no object key, no signed URL. An internal id is
+  enough to find it later: the `banned_identities` row's id.
+- **The deletion is verified, not assumed.** After deleting, the job checks that each object is
+  actually gone from R2, and succeeds only if every one is; a delete call that returns success is
+  not proof the object left. The check is tested to fail when pointed at an object that still
+  exists. It retries three times; a final failure is logged at error level, with that id, and
+  until T-9.12's alerts exist, that log line is all there is (on T-9.12's list).
+
+### D-091 · Upstash's Free plan, with the worker polling every 10 seconds — Locked
+**The decision (the founder, 4 October 2026):** `velora-staging` and `velora-prod` stay on
+Upstash's Free plan, and the ARQ worker polls every **10 seconds**, not ARQ's default 0.5 or the 2
+Claude proposed. A photo then waits up to 10 seconds more for moderation, acceptable for moderation.
+
+**The arithmetic, from the code and Upstash's page, both read 4 October 2026:**
+- **Upstash's limit:** "500K" commands a month on Free, and "Operational commands like AUTH, HELLO,
+  SELECT, COMMAND, CONFIG, INFO, PING, RESET, and QUIT are not charged."
+- **The worker, idle** (arq 0.28's own loop, read from its source): one `ZRANGEBYSCORE` a poll, and
+  once an hour a `ZCARD` and a `PSETEX` for its health key; abort and cron add none unless switched
+  on. At 10 seconds over a 30-day month: 259,200 + 1,440 = **260,640 commands, 52% of Free**. At 2
+  seconds it would be 1,297,440, and at the default 0.5 seconds 5,185,440: both over.
+- **Fly's `/readyz` checks**, every 15 seconds, send `PING`, which isn't charged: 0. (Claude first
+  counted them as 172,800 a month, before reading that line; corrected here.)
+- **What's left for real traffic:** about 239,000 commands a month per database, each request
+  spending one or two (the rate-limit script, the activity throttle), more on sign-in. Measured
+  against real use before launch, not assumed.
+
+**One poll site is user-interactive, and 10 seconds is not acceptable there:** `verify_selfie`
+(T-4.5). A woman at the selfie step waits on its result (T-4.7 polls for up to 60 seconds), so a
+10-second pickup is up to 10 seconds of her watching a spinner. Photo moderation isn't: the photos
+step completes on a pending photo (T-4.3). How the selfie avoids the 10 seconds is T-4.5's to
+propose and the founder's to decide; the poll interval doesn't change for it.
+
+**If 10 seconds ever exceeds Free,** report the number and stop; never quietly pick a paid plan
+(the founder).
 
 ---
 

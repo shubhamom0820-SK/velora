@@ -184,7 +184,7 @@ a failed or hung publish (1 s) is logged without failing the request (`core/even
 | Job | Trigger | Does |
 |---|---|---|
 | `moderate_photo` | photo upload completed | re-encode, strip EXIF, NSFW/minor check, approve → copy to public bucket |
-| `verify_selfie` | selfie submitted | liveness (how: open, on T-4.5) + face match vs approved photos, on the worker itself: YuNet and SFace (D-088), no third party (D-087) |
+| `verify_selfie` | selfie submitted | face match vs approved photos, on the worker itself: YuNet and SFace (D-088), no third party (D-087); liveness is T-4.11's, and nothing claims it until then |
 | `watermark_album` | album access granted | render per-viewer watermarked copies |
 | `send_push` | any notification | Web Push, drop dead subscriptions on 404/410 |
 | `expire_threads` | cron, every minute | active threads past `expires_at` → `expired`, emit event |

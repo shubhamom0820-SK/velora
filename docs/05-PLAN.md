@@ -159,6 +159,7 @@ never done silently.
   vendor's account is dropped** (D-087, 4 October 2026): face matching runs on our own worker
   (D-088), and that account's unfinished payment verification is abandoned.
 - [ ] **P-0.7** Review our own legal text before real users arrive — no lawyer at this stage (the founder's call, 1 October 2026). Check Terms, Privacy, Refunds and Contact (T-2.2) against the decisions they cite and against what the product actually does at go-live; against the IT Rules 2021 (Grievance Officer, timelines) and the DPDP Act (notice, consent, rights — section 16 and Rule 15 take effect on 13 May 2027; check for any restricted-country notification); and gender-based pricing. Start with the law-and-courts text (D-052), the weakest part we wrote ourselves. Look closely, not in passing, at the under-18 section: it keeps a hashed phone number of someone just identified as a minor (D-009). The mechanism and saying so openly are right, but minors plus retention is the most scrutinised combination there is. Privacy has no section yet on what happens to people's data if the app shuts down or is sold; add one when there is something honest to say. Gates T-9.15, not the production build (D-053). Terms' consumer-rights line (D-058) was written without a lawyer, by the founder and Claude: if the terms are ever reviewed properly, show it to one.
+  **The face-match model's training data** (D-088, 4 October 2026), as written there, and never softened (the founder): the code and the weights permit commercial use (MIT, Apache-2.0). The weights' training data is a separate question: OpenCV Zoo doesn't say which set trained the shipped SFace model, and the SFace paper's experiments used CASIA-WebFace, VGGFace2 and MS-Celeb-1M, collections of faces of people who weren't asked. That is a question about the model's origins, not a restriction on using it.
   **No lawyer is engaged: an open item, and its owner is the founder, Shubham Kumar** (recorded 3
   October 2026). This review is his own, with Claude; no lawyer has read the legal pages. D-048
   calls this item "the DPDP session" and P-36 "the DPDP lawyer session", but none is booked. A
@@ -630,6 +631,8 @@ waits on the founder's decisions, so it is a task of its own, outside the sprint
     after launch that is an outage with no warning (the founder, 3 October 2026): a tag with
     T-3.14 is launch in that sense, as for P-66. The date covers the rest: a month or less before
     the trial ends ("a month" is Claude's reading of the founder's "anywhere near it", approved).
+  - **T-4.11, if REL-1's tag includes T-3.14.** Liveness before the first real user (the founder,
+    4 October 2026): D-008 makes it mandatory for women, and T-4.5 ships without it.
   - **P-68, if REL-1's tag includes T-3.14.** App Check enforced on Authentication, proved by its
     effect, before the site is public for sign-in (the founder, 4 October 2026): it is what makes
     an SMS flood need our web app rather than a script. A backstop only: P-68 is the very next
@@ -642,6 +645,10 @@ waits on the founder's decisions, so it is a task of its own, outside the sprint
   one-year Vercel token; the `api` record at Cloudflare, which issues its certificate; and, on
   release day, the apex and `www` records.
 - [ ] The prod app's four keys (`JWT_SECRET`, `PHONE_PEPPER`, `PHONE_ENC_KEY`, `CODE_PEPPER`) freshly generated, never staging's: startup refuses the repo's test keys (D-060) but can't know a copy of staging's. Read their shapes on the machine, lengths only, and compare each with its stored copy by SHA-256 prefix, as T-3.1 did for staging.
+- [ ] **Rotate the `velora-prod` R2 token before the first production deploy** (the founder, 4
+  October 2026): an Account API token, Object Read & Write, scoped to `velora-prod-public` and
+  `velora-prod-private`, TTL Forever, both values in the login Keychain under `velora-prod`. The
+  rotated token is the one that becomes the Fly secrets below.
 - [ ] **R2's token for production's pair as Fly secrets on `velora-api`** (T-4.1): `R2_ACCESS_KEY_ID`
   and `R2_SECRET_ACCESS_KEY`, which the founder holds (`infra/PRODUCTION.md` §3). Without them
   production's API refuses to start. Prove the token's scope by its effect before the tag: refused
@@ -1321,15 +1328,24 @@ exist yet. The batch is a chain, T-3.10 → T-3.11 → T-3.12 → T-3.13, each n
 ### T-4.2 · Upload URL and complete
 - [ ] **Needs:** T-4.1, T-3.5, and **P-54's row half** (D-078: an under-18 refusal deletes every
   table the app may delete from; this task adds the files)
-- [ ] `POST /photos/upload-url {kind, position?}` — public max 6 (positions 0–5), private max 6, selfie 1 active. Creates `photos` row `pending`, returns presigned PUT (image/jpeg|png|webp|heic, ≤ 8 MB).
+- [ ] `POST /photos/upload-url {kind, position?, content_type}` — public max 6 (positions 0–5), private max 6, selfie 1 active. Creates `photos` row `pending`, returns presigned PUT (image/jpeg|png|webp, ≤ 8 MB; no HEIC, D-089).
 - [ ] `POST /photos/{id}/complete` — object exists and size ok → enqueue `moderate_photo` (public/private) or leave for `verify_selfie` (selfie).
-- [ ] **D-078 (P-54's file half, built here):** an under-18 refusal deletes `photos` rows and the files
-  behind them, keys read in the deleting transaction before the rows go, the files' deletion
-  enqueued after the commit, a final failure raised where someone sees it. The first file stored
-  behind a user row must be deletable the day it can exist: if T-4.4's job queue isn't there yet,
-  decide here how the deletion runs until it is; D-078's order holds either way. Any file this task
-  stores behind a user row joins the list, with a test. The upload URL still waits for its step
-  (D-068).
+- [ ] **The bytes decide, not the declared type (D-089).** `complete` reads the object's first bytes:
+  a JPEG, PNG or WebP goes on, as what its bytes say; anything else is rejected, its object deleted,
+  and the error says what to do: "JPEG, PNG or WebP". The declared `content_type` is signed into the
+  PUT and used for a clearer message, never to decide. Proved by a test that fails if the code
+  trusts the header: bytes of a PNG declared `image/jpeg` handled as a PNG, and bytes of something
+  else declared `image/jpeg` refused.
+- [ ] **D-078 (P-54's file half, built here), in D-090's order:** an under-18 refusal deletes `photos`
+  rows and the files behind them. The keys are read in the deleting transaction before the rows go;
+  the deletion job is queued **before** the commit (D-090 supersedes D-078's "after"), 60 seconds
+  out, and deletes only once the user is gone, checking again at 5 minutes. The object goes; the
+  refusal's record, `banned_identities`, stays (rule 12 applies to the record, not the image). Each
+  deletion is verified by reading the object back as gone, a check tested to fail against an object
+  that still exists. The log line names the `banned_identities` row's id, never a number, a key or a
+  signed URL (rule 15); a final failure logs at error level. Until T-4.4's worker runs, the job
+  waits in Redis; T-4.4 registers it. Any file this task stores behind a user row joins the list,
+  with a test. The upload URL still waits for its step (D-068).
 - [ ] **Commit:** `feat(photos): upload url and completion [T-4.2]`
 
 ### T-4.3 · Manage photos
@@ -1339,8 +1355,11 @@ exist yet. The batch is a chain, T-3.10 → T-3.11 → T-3.12 → T-3.13, each n
 - [ ] **Commit:** `feat(photos): list, reorder, delete [T-4.3]`
 
 ### T-4.4 · Moderation worker
-- [ ] **Needs:** T-4.2, T-1.15, and a **Sightengine account with API keys** — not created yet (P-0.6)
+- [ ] **Needs:** T-4.2, T-1.15, and a **Sightengine account with API keys** — created by the founder on 4 October 2026, free plan, its keys in the Keychain (P-0.6)
 - [ ] ARQ worker bootstrap (`workers/main.py`) + `make worker`.
+- [ ] **The worker polls every 10 seconds** (D-091), a setting: on Upstash's Free plan that is
+  260,640 commands a month idle, 52% of the 500K, where ARQ's default 0.5 seconds would be over
+  five million.
 - [ ] Deploy the worker to Fly staging (moved from T-1.22): `infra/fly.worker.toml` beside
   `fly.api.toml`, the same image and least-privilege role, deployed by `deploy.yml` after the API.
   Add its pool to the connection budget in `infra/STAGING.md`. It shares `Settings`, so it needs
@@ -1379,31 +1398,37 @@ exist yet. The batch is a chain, T-3.10 → T-3.11 → T-3.12 → T-3.13, each n
 - [ ] **Commit:** `feat(worker): photo moderation pipeline [T-4.4]`
 
 ### T-4.5 · Selfie verification
-- [ ] **Needs:** T-4.4; **D-088 approved**, the model and `opencv-python-headless` as a new
-  dependency (rule 4); **the liveness decision** (below), the founder's; and **the measurement
-  set** (below), which the founder gathers. No third party matches faces (D-087).
-- [ ] `POST /verification/challenge` → random pose from a list (turn left, turn right, look up, smile) stored on the row. `POST /verification/{id}/submit {photo_id}` → enqueue `verify_selfie`.
+- [ ] **Needs:** T-4.4; D-088 (approved by the founder, 4 October 2026: the model and
+  `opencv-python-headless`); **the measurement set** (below), which the founder gathers; and **the
+  founder's answer on how `verify_selfie` avoids D-091's 10-second pickup**, since a woman waits on
+  its result: this task proposes. No third party matches faces (D-087). Liveness isn't here: it is
+  T-4.11.
+- [ ] **No pose** (the founder, 4 October 2026: liveness is T-4.11's, and the pose challenge is
+  rejected). `POST /verification/challenge` and the `challenge` column (`text not null`, "the random
+  pose asked for", 03-SCHEMA) were for a pose: this task's plan says what they become, without a
+  migration if it can, and 04-API changes with it. `POST /verification/{id}/submit {photo_id}` →
+  enqueue `verify_selfie`.
 - [ ] `verify_selfie`: re-encode; `FaceMatchProvider.compare(selfie, approved_public_photos)` on the
   worker (D-088): YuNet finds exactly one face, SFace's cosine similarity against each approved
   public photo, the best one counted; at or above the threshold (below) → `approved`,
   `users.is_verified = true`; else `rejected` with reason. Max 5 attempts / day. (The plan's first
   "similarity ≥ 85" was the dropped vendor's 0–100 scale; SFace has none, and the number comes from the
   measurement below.)
-- [ ] **Liveness: open, and the founder's to decide** (4 October 2026). D-008 makes liveness
-  mandatory for women. The direction was Sightengine's own liveness detection in place of the pose
-  check Sprint 4's plan proposed (its question D9). **Checked before committing to it,** as
-  directed: Sightengine's `liveness` model is passive, one photo, no head turns, a score from 0
-  to 1 and a rejection reason (`no_face`, `too_many_faces`, `inanimate_face`, `invalid_face`,
-  `spoof`, `deepfake`, `ai_generated`), on the same `check.json` endpoint as T-4.4's moderation,
-  so inside T-4.4's plain-API constraint (`/privacy` would still need a line for the selfie going
-  to Sightengine). **It isn't on the free plan:** one call with our free-plan keys, on Sightengine's
-  own example image, was refused: "Access to the Liveness Detection API is restricted. Feature not
-  available on the free plan. Switch to a paid plan" (0 operations charged; read by Claude, 4
-  October 2026). Its pricing page lists it under Pro, $99 a month for 40,000 operations, and its
-  documented example response consumed 10 operations for one check. The same free-plan keys do get
-  the `minor` probability T-4.4 needs, at 1 operation. So the founder chooses: Pro from this
-  task's real step on, a liveness model on our own worker, or the pose challenge on our own worker,
-  which Claude has called weak.
+- [ ] **T-4.5 ships without liveness, and claims nothing it doesn't do** (the founder, 4 October
+  2026; liveness is T-4.11). Face matching is a real check: it proves the selfie matches the profile
+  photos. It does not prove a live person was in front of the camera, and we must not claim it does.
+  **The hard constraint:** nothing in `/privacy`, the UI copy or any badge may say or imply that we
+  confirm a real person, a live person, or that someone "is who they say they are". Describe exactly
+  what we do: the selfie is compared with the profile photos. A word that promises more than face
+  matching delivers is wrong, the way the Sightengine retention wording would have been.
+  **Already in `web/src/i18n/en.ts` (read 4 October 2026), each rewritten here or shown to the
+  founder before this task ships:** `/privacy`'s "Your selfie, to check that you're really you.";
+  the landing page's "Verified, moderated" and "Selfie verification, photo checks, and reports that
+  actually remove people."; the badge, `verified: "Verified"`; and `/terms`' "Women verify with a
+  selfie before their profile goes live". (The code screen's "Verify" is the sign-in code's, not
+  this.)
+- [ ] **Measure the worker's peak memory on the actual Fly machine** (D-088's first condition), with
+  face matching loaded, beside this Mac's 290 to 330 MB; the 1 GB size is locked on that number.
 - [ ] **Accuracy is ours: how it's measured** (D-088; at the founder's direction, 4 October 2026:
   "there is no longer a vendor to blame when it is wrong").
   - **A right match:** the same person, accepted. **A wrong match:** a different person accepted,
@@ -1441,12 +1466,18 @@ exist yet. The batch is a chain, T-3.10 → T-3.11 → T-3.12 → T-3.13, each n
 - [ ] Women see the private-album note.
 - [ ] Built in T-3.11's `StepFrame`, at D-080's `/onboarding/photos`, replacing T-3.12's placeholder.
 - [ ] **Widen the CSP here (D-059):** `connect-src` for R2's upload endpoint (the presigned PUT), and `img-src` for `PUBLIC_CDN_URL` and `blob:` previews. Uploads and previews fail with a CSP error until then.
+- [ ] **Done when, on a real iPhone, on this control (D-089):** iOS Safari's upload sends JPEG, not
+  HEIC, read from what the API received (its bytes), never reasoned about. If it sends HEIC, "no
+  HEIC" breaks every iPhone sign-up: stop and tell the founder before anything ships. D-089 is
+  Locked when this passes.
 - [ ] **Commit:** `feat(web): photo upload step [T-4.6]`
 
 ### T-4.7 · Web selfie step
 - [ ] **Needs:** T-4.5, T-4.6
-- [ ] Request challenge → show pose instruction → `getUserMedia({video:{facingMode:"user"}})` → live mirrored preview → capture to canvas → upload as `kind=selfie` → submit → poll `GET /verification/latest` every 2 s (max 60 s) → result. Handles permission denied with instructions per browser.
+- [ ] Start the verification (no pose: T-4.5) → `getUserMedia({video:{facingMode:"user"}})` → live mirrored preview → capture to canvas → upload as `kind=selfie` → submit → poll `GET /verification/latest` every 2 s (max 60 s) → result. Handles permission denied with instructions per browser.
 - [ ] Men: "Skip for now". Women: cannot skip.
+- [ ] **The copy claims face matching only** (T-4.5's hard constraint): the screen says the selfie
+  is compared with the profile photos, never that it confirms a real or live person.
 - [ ] Built in T-3.11's `StepFrame`, at D-080's `/onboarding/selfie`, replacing T-3.12's placeholder.
 - [ ] **Allow the camera here (D-059):** T-2.5's Permissions-Policy has `camera=()`, so `getUserMedia` is refused until this task makes it `camera=(self)`; add `blob:` wherever the captured frame shows. T-4.9's fake-camera E2E fails until then.
 - [ ] **Commit:** `feat(web): selfie verification step [T-4.7]`
@@ -1470,6 +1501,31 @@ exist yet. The batch is a chain, T-3.10 → T-3.11 → T-3.12 → T-3.13, each n
 - [ ] **Allow location here (D-059):** T-2.5's Permissions-Policy has `geolocation=()`, so the browser refuses the position without ever asking until this task makes it `geolocation=(self)`. Until then everyone silently lands on the area picker.
 - [ ] **Commit:** `feat(profiles): location [T-4.10]`
 
+
+### T-4.11 · Liveness
+- [ ] **Needs:** T-4.5; the research below naming a model; and the founder's decision on it.
+  **Before the first real user:** on REL-1's Needs line if REL-1's tag includes T-3.14, and on
+  T-9.15's. Split out of T-4.5 by the founder, 4 October 2026, so T-4.5 ships face matching
+  without it. D-008 (Locked) makes liveness mandatory for women before their profile goes live:
+  this is the task that makes that true.
+- [ ] **What is known, so the research starts from it** (read by Claude, 4 October 2026):
+  Sightengine's `liveness` model is passive, one photo, no head turns: a score from 0 to 1 and a
+  rejection reason (`no_face`, `too_many_faces`, `inanimate_face`, `invalid_face`, `spoof`,
+  `deepfake`, `ai_generated`), on the same `check.json` endpoint as T-4.4's moderation. It isn't on
+  the free plan: one call with our keys, on Sightengine's own example image, was refused with
+  "Access to the Liveness Detection API is restricted. Feature not available on the free plan.
+  Switch to a paid plan" (0 operations charged). Its pricing page lists it under Pro, $99 a month,
+  and its documented example consumed 10 operations a check. **Not bought** (the founder): about
+  ₹8,300 a month, roughly ₹1 lakh a year, before the product has a single paying user.
+- [ ] **The research, first:** passive liveness, or presentation-attack detection, models whose
+  licence permits commercial use. D-088's standard: the actual licence text read, and anything
+  research-only rejected the way InsightFace was; memory measured and accuracy measured, on attacks
+  we make ourselves (prints, screens, replays) against the measurement set's consenting people,
+  never a paper's claims. Reported to the founder, who decides.
+- [ ] **The pose challenge stays rejected** until that research exists (the founder, 4 October
+  2026): Claude called it weak and so did he, and "a weak check that looks like a strong one is
+  worse than no check".
+- [ ] **Commit:** `feat(verification): liveness [T-4.11]`
 
 ---
 
@@ -2007,6 +2063,7 @@ committed rows.
 - [ ] **Needs:** T-1.22, and a **Sentry account** — not created yet (P-0.6)
 - [ ] Sentry in api, worker, web (release = git sha). Alerts: 5xx > 1% for 5 min, webhook signature failures, any job failing 3×, ledger reconciliation mismatch, queue depth > 1,000. Uptime check on `/readyz`.
 - [ ] Route D-066's OTP warning, logged at half of `otp_sms_daily_cap`, to the alert channel: until this task it lands only in Fly's logs, which nobody reads.
+- [ ] Route D-090's final failure to the alert channel: a minor's files that couldn't be deleted after three tries, logged at error level with the `banned_identities` id. Until this task that log line is all there is, which D-078 says is not enough.
 - [ ] **Widen the CSP here, and wire its reporting (D-059):** `connect-src` for Sentry's ingest host, and the CSP's reports (`report-to`, with `report-uri` as the fallback) sent to Sentry's security endpoint. Until then the enforced policy is silent: a violation in production stays invisible until a user complains.
 - [ ] **Commit:** `chore(ops): error tracking and alerts [T-9.12]`
 
@@ -2021,7 +2078,7 @@ committed rows.
 - [ ] **Commit:** `docs(ops): backup and restore runbook [T-9.14]`
 
 ### T-9.15 · Go live
-- [ ] **Needs:** T-9.13, T-9.14, P-0.5, P-0.7, P-0.8; **P-66**: until staging has a Firebase project of its own, its sign-ins land in production's user pool, which is not acceptable after launch (the founder, 3 October 2026, on T-3.14); **P-0.18**: the billing account converted from its free trial, after App Check (P-68), since after launch the trial's end is an outage with no warning (the founder, 3 October 2026); and **P-68**: App Check enforced on Authentication and proved by its effect, before the site is public for sign-in (the founder, 4 October 2026)
+- [ ] **Needs:** T-9.13, T-9.14, P-0.5, P-0.7, P-0.8; **T-4.11**: liveness before the first real user (the founder, 4 October 2026); **P-66**: until staging has a Firebase project of its own, its sign-ins land in production's user pool, which is not acceptable after launch (the founder, 3 October 2026, on T-3.14); **P-0.18**: the billing account converted from its free trial, after App Check (P-68), since after launch the trial's end is an outage with no warning (the founder, 3 October 2026); and **P-68**: App Check enforced on Authentication and proved by its effect, before the site is public for sign-in (the founder, 4 October 2026)
 - [ ] Production env: real SMS, real Razorpay live keys + webhook URL, real moderation and face match, VAPID keys. Run the pre-launch checklist in `07-CHECKLISTS.md`. Do one real ₹ purchase yourself and refund it, under D-076's rule 3: the refund reverses that purchase's Velas in the ledger in the same step (T-8.2), so money never goes back while its Velas stand.
 - [ ] **Write to the waitlist** (T-2.3): its copy promises to tell people when Velora opens near them. Nothing can send bulk email yet, so choose how before launch day, or the list is one we can't write to. A sending service is a new dependency and another processor `/privacy` must name, and its From address needs SPF and DKIM, like the mailboxes (P-0.3). B-14, a second city, writes to it again, by city.
   **DKIM before the first send, or the launch email goes to spam:** our DMARC record says

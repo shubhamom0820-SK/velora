@@ -187,10 +187,11 @@ line is as binding: `velora-prod-public` and `velora-prod-private`, location hin
   staging's (the founder's report; not yet proved by its effect, since the token isn't anywhere
   Claude can use it: see below). Staging's token is proved refused here (`infra/STAGING.md` §3).
 - **Its two values are not a Fly secret yet.** They go in before REL-1 (§4): until then
-  production's API, if started, refuses to start. The founder named the Keychain, service
-  `velora-prod`, as where they are; on 4 October 2026 the login Keychain held no `velora-prod`
-  item, so if they're in iCloud's Passwords, `security` can't read them and STAGING.md's piping
-  doesn't apply: set them from wherever they are, with `flyctl secrets import`.
+  production's API, if started, refuses to start. They are in the login Keychain, service
+  `velora-prod`, accounts `r2-access-key-id` and `r2-secret-access-key` (the founder; the item
+  names read by Claude on 4 October 2026, never the values). The token's TTL is Forever, so
+  **it is rotated before the first production deploy** (the founder, on REL-1's list), and the
+  rotated values are the ones that go to Fly.
 
 ### 4. Fly (until P-49)
 
