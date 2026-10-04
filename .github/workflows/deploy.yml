@@ -70,7 +70,8 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           SHA: ${{ steps.commit.outputs.sha }}
-        run: scripts/ci-gate "$SHA"
+        # main's own run for it, never another branch's (P-140).
+        run: scripts/ci-gate --branch main "$SHA"
 
   migrate:
     name: migrate — as the owner, from CI

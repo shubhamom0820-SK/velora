@@ -4,7 +4,14 @@
 # Everything else fails closed: a failed or cancelled run, a run for some other
 # commit, no run at all, a run that never finishes, or GitHub not answering.
 #
-#   scripts/ci-gate [COMMIT]          (default: HEAD)
+#   scripts/ci-gate [--branch BRANCH] [COMMIT]   (default: HEAD)
+#
+# It reads one branch's run only (P-140): `--branch`, or the branch COMMIT names
+# (`scripts/ci-gate main`), or the branch HEAD is on (/done's call). Never the
+# newest run on any branch: another session's branch can point at the same
+# commit, and its cancelled run once refused a deploy whose main run was green;
+# the same rule would let a newer green run elsewhere cover a red one on main.
+# A bare commit with no --branch, or a detached HEAD, names no branch: refused.
 #
 # Exit codes:
 #   0  CI passed for this commit
@@ -14,10 +21,38 @@
 #   4  couldn't reach or authenticate with GitHub: the only case for /done's
 #      manual path, and a bad token is the usual cause
 #   5  GitHub answered, with an error: never a case for the manual path
+#   6  no branch to read the run from: a bare commit needs --branch, and a
+#      detached HEAD (a rebase stopped part way, say) has none
 set -euo pipefail
 
-sha="$(git rev-parse --verify "${1:-HEAD}^{commit}")"
+say() { printf 'ci-gate: %s\n' "$*" >&2; }
+not_merging() { say "Not fast-forwarding main. $*"; }
+
+branch="" ref=""
+while (($#)); do
+  case "$1" in
+    --branch) branch="${2:-}"; shift 2 || shift ;;
+    --branch=*) branch="${1#--branch=}"; shift ;;
+    -*) say "unknown option $1. Usage: scripts/ci-gate [--branch BRANCH] [COMMIT]"; exit 6 ;;
+    *) ref="$1"; shift ;;
+  esac
+done
+ref="${ref:-HEAD}"
+sha="$(git rev-parse --verify "${ref}^{commit}")"
 short="${sha:0:7}"
+if [[ -z "$branch" ]]; then
+  if [[ "$ref" == HEAD ]]; then
+    branch="$(git symbolic-ref --quiet --short HEAD || true)"
+  elif git show-ref --verify --quiet "refs/heads/$ref"; then
+    branch="$ref"
+  elif [[ "$ref" == origin/* ]] && git show-ref --verify --quiet "refs/remotes/$ref"; then
+    branch="${ref#origin/}"
+  fi
+fi
+if [[ -z "$branch" ]]; then
+  not_merging "no branch to read CI from for $short: a bare commit needs --branch, and a detached HEAD (a rebase stopped part way?) has none."
+  exit 6
+fi
 # The workflow's `name:` in .github/workflows/ci.yml. Matched by name, not with
 # `gh run list --workflow ci.yml`: GitHub resolves that against the default
 # branch, so it 404s until the workflow file is on main.
@@ -27,9 +62,6 @@ finish_timeout="${CI_GATE_FINISH_TIMEOUT:-1200}" # seconds for it to finish
 interval="${CI_GATE_INTERVAL:-10}"
 errors="$(mktemp)"
 trap 'rm -f "$errors"' EXIT
-
-say() { printf 'ci-gate: %s\n' "$*" >&2; }
-not_merging() { say "Not fast-forwarding main. $*"; }
 
 # gh failed. Tell "couldn't reach or authenticate" (exit 4) apart from "GitHub
 # answered with an error" (exit 5), so an ordinary 404 can never open the
@@ -46,22 +78,22 @@ gh_failed() {
   exit 5
 }
 
-# The run for exactly this commit and this workflow: gh filters by SHA, and jq
-# checks headSha and the workflow's name again. Never "the latest run on the
+# The run for exactly this commit, this workflow and this branch: gh filters by
+# SHA and branch, and jq checks all three again. Never "the latest run on the
 # branch" — between a push and its run appearing, that is an older commit's.
 find_run() {
-  gh run list --commit "$sha" --event push --limit 50 \
-    --json databaseId,headSha,workflowName,createdAt \
-    --jq "[.[] | select(.headSha == \"$sha\" and .workflowName == \"$workflow\")] | sort_by(.createdAt) | last | .databaseId // empty"
+  gh run list --commit "$sha" --branch "$branch" --event push --limit 50 \
+    --json databaseId,headSha,headBranch,workflowName,createdAt \
+    --jq "[.[] | select(.headSha == \"$sha\" and .headBranch == \"$branch\" and .workflowName == \"$workflow\")] | sort_by(.createdAt) | last | .databaseId // empty"
 }
 
-say "waiting for the '${workflow}' workflow on ${short}…"
+say "waiting for the '${workflow}' workflow on ${short}, on ${branch}…"
 start=$SECONDS
 while :; do
   if ! run="$(find_run 2>"$errors")"; then gh_failed "listing runs for $short"; fi
   if [[ -n "$run" ]]; then break; fi
   if ((SECONDS - start >= appear_timeout)); then
-    not_merging "CI never reported a run for $short within ${appear_timeout}s."
+    not_merging "CI never reported a run for $short on $branch within ${appear_timeout}s."
     say "Decide: look at the Actions tab, re-run, or wait and run scripts/ci-gate again."
     exit 2
   fi
@@ -71,13 +103,17 @@ done
 say "run $run is for $short; waiting for it to finish…"
 start=$SECONDS
 while :; do
-  if ! line="$(gh run view "$run" --json status,conclusion,headSha \
-    --jq '"\(.status)|\(.conclusion)|\(.headSha)"' 2>"$errors")"; then
+  if ! line="$(gh run view "$run" --json status,conclusion,headSha,headBranch \
+    --jq '"\(.status)|\(.conclusion)|\(.headSha)|\(.headBranch)"' 2>"$errors")"; then
     gh_failed "reading run $run"
   fi
-  IFS='|' read -r status conclusion head <<<"$line"
+  IFS='|' read -r status conclusion head run_branch <<<"$line"
   if [[ "$head" != "$sha" ]]; then
     not_merging "run $run is for ${head:0:7}, not $short."
+    exit 1
+  fi
+  if [[ "$run_branch" != "$branch" ]]; then
+    not_merging "run $run ran on $run_branch, not $branch."
     exit 1
   fi
   if [[ "$status" == completed ]]; then

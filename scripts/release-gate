@@ -81,14 +81,16 @@ if ! git merge-base --is-ancestor "$sha" "$main_ref"; then
 fi
 say "ok   $short is on main."
 
-# 2. CI, for this exact commit. A push run records the commit it ran, so it is
-# matched by headSha, and the newest one counts.
-ci="$(gh run list --commit "$sha" --event push --limit 50 \
-  --json databaseId,headSha,workflowName,status,conclusion,createdAt \
-  --jq "[.[] | select(.headSha == \"$sha\" and .workflowName == \"CI\")] | sort_by(.createdAt) | last | if . == null then \"\" else \"\(.databaseId)|\(.status)|\(.conclusion)\" end" \
+# 2. CI, for this exact commit, on main. A push run records the commit it ran,
+# so it is matched by headSha, and the newest one on main counts. Only main's
+# (P-140): another session's branch can point at the same commit, and the
+# newest run anywhere could be a green one covering a red run on main.
+ci="$(gh run list --commit "$sha" --branch main --event push --limit 50 \
+  --json databaseId,headSha,headBranch,workflowName,status,conclusion,createdAt \
+  --jq "[.[] | select(.headSha == \"$sha\" and .headBranch == \"main\" and .workflowName == \"CI\")] | sort_by(.createdAt) | last | if . == null then \"\" else \"\(.databaseId)|\(.status)|\(.conclusion)\" end" \
   2>"$work/errors")" || gh_failed "listing CI runs for $short"
 if [[ -z "$ci" ]]; then
-  refuse "CI never ran for it."
+  refuse "CI never ran for it on main."
 fi
 IFS='|' read -r ci_run ci_status ci_conclusion <<<"$ci"
 if [[ "$ci_status" != completed ]]; then

@@ -3320,6 +3320,9 @@ The number comes from the session's own block, given in its brief, from P-100 up
   (P-0.15's deploy flag, landed later as `da5172a`). P-54's case was a refused fast-forward; this
   was a stopped rebase. Twice, by two routes, makes it a thing that happens, not a thing that
   happened.
+  **Partly closed by P-140:** a stopped rebase leaves HEAD detached, and `ci-gate` with no argument
+  now exits 6 there, naming no branch. A HEAD already on `main` while on a branch still passes,
+  which is this item's own fix, still open.
 - [ ] P-61 · Give the API's 500s their CORS headers. **Before T-9.12,** or sooner if a screen needs to
   tell a crash from no signal. Worst case: a browser can't read the API's `INTERNAL` envelope at all,
   so every 500 looks to the web exactly like a lost connection ("Failed to fetch"), and a bug in
@@ -3681,7 +3684,7 @@ The number comes from the session's own block, given in its brief, from P-100 up
   4 October 2026). Decided by the founder, 4 October 2026; filed by Claude.
 
   Found writing D-230.
-- [ ] P-140 · Make a deploy's gate read `main`'s own CI run, not whichever ran last for the commit.
+- [x] P-140 · Make a deploy's gate read `main`'s own CI run, not whichever ran last for the commit.
   **Before the next day with several sessions landing at once.** Worst case: a commit whose CI
   on `main` passed is refused deployment, and the refusal reads as if the commit failed on its
   merits, so someone hunts a bug that isn't there while staging falls behind `main`. **Observed,
@@ -3696,3 +3699,18 @@ The number comes from the session's own block, given in its brief, from P-100 up
   it; nobody has seen it). Fix to decide: the deploy's gate filters to `main`'s run for the
   commit, and `/done`'s to the task branch's. Found landing P-0.15's deploy flag; filed from this
   session's block (P-140 to P-149).
+  **Done, 4 October 2026,** at the direction of the advisor directing Sprint 5. **The silent
+  direction was real before the fix:** with `main`'s run red and a newer green run for the commit
+  on another branch, `scripts/ci-gate` called as `deploy.yml` called it answered `CI is green ...
+  (run 12)` and exited 0, and `scripts/release-gate`, production's gate, picked the same run: both
+  would have passed a red commit. **Fix:** `ci-gate` reads one branch's run only (`--branch`, else
+  the branch its ref names, else the branch HEAD is on; a bare commit or a detached HEAD has no
+  branch and exits 6, never guessed), checks the branch again when it reads the run, and
+  `deploy.yml` passes `--branch main`; `release-gate` reads `main`'s run only. **Proof, both
+  ways:** the new scenarios (`main` red with a newer green elsewhere refused; `main` green with a
+  newer cancelled elsewhere passed; a run only on another branch never counts; a run read back
+  from another branch refused; HEAD's and a ref's branch found; a bare commit and a detached HEAD
+  refused) pass, `ci-gate-test` 20 of 20 and `release-gate-test` 52 of 52. Against the old
+  `release-gate`, the hole scenario exited 0. Each check removed alone went red: `ci-gate`'s branch
+  filter (4 scenarios), its read-back check (1), `release-gate`'s filter (3); each restored and
+  checked by SHA-256.

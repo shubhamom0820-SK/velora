@@ -11,8 +11,9 @@ Finish task $ARGUMENTS.
 7. Push the branch: run `git push -u origin HEAD`. If the push fails because
    no remote is configured, tell me instead of guessing a URL.
 8. Wait for CI on that exact commit: run `scripts/ci-gate` (D-044). It finds the CI run for HEAD's
-   SHA, never "the latest run on the branch", waits up to 3 minutes for it to appear and 20 for it
-   to finish, and exits 0 only if that run passed.
+   SHA on this branch only, never "the latest run on the branch" and never another branch's run of
+   the same commit (P-140), waits up to 3 minutes for it to appear and 20 for it to finish, and
+   exits 0 only if that run passed. Run it as its own step and read its own exit code.
    - Exit 0: continue.
    - Any other exit: stop here. Show what it printed, leave `main` untouched and the branch
      pushed, and let me decide. Never fast-forward on a failure, a cancelled run, a timeout or
@@ -39,7 +40,9 @@ second occurrence here; a token per session is then the test.
 
 **It is never for a red run, or for anything GitHub answered.** Exit 1 (CI failed, was cancelled,
 or ran for another commit) means the commit is not good: fix it on the branch and run `/done`
-again. Exit 5 means GitHub answered with an error: read it and fix the cause. Exit 2 or 3 (no run
+again. Exit 5 means GitHub answered with an error: read it and fix the cause. Exit 6 means it found
+no branch to read: HEAD is detached (a rebase stopped part way?); finish or abort the rebase, back on
+the task branch, and run `/done` again. Exit 2 or 3 (no run
 appeared, or it didn't finish) means wait and run `scripts/ci-gate` again; if it keeps happening,
 stop and ask me. Take this path only when I say so, after you've shown me the gate's exit-4 output.
 

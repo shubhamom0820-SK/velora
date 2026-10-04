@@ -93,10 +93,10 @@ cat "$FAKE_DIR/$fixture-http"
 FAKE
 chmod +x "$work/bin/gh" "$work/bin/curl"
 
-# ci_run ID SHA STATUS CONCLUSION CREATED_AT
+# ci_run ID SHA STATUS CONCLUSION CREATED_AT [BRANCH]   (BRANCH defaults to main)
 ci_run() {
-  printf '{"databaseId":%s,"headSha":"%s","workflowName":"CI","status":"%s","conclusion":"%s","createdAt":"%s"}' \
-    "$1" "$2" "$3" "$4" "$5"
+  printf '{"databaseId":%s,"headSha":"%s","workflowName":"CI","status":"%s","conclusion":"%s","createdAt":"%s","headBranch":"%s"}' \
+    "$1" "$2" "$3" "$4" "$5" "${6:-main}"
 }
 # staging_run ID DEPLOYED_SHA STATUS CONCLUSION CREATED_AT [RECORDED_HEAD_SHA]
 staging_run() {
@@ -187,7 +187,7 @@ expect main-not-fetched 1 "Can't see origin/main to check the commit is on main:
 
 # --- 2. CI for this exact commit
 scenario ci-never-ran "[]" "[$(staging_run 21 "$sha" completed success 2026-09-20T01:00:00Z)]" "$(token_json 200)" 200
-expect ci-never-ran 1 "Not releasing ${sha:0:7}. CI never ran for it."
+expect ci-never-ran 1 "Not releasing ${sha:0:7}. CI never ran for it on main."
 
 scenario ci-failed "[$(ci_run 11 "$sha" completed failure 2026-09-20T00:00:00Z)]" \
   "[$(staging_run 21 "$sha" completed success 2026-09-20T01:00:00Z)]" "$(token_json 200)" 200
@@ -206,6 +206,20 @@ expect ci-picks-this-commit 0 "ok   CI passed for ${sha:0:7} (run 11)."
 scenario ci-newest-counts "[$(ci_run 11 "$sha" completed success 2026-09-20T00:00:00Z),$(ci_run 12 "$sha" completed failure 2026-09-20T05:00:00Z)]" \
   "[$(staging_run 21 "$sha" completed success 2026-09-20T06:00:00Z)]" "$(token_json 200)" 200
 expect ci-newest-counts 1 "CI concluded 'failure' for it (run 12)."
+
+# main's own run only (P-140): another session's branch can point at the same
+# commit, and its runs never count.
+# The hole nobody had seen: main's run red, a newer green one elsewhere.
+scenario ci-main-red-newer-green-elsewhere "[$(ci_run 11 "$sha" completed failure 2026-09-20T00:00:00Z),$(ci_run 12 "$sha" completed success 2026-09-20T05:00:00Z docs-other)]" \
+  "[$(staging_run 21 "$sha" completed success 2026-09-20T06:00:00Z)]" "$(token_json 200)" 200
+expect ci-main-red-newer-green-elsewhere 1 "CI concluded 'failure' for it (run 11)."
+# What was seen: main's run green, a newer cancelled one elsewhere.
+scenario ci-main-green-newer-cancelled-elsewhere "[$(ci_run 11 "$sha" completed success 2026-09-20T00:00:00Z),$(ci_run 13 "$sha" completed cancelled 2026-09-20T05:00:00Z docs-other)]" \
+  "[$(staging_run 21 "$sha" completed success 2026-09-20T06:00:00Z)]" "$(token_json 200)" 200
+expect ci-main-green-newer-cancelled-elsewhere 0 "ok   CI passed for ${sha:0:7} (run 11)."
+scenario ci-ran-only-elsewhere "[$(ci_run 12 "$sha" completed success 2026-09-20T05:00:00Z docs-other)]" \
+  "[$(staging_run 21 "$sha" completed success 2026-09-20T06:00:00Z)]" "$(token_json 200)" 200
+expect ci-ran-only-elsewhere 1 "CI never ran for it on main."
 
 # --- 3. staging deployed this exact commit
 scenario staging-never-deployed "[$(ci_run 11 "$sha" completed success 2026-09-20T00:00:00Z)]" \

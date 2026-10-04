@@ -54,29 +54,45 @@ jq -r "$expr" <<<"$json"
 FAKE
 chmod +x "$work/bin/gh"
 
-# scenario NAME LIST_JSON [RUN_ID VIEW_STATUS VIEW_CONCLUSION VIEW_SHA]...
+# The branch every scenario's runs are on unless it says otherwise; expect
+# gates on it, as /done does on its task branch.
+branch=feature
+
+# scenario NAME LIST_JSON [RUN_ID VIEW_STATUS VIEW_CONCLUSION VIEW_SHA [VIEW_BRANCH]]...
+# (groups of five; VIEW_BRANCH defaults to $branch)
 scenario() {
   local dir="$work/$1"
   mkdir -p "$dir"
   printf '%s' "$2" >"$dir/list.json"
   shift 2
-  while (($# >= 4)); do
-    printf '{"status":"%s","conclusion":"%s","headSha":"%s"}' "$2" "$3" "$4" >"$dir/view-$1.json"
-    shift 4
+  while (($# >= 5)); do
+    printf '{"status":"%s","conclusion":"%s","headSha":"%s","headBranch":"%s"}' "$2" "$3" "$4" "${5:-$branch}" >"$dir/view-$1.json"
+    shift 5
   done
 }
-# run ID SHA CREATED_AT [WORKFLOW_NAME]
-run() { printf '{"databaseId":%s,"headSha":"%s","createdAt":"%s","workflowName":"%s"}' "$1" "$2" "$3" "${4:-CI}"; }
+# run ID SHA CREATED_AT [WORKFLOW_NAME] [BRANCH]
+run() { printf '{"databaseId":%s,"headSha":"%s","createdAt":"%s","workflowName":"%s","headBranch":"%s"}' "$1" "$2" "$3" "${4:-CI}" "${5:-$branch}"; }
 
 # expect NAME EXIT MESSAGE [ENV=VALUE]... — the exit code alone can't tell a
 # deliberate "not green" from the script crashing, so the message is checked too.
+# The gate reads $branch's run for $sha. expect_in DIR NAME EXIT MESSAGE ARGS...
+# runs it from DIR with ARGS instead, for how it finds its branch on its own.
 passed=0 failed=0
 expect() {
-  local name="$1" want="$2" message="$3" got=0
+  local name="$1" want="$2" message="$3"
   shift 3
-  env PATH="$work/bin:$PATH" FAKE_DIR="$work/$name" CI_GATE_INTERVAL=1 \
-    CI_GATE_APPEAR_TIMEOUT=2 CI_GATE_FINISH_TIMEOUT=2 "$@" \
-    "$gate" "$sha" >"$work/$name.out" 2>&1 || got=$?
+  check "$name" "$want" "$message" "$here" env "$@" "$gate" --branch "$branch" "$sha"
+}
+expect_in() {
+  local dir="$1" name="$2" want="$3" message="$4"
+  shift 4
+  check "$name" "$want" "$message" "$dir" "$gate" "$@"
+}
+check() {
+  local name="$1" want="$2" message="$3" dir="$4" got=0
+  shift 4
+  (cd "$dir" && env PATH="$work/bin:$PATH" FAKE_DIR="$work/$name" CI_GATE_INTERVAL=1 \
+    CI_GATE_APPEAR_TIMEOUT=2 CI_GATE_FINISH_TIMEOUT=2 "$@") >"$work/$name.out" 2>&1 || got=$?
   if [[ "$got" == "$want" ]] && grep -qF -- "$message" "$work/$name.out"; then
     passed=$((passed + 1))
     printf 'ok    %-48s exit %s\n' "$name" "$got"
@@ -87,40 +103,85 @@ expect() {
   fi
 }
 
-scenario green "[$(run 11 "$sha" 2026-01-01T00:00:00Z)]" 11 completed success "$sha"
+scenario green "[$(run 11 "$sha" 2026-01-01T00:00:00Z)]" 11 completed success "$sha" ""
 expect green 0 "CI is green for ${sha:0:7} (run 11)"
 
-scenario appears-late "[$(run 11 "$sha" 2026-01-01T00:00:00Z)]" 11 completed success "$sha"
+scenario appears-late "[$(run 11 "$sha" 2026-01-01T00:00:00Z)]" 11 completed success "$sha" ""
 echo 2 >"$work/appears-late/delay"
 expect appears-late 0 "CI is green for ${sha:0:7} (run 11)" CI_GATE_APPEAR_TIMEOUT=6
 
 # A newer run for an older commit sits beside ours: the gate must take ours.
 scenario picks-this-commit "[$(run 9 "$old" 2026-01-02T00:00:00Z),$(run 11 "$sha" 2026-01-01T00:00:00Z)]" \
-  9 completed failure "$old" 11 completed success "$sha"
+  9 completed failure "$old" "" 11 completed success "$sha" ""
 expect picks-this-commit 0 "CI is green for ${sha:0:7} (run 11)"
 
-scenario only-an-older-commit "[$(run 9 "$old" 2026-01-02T00:00:00Z)]" 9 completed success "$old"
-expect only-an-older-commit 2 "CI never reported a run for ${sha:0:7}"
+scenario only-an-older-commit "[$(run 9 "$old" 2026-01-02T00:00:00Z)]" 9 completed success "$old" ""
+expect only-an-older-commit 2 "CI never reported a run for ${sha:0:7} on $branch"
 
 scenario no-run-at-all "[]"
-expect no-run-at-all 2 "CI never reported a run for ${sha:0:7}"
+expect no-run-at-all 2 "CI never reported a run for ${sha:0:7} on $branch"
 
-scenario failed "[$(run 11 "$sha" 2026-01-01T00:00:00Z)]" 11 completed failure "$sha"
+scenario failed "[$(run 11 "$sha" 2026-01-01T00:00:00Z)]" 11 completed failure "$sha" ""
 expect failed 1 "CI concluded 'failure'"
 
-scenario cancelled "[$(run 11 "$sha" 2026-01-01T00:00:00Z)]" 11 completed cancelled "$sha"
+scenario cancelled "[$(run 11 "$sha" 2026-01-01T00:00:00Z)]" 11 completed cancelled "$sha" ""
 expect cancelled 1 "CI concluded 'cancelled'"
 
-scenario view-is-another-commit "[$(run 11 "$sha" 2026-01-01T00:00:00Z)]" 11 completed success "$old"
+scenario view-is-another-commit "[$(run 11 "$sha" 2026-01-01T00:00:00Z)]" 11 completed success "$old" ""
 expect view-is-another-commit 1 "run 11 is for 0000000, not ${sha:0:7}"
 
-scenario never-finishes "[$(run 11 "$sha" 2026-01-01T00:00:00Z)]" 11 in_progress "" "$sha"
+scenario never-finishes "[$(run 11 "$sha" 2026-01-01T00:00:00Z)]" 11 in_progress "" "$sha" ""
 expect never-finishes 3 "didn't finish within 2s"
 
 # GitHub's own "Dependency Graph" workflow also runs on pushed commits.
 scenario picks-this-workflow "[$(run 5 "$sha" 2026-01-02T00:00:00Z "Dependency Graph"),$(run 11 "$sha" 2026-01-01T00:00:00Z)]" \
-  5 completed failure "$sha" 11 completed success "$sha"
+  5 completed failure "$sha" "" 11 completed success "$sha" ""
 expect picks-this-workflow 0 "CI is green for ${sha:0:7} (run 11)"
+
+# --- One branch's run only (P-140) ---------------------------------------------
+# Another session's branch can point at the same commit. Its runs never count.
+
+# The hole nobody had seen: main's run is red, and a newer green run for the
+# same commit sits on another branch. The deploy's gate must still refuse.
+scenario main-red-newer-green-elsewhere \
+  "[$(run 11 "$sha" 2026-01-01T00:00:00Z CI main),$(run 12 "$sha" 2026-01-02T00:00:00Z CI docs-other)]" \
+  11 completed failure "$sha" main 12 completed success "$sha" docs-other
+check main-red-newer-green-elsewhere 1 "CI concluded 'failure' for ${sha:0:7} (run 11)" "$here" "$gate" --branch main "$sha"
+
+# What was seen (P-140): main's run green, a newer cancelled one elsewhere.
+scenario main-green-newer-cancelled-elsewhere \
+  "[$(run 11 "$sha" 2026-01-01T00:00:00Z CI main),$(run 13 "$sha" 2026-01-03T00:00:00Z CI docs-other)]" \
+  11 completed success "$sha" main 13 completed cancelled "$sha" docs-other
+check main-green-newer-cancelled-elsewhere 0 "CI is green for ${sha:0:7} (run 11)" "$here" "$gate" --branch main "$sha"
+
+scenario only-another-branch-ran "[$(run 12 "$sha" 2026-01-02T00:00:00Z CI docs-other)]" \
+  12 completed success "$sha" docs-other
+check only-another-branch-ran 2 "CI never reported a run for ${sha:0:7} on main" "$here" "$gate" --branch main "$sha"
+
+scenario view-is-another-branch "[$(run 11 "$sha" 2026-01-01T00:00:00Z CI main)]" \
+  11 completed success "$sha" docs-other
+check view-is-another-branch 1 "run 11 ran on docs-other, not main" "$here" "$gate" --branch main "$sha"
+
+# No branch to read: a bare commit, or a detached HEAD. Refused, never guessed.
+scenario bare-commit-names-no-branch "[$(run 11 "$sha" 2026-01-01T00:00:00Z)]" 11 completed success "$sha" ""
+check bare-commit-names-no-branch 6 "no branch to read CI from for ${sha:0:7}" "$here" "$gate" "$sha"
+
+# How /done and the manual path find their branch, in a repository of its own.
+repo="$work/repo"
+git init -q -b main "$repo"
+git -C "$repo" -c user.name=t -c user.email=t@t commit -q --allow-empty -m one
+git -C "$repo" checkout -q -b feature-x
+rsha="$(git -C "$repo" rev-parse HEAD)"
+scenario head-names-its-branch "[$(run 11 "$rsha" 2026-01-01T00:00:00Z CI feature-x),$(run 12 "$rsha" 2026-01-02T00:00:00Z CI main)]" \
+  11 completed success "$rsha" feature-x 12 completed failure "$rsha" main
+expect_in "$repo" head-names-its-branch 0 "CI is green for ${rsha:0:7} (run 11)"
+scenario ref-names-its-branch "[$(run 11 "$rsha" 2026-01-01T00:00:00Z CI feature-x),$(run 12 "$rsha" 2026-01-02T00:00:00Z CI main)]" \
+  11 completed success "$rsha" feature-x 12 completed failure "$rsha" main
+expect_in "$repo" ref-names-its-branch 1 "CI concluded 'failure' for ${rsha:0:7} (run 12)" main
+git -C "$repo" checkout -q --detach
+scenario detached-head-names-no-branch "[$(run 11 "$rsha" 2026-01-01T00:00:00Z CI feature-x)]" \
+  11 completed success "$rsha" feature-x
+expect_in "$repo" detached-head-names-no-branch 6 "a detached HEAD (a rebase stopped part way?) has none"
 
 scenario github-unreachable "[]"
 touch "$work/github-unreachable/unreachable"
