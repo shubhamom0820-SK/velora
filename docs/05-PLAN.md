@@ -164,6 +164,15 @@ never done silently.
   against the ~761 files of a deploy without it. **Not yet proved:** the first staging deploy
   that goes through must show that count; if the CLI's output doesn't show it, the record says so
   rather than assuming the flag took effect. Pro stays unbought until that is read.
+  **Proved, 4 October 2026:** the first staging deploy through after the window cleared
+  (`aba62e5`, run 37222076586) printed bytes only (`Uploading … (1.8MB/1.8MB)`), then
+  `Concatenating deployment archive files... Extracted 762 deployment files...`, where a deploy
+  without the flag says `Downloading 761 deployment files...`. That shows the archive was used,
+  not how many uploads it took, so the count came from one `--debug` deploy (approved once, run
+  37222405686, from a throwaway branch, deploying `main`'s head `f083c61`): Vercel's client said
+  `1 files are required to upload`, made one `POST /v2/files`, and uploaded
+  `web/.vercel/source.tgz.part1` (1.78 MB). **One upload per deploy, measured.** A bigger build
+  may split into more parts; this one didn't. Pro remains unbought.
 - [ ] **P-0.16** Move `velora-prod`'s Supabase organisation to Pro before `v0.1.0` (REL-1). **Blocks that release, not the build,** and the release gate refuses while it is on Free (D-075). The Free plan keeps no automatic backups, and the first real sign-up is the first thing worth losing (the founder, 3 October 2026). Pro is $25 a month per organisation with 7 days of daily backups; its $10 of included compute covers one project, which is why `velora-prod` has an organisation of its own (`infra/PRODUCTION.md`). Point-in-time recovery, a further add-on, is T-9.14's.
 - [x] **P-0.6** Create accounts: GitHub, Supabase (Mumbai), Upstash, Cloudflare (R2 on), Fly.io (paid plan for `bom`), Vercel, Sentry, Sightengine.
   **Ticked with two still to set up then**, none needed before Sprint 4, each on its task's
@@ -3840,3 +3849,15 @@ The number comes from the session's own block, given in its brief, from P-100 up
   times as he likes for one Thread, D-250), but no endpoint charges it; this task is its natural
   home, the founder to confirm. T-7.6 points here. Found in T-5.2; filed from this session's block
   (P-150 to P-159).
+- [ ] P-141 · Let only `main` deploy to staging. **Before the next session that can push a
+  branch.** Worst case: a workflow file edited on any branch runs with staging's secrets, among
+  them the database owner's connection used for migrations, and the Vercel and Fly tokens: it can
+  deploy anything to staging or read what those secrets reach. **Observed, 4 October 2026:** the
+  staging environment has no deployment branch policy (`deployment_branch_policy: null`, no
+  protection rules), and a `deploy.yml` changed on a throwaway branch and dispatched from it ran
+  every job with staging's secrets (run 37222405686, P-0.15's one `--debug` deploy, approved).
+  Production is already closed: its environment allows only tags `v*`. Fix: give `staging` a
+  deployment branch policy of `main` only. Every real deploy runs on `main` (a CI run there, or a
+  dispatch from it), so nothing legitimate is lost; a one-off like that `--debug` run would then
+  need its change on `main`. A repository setting, so the founder's to change. Found running
+  that deploy; filed from this session's block (P-140 to P-149).
