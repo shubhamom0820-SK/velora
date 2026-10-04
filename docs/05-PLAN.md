@@ -4026,6 +4026,43 @@ The number comes from the session's own block, given in its brief, from P-100 up
   to `49 of 50`), and the new `test_a_fifty_waits_while_another_run_holds_the_turn` went red
   (`it took the turn while another run held it`); restored by SHA-256. The case is committed:
   `tests.break_guards p142-`, red in 1 of 1. Filed from this session's block (P-140 to P-149).
+- [ ] P-200 · Stop the shared local Postgres running out of connections when sessions test at once,
+  in what P-142 leaves. **Now** (the founder, 5 October 2026). Worst case: a local run fails,
+  passes on a re-run, and people learn to re-run instead of look, the habit the landing guard was
+  built that night to stop; with six sessions working at once, the flake meets someone every day it
+  stays.
+  **What was observed, by Claude, 4 October 2026, on this machine:** every worktree shares one
+  Docker Postgres, at the default `max_connections` of 100 (read from Postgres itself; nothing in
+  `infra/docker-compose.yml` sets it), and T-5.4's concurrency tests open 50 at once. Twice that
+  night `make test` failed with Postgres's own refusal: once in `tests/core/test_events.py`
+  (`TooManyConnectionsError: sorry, too many clients already`, answered as a 500), once in
+  T-5.4's six concurrency tests (their own message: "Postgres opened 44 of 50 connections",
+  then 45). At the second, `pg_stat_activity` showed 60 connections held by other sessions. Each
+  time, waiting until fewer than 30 were in use and running again passed, the whole suite.
+  **It fits an earlier failure without proving it:** on 4 October 2026 one run failed
+  `tests/modules/users/test_me.py::test_me_never_sends_the_number_or_the_date_of_birth`, CI was
+  green on the same commit, and it never reproduced (5 runs alone, 2 full suites). Its error text
+  was lost: that run's output went through a pipe to `grep`. A probe of the one other cause
+  suspected, the birth year appearing in `/me` by chance, found it in 0 of 1,500 bodies.
+  **One more that may be the same, unproved:** the same night, one run of
+  `python -m tests.break_guards land` reported its first two cases not red; its output wasn't
+  kept, and each was red in 4 of 4 runs since. A pytest run that can't start (Postgres refusing
+  the run slot's connection, say) reads there as "not red" rather than inconclusive, which would
+  explain it; nothing showed that it did.
+  **What P-142 settled, and what it leaves** (P-142 landed minutes before this was filed): two
+  runs' fifty-connection tests now take turns, which is the second observation's kind if the 60
+  held then included another run's fifty. It leaves the first kind: while one run holds its
+  fifty, every other session's ordinary tests share the other 50, and a run's own pools, the
+  app's included, are refused when they don't fit, as `test_events.py` was.
+  **Options, the founder's to choose:** raise `max_connections` in the compose file, sized from
+  what every session can open at once (P-55's slots × their pools, plus the 50 of the run holding
+  the turn), at a quiet moment, since P-142 rejected restarting the shared server while
+  sessions' tests run; or make an ordinary run wait for the turn too when it can't get a
+  connection, rather than fail. Whatever is chosen, prove it by its effect: a full suite started
+  while another holds the fifty, both green.
+
+  Found building T-4.4's follow-ups. The first number of Claude's block for this session (P-200
+  to P-209, D-300 to D-309, given by the founder).
 - [ ] P-152 · Make the debit's allowlist hold against a caller it can't see named. **Not tonight**
   (the advisor, 5 October 2026); worth doing where it is next touched, T-8.9, which names gift
   sending in it. Worst case: a caller reaches `wallet.service.debit` through a name built at run
@@ -4058,6 +4095,11 @@ The number comes from the session's own block, given in its brief, from P-100 up
   through `tests/test_require_main_checkout.py`, which also asks `make -n hooks` that the check is
   the first thing it runs; `tests.break_guards p143-` turns each red (the check disabled, the
   check not run), restored by SHA-256. Filed from this session's block (P-140 to P-149).
+  **Whose worktree it was** (added by that session, unprompted): Claude's, in the session doing
+  T-4.4's follow-ups. Its `make hooks`, at 23:48 IST, installed the landing guard's pre-push and
+  pinned the pre-commit hook to that worktree's virtualenv; it removed the worktree after landing
+  `76bda6f`, and reinstalled the hook from the main checkout's virtualenv at 00:34 IST, when its
+  own next commit failed. The hook has pointed there since.
 - [ ] P-190 · Decide what someone just outside Phagwara picks when they deny location access.
   **For the founder, before REL-1.** Worst case: someone in Jalandhar, 22 km from Phagwara and so
   inside D-013's 25 km discovery radius (`discovery_radius_km`), denies location access and is
