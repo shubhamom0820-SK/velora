@@ -189,7 +189,11 @@ jobs:
       - name: vercel build
         run: pnpm dlx "vercel@$VERCEL_CLI_VERSION" build --prod
       - name: vercel deploy
-        run: pnpm dlx "vercel@$VERCEL_CLI_VERSION" deploy --prebuilt --prod
+        # --archive=tgz: a few archive parts per deploy, not one upload per file. The
+        # Hobby team's cap is 5,000 uploads a day (api-upload-free), and a deploy is
+        # ~761 files, so a day of landings hit it (P-0.15). Same flag in both
+        # workflows, so staging proves what production runs (D-075).
+        run: pnpm dlx "vercel@$VERCEL_CLI_VERSION" deploy --prebuilt --prod --archive=tgz
 
   smoke:
     name: smoke — staging, from the outside

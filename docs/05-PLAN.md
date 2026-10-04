@@ -151,6 +151,19 @@ never done silently.
 - [ ] **P-0.15** Move the Vercel team `knot11` to Pro before `v0.1.0` (REL-1). **Blocks that release, not the build,** and the release gate refuses while the team is on Hobby (D-075). Vercel's own terms: "Hobby teams are restricted to non-commercial personal use only", with "advertising the sale of a product or service" among their examples of commercial use (its fair use guidelines, updated 14 September 2026). A public dating app is plainly commercial. Until the release, staging is `noindex` with no traffic, so the risk is close to zero and it waits (the founder, 3 October 2026). Pro is $20 a month with one deploying seat, covering both projects.
   **The trial doesn't fit** (Vercel's own page, read 3 October 2026): 14 days or until its usage limits, whichever comes first; one per user account; started only by creating a new team, not by upgrading `knot11`; without a payment method it falls back to Hobby. So it is worth at most one month's $20, and only if started the day `v0.1.0` goes public, in a new team production would then live in. Upgrade `knot11` itself on release day.
   **The Hobby plan's upload cap already stops staging deploys** (found building T-3.14, 4 October 2026). Vercel refuses a deployment's upload past 5,000 files a day: `Error: Too many requests - try again in 24 hours (more than 5000, code: "api-upload-free")`, at `deploy.yml`'s `web — Vercel` job (`vercel deploy --prebuilt --prod`). Two staging deploys of green code hit it: `1d6eb44` (run 37146785444, 3 October, 19:10 UTC; its log also repeats `Error: Upload aborted`) and `94e3934` (run 37152600833, 20:46 UTC). `6d621f6` uploaded between them (run 37152210707, aliased at 20:40). Each time, gate, migrate and the Fly API had already deployed, so staging's API ran ahead of its web. **To recognise it in a minute:** the `web — Vercel` job red, every job before it green, and `api-upload-free` in its log. It's the plan's limit, not the code: there's nothing to debug. **Pro raises the cap, it doesn't remove it:** Vercel's limits page (read 4 October 2026) gives `api-upload-free` 5,000 a day and Pro's `api-upload-paid` 40,000. Vercel's own hint, `--archive=tgz`, would upload one archive instead of every file.
+  **The cap again, 4 October 2026, and `--archive=tgz` landed** (at the direction of the advisor
+  directing Sprint 5, relayed by the founder, instead of Pro: Pro raises a ceiling that every
+  session's landing climbs back into). Staging's deploy of `dc914d9` (run 37214991123) was refused
+  at 16:00:26 UTC with `Too many requests - try again in 24 hours (more than 5000, code:
+  "api-upload-free")`; the API had deployed. Vercel's limits page (read 4 October 2026): 5,000 per
+  86,400 s, reset "after the Duration has expired", fixed or rolling not said. This item's own
+  record above, an upload at 20:40 UTC between two refusals, points to rolling. Both deploy
+  workflows now run `vercel deploy --prebuilt --prod --archive=tgz`, so staging proves what
+  production runs (D-075). Vercel's deploy page says `--archive` packs the output into "one or
+  more files", and split archives are now its default, so a deploy should upload a few parts,
+  against the ~761 files of a deploy without it. **Not yet proved:** the first staging deploy
+  that goes through must show that count; if the CLI's output doesn't show it, the record says so
+  rather than assuming the flag took effect. Pro stays unbought until that is read.
 - [ ] **P-0.16** Move `velora-prod`'s Supabase organisation to Pro before `v0.1.0` (REL-1). **Blocks that release, not the build,** and the release gate refuses while it is on Free (D-075). The Free plan keeps no automatic backups, and the first real sign-up is the first thing worth losing (the founder, 3 October 2026). Pro is $25 a month per organisation with 7 days of daily backups; its $10 of included compute covers one project, which is why `velora-prod` has an organisation of its own (`infra/PRODUCTION.md`). Point-in-time recovery, a further add-on, is T-9.14's.
 - [x] **P-0.6** Create accounts: GitHub, Supabase (Mumbai), Upstash, Cloudflare (R2 on), Fly.io (paid plan for `bom`), Vercel, Sentry, Sightengine.
   **Ticked with two still to set up then**, none needed before Sprint 4, each on its task's
@@ -3589,3 +3602,12 @@ The number comes from the session's own block, given in its brief, from P-100 up
   alone.
 
   Found building T-4.4.
+- [ ] P-85 · Refuse a duplicate Proposed-item number in CI. **Not tonight (the advisor directing
+  Sprint 5, 4 October 2026); before the next day with several sessions allocating at once.**
+  Worst case: two items under one number, and a relay, a Needs line or a commit that names it
+  points at the wrong one. On 4 October five sessions allocated at once: two open branches
+  claimed P-74 and P-75 for different items, and T-5.4's item moved from P-73 to P-84 at its
+  rebase. The manual rule held (re-read `main` and every open branch at landing), but a rule five
+  sessions follow by hand will slip. Fix: a test that parses `05-PLAN.md`'s Proposed list and
+  fails on any number used twice, naming both titles, so the second session to merge finds out
+  in CI. Found in T-5.4.
