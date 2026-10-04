@@ -2297,6 +2297,8 @@ roughly double. Re-estimate after Sprint 2 using your real pace.
 
 Claude Code adds items here instead of doing unplanned work. Format:
 `- [ ] P?-NN · short title — why it's needed — found during T-x.y`
+The number comes from the session's own block, given in its brief, from P-100 up (CLAUDE.md,
+"P-numbers: a block per session"); never from scanning branches.
 
 - [ ] P-01 · Decide the Postgres image for Apple Silicon — `postgis/postgis:16-3.4` publishes no
   arm64 manifest, so it runs under emulation on the dev Mac. It works, but it is slow, and T-1.5

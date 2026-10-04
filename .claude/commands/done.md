@@ -29,6 +29,14 @@ everything above. It is **only** for `scripts/ci-gate` exiting **4**: it couldn'
 authenticate with GitHub. That is usually a bad or expired token, not an outage — so step 1 is
 always the token.
 
+**Seen once, and open (4 October 2026):** the gate exited 4 while waiting on run 37215825345
+(T-5.6's docs, five sessions landing at once). `gh auth status` was fine, `gh api rate_limit`
+showed 5,000 of 5,000 left in a fresh window, and the gate, run again at once, went green.
+**Hypothesis, not established:** several sessions polling GitHub with one token. The arithmetic
+doesn't obviously carry it (five gates polling every 10 s is about 1,800 calls an hour, under
+the 5,000), so a secondary limit is as likely. Don't act on it. If it happens again, record the
+second occurrence here; a token per session is then the test.
+
 **It is never for a red run, or for anything GitHub answered.** Exit 1 (CI failed, was cancelled,
 or ran for another commit) means the commit is not good: fix it on the branch and run `/done`
 again. Exit 5 means GitHub answered with an error: read it and fix the cause. Exit 2 or 3 (no run
