@@ -1603,13 +1603,26 @@ exist yet. The batch is a chain, T-3.10 → T-3.11 → T-3.12 → T-3.13, each n
   job stays the path sure to run, so a lost wake costs 10 seconds, never the selfie. Proved end to
   end on this run's Redis (`test_a_submitted_selfie_is_decided_by_the_wake_and_the_job_finds_it_done`).
   What she sees while she waits is T-4.7's (its line says how).
-- [ ] **Measure the worker's peak memory on the actual Fly machine** (D-088's first condition), with
+- [x] **Measure the worker's peak memory on the actual Fly machine** (D-088's first condition), with
   face matching loaded, beside this Mac's 290 to 330 MB; the 1 GB size is locked on that number.
-  **Measured so far, not on Fly:** in the image this task builds, on this Mac's Docker (arm64
-  Linux), 5 October 2026, one comparison of a 1,600-pixel selfie against three 1,600-pixel photos
-  peaks at **403 MB** (118 MB before the models load; 235 MB with 600-pixel images). That is above
-  D-088's 290 to 330 MB estimate, measured on macOS without the image's own baseline. The Fly
-  figure is the condition, measured after the deploy.
+  **Measured on the Fly machine, by Claude, 5 October 2026, after deploy run 37233775780
+  (`3ed0f6d`, every job green, the worker's release-command `--check` passing with the models):**
+  `velora-worker-staging`, shared-cpu-1x, 962 MB usable. The running worker, models loaded at
+  startup: **207 MB resident, 268 MB its peak since start**. One comparison in a separate process
+  in that machine, a 1,600-pixel selfie against two 1,600-pixel photos (the committed fixtures,
+  sent in with the probe and enlarged there; Wikimedia refused Fly's address): **405 MB peak**,
+  from 123 MB before the models load. **That is above D-088's 290 to 330 MB estimate** (macOS,
+  without the image's baseline), and matches this Mac's arm64 container (403 MB). With T-4.4's
+  worst photo decode (447 MB from a 104 MB start), the worker's worst moment is one or the other,
+  never both, since both run synchronously on its one event loop: about 207 + 343 = 550 MB of 962.
+  1 GB holds it with room; locking the size on this number is the founder's (D-088). The models
+  behave alike on amd64: the same similarities as on the Mac (0.9099, 0.1353).
+  **The wake on staging (D-261):** the worker logs `wake.listening` on `wake:verify_selfie` at
+  start, so Upstash's Free plan takes the subscription. Three wakes published from inside the
+  worker's machine for verification ids that exist nowhere (nothing read or written) were heard in
+  547, 536 and 454 ms, each including the probe's own new TLS connection to Mumbai. **Not measured:**
+  what a wake costs in Upstash's command count (its pages don't say whether deliveries count);
+  its console's daily chart, before and after a few test selfies, answers it.
 - [x] **Accuracy: there is no measurement, and the record says so** (D-260). The threshold is
   SFace's published 0.363 on LFW, the model's authors' number on their data, not ours on ours; our
   false-accept rate is unknown. **What stands in for it:** the words (D-262), and the founder
