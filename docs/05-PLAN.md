@@ -3505,8 +3505,9 @@ The number comes from the session's own block, given in its brief, from P-100 up
   test: a wrong database refused, and a database at head with each of the three dropped, then
   disabled, refused, naming the object. At the direction of the advisor directing Sprint 5,
   3 October 2026, after T-5.1; the three objects added at the advisor's direction the same day.
-  **Done, 4 October 2026,** at the founder's direction. `scripts/migrate-with-url` hands Alembic a
-  connection of its own, commits, and on that connection reads `alembic_version`: anything but the
+  **Done, 4 October 2026,** at the direction of the advisor (Claude, in a separate chat), relayed
+  by the founder. `scripts/migrate-with-url` hands Alembic a connection of its own, commits, and
+  on that connection reads `alembic_version`: anything but the
   repo's single head (`get_current_head()`, which refuses two) exits 1, naming what the database
   holds. With the head matching, D-076's two triggers must be on their own tables with `tgenabled`
   `O` or `A` (`R` fires only under replica, so it counts as disabled), and D-077's index on
@@ -3523,10 +3524,18 @@ The number comes from the session's own block, given in its brief, from P-100 up
   and the commit removed: there the script printed the head and exited 0 over a database with no
   `alembic_version`, caught only by the test's own readback. **Green, as expected,** with the
   commit removed alone: Alembic commits a transaction it opened itself, and the commit is for the
-  case above. **Not proved against a real deploy:** the failing case would mean breaking staging's
-  `alembic_version`, whose owner credentials live only in GitHub. **Unexplained:** one run of the
-  weakening set reported two errors on the index cases, with no log kept, no Postgres error logged
-  then, and none in 33 runs since; if it recurs, keep pytest's output.
+  case above. **Passing against a real deploy:** staging's deploy of `ff50186` (run 37225065845,
+  4 October 2026, 18:36 UTC), its migrate job as the owner against Supabase, printed
+  `migrate: alembic_version holds 190d7bebf133.` and `that is the repo's head, 190d7bebf133.`,
+  both triggers `present and enabled` and the index `present, unique and valid`; every job green.
+  No migration was due, so Alembic logged no `Running upgrade`: these lines are the database's
+  answer, not the migrator's. **Failing against a real deploy: not produced.** It would mean
+  breaking staging's `alembic_version`, whose owner credentials live only in GitHub; the real
+  script against a real Postgres stands in for it, above. **What it doesn't prove:** a trigger
+  whose function was rewritten to refuse nothing still passes, since present and enabled is what
+  this item asks. **Unexplained:** one run of the weakening set reported two errors on the index
+  cases, with no log kept, no Postgres error logged then, and none in 33 runs since; if it
+  recurs, keep pytest's output.
 - [ ] P-66 · Give staging a Firebase project of its own, with its own test numbers, its own
   authorised domains and its own region policy. **Before the first staging check that signs in
   and runs unattended** (an E2E against staging, or anything in CI that signs in): that is P-67,
