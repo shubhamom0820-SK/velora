@@ -263,6 +263,9 @@ any step failed. It runs only where `ENV` is local or staging: production's copy
    token is its own, scoped to this app, in GitHub's `staging` environment as
    `FLY_WORKER_API_TOKEN`; the API's token can't deploy it.
 
+   **Set up by Claude on 4 October 2026 (T-4.4),** first deployed by deploy run 37218077335;
+   the secrets compared that day by the prefixes recorded on T-4.4.
+
    **Sightengine is checked where it runs:**
    `flyctl ssh console -a velora-worker-staging -C "python -m app.tools.sightengine_shape"` sends
    Sightengine's two documentation examples, re-encoded as the worker sends a photo, and compares

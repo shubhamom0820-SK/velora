@@ -1399,13 +1399,20 @@ exist yet. The batch is a chain, T-3.10 → T-3.11 → T-3.12 → T-3.13, each n
   five million. `WORKER_POLL_DELAY_S`, default 10; the health key hourly; abort and cron off.
   `test_it_polls_every_10_seconds_which_is_d091s_sum` builds the worker as `run_worker` does and
   recomputes D-091's 260,640 from its own numbers.
-- [ ] **On Fly now (D-095, the founder, 4 October 2026):** not after P-49's move.
+- [x] **On Fly now (D-095, the founder, 4 October 2026):** not after P-49's move.
   Deploy the worker to Fly staging (moved from T-1.22): a 1 GB machine (D-088), with Sightengine's
   and R2's keys among its secrets; `infra/fly.worker.toml` beside
   `fly.api.toml`, the same image and least-privilege role, deployed by `deploy.yml` after the API.
   Add its pool to the connection budget in `infra/STAGING.md`. It shares `Settings`, so it needs
   the API's four keys as secrets, the same values (from the Keychain, `infra/STAGING.md`):
   otherwise it can't read the numbers or hashes the API wrote, or doesn't start (D-060, D-061).
+  **Done, 4 October 2026, by Claude:** the app `velora-worker-staging` (organisation `personal`,
+  `sin`), its ten secrets staged through stdin, never printed (the four keys, R2's pair and
+  Sightengine's pair from the Keychain; `DATABASE_URL` and `REDIS_URL` piped from the API's
+  machine), and its own deploy token in GitHub's `staging` environment as `FLY_WORKER_API_TOKEN`
+  (scoped to this app; Fly's default expiry, 2046). Deployed by deploy run 37218077335 on
+  `94dcee6`: its release command (`python -m app.workers --check`) passed on a one-off machine,
+  then one `worker` machine, shared-cpu-1x, 1,024 MB. Budget: 14 + 3 = 17 of `velora_api`'s 20.
 - [x] `moderate_photo(photo_id)`: fetch raw → Pillow open (reject if not an image) → `ImageOps.exif_transpose` → resize longest side 1600 → save JPEG q85 **without EXIF** → `ModerationProvider.check()` → approve (write public copy for `public` kind) or reject with reason (`nudity`, `minor_suspected`, `no_face`, `text_overlay`, `other`). `minor_suspected` is D-093's: rejected without an accusation ("We couldn't verify this photo — try a different one"), the image deleted, a `fraud_events` signal kept; the internal report waits for T-9.2's system user.
   **As built** (`photos.service.moderate`): at most 8 MB read and the bytes judged again (the PUT
   URL outlives `complete`, D-089); the re-encoded JPEG written over the upload before Sightengine
@@ -1495,10 +1502,36 @@ exist yet. The batch is a chain, T-3.10 → T-3.11 → T-3.12 → T-3.13, each n
 - [x] Extend `make seed` (T-1.15): an approved public photo at position 0 for every seeded user past the photos step (everyone but the moderator, including the three women at the selfie step) — a placeholder from the prototype's `c1`/`c2` gradient, re-encoded like any upload and stored through `StorageProvider`. Re-running creates no duplicates.
   22 people (the moderator excepted), 900 × 1200, both buckets; someone seeded before T-4.4 gets
   theirs on the next run, once; a place 0 already holding a live photo gets none.
-- [ ] **Done when, on staging:** the worker deploys by `deploy.yml`; its secrets match their
+- [x] **Done when, on staging:** the worker deploys by `deploy.yml`; its secrets match their
   sources by SHA-256 prefix, computed on each machine and from the Keychain; a job queued on
   staging's Redis is run by it; `sightengine_shape` passes inside its machine; its memory measured
   there. Recorded in the docs commit after `/done`, with the deploy run.
+  **Passed, 4 October 2026, by Claude, after deploy run 37218077335 (`94dcee6`):**
+  - **Started:** its log, `Starting worker for 2 functions: moderate_photo, delete_files`,
+    Upstash's `redis_version=8.4.0`, and `worker.started` with `poll_delay_s` 10.0, `env` staging.
+  - **Secrets:** SHA-256, first 8 hex characters, computed on each machine and from the Keychain,
+    never moved: `DATABASE_URL` `c15a8086` and `REDIS_URL` `55506d9f` on both machines;
+    `JWT_SECRET` `f5fbdd09`, `PHONE_PEPPER` `f7d127c0`, `PHONE_ENC_KEY` `9d5de66c`, `CODE_PEPPER`
+    `fd4ae0b5`, `R2_ACCESS_KEY_ID` `ac6d5e3f`, `R2_SECRET_ACCESS_KEY` `1188b869` on both and in the
+    Keychain (R2's as T-4.1 recorded); `SIGHTENGINE_API_USER` `98317d78` and
+    `SIGHTENGINE_API_SECRET` `54c71686` on the worker and in the Keychain, and on the API, none.
+  - **A job through staging's Redis:** two `moderate_photo` jobs queued from inside the worker's
+    machine for photo ids that exist nowhere (no row read, none written), each answered
+    "no such photo": picked up 10.20 s and 7.93 s after queuing (the 10-second poll), run in
+    1.85 s (a cold connection to Mumbai) and 0.18 s. ARQ's line read `moderate_photo(…)`: no
+    argument logged.
+  - **Sightengine where it runs:** `python -m app.tools.sightengine_shape` inside the machine:
+    0 differences for both examples, exit 0.
+  - **R2 where it runs:** T-4.1's `storage_probe` inside the worker's machine, with the
+    `velora-prod-*` refusals: every step `ok`, exit 0.
+  - **Memory, measured on this machine** (962 MB usable of the 1,024): the running worker, after
+    those jobs, 113 MB resident, its peak 113 MB. Decoding there, in a separate process: a
+    typical 12-megapixel JPEG of 5.65 MB peaks at 181 MB, the worst the 40-megapixel limit lets
+    through (an RGBA PNG) at 447 MB, from a 104 MB start; so a worker decoding the worst photo
+    sits near 460 MB. The same figures as this Mac's arm64 image (182 and 447 MB). D-088's 290
+    to 330 MB is face matching's, measured by T-4.5.
+  - **Not proved here: a real photo from upload to approved.** It needs T-4.6's upload screen on
+    staging, signed in by SMS. That chain is T-4.6's staging check, and the demo.
 - [x] **Commit:** `feat(worker): photo moderation pipeline [T-4.4]`
 
 ### T-4.5 · Selfie verification
