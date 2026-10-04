@@ -1304,8 +1304,8 @@ exist yet. The batch is a chain, T-3.10 → T-3.11 → T-3.12 → T-3.13, each n
   a token per environment scoped to its own pair, and staging's two Fly secrets (`infra/STAGING.md`
   §3, `infra/PRODUCTION.md` §3). **P-49 is waived for this task:** the go-ahead in the founder's
   message of 4 October 2026 came with P-49 unticked. Its reason is T-4.4's worker, and nothing here
-  is tied to where the API runs; whether it moves to T-4.4's deploy step is still open (D2 of
-  Sprint 4's plan).
+  is tied to where the API runs. **Decided 4 October 2026 (D-095):** the worker deploys to Fly
+  staging in T-4.4, and moves with the API when P-49 lands.
 - [x] Real `StorageProvider` on aioboto3 (works for R2 and the local S3, SeaweedFS since D-086): `presign_put(bucket, key, content_type, max_bytes, ttl=300)`, `presign_get(bucket, key, ttl=600)`, `get_bytes`, `put_bytes`, `copy`, `delete`.
   Plus `head()`, size and type: a presigned PUT can't cap its own size, so T-4.2 checks the upload
   after it arrives. The Content-Type is signed into the PUT. One client per app, closed with it.
@@ -1374,7 +1374,9 @@ exist yet. The batch is a chain, T-3.10 → T-3.11 → T-3.12 → T-3.13, each n
 - [ ] **The worker polls every 10 seconds** (D-091), a setting: on Upstash's Free plan that is
   260,640 commands a month idle, 52% of the 500K, where ARQ's default 0.5 seconds would be over
   five million.
-- [ ] Deploy the worker to Fly staging (moved from T-1.22): `infra/fly.worker.toml` beside
+- [ ] **On Fly now (D-095, the founder, 4 October 2026):** not after P-49's move.
+  Deploy the worker to Fly staging (moved from T-1.22): a 1 GB machine (D-088), with Sightengine's
+  and R2's keys among its secrets; `infra/fly.worker.toml` beside
   `fly.api.toml`, the same image and least-privilege role, deployed by `deploy.yml` after the API.
   Add its pool to the connection budget in `infra/STAGING.md`. It shares `Settings`, so it needs
   the API's four keys as secrets, the same values (from the Keychain, `infra/STAGING.md`):
@@ -1494,6 +1496,20 @@ exist yet. The batch is a chain, T-3.10 → T-3.11 → T-3.12 → T-3.13, each n
   possible minor) reaches the slot that showed it, before building the "rejected" state.
 - [ ] Built in T-3.11's `StepFrame`, at D-080's `/onboarding/photos`, replacing T-3.12's placeholder.
 - [ ] **Widen the CSP here (D-059):** `connect-src` for R2's upload endpoint (the presigned PUT), and `img-src` for `PUBLIC_CDN_URL` and `blob:` previews. Uploads and previews fail with a CSP error until then.
+  **And `img-src` for R2's own endpoint too** (found 4 October 2026): `GET /me/photos` gives a
+  pending or private photo as a signed link to the private bucket, on R2's endpoint
+  (`https://<R2_ACCOUNT_ID>.r2.cloudflarestorage.com`, path-style, T-4.1), not the CDN. Without it a
+  photo shows only once approved.
+- [ ] **CORS on the private bucket, or no browser can upload at all** (found 4 October 2026). The
+  presigned PUT goes from the web's origin to R2's endpoint: cross-origin, with a `Content-Type`
+  header, so the browser asks first, and R2 refuses without a CORS rule. Our tokens are Object Read
+  & Write and can't set one, so the founder sets it in Cloudflare (R2 → `velora-staging-private` →
+  Settings → CORS policy), exactly this, and production's the same with `https://veloraapp.co.in`
+  before REL-1:
+  `[{"AllowedOrigins": ["https://staging.veloraapp.co.in"], "AllowedMethods": ["PUT"], "AllowedHeaders": ["Content-Type"], "MaxAgeSeconds": 3600}]`.
+  Signed links shown in `<img>` need no CORS. Locally the web (`127.0.0.1:3000`) and the S3
+  (`127.0.0.1:9000`) are different origins too, so the local S3 (D-086) needs the same rule for the
+  local web: proved by a real upload from the browser, not assumed.
 - [ ] **Done when, on a real iPhone, on this control (D-089):** iOS Safari's upload sends JPEG, not
   HEIC, read from what the API received (its bytes), never reasoned about. If it sends HEIC, "no
   HEIC" breaks every iPhone sign-up: stop and tell the founder before anything ships. D-089 is
@@ -1701,6 +1717,8 @@ committed rows.
 - [ ] **Commit:** `test(wallet): concurrency and idempotency [T-5.4]`
 
 ### T-5.2 · Prices
+**Held by the founder, 4 October 2026:** not started until the wallet has a screen, since until
+then prices show nothing. T-4.4 and T-4.6 come first.
 - [ ] **Needs:** T-5.1
 - [ ] `pricing.service.price_for(user, action)`:
   - women 0; men the `action_prices` value;
@@ -2110,7 +2128,7 @@ committed rows.
 - [ ] **Commit:** `docs(ops): backup and restore runbook [T-9.14]`
 
 ### T-9.15 · Go live
-- [ ] **Needs:** T-9.13, T-9.14, P-0.5, P-0.7, P-0.8; **P-72**: a human path for repeated possible-minor flags (D-093); **T-4.11**: liveness before the first real user (the founder, 4 October 2026); **P-66**: until staging has a Firebase project of its own, its sign-ins land in production's user pool, which is not acceptable after launch (the founder, 3 October 2026, on T-3.14); **P-0.18**: the billing account converted from its free trial, after App Check (P-68), since after launch the trial's end is an outage with no warning (the founder, 3 October 2026); and **P-68**: App Check enforced on Authentication and proved by its effect, before the site is public for sign-in (the founder, 4 October 2026)
+- [ ] **Needs:** T-9.13, T-9.14, P-0.5, P-0.7, P-0.8; **P-73**: who the two unidentified staging accounts are; **P-72**: a human path for repeated possible-minor flags (D-093); **T-4.11**: liveness before the first real user (the founder, 4 October 2026); **P-66**: until staging has a Firebase project of its own, its sign-ins land in production's user pool, which is not acceptable after launch (the founder, 3 October 2026, on T-3.14); **P-0.18**: the billing account converted from its free trial, after App Check (P-68), since after launch the trial's end is an outage with no warning (the founder, 3 October 2026); and **P-68**: App Check enforced on Authentication and proved by its effect, before the site is public for sign-in (the founder, 4 October 2026)
 - [ ] Production env: real SMS, real Razorpay live keys + webhook URL, real moderation and face match, VAPID keys. Run the pre-launch checklist in `07-CHECKLISTS.md`. Do one real ₹ purchase yourself and refund it, under D-076's rule 3: the refund reverses that purchase's Velas in the ledger in the same step (T-8.2), so money never goes back while its Velas stand.
 - [ ] **Write to the waitlist** (T-2.3): its copy promises to tell people when Velora opens near them. Nothing can send bulk email yet, so choose how before launch day, or the list is one we can't write to. A sending service is a new dependency and another processor `/privacy` must name, and its From address needs SPF and DKIM, like the mailboxes (P-0.3). B-14, a second city, writes to it again, by city.
   **DKIM before the first send, or the launch email goes to spam:** our DMARC record says
@@ -2817,6 +2835,9 @@ Claude Code adds items here instead of doing unplanned work. Format:
       `infra/PRODUCTION.md`'s Fly section and its Fly cost line.
 
     The web, the release gate, the smoke check and the domains stay.
+  - **And staging's worker** (D-095, 4 October 2026): T-4.4 deploys it to Fly now, so the move takes
+    two apps, not one: `infra/fly.worker.toml`, its job in `deploy.yml`, its secrets (the same four
+    keys, R2's and Sightengine's), and its line in `infra/STAGING.md`'s connection budget.
 
   Found reviewing T-3.2 to T-3.5, at the direction of the advisor directing them (Claude, in a
   separate chat), who added option B and the residency question.
@@ -3272,3 +3293,22 @@ Claude Code adds items here instead of doing unplanned work. Format:
   2026.
 
   Found planning T-4.4.
+- [ ] P-73 · Find out what the two unidentified accounts on staging hold. **Before real users** (on
+  T-9.15's Needs line, and REL-1's if its tag includes T-3.14). Two accounts, from phone numbers the
+  founder hasn't identified, signed in to staging at 21:05 and 21:11 UTC on 3 October 2026 and were
+  still signed in a day later (the founder's reading). Staging shares Firebase's user pool with
+  production (P-66), so if they hold real profile data, real people are already in that pool.
+  Worst case: a stranger's profile or photo shown to someone who isn't meant to see it, once any
+  screen shows other people (none does on 4 October 2026: discover, chats, wallet and you are all
+  placeholders, and no profile page exists, so no demo can show them yet).
+  **Not answered yet, and why:** on 4 October 2026 Claude proposed one read-only query inside
+  staging's API machine (a read-only transaction printing only, per account, when it was created,
+  its onboarding step, which profile fields are set, yes or no, and a row count for every table
+  with a key to `users`; never a phone number, a name, a photo, an IP address or a user agent).
+  Claude Code's permission system blocked it as personal-data handling, and nothing was read by any
+  other route. **Two ways to answer it:** (a) the founder allows it, by approving that query when
+  it is proposed or by adding a Bash permission rule for it, and Claude runs it; or (b) the founder
+  runs it himself. What to do with the answer is the founder's either way. At the founder's
+  direction, 4 October 2026.
+
+  Found preparing T-4.6.

@@ -2173,6 +2173,21 @@ date of that check and the shape seen are recorded** (on T-4.4), so that when Si
 something, the record shows whether it was us who went stale or them. The plain image moderation
 API only, as T-4.4 already constrains: never hybrid review, never the Feedback API.
 
+### D-095 · The worker deploys to Fly staging now, and moves with the API at P-49 — Locked
+**The decision (T-4.4; the founder, 4 October 2026):** T-4.4 deploys the ARQ worker to Fly staging,
+as a second Fly app beside the API (`infra/fly.worker.toml`, a 1 GB machine per D-088, a deploy job
+after the API's), rather than waiting for P-49's move to a VM in Mumbai, which itself waits on
+P-68 and then P-0.18. When P-49 lands it moves two apps, not one.
+
+**Why: the asymmetry.** Waiting means weeks of a staging that accepts uploads and never approves
+one, so every demo and every staging check from T-4.6 on dead-ends. Deploying now costs an hour or
+two of worker config redone at P-49, and about $8.50 a month until then. Claude first recommended
+waiting (option (a) of Sprint 4's plan, D2), then reversed it once the gap to P-49 was clear; the
+founder chose the reversal.
+
+**Supersedes** the advisor's direction of 3 October 2026 that P-49 come before Sprint 4 so the
+worker is built once on its new host (on T-4.1's Needs line, waived there for T-4.1).
+
 ---
 
 ## Adding a decision
