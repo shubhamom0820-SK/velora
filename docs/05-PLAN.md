@@ -4008,3 +4008,21 @@ The number comes from the session's own block, given in its brief, from P-100 up
   can build), or a `debit` no other module can import, with the source scan kept as a second
   layer. Found in T-5.2, whose report named it; the advisor ranked it first of that report's three
   worries. Filed from this session's block (P-150 to P-159).
+- [x] P-143 · Refuse `make hooks` anywhere but the clone's main checkout. **Done, 4 October 2026,**
+  at the direction of the advisor directing Sprint 5. Worst case, as it happened: git's hooks are
+  shared by every checkout of a clone, and `pre-commit install` pins the pre-commit hook to the
+  virtualenv of the checkout it runs in; run from a scratchpad worktree later removed (at 23:48),
+  every checkout's commits failed with "`pre-commit` not found", and with seven sessions each
+  holding a worktree it would happen again. **Fix:** `make hooks` first runs
+  `scripts/require-main-checkout`, which refuses a linked worktree and names the command to run
+  instead. It tells the two apart by git itself, never a path: in the main checkout the git
+  directory is the clone's common one, in a worktree `<common>/worktrees/<name>`. **Proved both
+  ways, in a throwaway clone with hooks of its own:** from its main checkout `make hooks` was
+  accepted and the hook pointed at that checkout's virtualenv; from its linked worktree it was
+  refused (exit 2) with the hooks byte for byte unchanged; with the check disabled, `make hooks`
+  from the worktree succeeded, pointed the hook at the worktree, and once the worktree was removed
+  a commit in the main checkout failed with "`pre-commit` not found": tonight's breakage,
+  reproduced. In the suite: `scripts/require-main-checkout-test` (5 of 5, a real linked worktree)
+  through `tests/test_require_main_checkout.py`, which also asks `make -n hooks` that the check is
+  the first thing it runs; `tests.break_guards p143-` turns each red (the check disabled, the
+  check not run), restored by SHA-256. Filed from this session's block (P-140 to P-149).

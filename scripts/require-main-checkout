@@ -1,0 +1,24 @@
+#!/usr/bin/env bash
+# Refuses unless run from the clone's main checkout, never a linked worktree
+# (P-143). `make hooks` runs it first: git's hooks are shared by every checkout
+# of a clone, and `pre-commit install` pins the pre-commit hook to the
+# virtualenv of the checkout it ran in. Run from a worktree that is later
+# removed, every checkout's commits fail with "`pre-commit` not found" (it
+# happened on 4 October 2026). The main checkout lives as long as the clone.
+#
+# Told apart by git itself, never by a path: in the main checkout the git
+# directory is the clone's common one; in a linked worktree it is
+# <common>/worktrees/<name>.
+set -euo pipefail
+
+git_dir="$(cd "$(git rev-parse --git-dir)" && pwd -P)"
+common_dir="$(cd "$(git rev-parse --git-common-dir)" && pwd -P)"
+if [[ "$git_dir" != "$common_dir" ]]; then
+  main="$(git worktree list --porcelain | sed -n '1s/^worktree //p')"
+  printf '%s\n' \
+    "make hooks: refused. This is a linked worktree, and the hooks are shared by every" \
+    "checkout of this clone: installed from here, they would point at this worktree's" \
+    "virtualenv, and break everyone's commits when it is removed (P-143)." \
+    "Run it from the main checkout: cd ${main} && make hooks" >&2
+  exit 1
+fi

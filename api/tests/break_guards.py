@@ -1774,6 +1774,36 @@ P142: list[tuple[Case, list[str]]] = [
     ),
 ]
 
+# --- P-143: make hooks only from the clone's main checkout -----------------------
+
+HOOKS_TEST = "tests/test_require_main_checkout.py"
+P143: list[tuple[Case, list[str]]] = [
+    (
+        Case(
+            id="p143-a-worktree-allowed",
+            what="P-143: the check lets a linked worktree through",
+            edits=[
+                (
+                    "../scripts/require-main-checkout",
+                    'if [[ "$git_dir" != "$common_dir" ]]; then\n',
+                    "if false; then\n",
+                )
+            ],
+            expect=["test_make_hooks_is_refused_outside_the_main_checkout"],
+        ),
+        [HOOKS_TEST],
+    ),
+    (
+        Case(
+            id="p143-check-not-run",
+            what="P-143: make hooks no longer runs the check",
+            edits=[("../Makefile", "\t@scripts/require-main-checkout\n", "")],
+            expect=["test_the_check_is_the_first_thing_make_hooks_runs"],
+        ),
+        [HOOKS_TEST],
+    ),
+]
+
 CASES: list[tuple[Case, list[str]]] = (
     [(c, T51_SELECTION) for c in T51]
     + [(c, T54_SELECTION) for c in T54]
@@ -1782,6 +1812,7 @@ CASES: list[tuple[Case, list[str]]] = (
     + LAND
     + [(c, T52_SELECTION) for c in T52]
     + P142
+    + P143
 )
 
 # The fifty-connection fixture's own message when Postgres refuses a connection.
@@ -1804,8 +1835,9 @@ def tracked() -> dict[str, str]:
     }
     for path in (API.parent / "infra").glob("fly.*.toml"):
         files[f"../infra/{path.name}"] = sha(path)
-    for name in ("push-gate", "mark-checked"):
+    for name in ("push-gate", "mark-checked", "require-main-checkout"):
         files[f"../scripts/{name}"] = sha(API.parent / "scripts" / name)
+    files["../Makefile"] = sha(API.parent / "Makefile")
     return files
 
 

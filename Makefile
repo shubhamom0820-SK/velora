@@ -58,7 +58,10 @@ lint-api: ## api: ruff + format check + strict mypy
 lint-web: ## web: eslint + tsc + prettier check
 	cd web && pnpm lint && pnpm typecheck && pnpm format:check
 
-hooks: ## Install the git hooks (once per clone): pre-commit's, and the landing guard's pre-push
+hooks: ## Install the git hooks (once per clone, from its main checkout): pre-commit's and the landing guard's pre-push
+	@# Only from the clone's main checkout: the hooks are shared, and installed
+	@# from a worktree they'd point at its virtualenv, gone when it is (P-143).
+	@scripts/require-main-checkout
 	cd api && uv run pre-commit install
 	@# Shared by every worktree of this clone; each push runs its own checkout's
 	@# scripts/push-gate, and a checkout from before the guard has none to run.

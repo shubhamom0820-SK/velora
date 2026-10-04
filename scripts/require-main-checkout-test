@@ -1,0 +1,49 @@
+#!/usr/bin/env bash
+# Tests scripts/require-main-checkout (P-143) in a repository of its own, with
+# a real linked worktree: refused there and in its subdirectories, with the
+# command to run instead; accepted, silently, from the main checkout.
+set -euo pipefail
+
+here="$(cd "$(dirname "$0")" && pwd)"
+check="$here/require-main-checkout"
+work="$(mktemp -d)"
+trap 'rm -rf "$work"' EXIT
+
+main="$work/clone"
+git init -q -b main "$main"
+git -C "$main" -c user.name=t -c user.email=t@t commit -q --allow-empty -m one
+mkdir -p "$main/api"
+git -C "$main" worktree add -q "$work/worktree" -b side
+mkdir -p "$work/worktree/api"
+main_real="$(cd "$main" && pwd -P)"
+
+passed=0 failed=0
+# expect NAME DIR EXIT MESSAGE ("" means it must print nothing)
+expect() {
+  local name="$1" dir="$2" want="$3" message="$4" got=0
+  (cd "$dir" && "$check") >"$work/$name.out" 2>&1 || got=$?
+  local ok=1
+  [[ "$got" == "$want" ]] || ok=0
+  if [[ -z "$message" ]]; then
+    [[ ! -s "$work/$name.out" ]] || ok=0
+  else
+    grep -qF -- "$message" "$work/$name.out" || ok=0
+  fi
+  if ((ok)); then
+    passed=$((passed + 1))
+    printf 'ok    %-36s exit %s\n' "$name" "$got"
+  else
+    failed=$((failed + 1))
+    printf 'FAIL  %-36s exit %s, want %s saying "%s"\n' "$name" "$got" "$want" "$message"
+    sed 's/^/        /' "$work/$name.out"
+  fi
+}
+
+expect main-checkout "$main" 0 ""
+expect main-checkout-subdirectory "$main/api" 0 ""
+expect linked-worktree "$work/worktree" 1 "make hooks: refused. This is a linked worktree"
+expect linked-worktree-subdirectory "$work/worktree/api" 1 "make hooks: refused. This is a linked worktree"
+expect names-the-main-checkout "$work/worktree" 1 "Run it from the main checkout: cd ${main_real} && make hooks"
+
+echo "require-main-checkout-test: $passed passed, $failed failed"
+((failed == 0))
