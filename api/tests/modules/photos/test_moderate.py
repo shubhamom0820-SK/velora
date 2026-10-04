@@ -138,6 +138,7 @@ async def test_an_approved_public_photo_is_published_from_the_bytes_scored(
     assert after.moderation == {
         "provider": "sightengine",
         "models": ["nudity-2.1", "face-age", "text"],
+        "minor": 0.01,
         "explicit": 0.01,
         "faces": 1,
         "artificial_faces": 0,

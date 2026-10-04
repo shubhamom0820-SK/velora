@@ -29,6 +29,7 @@ from dataclasses import dataclass, field
 from typing import Any, Final, Literal, Protocol, cast
 
 import httpx
+import structlog
 from pydantic import BaseModel, ConfigDict, ValidationError
 
 CHECK_URL: Final = "https://api.sightengine.com/1.0/check.json"
@@ -39,6 +40,8 @@ TIMEOUT_S: Final = 30.0
 # Which model gave which score, for the records that keep one (D-093).
 MINOR_MODEL: Final = "sightengine face-age"
 
+log = structlog.get_logger(__name__)
+
 
 class ModerationFailed(Exception):
     """No answer we can read: Sightengine unreachable, slow, refusing, or
@@ -48,17 +51,15 @@ class ModerationFailed(Exception):
 
 @dataclass(frozen=True)
 class Scores:
-    """What the three models said about one image, each from 0 to 1."""
+    """What the decision reads of the three models' answer, each from 0 to 1."""
 
-    # nudity-2.1's top-level classes, `none` included.
+    # nudity-2.1's explicit classes: the ones `photos.moderation` decides on.
     nudity: Mapping[str, float]
     # One per real face: the probability it is a minor's. Empty: no real face.
     minors: tuple[float, ...]
     # Drawings, statues, masks: faces, but nobody's (face-age).
     artificial_faces: int
     text_artificial: float
-    text_natural: float
-    operations: int = 0
 
 
 class ModerationProvider(Protocol):
@@ -71,21 +72,19 @@ class ModerationProvider(Protocol):
         ...
 
 
-# --- The response, as Sightengine documents it -----------------------------------
+# --- The response: strict where it is read, tolerant where it isn't --------------
 #
-# Strict: a score that arrives as a string, a field renamed or moved, fails here,
-# loudly, and the photo waits; it never reads as 0 and passes. Fields not read
-# are still listed, so the fake can't drift from the checked shape either.
+# The fields the decision reads are required and strict: one renamed, moved,
+# missing or arriving as a string fails here, loudly, and the photo waits; it
+# never reads as 0 and passes (D-094's find is the reason). Every other field may
+# change, go or appear: a vendor adding something harmless must not stop every
+# upload (the founder, 4 October 2026). A field nobody has seen before is logged,
+# by name, once a process, so it is noticed; D-094's shape check is where a
+# change is studied.
 
 
 class _Strict(BaseModel):
     model_config = ConfigDict(strict=True, extra="allow", frozen=True)
-
-
-class _RequestInfo(_Strict):
-    id: str
-    timestamp: float
-    operations: int
 
 
 class _Nudity(_Strict):
@@ -93,11 +92,6 @@ class _Nudity(_Strict):
     sexual_display: float
     erotica: float
     very_suggestive: float
-    suggestive: float
-    mildly_suggestive: float
-    suggestive_classes: dict[str, Any]
-    none: float
-    context: dict[str, float]
 
 
 class _Age(_Strict):
@@ -109,53 +103,30 @@ class _FaceAttributes(_Strict):
 
 
 class _Face(_Strict):
-    x1: float
-    y1: float
-    x2: float
-    y2: float
     attributes: _FaceAttributes
-
-
-class _Box(_Strict):
-    x1: float
-    y1: float
-    x2: float
-    y2: float
-    label: str
-    prob: float
 
 
 class _Text(_Strict):
     has_artificial: float
-    has_natural: float
-    # Absent when there is no text, not an empty list: see CHECKED_ANSWER.
-    boxes: list[_Box] | None = None
-
-
-class _Media(_Strict):
-    id: str
-    uri: str
 
 
 class _Check(_Strict):
     status: Literal["success"]
-    request: _RequestInfo
     nudity: _Nudity
     faces: list[_Face]
     artificial_faces: list[Any]
     text: _Text
-    media: _Media
 
 
+# The nudity classes read: exactly the ones `photos.moderation.EXPLICIT` decides on.
 NUDITY_CLASSES: Final = (
     "sexual_activity",
     "sexual_display",
     "erotica",
     "very_suggestive",
-    "suggestive",
-    "mildly_suggestive",
-    "none",
 )
+# Field names already noticed by this process: each unknown one is logged once.
+_noticed: set[str] = set()
 
 
 def parse_check(body: bytes | str) -> Scores:
@@ -164,14 +135,30 @@ def parse_check(body: bytes | str) -> Scores:
         check = _Check.model_validate_json(body)
     except ValidationError:
         raise ModerationFailed(_failure_kind(body)) from None
+    unknown = field_paths(json.loads(body)) - KNOWN_FIELDS - _noticed
+    if unknown:
+        _noticed.update(unknown)
+        log.warning("moderation.unknown_fields", fields=sorted(unknown))
     return Scores(
         nudity={name: getattr(check.nudity, name) for name in NUDITY_CLASSES},
         minors=tuple(face.attributes.age.minor for face in check.faces),
         artificial_faces=len(check.artificial_faces),
         text_artificial=check.text.has_artificial,
-        text_natural=check.text.has_natural,
-        operations=check.request.operations,
     )
+
+
+def field_paths(value: Any, prefix: str = "") -> set[str]:
+    """Every field name in an answer, as a path (`text.boxes[].prob`): names
+    only, never a value."""
+    if isinstance(value, dict):
+        paths: set[str] = set()
+        for key, item in value.items():
+            here = f"{prefix}.{key}" if prefix else str(key)
+            paths |= {here} | field_paths(item, here)
+        return paths
+    if isinstance(value, list):
+        return set().union(*(field_paths(item, f"{prefix}[]") for item in value))
+    return set()
 
 
 class _Failure(BaseModel):
@@ -363,6 +350,13 @@ def fake_answer(outcome: FakeOutcome) -> dict[str, Any]:
             ],
         }
     return answer
+
+
+# Every field Sightengine is known to send: the checked answer's, a text box's
+# included. Anything else is logged as new (`parse_check`).
+KNOWN_FIELDS: Final = field_paths(fake_answer("approve")) | field_paths(
+    fake_answer("text_overlay")
+)
 
 
 @dataclass

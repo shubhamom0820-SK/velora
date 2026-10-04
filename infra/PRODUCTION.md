@@ -147,7 +147,7 @@ a leaked one first, then make a new one:
 | `PRODUCTION_MIGRATION_DATABASE_URL` (the owner) | The whole database, including switching off the ledger's guards (D-046) | A new database password in Supabase, then GitHub's secret |
 | `REDIS_URL` | Rate limits and sign-in codes | Upstash's credential reset, then Fly's secret |
 | `VERCEL_TOKEN` | Deploying anything to the production site | A new one-year token, then GitHub's secret |
-| `FLY_API_TOKEN` | Deploying anything to `velora-api` | `fly tokens create deploy -a velora-api`, piped into GitHub's secret |
+| `FLY_API_TOKEN` | Deploying anything to `velora-api` | `fly tokens create deploy -a velora-api` **with a shorter expiry than Fly's default of 20 years**, set at REL-1 (the founder, 4 October 2026: here the consequence is real; staging's keep the default on purpose), piped into GitHub's secret |
 | `SUPABASE_ACCESS_TOKEN` | Reading velora-prod and its organisation, nothing else (scoped) | A new scoped token, then GitHub's secret |
 
 ## First-time setup

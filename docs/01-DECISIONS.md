@@ -2563,15 +2563,20 @@ Like every reason, each is an `action_prices` key, so `pricing.service` prices i
 The names are the founder's decision, 4 October 2026, relayed by the advisor (Claude, in a separate
 chat); the shape is Claude's, in T-5.2.
 
-### D-101 · What moderation's scores mean — Open
-**The proposal (T-4.4, Claude, 4 October 2026; the founder's to lock or change):** the worker
+### D-101 · What moderation's scores mean — Locked (the minor threshold revisited from real scores)
+**The decision (T-4.4; proposed by Claude, decided by the founder, 4 October 2026):** the worker
 asks Sightengine for `nudity-2.1`, `face-age` and `text` in one plain `check.json` call
 (`face-age`, because Sightengine marks `face-attributes` deprecated), and decides in this order,
 the first that holds deciding (`api/app/modules/photos/moderation.py`, each threshold one
-constant):
-1. **`minor_suspected`:** any real face scored 0.5 or more as a minor's. Sightengine says faces near
-   18 score close to 0.5, so this catches young-looking adults, which D-093 accepts. First, so a
-   photo that also scores as sexual is handled as D-093 says (P-81 asks the lawyer about that case).
+constant, each held at its edge by `tests/modules/photos/test_moderation_rules.py`):
+1. **`minor_suspected`:** any real face scored **0.35** or more as a minor's. First, so a photo
+   that also scores as sexual is handled as D-093 says (P-81 asks the lawyer about that case).
+   **0.35 was chosen for an asymmetry, not from data:** nobody has seen how this model scores real
+   photos. Claude proposed 0.5; the founder lowered it: "The two errors are not symmetric. A false
+   positive costs a young-looking woman a polite 'try a different photo'. A false negative puts a
+   minor's photo on a dating app. When the costs differ that much, the threshold belongs on the
+   cautious side of the coin flip." (Sightengine says faces near 18 score close to 0.5.)
+   **Revisited once there are real scores to look at** (on T-9.5, where they are first seen).
 2. **`nudity`:** sexual activity, sexual display, erotica or "very suggestive" at 0.5 or more.
    Swimwear, a bare chest and the merely suggestive pass: ordinary on dating profiles.
 3. **`no_face`:** a public photo with no real face (drawings, statues and masks don't count). A
@@ -2579,14 +2584,19 @@ constant):
 4. **`text_overlay`:** embedded text at 0.8 or more. Overlaid numbers and handles would get round
    the chat's masking (T-7.3); text in the scene is "natural" and passes.
 
+The founder approved 2, 3 and 4 as proposed, and changed 1.
+
+**The reader is strict only where it reads** (the founder, the same day): the fields these four
+read fail closed if renamed, moved, missing or retyped; any other field may change or go, and a
+field never seen before is logged by name, once a process (`moderation.unknown_fields`), never
+refused. "A vendor adding something harmless" must not stop every upload.
+
 **What the owner reads is T-4.6's to decide,** not this entry's: the column keeps the reason
 for moderation (rule 12), and T-4.6 proposes naming to the owner only reasons on a list, so
 `minor_suspected` reaches them as `other`, in D-093's words.
 
-**Why Open:** the numbers are a first guess at a trade-off nobody has measured: a false rejection
-costs a real person a retry, a false approval puts a photo in front of strangers. They are tuned
-from what T-9.5's queue shows, by changing a constant and this entry, never silently.
-
+**Its number predates the D-number blocks** (CLAUDE.md, "P- and D-numbers"): it was on `main`
+before that rule, so it keeps it; renumbering would risk the stale reference the rule prevents.
 ---
 
 ## Adding a decision

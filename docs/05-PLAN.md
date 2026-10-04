@@ -192,6 +192,11 @@ never done silently.
   are never refunded, so `/terms` needs a line on what happens to an unspent balance then. It goes
   beside Privacy's missing section above, and is written when there is something honest to say.
   D-076 is Claude's reading of RBI's text, not legal advice: show it to the lawyer too.
+  **The exception: P-81 is answered before the first real user, not with the rest** (the founder,
+  4 October 2026). Whether deleting a photo that scores as both a possible minor and sexual
+  (D-093) conflicts with a duty under Indian law to preserve or report it is the one legal
+  question that can't wait for this review: getting it wrong is not a commercial mistake. It is
+  on REL-1's Needs line for that reason.
 - [ ] **P-0.17** A chartered accountant confirms how prepaid Velas are treated, **before the first real sale. Owner: the founder, Shubham Kumar. Trigger: Sprint 8, not launch:** it is on T-8.1's Needs line, so `/task` stops there. Recorded 3 October 2026, at the direction of the advisor directing Sprint 5 (Claude, in a separate chat).
   **What the CA confirms:**
   - **Revenue recognition:** unspent paid Velas are a liability until spent. They never expire and
@@ -664,10 +669,17 @@ waits on the founder's decisions, so it is a task of its own, outside the sprint
     4 October 2026): D-008 makes it mandatory for women, and T-4.5 ships without it.
   - **P-72, if REL-1's tag includes T-4.4.** A human for repeated possible-minor flags (D-093), so
     a model's probability never becomes an automatic action against a real woman.
+  - **P-81, if REL-1's tag includes T-4.4.** The lawyer's answer on a photo that scores as both a
+    possible minor and sexual, which D-093 deletes: the one legal question the founder put before
+    the first real user, since getting it wrong is not a commercial mistake (4 October 2026).
   - **P-68, if REL-1's tag includes T-3.14.** App Check enforced on Authentication, proved by its
     effect, before the site is public for sign-in (the founder, 4 October 2026): it is what makes
     an SMS flood need our web app rather than a script. A backstop only: P-68 is the very next
     task after T-3.14, since the exposure opens at T-3.14's first staging deploy.
+- [ ] **Production's Fly deploy tokens get a shorter expiry than Fly's default of 20 years**, chosen
+  then, and the worker's too once production has one (the founder, 4 October 2026): in production
+  the consequence is real. Staging's keep the default on purpose: low consequence, and a renewal
+  date nobody remembers is its own risk.
 - [ ] `veloraapp.co.in` → Vercel prod; `api.veloraapp.co.in` → Fly prod app; SSL issued. Prod DB/Redis/R2 created but empty.
   **Moved from T-2.6** (the founder's re-scope, 3 October 2026). T-2.6 set up the GitHub
   environment, the Fly app and the Vercel project and its domains; what's left is the founder's,
@@ -1434,7 +1446,7 @@ exist yet. The batch is a chain, T-3.10 → T-3.11 → T-3.12 → T-3.13, each n
   read, `other` (or `too_large`), its file deleted; the decision written with the user's row
   locked, so it and a reorder take turns (`test_the_decision_and_a_reorder_take_turns`, the
   overlap observed in `pg_stat_activity`). The thresholds are Claude's, the founder's to change:
-  **D-101, Open.** What the owner reads of a rejection is T-4.6's (D-093's first condition at the
+  **D-101,** decided by the founder (a possible minor from 0.35). What the owner reads of a rejection is T-4.6's (D-093's first condition at the
   API: no reason that names a possible minor); the `fraud_events` row is
   `possible_minor_photo_score`, weight 0, `meta`
   `{what, model, score}`, never the image or which photo; every copy deleted and read back, and a
@@ -2393,6 +2405,11 @@ prices don't depend on the web photos step, and the hold is lifted.
   stored as a keyed hash and an encrypted copy, so search normalises and hashes the number typed and
   matches it exactly. "Whose number ends in 4321?" has no answer, by design: support asks for the
   whole number.
+- [ ] **Revisit D-101's possible-minor threshold, 0.35, from real scores** (the founder, 4
+  October 2026). It was chosen for an asymmetry, not from data: nobody had seen how
+  Sightengine's `face-age` scores real photos. This is where real scores are first seen (the
+  photo's `moderation` column keeps every photo's minor score, below the threshold too).
+  Report what they show; the founder decides whether 0.35 moves, recorded on D-101.
 - [ ] **Commit:** `feat(admin): moderation panel [T-9.5]`
 
 ### T-9.6 · Settings and data rights
@@ -3777,8 +3794,15 @@ The number comes from the session's own block, given in its brief, from P-100 up
   the bytes Sightengine scored, written to its own key, never copied from the upload (T-4.4 tests
   that). Options: keep the moderated copy at a key of its own (a column, so a migration, P-65
   first), or have T-8.4 render albums only from bytes moderation wrote. The founder decides.
+  **Decided by the founder, 4 October 2026: the separate key.** Moderation writes the re-encoded
+  image to a key the owner's upload URL can't reach, and albums render only from that key. D-092
+  already makes those bytes a different artifact, so its own key costs almost nothing and closes
+  the hole rather than narrowing it. (Built from the photo's id, as the public copy's key is, it
+  may need no column at all; the task that builds it says.)
 
-  Found building T-4.4.
+  Found building T-4.4. **P-79 to P-81 predate the P-number blocks** (CLAUDE.md): they were on
+  `main` before that rule, and keep their numbers, since renumbering risks the stale reference the
+  rule exists to prevent (the founder, 4 October 2026).
 - [ ] P-80 · Keep query values out of the API's database errors. **Before real users** (on
   T-9.15's Needs line). Worst case: a failed query's error, logged with its parameters, carries a
   phone number's hash, an encrypted number or a storage key into Fly's logs (rule 15). Seen
@@ -3790,7 +3814,11 @@ The number comes from the session's own block, given in its brief, from P-100 up
 
   Found building T-4.4.
 - [ ] P-81 · Ask the lawyer whether D-093's deletion may need to yield when a photo is also sexual.
-  **Before the first real user** (P-0.7's review; on T-9.15's Needs line). Worst case: a photo
+  **Before the first real user, and not with the rest** (on REL-1's and T-9.15's Needs lines; the
+  one exception on P-0.7). **The one legal question that must be answered before anyone real
+  signs up** (the founder, 4 October 2026): the founder has deferred legal work until later, and
+  this is the exception, because getting it wrong here is not a commercial mistake. "I'm not going
+  to reason my way to an answer": neither of us knows the law, so a lawyer answers it. Worst case: a photo
   Sightengine scores as possibly a minor's and as sexual is deleted, as D-093 requires, when the
   law required it kept and reported. Claude doesn't know what Indian law requires here and claims
   nothing; this is a question, not a finding. The code does what D-093 says: a possible minor's

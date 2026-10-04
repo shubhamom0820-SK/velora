@@ -1223,6 +1223,83 @@ T44: list[tuple[Case, list[str]]] = [
             "tests/seed/test_seed.py::test_everyone_past_the_photos_step_has_an_approved_photo_at_place_0"
         ],
     ),
+    # The founder's answers, 4 October 2026: D-101's minor threshold, and the
+    # reader strict only where it reads.
+    (
+        Case(
+            id="t44-34-the-minor-threshold-back-at-the-coin-flip",
+            what="D-101: a possible minor from 0.5, not 0.35",
+            edits=[
+                (
+                    "app/modules/photos/moderation.py",
+                    "MINOR_AT: Final = 0.35  # an asymmetry, not data: see above (D-101)\n",
+                    "MINOR_AT: Final = 0.5\n",
+                )
+            ],
+            expect=["test_a_possible_minor_from_0_35[0.35-minor_suspected]"],
+        ),
+        ["tests/modules/photos/test_moderation_rules.py"],
+    ),
+    (
+        Case(
+            id="t44-35-an-unknown-field-refused",
+            what="the reader refuses a field it has never seen",
+            edits=[
+                (
+                    "app/core/providers/moderation.py",
+                    'model_config = ConfigDict(strict=True, extra="allow", frozen=True)',
+                    'model_config = ConfigDict(strict=True, extra="forbid", frozen=True)',
+                )
+            ],
+            expect=["test_a_field_never_seen_is_logged_once_by_name_never_refused"],
+        ),
+        ["tests/core/test_moderation.py"],
+    ),
+    (
+        Case(
+            id="t44-36-an-unread-field-required",
+            what="the reader requires a field the decision never reads (media)",
+            edits=[
+                (
+                    "app/core/providers/moderation.py",
+                    "    artificial_faces: list[Any]\n    text: _Text\n",
+                    "    artificial_faces: list[Any]\n    text: _Text\n    media: dict[str, Any]\n",
+                )
+            ],
+            expect=["test_a_field_the_decision_never_reads_may_go[media]"],
+        ),
+        ["tests/core/test_moderation.py"],
+    ),
+    (
+        Case(
+            id="t44-37-an-unknown-field-unnoticed",
+            what="a field never seen passes without a log line",
+            edits=[
+                (
+                    "app/core/providers/moderation.py",
+                    '        log.warning("moderation.unknown_fields", fields=sorted(unknown))\n',
+                    "        pass\n",
+                )
+            ],
+            expect=["test_a_field_never_seen_is_logged_once_by_name_never_refused"],
+        ),
+        ["tests/core/test_moderation.py"],
+    ),
+    (
+        Case(
+            id="t44-38-the-minor-score-not-kept",
+            what="D-101's revisit: a photo's minor score not kept below the threshold",
+            edits=[
+                (
+                    "app/modules/photos/moderation.py",
+                    '        "minor": max(scores.minors, default=None),\n',
+                    "",
+                )
+            ],
+            expect=["test_an_approved_public_photo_is_published_from_the_bytes_scored"],
+        ),
+        ["tests/modules/photos/test_moderate.py"],
+    ),
 ]
 
 # --- T-4.6: D-096's read, and what an owner is told ------------------------------

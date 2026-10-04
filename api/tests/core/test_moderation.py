@@ -16,18 +16,24 @@ from typing import Any
 import httpx
 import pytest
 
+from app.core.providers import moderation
 from app.core.providers.moderation import (
     CHECK_URL,
     CHECKED_ANSWER,
+    KNOWN_FIELDS,
     MODELS,
+    NUDITY_CLASSES,
     FakeModeration,
     ModerationFailed,
     Scores,
     SightengineModeration,
     fake_answer,
+    field_paths,
     parse_check,
 )
+from app.modules.photos import moderation as rules
 from app.tools.sightengine_shape import differences, shape
+from tests.conftest import CapturedLogs
 
 USER, SECRET = "api-user-for-tests", "api-secret-for-tests"
 JPEG = b"\xff\xd8\xff\xe0 a re-encoded photo \xff\xd9"
@@ -66,7 +72,7 @@ def _form(request: httpx.Request) -> dict[str, Any]:
 # --- Reading an answer -------------------------------------------------------------
 
 
-def test_the_documented_answer_reads_as_its_scores() -> None:
+def test_the_checked_answer_reads_as_its_scores() -> None:
     scores = parse_check(json.dumps(CHECKED_ANSWER))
 
     assert scores == Scores(
@@ -75,16 +81,15 @@ def test_the_documented_answer_reads_as_its_scores() -> None:
             "sexual_display": 0.01,
             "erotica": 0.01,
             "very_suggestive": 0.01,
-            "suggestive": 0.01,
-            "mildly_suggestive": 0.01,
-            "none": 0.99,
         },
         minors=(0.01,),
         artificial_faces=0,
         text_artificial=0.01,
-        text_natural=0.02,
-        operations=3,
     )
+
+
+def test_the_reader_reads_exactly_the_classes_the_decision_uses() -> None:
+    assert NUDITY_CLASSES == rules.EXPLICIT
 
 
 def _without(path: list[str]) -> dict[str, Any]:
@@ -297,14 +302,71 @@ def test_an_answer_with_no_text_has_no_boxes_as_real_answers_do() -> None:
 
 
 def test_a_real_box_carries_a_prob_the_documentation_doesnt_show() -> None:
-    answer = fake_answer("text_overlay")
-    [box] = answer["text"]["boxes"]
+    [box] = fake_answer("text_overlay")["text"]["boxes"]
+
     assert box["prob"] == 0.99
 
+
+@pytest.mark.parametrize(
+    "path",
+    [
+        ["text", "boxes"],
+        ["media"],
+        ["request"],
+        ["nudity", "suggestive_classes"],
+        ["nudity", "context"],
+        ["nudity", "none"],
+        ["text", "has_natural"],
+        ["faces", 0, "x1"],
+    ],
+    ids=lambda path: ".".join(map(str, path)),
+)
+def test_a_field_the_decision_never_reads_may_go(path: list[Any]) -> None:
+    """The founder, 4 October 2026: fail closed on the fields read, never on
+    the rest. A vendor dropping or reshaping one of these changes no decision."""
+    answer = fake_answer("text_overlay")
+    target = answer
+    for step in path[:-1]:
+        target = target[step]
+    del target[path[-1]]
+
+    assert parse_check(json.dumps(answer)).text_artificial == 0.99932
+
+
+def test_a_field_never_seen_is_logged_once_by_name_never_refused(
+    captured_logs: CapturedLogs, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(moderation, "_noticed", set())
+    answer = fake_answer("approve")
+    answer["nudity"]["new_class"] = 0.42
+    answer["faces"][0]["attributes"]["age"]["band"] = "18-24"
+    answer["brand_new_model"] = {"score": 0.5}
+
+    first = parse_check(json.dumps(answer))
     parse_check(json.dumps(answer))
-    del box["prob"]
-    with pytest.raises(ModerationFailed):
-        parse_check(json.dumps(answer))
+
+    assert first == parse_check(json.dumps(CHECKED_ANSWER))
+    logged = [
+        e for e in captured_logs.events if e["event"] == "moderation.unknown_fields"
+    ]
+    assert [(e["log_level"], e["fields"]) for e in logged] == [
+        (
+            "warning",
+            [
+                "brand_new_model",
+                "brand_new_model.score",
+                "faces[].attributes.age.band",
+                "nudity.new_class",
+            ],
+        )
+    ]
+    assert "0.42" not in captured_logs.text and "18-24" not in captured_logs.text
+    captured_logs.assert_listening()
+
+
+def test_the_checked_answer_has_no_unknown_fields() -> None:
+    for outcome in ("approve", "nudity", "minor_suspected", "no_face", "text_overlay"):
+        assert field_paths(fake_answer(outcome)) <= KNOWN_FIELDS
 
 
 def test_the_shape_check_sees_names_nesting_and_types_never_values() -> None:

@@ -161,7 +161,7 @@ enforced in the service. Index `(intent_id)`: discovery filters on intent, match
 | public_key | text null | set when approved (public kind only) |
 | status | review_status_t default 'pending' | |
 | reject_reason | text null | |
-| moderation | jsonb | the scores the decision read (T-4.4): provider, models, `explicit`, `faces`, `artificial_faces`, `text_artificial`; never the image or the request |
+| moderation | jsonb | every score the decision read (T-4.4): provider, models, `minor` (the highest face's, kept below the threshold too, so D-101's is revisited from real scores), `explicit`, `faces`, `artificial_faces`, `text_artificial`; never the image or the request |
 | width, height | int null | |
 
 Indexes: `(user_id, kind, position)`, `(status) where status='pending'`.

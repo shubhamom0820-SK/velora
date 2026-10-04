@@ -107,7 +107,9 @@ and never taken from the clipboard by a command you copied.
   `db-owner` (the database owner's password, which you set), `velora-api-db`, `jwt-secret`,
   `phone-pepper`, `phone-enc-key`, `code-pepper`; R2's token, `r2-access-key-id` and
   `r2-secret-access-key` (§3); Sightengine's, `sightengine-api-user` and `sightengine-api-secret`
-  (T-4.4). `phone-pepper` never changes once a number is
+  (T-4.4); and the app's `database-url` and `redis-url`, as Fly holds them (T-4.4, added 4
+  October 2026 at the founder's direction: anything needed to recreate the environment has a
+  second copy outside the platform holding it). `phone-pepper` never changes once a number is
   banned; `phone-enc-key` rotates by putting a new key first, `new,old` (D-061); a new
   `code-pepper` makes every stored PIN fail until it is set again (D-062). The worker's app
   (T-4.4) holds the same four values: **a key changed on one app is changed on both, the same
@@ -278,7 +280,7 @@ any step failed. It runs only where `ENV` is local or staging: production's copy
 
    | Secret | Value |
    |---|---|
-   | `DATABASE_URL`, `REDIS_URL` | the API's own, piped from the API's machine into `flyctl secrets import`, never printed |
+   | `DATABASE_URL`, `REDIS_URL` | the API's own: the Keychain's `database-url` and `redis-url` (first piped from the API's machine, never printed) |
    | `JWT_SECRET`, `PHONE_PEPPER`, `PHONE_ENC_KEY`, `CODE_PEPPER` | the Keychain's, the API's values (D-060, D-061): with others, it can't read what the API wrote |
    | `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY` | the Keychain's, the API's token (§3) |
    | `SIGHTENGINE_API_USER`, `SIGHTENGINE_API_SECRET` | the Keychain's `sightengine-api-user`, `sightengine-api-secret` |
