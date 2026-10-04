@@ -1363,10 +1363,10 @@ exist yet. The batch is a chain, T-3.10 → T-3.11 → T-3.12 → T-3.13, each n
 - [x] **Commit:** `feat(photos): upload url and completion [T-4.2]`
 
 ### T-4.3 · Manage photos
-- [ ] **Needs:** T-4.2
-- [ ] `GET /me/photos`, `PATCH /me/photos/order`, `DELETE /photos/{id}` (soft: status `rejected` + reason `user_deleted`, object removed from public bucket).
-- [ ] Onboarding `photos` step completes when ≥ 1 public photo is `approved` **or** `pending` (pending ones stay invisible to others until approved).
-- [ ] **Commit:** `feat(photos): list, reorder, delete [T-4.3]`
+- [x] **Needs:** T-4.2
+- [x] `GET /me/photos`, `PATCH /me/photos/order`, `DELETE /photos/{id}` (soft: status `rejected` + reason `user_deleted`, object removed from public bucket).
+- [x] Onboarding `photos` step completes when ≥ 1 public photo is `approved` **or** `pending` (pending ones stay invisible to others until approved).
+- [x] **Commit:** `feat(photos): list, reorder, delete [T-4.3]`
 
 ### T-4.4 · Moderation worker
 - [ ] **Needs:** T-4.2, T-1.15, and a **Sightengine account with API keys** — created by the founder on 4 October 2026, free plan, its keys in the Keychain (P-0.6)
@@ -1489,6 +1489,9 @@ exist yet. The batch is a chain, T-3.10 → T-3.11 → T-3.12 → T-3.13, each n
 - [ ] **Needs:** T-4.3, T-3.12
 - [ ] 6-slot grid; tap empty slot → file picker (`accept="image/*"`, `capture` not forced); client resize to ≤ 2000 px before upload (canvas) to save data; PUT to presigned URL with progress; states per slot: uploading %, checking, approved, rejected (with reason + retry). Drag to reorder (or up/down buttons on mobile).
 - [ ] Women see the private-album note.
+- [ ] **A rejection's reason on screen:** `GET /me/photos` lists only live photos (T-4.3), so a photo
+  moderation rejects drops out of it. This task decides how its reason (D-093's wording for a
+  possible minor) reaches the slot that showed it, before building the "rejected" state.
 - [ ] Built in T-3.11's `StepFrame`, at D-080's `/onboarding/photos`, replacing T-3.12's placeholder.
 - [ ] **Widen the CSP here (D-059):** `connect-src` for R2's upload endpoint (the presigned PUT), and `img-src` for `PUBLIC_CDN_URL` and `blob:` previews. Uploads and previews fail with a CSP error until then.
 - [ ] **Done when, on a real iPhone, on this control (D-089):** iOS Safari's upload sends JPEG, not

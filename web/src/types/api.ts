@@ -359,6 +359,57 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/me/photos": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** My Photos */
+        get: operations["my_photos_v1_me_photos_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/me/photos/order": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /** Reorder */
+        patch: operations["reorder_v1_me_photos_order_patch"];
+        trace?: never;
+    };
+    "/v1/photos/{photo_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Delete Photo */
+        delete: operations["delete_photo_v1_photos__photo_id__delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/auth/otp/send": {
         parameters: {
             query?: never;
@@ -577,7 +628,9 @@ export interface components {
         };
         /**
          * Photo
-         * @description A photo as its owner sees it. T-4.3 adds where to view it.
+         * @description A photo as its owner sees it, and where to view it: an approved public
+         *     photo at the CDN, anything else by a 10-minute signed link to the private
+         *     copy; `None` once its file is gone (a refused upload).
          */
         Photo: {
             /**
@@ -591,12 +644,22 @@ export interface components {
             status: components["schemas"]["ReviewStatus"];
             /** Reject Reason */
             reject_reason: string | null;
+            /** Url */
+            url: string | null;
         };
         /**
          * PhotoKind
          * @enum {string}
          */
         PhotoKind: "public" | "private" | "selfie";
+        /**
+         * PhotoOrder
+         * @description Every live public photo, in the order wanted: the first is the main one.
+         */
+        PhotoOrder: {
+            /** Photo Ids */
+            photo_ids: string[];
+        };
         /** PinSet */
         PinSet: {
             /** Pin */
@@ -1296,6 +1359,88 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["Photo"];
                 };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    my_photos_v1_me_photos_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Photo"][];
+                };
+            };
+        };
+    };
+    reorder_v1_me_photos_order_patch: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PhotoOrder"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Photo"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    delete_photo_v1_photos__photo_id__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                photo_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
             /** @description Validation Error */
             422: {

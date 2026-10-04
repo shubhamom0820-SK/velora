@@ -51,12 +51,16 @@ number: no screen shows either, so neither leaves the server (D-067's discipline
 |---|---|---|---|---|
 | POST | /photos/upload-url | 🔐 | `{kind, position?, content_type}` → `{photo_id, put_url, headers}`. `content_type` is `image/jpeg`, `image/png` or `image/webp`, signed into the PUT, so send `headers` with it; a hint, never what decides (D-089). Public: `position` 0–5, one per place; private: up to 6; selfie: one waiting. Each at its step or after (D-068). 30 an hour per user | T-4.2 |
 | POST | /photos/{id}/complete | 🔐 | → `Photo` (pending). The object's bytes decide: a JPEG, PNG or WebP is queued for moderation (a selfie waits for T-4.5); anything else is `UNSUPPORTED_IMAGE`, over 8 MB `IMAGE_TOO_LARGE`, each rejecting the photo and removing its file. Saying it twice is harmless | T-4.2 |
-| GET | /me/photos | 🔐 | → `Photo[]` with status | T-4.3 |
-| PATCH | /me/photos/order | 🔐 | `{photo_ids[]}` → `Photo[]` | T-4.3 |
-| DELETE | /photos/{id} | 🔐 | → 204 (soft) | T-4.3 |
+| GET | /me/photos | 🔐 | → `Photo[]`: the owner's live public photos by place, then private; never selfies, rejected photos or anyone else's | T-4.3 |
+| PATCH | /me/photos/order | 🔐 | `{photo_ids[]}`, exactly the live public photos, each once, the first the main one → `Photo[]`, places 0 onwards | T-4.3 |
+| DELETE | /photos/{id} | 🔐 | → 204 (soft): rejected as `user_deleted`, its public copy removed; twice is once. A selfie, or the last public photo once past the `photos` step, is `NOT_ALLOWED` | T-4.3 |
 | POST | /verification/challenge | 🔐 | → `{verification_id, pose}` | T-4.5 |
 | POST | /verification/{id}/submit | 🔐 | `{photo_id}` → `Verification` (pending) | T-4.5 |
 | GET | /verification/latest | 🔐 | → `Verification` | T-4.5 |
+
+`Photo` (T-4.2, T-4.3): `id`, `kind`, `position`, `status`, `reject_reason`, and `url`: an approved
+public photo at `PUBLIC_CDN_URL`, any other live one by a 10-minute signed link to its private copy,
+`null` for a rejected one. A pending public photo completes the `photos` step (T-4.3).
 
 ## Discovery
 | Method | Path | Auth | Body → Response | Task |

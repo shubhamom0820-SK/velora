@@ -354,12 +354,15 @@ async def test_a_photo_goes_to_moderation_as_its_bytes_say(
     response = await _complete(client, token, photo_id)
 
     assert response.status_code == 200
+    raw_key = (await _photo(db, photo_id)).raw_key
     assert response.json() == {
         "id": photo_id,
         "kind": "public",
         "position": 0,
         "status": "pending",
         "reject_reason": None,
+        # Pending: its owner views it by a signed link to the private copy.
+        "url": f"fake-storage://{PRIVATE}/{raw_key}?method=GET&ttl=600",
     }
     [job] = fake_queue.named(MODERATE_PHOTO)
     assert job.kwargs == {"photo_id": photo_id, "image_type": judged}

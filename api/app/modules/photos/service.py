@@ -24,7 +24,7 @@ from app.core.errors import AppError, invalid_field
 from app.core.images import ACCEPTED_NAMES, ACCEPTED_TYPES, SNIFF_BYTES, sniff
 from app.core.providers.storage import ObjectNotFound, StorageProvider
 from app.core.queue import MODERATE_PHOTO, Queue
-from app.core.storage_keys import raw_key
+from app.core.storage_keys import public_url, raw_key
 from app.modules.photos import repository
 from app.modules.photos.models import Photo
 from app.modules.photos.schemas import Photo as PhotoOut
@@ -174,15 +174,20 @@ async def complete(
 ) -> PhotoOut:
     """The upload is done: check what arrived, then queue it for moderation.
 
+    A public photo accepted at the `photos` step completes that step (T-4.3):
+    one public photo, pending or approved, is enough to go on; pending ones stay
+    invisible to others until approved.
+
     Saying so twice is harmless: a rejected photo stays rejected, and the
     moderation job is queued under the photo's id, so once."""
     refusal: AppError | None = None
     async with session.begin():
+        user = await users_service.locked_user(session, user.id)
         photo = await repository.photo_for_update(session, user.id, photo_id)
         if photo is None:
             raise _not_found()
         if photo.status is not ReviewStatus.PENDING:
-            return PhotoOut.model_validate(photo)
+            return await _out(photo, storage, settings)
         bucket = settings.R2_BUCKET_PRIVATE
         try:
             info = await storage.head(bucket, photo.raw_key)
@@ -201,18 +206,121 @@ async def complete(
             photo.status = ReviewStatus.REJECTED
             photo.reject_reason = TOO_LARGE if too_large else UNSUPPORTED
             refusal = image_too_large() if too_large else unsupported_image()
-        elif photo.kind is not PhotoKind.SELFIE:
-            await queue.enqueue(
-                MODERATE_PHOTO,
-                job_id=f"{MODERATE_PHOTO}:{photo.id}",
-                photo_id=str(photo.id),
-                image_type=image_type,
-            )
-        out = PhotoOut.model_validate(photo)
+        else:
+            if photo.kind is not PhotoKind.SELFIE:
+                await queue.enqueue(
+                    MODERATE_PHOTO,
+                    job_id=f"{MODERATE_PHOTO}:{photo.id}",
+                    photo_id=str(photo.id),
+                    image_type=image_type,
+                )
+            if photo.kind is PhotoKind.PUBLIC and users_service.at_step(
+                user, OnboardingStep.PHOTOS
+            ):
+                users_service.advance_past(user, OnboardingStep.PHOTOS)
     if refusal is not None:
         # The row says rejected, committed; the file it never should have
         # been goes too. A delete that fails leaves it behind its row, which
         # D-078's deletion still reaches.
         await storage.delete(settings.R2_BUCKET_PRIVATE, photo.raw_key)
         raise refusal
-    return out
+    return await _out(photo, storage, settings)
+
+
+# --- The owner's photos (T-4.3) ---------------------------------------------------------
+
+USER_DELETED = "user_deleted"
+
+
+async def _out(photo: Photo, storage: StorageProvider, settings: Settings) -> PhotoOut:
+    """The photo for its owner, with where to view it: an approved public photo
+    at the CDN; any other live one by a signed link to the private copy, 10
+    minutes; a rejected one, whose file may be gone, by none."""
+    url: str | None = None
+    if photo.status is ReviewStatus.APPROVED and photo.public_key:
+        url = public_url(settings, photo.public_key)
+    elif photo.status is not ReviewStatus.REJECTED:
+        url = await storage.presign_get(settings.R2_BUCKET_PRIVATE, photo.raw_key)
+    return PhotoOut(
+        id=photo.id,
+        kind=photo.kind,
+        position=photo.position,
+        status=photo.status,
+        reject_reason=photo.reject_reason,
+        url=url,
+    )
+
+
+async def owners_photos(
+    session: AsyncSession, user: User, *, storage: StorageProvider, settings: Settings
+) -> list[PhotoOut]:
+    """Every live public and private photo of the user's, and nobody else's.
+    Selfies are T-4.5's; rejected photos aren't live (T-4.6 decides how a
+    rejection's reason is shown)."""
+    async with session.begin():
+        photos = await repository.owners_view(session, user.id)
+    return [await _out(photo, storage, settings) for photo in photos]
+
+
+async def reorder(
+    session: AsyncSession,
+    user: User,
+    photo_ids: list[UUID],
+    *,
+    storage: StorageProvider,
+    settings: Settings,
+) -> list[PhotoOut]:
+    """Put the live public photos in this order, the first the main one: places
+    0 onwards. The list must be exactly those photos, each once."""
+    if len(set(photo_ids)) != len(photo_ids):
+        raise invalid_field("photo_ids", "lists a photo more than once")
+    async with session.begin():
+        user = await users_service.locked_user(session, user.id)
+        users_service.at_step(user, OnboardingStep.PHOTOS)
+        live = await repository.live_photos(session, user.id, PhotoKind.PUBLIC)
+        if {photo.id for photo in live} != set(photo_ids):
+            raise invalid_field("photo_ids", "must be exactly your public photos")
+        await repository.set_positions(
+            session, [(photo_id, place) for place, photo_id in enumerate(photo_ids)]
+        )
+        photos = await repository.owners_view(session, user.id)
+    return [await _out(photo, storage, settings) for photo in photos]
+
+
+async def delete_photo(
+    session: AsyncSession,
+    user: User,
+    photo_id: UUID,
+    *,
+    storage: StorageProvider,
+    settings: Settings,
+) -> None:
+    """Remove a photo of the user's own: rejected, as `user_deleted`, so its
+    place is free; its public copy, if any, removed from the public bucket.
+    The private copy and the row stay (soft, as T-4.3 says). Removing it twice
+    is the same as once. Past the `photos` step the last live public photo
+    stays: discovery needs one (T-4.8)."""
+    public_key: str | None = None
+    async with session.begin():
+        user = await users_service.locked_user(session, user.id)
+        photo = await repository.photo_for_update(session, user.id, photo_id)
+        if photo is None:
+            raise _not_found()
+        if photo.kind is PhotoKind.SELFIE:
+            raise AppError("NOT_ALLOWED", "A selfie isn't removed here.")
+        if photo.status is ReviewStatus.REJECTED:
+            return
+        if photo.kind is PhotoKind.PUBLIC and not users_service.at_step(
+            user, OnboardingStep.PHOTOS
+        ):
+            live = await repository.live_photos(session, user.id, PhotoKind.PUBLIC)
+            if len(live) == 1:
+                raise AppError(
+                    "NOT_ALLOWED",
+                    "Add another photo before removing your last one.",
+                )
+        photo.status = ReviewStatus.REJECTED
+        photo.reject_reason = USER_DELETED
+        public_key = photo.public_key
+    if public_key:
+        await storage.delete(settings.R2_BUCKET_PUBLIC, public_key)

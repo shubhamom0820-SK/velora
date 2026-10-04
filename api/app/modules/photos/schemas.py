@@ -28,12 +28,21 @@ class UploadUrl(BaseModel):
 
 
 class Photo(BaseModel):
-    """A photo as its owner sees it. T-4.3 adds where to view it."""
-
-    model_config = ConfigDict(from_attributes=True)
+    """A photo as its owner sees it, and where to view it: an approved public
+    photo at the CDN, anything else by a 10-minute signed link to the private
+    copy; `None` once its file is gone (a refused upload)."""
 
     id: UUID
     kind: PhotoKind
     position: int | None
     status: ReviewStatus
     reject_reason: str | None
+    url: str | None
+
+
+class PhotoOrder(BaseModel):
+    """Every live public photo, in the order wanted: the first is the main one."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    photo_ids: list[UUID] = Field(min_length=1, max_length=6)
