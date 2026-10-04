@@ -220,7 +220,9 @@ undo without a decision:
   (At 14:49 UTC, before it was set, the staging origin got that 403 too.) **`GET` is wider than
   the photos need:** an `<img>` sends no preflight and needs no rule, which the local S3 shows,
   where the rule allows `PUT` only and a pending photo still shows by its signed link (T-4.6).
-  Whether it stays is the founder's.
+  Whether it stays is the founder's. **Proved by a real browser's upload** the same day (T-4.6):
+  a PUT signed inside the API machine for a key under `probe/`, sent by Chromium from the staging
+  origin, answered 200 with that origin allowed, its bytes read back and then deleted.
 
 **The proof is the probe, run inside the machine with its own keys** (T-4.1), after any change to
 the token, the buckets or the domain:

@@ -1638,7 +1638,16 @@ exist yet. The batch is a chain, T-3.10 → T-3.11 → T-3.12 → T-3.13, each n
   action has been blocked.", and "Loading the image 'http://127.0.0.1:9000/other-bucket/x.jpg'
   violates the following Content Security Policy directive: "img-src 'self' blob:
   http://127.0.0.1:9000/velora-private/ http://127.0.0.1:9000/velora-public/"".
-- [ ] **CORS on the private bucket, or no browser can upload at all** (found 4 October 2026). The
+  **And on staging, the same day,** after `aba62e5`'s deploy (run 37222076586, every job green,
+  smoke included), in Chromium on `https://staging.veloraapp.co.in`: staging's own private bucket
+  admitted (below), and refused, each in the browser's words, production's private bucket on the
+  same endpoint ("Connecting to 'https://<R2_ACCOUNT_ID>.r2.cloudflarestorage.com/velora-prod-private/probe'
+  violates the following Content Security Policy directive: "connect-src 'self'
+  https://api.staging.veloraapp.co.in https://<R2_ACCOUNT_ID>.r2.cloudflarestorage.com/velora-staging-private/
+  …". The action has been blocked."), staging's public bucket for a PUT, an image from production's
+  private bucket, and one from production's CDN; an absent key on staging's CDN failed as a 404
+  with no violation.
+- [x] **CORS on the private bucket, or no browser can upload at all** (found 4 October 2026). The
   presigned PUT goes from the web's origin to R2's endpoint: cross-origin, with a `Content-Type`
   header, so the browser asks first, and R2 refuses without a CORS rule. Our tokens are Object Read
   & Write and can't set one, so the founder sets it in Cloudflare (R2 → `velora-staging-private` →
@@ -1657,8 +1666,15 @@ exist yet. The batch is a chain, T-3.10 → T-3.11 → T-3.12 → T-3.13, each n
   response") and another origin ("No 'Access-Control-Allow-Origin' header is present on the
   requested resource"). **Staging: set by the founder the same day, with `GET` as well as `PUT`,
   and checked from outside at 15:48 UTC** (`infra/STAGING.md` §3): the staging origin's PUT
-  preflight passes, every other origin, method and header gets R2's 403. Ticked once a real
-  browser's upload on staging works.
+  preflight passes, every other origin, method and header gets R2's 403. **Then by a real
+  browser's upload, the same day:** a PUT signed inside staging's API machine with its own keys,
+  under `probe/` as T-4.1's probe writes, sent by Chromium from `https://staging.veloraapp.co.in`
+  with exactly the signed `Content-Type`: R2 answered 200 with `Access-Control-Allow-Origin:
+  https://staging.veloraapp.co.in`, upload progress reached the page, and what arrived, read back in
+  the machine, was 10 bytes of `image/jpeg` beginning `ffd8ffe0`; then deleted, and read back as
+  gone. (R2 answers an unsigned request with 400 before CORS applies, so only a signed one shows
+  both legs.) Not yet: a person's upload through the photos step, signed in, which the founder
+  does on staging with the iPhone check below.
 - [ ] **Done when, on a real iPhone, on this control (D-089):** iOS Safari's upload sends JPEG, not
   HEIC, read from what the API received (its bytes), never reasoned about. If it sends HEIC, "no
   HEIC" breaks every iPhone sign-up: stop and tell the founder before anything ships. D-089 is
