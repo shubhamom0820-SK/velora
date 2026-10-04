@@ -309,6 +309,30 @@ async def test_a_bucket_these_keys_reach_is_reported_as_a_failure(
     assert f"FAIL these keys are refused on {PRIVATE}" in report.lines
 
 
+async def test_a_failed_delete_is_reported_not_raised(
+    storage: S3Storage, http: httpx.AsyncClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Found running the probe against a server missing a bucket: a delete that
+    raised in the cleanup lost the whole report. Now the report comes back,
+    saying the objects weren't all deleted."""
+    real_delete = storage.delete
+    refused: list[str] = []
+
+    async def first_delete_fails(bucket: str, key: str) -> None:
+        if not refused:
+            refused.append(key)
+            raise RuntimeError("delete refused")
+        await real_delete(bucket, key)
+
+    monkeypatch.setattr(storage, "delete", first_delete_fails)
+    report = await probe(minio_settings(), storage, http)
+
+    assert report.lines[-1] == "FAIL every probe object is deleted"
+    assert report.failed
+    monkeypatch.undo()
+    await storage.delete(PUBLIC, refused[0])  # the one left behind
+
+
 @pytest.mark.parametrize("env", ["production", "preview", UNNAMED_ENV])
 async def test_the_probe_refuses_outside_local_and_staging(env: str) -> None:
     settings = minio_settings().model_copy(update={"ENV": env})

@@ -181,8 +181,13 @@ async def probe(
 
             await step(f"these keys are refused on {refused}", no_access)
     finally:
+        # Every delete is tried, and a failed one is reported, never raised: the
+        # report so far is what someone needs, and an exception would lose it.
         for bucket, key in written:
-            await storage.delete(bucket, key)
+            try:
+                await storage.delete(bucket, key)
+            except Exception:  # noqa: BLE001, S110 — all_gone() reports it
+                pass
 
         async def all_gone() -> bool:
             for bucket, key in written:
