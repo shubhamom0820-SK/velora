@@ -1299,9 +1299,21 @@ exist yet. The batch is a chain, T-3.10 → T-3.11 → T-3.12 → T-3.13, each n
   is written here and in both runbooks' §3. Read from outside by Claude the same day, by the
   server's own answer: on `cdn.staging.veloraapp.co.in` and `cdn.veloraapp.co.in`, TLS 1.0 and 1.1
   refused with a protocol-version alert, 1.2 and 1.3 accepted.
-- [ ] **Done when, on staging** (D14 of Sprint 4's plan): `app/tools/storage_probe`, run inside
+- [x] **Done when, on staging** (D14 of Sprint 4's plan): `app/tools/storage_probe`, run inside
   staging's machine with its own keys, passes every step, the scope refusals on production's
   buckets included; quoted in the docs commit after `/done`, with the deploy run it ran on.
+  **Passed, 4 October 2026,** on `dd30b29` after deploy run 37198554076 (every job green, smoke
+  included), by `flyctl ssh console -a velora-api-staging` running
+  `python -m app.tools.storage_probe --refused-bucket velora-prod-public --refused-bucket
+  velora-prod-private`, exit 0, every line `ok`: for each bucket, a presigned PUT stores the object,
+  the same PUT with another Content-Type is refused, `head()` reads its size and type, a presigned
+  GET and `get_bytes()` return the bytes; `put_bytes()` stores in the private bucket; `copy()`
+  from private to public, and the copy served at `PUBLIC_CDN_URL`; a private object's key not
+  served there; an absent key a 404 in these buckets, and these keys refused on
+  `velora-prod-public` and `velora-prod-private`; every probe object deleted. **The Fly secrets
+  are the Keychain's values:** each compared by SHA-256, first 8 hex characters, computed on the
+  machine and from the Keychain, never moved: `R2_ACCESS_KEY_ID` `ac6d5e3f` and
+  `R2_SECRET_ACCESS_KEY` `1188b869` in both places.
 - [x] **Commit:** `feat(storage): r2 presigned urls [T-4.1]`
 
 ### T-4.2 · Upload URL and complete

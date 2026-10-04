@@ -189,7 +189,8 @@ undo without a decision:
   buckets", so it can't touch production's. Proved by its effect (T-4.1's probe, below): a HEAD of
   an absent key is a 404 in these two buckets and a 403 in `velora-prod-public` and
   `velora-prod-private`. Its two values are Fly secrets (§4), set with `flyctl secrets import`, and
-  in the Keychain as `r2-access-key-id` and `r2-secret-access-key`.
+  in the Keychain as `r2-access-key-id` and `r2-secret-access-key`: the same values, compared by
+  Claude on 4 October 2026 by SHA-256 prefix on the machine and from the Keychain (T-4.1).
 - **`R2_ENDPOINT_URL` is never set here.** Settings refuse it anywhere but local, so storage goes to
   R2's own endpoint for the account in `R2_ACCOUNT_ID` (`infra/fly.api.toml`; not a secret).
 
