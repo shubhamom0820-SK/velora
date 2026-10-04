@@ -184,6 +184,21 @@ swallowed can't land anything. **Why (4 October 2026):** two sessions in one nig
 red `make test` hidden by `| grep` and `| tail -1`. Never `git push --no-verify` to `main`; /done's
 manual path skips only the CI half, with `VELORA_PUSH_GATE_MANUAL_PATH=1`.
 
+**Shell traps this project has hit.** The Bash tool runs zsh on the founder's Mac.
+1. **A pipe hides an exit code:** `make test | tail -1` reports `tail`'s. Read a check's status on
+   its own; the landing guard above exists for this (4 October 2026).
+2. **zsh doesn't word-split an unquoted `$var`:** a loop or flag list built from one reaches the
+   command as a single argument and comes back empty, silently. Run such checks under `bash -c`
+   or with arrays (2 October 2026).
+3. **An action placed after its check runs whatever the check found:** `scan; git push` pushed
+   `6764a90` past the scan that should have stopped it. Chain it: `scan && git push` (4 October
+   2026).
+4. **zsh reads `$var:r…` as a modifier:** `git push origin $SHA:refs/heads/main` sends a mangled
+   name and is refused. Write `"${SHA}:refs/heads/main"`, or run under bash. A push refused like
+   this is not GitHub misbehaving, and pushing again "to see why" is a landing: diagnose with
+   `--dry-run`. T-5.2's first docs push to `main` went up that way, unchained to its ancestor
+   check, and ended well only because the commit was the gated one (5 October 2026).
+
 ## P- and D-numbers: a block per session
 
 Each session is given a block of ten P-numbers and a block of ten D-numbers in its opening brief,

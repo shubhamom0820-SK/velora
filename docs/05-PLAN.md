@@ -1976,14 +1976,16 @@ prices don't depend on the web photos step, and the hold is lifted.
   10. **Four things about how a Thread lives** (D-097), none answered by its five steps. **(b)
       answered (D-250); (a) and (d) moved** to P-150, the 1-hour task D-097 names, with a pointer
       at T-7.6 (the founder, 4 October 2026): they touch no file of this task's. **(c) answered,
-      in two parts** (D-250, D-253).
+      in two parts:** D-250, the founder's, and D-253, the advisor's rule, Open until the
+      founder's word.
       - (a) **Moved, open: does his own message restart the hour?** Step 2 says hers does and is
         silent on his. If his did, he could keep a Thread open alone, free, by writing every 59
         minutes, and would never re-open one.
       - (b) **Answered: when she sends the first message, he pays to answer,** and that is the
         2-Vela re-open, `thread_reopen`: a priced action with a ledger reason of its own.
       - (c) **Answered: can he Extend a Thread that has already expired, and if so do the 10
-        Velas include the 2 to re-open it?** Yes, and yes (D-253): Extend is 10 at any time, and
+        Velas include the 2 to re-open it?** Yes, and yes, by the advisor's rule (D-253, Open
+        until the founder's word): Extend is 10 at any time, and
         from expired the 10 both re-opens and extends, never 2 then 10. **And** (D-250) Extend can
         be bought more than once for one Thread, 10 Velas for another 24 hours each time, so its
         reason repeats for one ref. Claude's summary to the founder had put (c) as that second
@@ -1998,15 +2000,18 @@ prices don't depend on the web photos step, and the hold is lifted.
   once any row uses a new reason, since no row can be deleted. **It stands over the advisor's 2½ to
   3½ hours** (Claude, in a separate chat), which was wrong because it didn't account for the
   enum's one-way nature (the founder).
-  **Measured: about 1¼ hours of working time,** from the answers arriving (about 22:57, 4 October)
-  to this task's code commit, leaving out about 12 minutes spent waiting for the gifts to be
-  confirmed; the gate and the landing come after it. **Both estimates were high:** Claude's 5½ hours
-  by about four times, the advisor's 2½ to 3½ by about two. The slowest part was the one named:
-  the enum held the task's one real bug (D-251's note), but it cost about twenty minutes, not
-  hours. Claude's estimate priced the work at a person's pace and the gate cycles one after
-  another, when tests and CI ran beside the work. So the line above is half right: the advisor's
-  estimate did leave out the enum, and it was still the nearer number (Claude, correcting its own
-  estimate, 5 October 2026).
+  **Measured: about 1 hour of working time to the code commit, and about 1½ hours to landing,** from
+  the answers arriving (about 22:57, 4 October), less about 12 minutes spent waiting for the gifts
+  to be confirmed: the commit's author time is 00:07, and `main`'s CI run for it started at 00:42
+  (run 37227352463). The half hour between is three rebase-and-gate cycles, each because `main`
+  moved. **Both estimates were high,** and both included the gate and the rebases: Claude's 5½ hours
+  by about three and a half times, the advisor's 2½ to 3½ by about two. The slowest part was the one
+  named: the enum held the task's one real bug (D-251's note), but it cost about twenty minutes, not
+  hours. Claude's estimate priced the work at a person's pace and the gate cycles one after another,
+  when tests and CI ran beside the work. So the line above is half right: the advisor's estimate did
+  leave out the enum, and it was still the nearer number (Claude, correcting its own estimate, 5
+  October 2026). **Corrected the same day:** this record first said "about 1¼ hours" to the commit,
+  rounded toward the estimate; the commit's author time gives 58 minutes.
 - [x] **The prices are D-097 to D-099's and D-231's** (the founder, 4 October 2026). Velas, for men;
   0 for a woman, for every action:
   - open a Thread 5 · re-open an expired Thread 2, every time · Extend, 24 hours, 10 · first
@@ -2227,8 +2232,9 @@ prices don't depend on the web photos step, and the hold is lifted.
 - **Two questions of how a Thread lives are P-150's,** moved from T-5.2's item 10 on 4 October
   2026, and still open: does his own message restart the hour, and when Extend's 24 hours end,
   does the hour start then or run from her last message? They decide when this task's cron expires
-  a Thread once the 1-hour task lands. **Settled beside them (D-253):** Extend on an expired Thread
-  re-opens it too, for 10 in all, never this task's 2 and then 10.
+  a Thread once the 1-hour task lands. **Beside them, the advisor's rule (D-253, Open until the
+  founder's word):** Extend on an expired Thread re-opens it too, for 10 in all, never this task's
+  2 and then 10.
 - [ ] Cron `expire_threads` (every minute, batches of 500, `FOR UPDATE SKIP LOCKED`) → `expired` + event. Cron `warn_expiring` (< 2 h, once) → push + event.
 - [ ] `POST /threads/{id}/reopen` (expired only) → debit 2 (men; D-098), `active`, `expires_at = now + 24h`, reset warning.
 - [ ] Tests using a controllable clock.
@@ -2342,7 +2348,9 @@ prices don't depend on the web photos step, and the hold is lifted.
 - [ ] **Name gift sending in the debit's allowlist:** `ALLOWED` in
   `api/tests/modules/pricing/test_debit_callers.py` (T-5.2). Until it is named, that test fails on
   any call to `wallet.service.debit` outside `pricing.service.charge`, this task's included. The
-  free sends' setting is `app_config.gift_free_weekly_limit` (15, T-5.2).
+  free sends' setting is `app_config.gift_free_weekly_limit` (15, T-5.2). **The allowlist reads
+  source, so it can't see a name built at run time: P-152,** worth doing here, where it is next
+  touched.
 - [ ] Links `thread_id` if an active or knotted thread already exists. Never creates a thread.
 - [ ] Publishes `gift.received` on the socket and a notification (respects prefs).
 - [ ] `GET /me/gifts` (received, paginated, sender card) and `GET /users/{id}/gifts` (counts only,
@@ -3921,8 +3929,9 @@ The number comes from the session's own block, given in its brief, from P-100 up
   filter (4 scenarios), its read-back check (1), `release-gate`'s filter (3); each restored and
   checked by SHA-256.
 - [ ] P-150 · Write the 1-hour task D-097 names, which moves a Thread from 24 hours to 1 and lists
-  every place that says 24 hours. **Needs:** the founder's answers to the two questions moved here
-  from T-5.2's item 10 on 4 October 2026 (the founder), still open:
+  every place that says 24 hours. **Needs:** the founder's word on D-253, the advisor's rule for
+  Extend from an expired Thread (Open); and his answers to the two questions moved here from
+  T-5.2's item 10 on 4 October 2026 (the founder), still open:
   - (a) **Does his own message restart the hour?** D-097's step 2 says hers does and is silent on
     his. Worst case if it's guessed: his did, so he keeps a Thread open alone, free, by writing
     every 59 minutes, and never pays a re-open.
@@ -3932,8 +3941,8 @@ The number comes from the session's own block, given in its brief, from P-100 up
 
   **Also unowned: no task sells Extend yet.** T-5.2 prices it (`thread_extend`, 10 Velas, as many
   times as he likes for one Thread, D-250, and at any time: from expired the 10 re-opens it too,
-  D-253), but no endpoint charges it; this task is its natural home, the founder to confirm. T-7.6 points here. Found in T-5.2; filed from this session's block
-  (P-150 to P-159).
+  D-253, Open), but no endpoint charges it; this task is its natural home, the founder to confirm.
+  T-7.6 points here. Found in T-5.2; filed from this session's block (P-150 to P-159).
 - [x] P-141 · Let only `main` deploy to staging. **Before the next session that can push a
   branch.** Worst case: a workflow file edited on any branch runs with staging's secrets, among
   them the database owner's connection used for migrations, and the Vercel and Fly tokens: it can
@@ -3985,3 +3994,17 @@ The number comes from the session's own block, given in its brief, from P-100 up
   to `49 of 50`), and the new `test_a_fifty_waits_while_another_run_holds_the_turn` went red
   (`it took the turn while another run held it`); restored by SHA-256. The case is committed:
   `tests.break_guards p142-`, red in 1 of 1. Filed from this session's block (P-140 to P-149).
+- [ ] P-152 · Make the debit's allowlist hold against a caller it can't see named. **Not tonight**
+  (the advisor, 5 October 2026); worth doing where it is next touched, T-8.9, which names gift
+  sending in it. Worst case: a caller reaches `wallet.service.debit` through a name built at run
+  time (`getattr(module, "de" + "bit")`, an `importlib` lookup, a handler table filled by
+  registration) with a literal price, and `test_only_charge_reaches_the_debit` stays green: a man
+  is charged a number no `action_prices` row holds, and nothing says so (rules 5 and 6). **The same
+  shape as D-084's blacklist:** the guard catches what it can see named, so every case written
+  with a name it can see passes. D-084's lesson is the precedent: prove the stronger guard against
+  a caller the source scan can't see, a debit reached by a computed name, and keep that case.
+  Ways to strengthen it, the strengthener's to choose: a check at run time (`debit` refuses a call
+  that didn't come through `charge` or gift sending, for instance by needing a value only they
+  can build), or a `debit` no other module can import, with the source scan kept as a second
+  layer. Found in T-5.2, whose report named it; the advisor ranked it first of that report's three
+  worries. Filed from this session's block (P-150 to P-159).

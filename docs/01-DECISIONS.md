@@ -2305,7 +2305,8 @@ then.
 **What this entry leaves open** is on T-5.2's Needs line, with every pricing question, each with
 the files it touches. **Answered or moved 4 October 2026 by D-250:** a man answering her first
 message pays the 2-Vela re-open; Extend can be bought again and again; (a) and (d) went to
-P-150. (c)'s own two were answered by D-253, 5 October 2026: Extend from expired is 10 in all.
+P-150. (c)'s own two were answered by D-253, 5 October 2026: Extend from expired is 10 in all
+(the advisor's rule, Open until the founder's word).
 
 **Answered 4 October 2026 (the founder): an expired Thread stays readable.** "Unavailable" means he
 can't send, not that he can't read: the history he paid 5 Velas for stays visible to both of them.
@@ -2540,7 +2541,8 @@ which owns the screen, on its Needs line; the tag stays on the ₹4,500 pack, ch
 (D-231). D-097's (a), whether his own message restarts the hour, and (d), when the hour starts
 after Extend, go to P-150, the 1-hour task, with a pointer at T-7.6; (c)'s two questions go with
 them, moved by Claude (the founder to confirm), since they touch no file of T-5.2's either.
-**(c)'s two were answered instead, 5 October 2026, by D-253,** and never moved: P-150 keeps (a)
+**(c)'s two were answered instead, 5 October 2026, by D-253** (the advisor's, Open until the
+founder's word), and never moved: P-150 keeps (a)
 and (d).
 
 **Supersedes** D-005's beta entry variant (₹999 for 25).
@@ -2595,9 +2597,11 @@ needed. **Rejected:** a chai and a bouquet, the advisor's first proposal, which 
 new assets to say the same thing.
 
 Proposed by Claude in T-5.2, 4 October 2026; confirmed 5 October 2026 in the advisor's relay
-(Claude, in a separate chat), with the reasons above.
+(Claude, in a separate chat), with the reasons above. **The choice is the advisor's:** the founder
+gave it the gifts to choose (the advisor, 5 October 2026). It is Locked on that delegation, which
+is the founder's word.
 
-### D-253 · Extend is one price, at any time, an expired Thread included — Locked (values tunable)
+### D-253 · Extend is one price, at any time, an expired Thread included — Open (the advisor's rule)
 **Extend costs 10 Velas and can be bought at any time, on an expired Thread too. From expired, the
 10 both re-opens the Thread and extends it: he never pays 2 and then 10.** In the ledger that is
 one `thread_extend` debit (D-251), never a `thread_reopen` beside it.
@@ -2610,6 +2614,9 @@ It answers T-5.2's item 10(c), whose two questions Claude had moved to P-150 (D-
 answerable, so P-150 keeps only (a) and (d). Building it is P-150's: no task sells Extend yet.
 
 The rule and its reason came 5 October 2026 in the advisor's relay (Claude, in a separate chat).
+**The rule is the advisor's,** not the founder's (the advisor, 5 October 2026), so it stays Open
+until he approves it: an advisor's decision is Locked only on the founder's word. It was first
+written Locked; corrected the same day.
 
 ### D-101 · What moderation's scores mean — Locked (the minor threshold revisited from real scores)
 **The decision (T-4.4; proposed by Claude, decided by the founder, 4 October 2026):** the worker
