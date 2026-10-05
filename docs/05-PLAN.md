@@ -2241,13 +2241,13 @@ prices don't depend on the web photos step, and the hold is lifted.
 - [x] **Commit:** `feat(web): app shell [T-5.6]`
 
 ### T-5.5 · Web wallet
-- [ ] **Needs:** T-5.2, T-5.3, T-3.10, T-5.6
-- [ ] **The balance pill** (men), or "Free access" (women), sits in T-5.6's header.
-- [ ] **The shell's look guard is still a blacklist** (P-83, which waits for T-6.5): whatever this
+- [x] **Needs:** T-5.2, T-5.3, T-3.10, T-5.6
+- [x] **The balance pill** (men), or "Free access" (women), sits in T-5.6's header.
+- [x] **The shell's look guard is still a blacklist** (P-83, which waits for T-6.5): whatever this
   task adds to `AppShell.tsx` keeps its look values in `tokens.css` by its own discipline, never
   by trusting `look.test.ts` to catch one. At the direction of the advisor directing T-5.6 (Claude,
   in a separate chat), relayed by the founder, 4 October 2026.
-- [ ] **The wallet screen** has a black balance card, a price list from `/prices` and the ledger
+- [x] **The wallet screen** has a black balance card, a price list from `/prices` and the ledger
   history (infinite scroll). It follows the prototype with these departures, written into 08-DESIGN:
   - no "Request a refund on unspent credits" and no "Unspent credits refundable within 7 days" (the
     cash-out D-050 removed; D-076), just a quiet link to `/refunds`;
@@ -2255,14 +2255,14 @@ prices don't depend on the web photos step, and the hold is lifted.
     "Messaging in a knot · Free". Not Wink, Boost, calls or "Gifts 20–500" (D-231's gifts are 5,
     10, 15 and 20);
   - "credits" becomes Velas (D-049), and the women's screen drops "calls" (after beta).
-- [ ] The pill reads one wallet query, refreshed after anything that spends or credits and when the
+- [x] The pill reads one wallet query, refreshed after anything that spends or credits and when the
   window regains focus. No polling; the socket arrives with T-7.12.
-- [ ] Global handler: any `INSUFFICIENT_CREDITS` from a mutation (the query client's mutation error
+- [x] Global handler: any `INSUFFICIENT_CREDITS` from a mutation (the query client's mutation error
   hook; queries never) opens the store sheet, a "coming soon" placeholder until T-8.7, with its open
   state in Zustand.
-- [ ] Words for all 17 ledger reasons in `en.ts`, in a map typed from the generated enum, so a new
+- [x] Words for all 17 ledger reasons in `en.ts`, in a map typed from the generated enum, so a new
   reason without words fails `tsc`.
-- [ ] **Commit:** `feat(web): wallet screen and balance pill [T-5.5]`
+- [x] **Commit:** `feat(web): wallet screen and balance pill [T-5.5]`
 
 ---
 
@@ -2297,7 +2297,7 @@ prices don't depend on the web photos step, and the hold is lifted.
 
 
 ### T-6.5 · Web discover deck
-- [ ] **Needs:** T-6.2, T-6.4, and P-57: the app's screens have no visual design, so this task stops and asks before designing one rather than inventing it from the prototype; and P-82 and P-83: its design pass changes the shell's values, so first the shell is checked where a browser draws it, and its look guard fails anything not on an allowed list
+- [ ] **Needs:** T-6.2, T-6.4, and P-57: the app's screens have no visual design, so this task stops and asks before designing one rather than inventing it from the prototype; and P-82 and P-83: its design pass changes the shell's values, so first the shell is checked where a browser draws it, and its look guard fails anything not on an allowed list; and P-220: its match sheet is the app's first sheet after T-5.5's store sheet, so a sheet left open behind the PIN lock stops being reachable first
 - [ ] `useDiscover(feed, filters)` infinite query; keep 3 cards rendered; prefetch next page at 5 left.
 - [ ] Card with `@use-gesture/react` + `@react-spring/web`: drag with rotation, LIKE/PASS overlays by drag distance, fling threshold 100 px or velocity, up = super. Tap = open profile. Keyboard ← → ↑ on desktop.
 - [ ] Optimistic swipe: advance immediately, rollback + toast on error.
@@ -4413,3 +4413,36 @@ The number comes from the session's own block, given in its brief, from P-100 up
   that range for proofs, and make the wrong one refuse rather than rely on remembering: a guard
   beats a rule. In the text the founder relayed, 5 October 2026; filed from T-4.7's session block
   (P-110 to P-119).
+- [ ] P-220 · Keep an open sheet behind the PIN lock out of reach. **Before T-6.5** (on its Needs
+  line). Worst case: someone opens a sheet in the app, the lock comes up over it after five
+  minutes away, and whoever picks up the phone can still Tab into the sheet, or hear it read by a
+  screen reader: a report being written, a profile's ⋯ menu, whatever that sheet holds. The lock
+  is a deterrent (D-069), but this is a gap in it. `Sheet` portals to `<body>` (`Sheet.tsx`), and
+  the lock makes only the frame's own children `inert` (`SignedInFrame.tsx`); the lock is drawn
+  over the sheet (z-50 over z-40), but nothing makes the sheet unreachable. Seen in jsdom in
+  T-5.5's session: with the lock up, the page sat under `inert` and an open sheet didn't (a probe,
+  not kept). T-5.5's store sheet closes itself when the lock goes up (`StoreSheet.tsx`, with a
+  test); every later sheet would have to repeat that. Fix once, the doer's to choose: `Sheet`
+  stays shut while `locked`, or the lock makes the portal's content `inert` too, with a test that
+  a sheet open when the lock rises can't be reached. Found in T-5.5's plan; filed from its block
+  (P-220 to P-229).
+- [ ] P-221 · Read a balance on the web only from the wallet query, never from `Me`. **Before any
+  screen shows a balance read from `Me`.** Worst case: a screen shows `Me.balance` beside the
+  header's pill and the two disagree, a money number wrong on screen, silently. `Me` is cached for
+  60 s (`ME_FRESH_FOR_MS`); the pill asks `GET /wallet` again on focus and after every spend. No
+  risk today: the pill and the wallet's card both read `useWallet()`, and nothing on the web reads
+  `Me.balance`. Fix: stop `Me` carrying the balance, or keep it out of the web's `Me` type, so
+  reading it fails `tsc`. P-170 is the API's side of the same field. Filed from T-5.5's block, at
+  the direction of the advisor directing T-5.5 (Claude, in a separate chat), relayed by the
+  founder, 5 October 2026, with this trigger rather than no deadline.
+- [ ] P-222 · Give `PinPad`'s blank cell a key of its own. **Before REL-1**, where real people
+  type PINs. Worst case: React reconciles the pad wrongly on a re-render (the keys disable while
+  a PIN is checked) and the 9 goes missing, or shows twice, on the lock screen or the PIN step,
+  so someone whose PIN has a 9 can't type it, at the lock or while choosing it. React's own words
+  for duplicate keys: children "may be duplicated and/or omitted — the behavior is unsupported".
+  `KEYS` puts `""` at index 9 and keys that cell by its index, so it is `9`, the same as the
+  digit 9's key (`src/components/ui/PinPad.tsx`). Seen in T-5.5's browser look (Playwright's
+  Chromium against `next dev`, 5 October 2026): "Encountered two children with the same key, `9`"
+  on the lock screen. Not seen: any misdrawn pad; all ten digits showed and the PIN unlocked.
+  Fix: a key no digit can have (`"blank"`), and a test that the pad renders with no React key
+  warning. Found in T-5.5's session; filed from its block (P-220 to P-229).

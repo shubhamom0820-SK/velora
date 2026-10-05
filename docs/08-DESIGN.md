@@ -206,8 +206,34 @@ both), so T-6.5's design pass changes values, not structure. Where it departs fr
 labels are `micro` (its 9.5 px), icons 20 px (its 19), and items stack icon over label at every
 width (its desktop items sit side by side); the wordmark is the landing's plain one, without the
 red letter; the page scrolls, where the prototype scrolls inside a fixed frame. The globe, the
-bell, the balance pill and the Chats badge wait for the tasks that build them (the pill is
-T-5.5's; Hindi comes after beta).
+bell and the Chats badge wait for the tasks that build them (Hindi comes after beta); the balance
+pill is T-5.5's, below.
+
+**The wallet and the pill as T-5.5 built them** (provisional, 5 October 2026). At the header's
+end, a man's balance pill: `--accent` with `--on-accent` text, a filled bolt (`Zap`) and his
+balance, read from `GET /wallet` alone, never from `Me` (P-221). It is a button that opens the
+store sheet, and so is "Buy Velas" under the wallet's card. Until T-8.7 fills it, the sheet says
+plainly that buying hasn't started, with no promise of when. **Why a button now:** the screen's
+shape is settled here, so T-8.7 fills the sheet without reopening the header, the card or the
+pill's tap area, and a man out of Velas who taps his balance isn't left stuck. At the direction
+of the advisor directing T-5.5 (Claude, in a separate chat), relayed by the founder, 5 October
+2026. A woman's header says "Free access" in `--chrome-ink` on `--chrome-accent-soft` with a
+`--chrome-accent` border, not the prototype's red text: red on its own soft red measures 4.15:1,
+under the 4.5:1 its `micro` text needs (13.93:1 as built). The pill's sizes are the
+`--shell-pill-*` tokens, and its tap area reaches 8 px past it, to 44 px (§3).
+
+Where the wallet screen departs from the prototype:
+- No "Request a refund on unspent credits" and no "Unspent credits refundable within 7 days": the
+  cash-out D-050 removed (D-076, D-230). A quiet "Refund policy" link to `/refunds` instead.
+- The price list is `/prices`' actions (D-098, D-231), nine today, in the web's own order, then
+  "Tie the knot · Free" and "Messaging in a knot · Free". Not Wink, Boost, calls or "Gifts
+  20–500": D-231's gifts are 5, 10, 15 and 20 Velas, priced by `GET /gifts`, not here. A price
+  reads "5 Velas" or "1 Vela".
+- "Credits" are Velas (D-049). The women's screen drops "calls" (after beta); its "and never
+  will" says no more than what is published already ("Free for women, always" on the landing
+  page; "Women never pay for anything" in the Terms).
+- The history lists every entry, a page at a time as it scrolls, where the prototype showed the
+  last 12. Each reason is in words from `en.ts`, by the API's enum (P-26), never free text.
 
 **Admin:** Dashboard · Reports queue · User detail · Moderation queue · Audit log (header ✦).
 

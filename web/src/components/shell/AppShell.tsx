@@ -6,6 +6,7 @@ import {
   MessageCircle,
   User,
   Wallet,
+  Zap,
 } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
@@ -15,7 +16,11 @@ import { Icon } from "@/components/ui/Icon";
 import type { MessageKey } from "@/i18n/t";
 import { t } from "@/i18n/t";
 import { APP_NAME } from "@/lib/app";
+import { creditsCount, creditsText } from "@/lib/credits";
 import { cx } from "@/lib/cx";
+import { useMe } from "@/lib/queries/me";
+import { useWallet } from "@/lib/queries/wallet";
+import { useStoreSheet } from "@/store/store-sheet";
 
 /**
  * The app's four places, in this order (T-5.6). No Vibe: after beta (D-010).
@@ -49,9 +54,18 @@ function isCurrent(pathname: string, href: string): boolean {
  * One `<nav>`, inside the header: fixed along the bottom on mobile, in the
  * header's row from `md` up, as in the prototype. The wordmark is `APP_NAME`,
  * never the prototype's "Knot" (CLAUDE.md rule 17).
+ *
+ * At the header's end (T-5.5): a man's balance pill, which opens the store
+ * sheet, or a woman's "Free access". The pill reads the one wallet query; a
+ * woman's screen never asks for it. Its look is the `--shell-pill-*` tokens,
+ * kept there by hand: `look.test.ts` is a blacklist until P-83.
  */
 export function AppShell({ children }: { children: ReactNode }) {
   const pathname = usePathname();
+  const gender = useMe().data?.gender;
+  const wallet = useWallet({ enabled: gender === "male" });
+  const showStore = useStoreSheet((state) => state.show);
+  const balance = wallet.data?.balance;
   return (
     <div className="bg-bg mx-auto flex min-h-dvh max-w-(--shell-width) flex-col">
       <header className="bg-chrome border-chrome-line sticky top-0 z-10 flex h-(--shell-header-height) items-center gap-(--shell-gutter) border-b px-(--shell-gutter)">
@@ -85,6 +99,33 @@ export function AppShell({ children }: { children: ReactNode }) {
             );
           })}
         </nav>
+        {gender === "male" && (
+          <button
+            type="button"
+            onClick={showStore}
+            aria-label={
+              balance !== undefined
+                ? t("wallet.pill", { velas: creditsText(balance) })
+                : t(
+                    wallet.isError
+                      ? "wallet.pillUnavailable"
+                      : "wallet.pillLoading",
+                  )
+            }
+            className="bg-accent text-on-accent text-ui rounded-pill shadow-1 relative ml-auto flex items-center gap-(--shell-pill-gap) px-(--shell-pill-pad-x) py-(--shell-pill-pad-y) before:absolute before:-inset-(--shell-pill-tap)"
+          >
+            <Icon
+              icon={Zap}
+              className="size-(--shell-pill-icon) fill-current"
+            />
+            {balance !== undefined && creditsCount(balance)}
+          </button>
+        )}
+        {gender === "female" && (
+          <span className="bg-chrome-accent-soft border-chrome-accent text-chrome-ink text-micro rounded-pill ml-auto border px-(--shell-pill-pad-x) py-(--shell-pill-pad-y)">
+            {t("wallet.freeAccess")}
+          </span>
+        )}
       </header>
       <main className="flex flex-1 flex-col pb-(--shell-nav-height) md:pb-0">
         {children}

@@ -1,3 +1,34 @@
+import type { components } from "@/types/api";
+
+type LedgerReason = components["schemas"]["LedgerReason"];
+
+/**
+ * What the wallet's history calls each reason Velas moved (T-5.5): the API
+ * sends the enum, never words (D-033, P-26). `satisfies` makes a reason the
+ * API adds without words here fail `tsc`, and so do words for a reason it
+ * drops. Drafted by Claude, for the founder's review.
+ */
+const ledgerReasons = {
+  purchase: "Velas bought",
+  purchase_bonus: "First-purchase bonus",
+  referral_reward: "Referral reward",
+  admin_grant: "Added by {app}",
+  refund: "Refund",
+  gift: "Gift sent",
+  // Unused since D-230, never repurposed: the words stay for the enum.
+  refund_banned_partner: "Returned after a ban",
+  refund_album_declined: "Returned: request declined",
+  thread_open: "Thread opened",
+  dm_open: "First private message",
+  thread_reopen: "Thread re-opened",
+  voice_unlock: "Voice note unlocked",
+  album_request: "Private pictures viewed",
+  super_like: "Super Like",
+  liked_you_reveal: "Revealed who liked you",
+  thread_extend: "Thread extended",
+  dm_message: "Private message",
+} as const satisfies Record<LedgerReason, string>;
+
 /**
  * Every user-facing string (D-033). A Hindi dictionary joins after beta with the
  * same keys; components never hold copy, they call `t()` from ./t.
@@ -18,7 +49,6 @@ export const en = {
     login: "Sign in",
     discover: "Discover",
     chats: "Chats",
-    wallet: "Wallet",
     you: "You",
     admin: "Admin",
   },
@@ -37,6 +67,66 @@ export const en = {
     chats: "Chats",
     wallet: "Wallet",
     you: "You",
+  },
+  // The balance pill, the wallet screen and the store sheet (T-5.5). Users see
+  // Velas, never "credits" (D-049). Drafted by Claude, for the founder's review.
+  wallet: {
+    title: "Wallet",
+    velas: {
+      one: "{count} Vela",
+      other: "{count} Velas",
+    },
+    // The unit beside the balance card's number.
+    unit: {
+      one: "Vela",
+      other: "Velas",
+    },
+    // The pill in the header (men): the button's name for screen readers.
+    pill: "{velas}. Buy Velas",
+    pillLoading: "Balance loading. Buy Velas",
+    pillUnavailable: "Balance unavailable. Buy Velas",
+    freeAccess: "Free access",
+    balance: "Your balance",
+    balanceFailed: "We couldn't load your balance",
+    buy: "Buy Velas",
+    prices: "What things cost",
+    pricesFailed: "We couldn't load the prices",
+    free: "Free",
+    tieTheKnot: "Tie the knot",
+    knotMessages: "Messaging in a knot",
+    // The price list's words for each priced action, by its debit reason
+    // (pricing.service keys `action_prices` by it).
+    action: {
+      thread_open: "Open a thread",
+      thread_reopen: "Re-open an expired thread",
+      thread_extend: "Extend a thread by a day",
+      dm_open: "First private message",
+      dm_message: "Each private message after it",
+      album_request: "View private pictures",
+      voice_unlock: "Listen to a voice note",
+      super_like: "Super Like",
+      liked_you_reveal: "See one person who liked you",
+    },
+    reason: ledgerReasons,
+    history: "History",
+    historyFailed: "We couldn't load your history",
+    historyEmpty: "Nothing yet",
+    historyEmptyBody: "Velas you get and spend show up here.",
+    loadingMore: "Loading more",
+    // A quiet link: purchases are final, and a broken payment is ours to fix
+    // (D-050, D-230). No refund request and no "refundable within 7 days".
+    refunds: "Refund policy",
+    // Women (D-098): no balance, no prices, no history. No calls (after beta).
+    womenTitle: "Everything is free for you",
+    womenBody:
+      "Threads, knots, voice notes and your private album cost you nothing, and never will.",
+    // Until T-8.7 builds the store. Says plainly that buying hasn't started,
+    // with no promise of when (the advisor directing T-5.5, relayed by the
+    // founder, 5 October 2026).
+    store: {
+      title: "Buy Velas",
+      body: "Buying Velas hasn't started on {app} yet. Until it does, there's no way to add Velas to your balance.",
+    },
   },
   // Sign-in and onboarding (T-3.11, T-3.12). Drafted by Claude from the
   // prototype where 08-DESIGN's list of its errors leaves it trusted, and from

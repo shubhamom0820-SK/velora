@@ -6,16 +6,15 @@ import { t } from "@/i18n/t";
 
 import ChatsPage from "./chats/page";
 import DiscoverPage from "./discover/page";
-import WalletPage from "./wallet/page";
 import YouPage from "./you/page";
 
 // One route per place in the shell's nav, each a placeholder until its task
-// (T-5.6). They render inside the shell's <main>, so none brings its own.
+// (T-5.6); Wallet's is built (T-5.5). They render inside the shell's <main>,
+// so none brings its own.
 describe("the app's placeholder routes", () => {
   it.each<[string, ComponentType]>([
     ["Discover", DiscoverPage],
     ["Chats", ChatsPage],
-    ["Wallet", WalletPage],
     ["You", YouPage],
   ])("%s says what it is and that it's coming", (name, Page) => {
     render(<Page />);

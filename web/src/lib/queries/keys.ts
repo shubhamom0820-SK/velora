@@ -15,4 +15,9 @@ export const queryKeys = {
   myPhotos: () => ["photos", "mine"] as const,
   photo: (id: string) => ["photos", id] as const,
   verificationLatest: () => ["verification", "latest"] as const,
+  // `wallet()` is the prefix of the ledger's key too, so one invalidation
+  // refreshes the balance and the history together (T-5.5).
+  wallet: () => ["wallet"] as const,
+  walletLedger: () => ["wallet", "ledger"] as const,
+  prices: () => ["prices"] as const,
 };

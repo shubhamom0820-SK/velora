@@ -1,7 +1,12 @@
-import { render, screen, within } from "@testing-library/react";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { render, screen, waitFor, within } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { t } from "@/i18n/t";
+import { queryKeys } from "@/lib/queries/keys";
+import { envelope, fakeApi, json } from "@/lib/testing/fakeApi";
+import { useStoreSheet } from "@/store/store-sheet";
 
 import { AppShell } from "./AppShell";
 
@@ -12,16 +17,30 @@ vi.mock("next/navigation", () => ({ usePathname: () => nav.pathname }));
 // component instead of read from APP_NAME can't pass (CLAUDE.md rule 17).
 vi.mock("@/lib/app", () => ({ APP_NAME: "Zephyrine" }));
 
-function renderShell() {
+/** The shell as a signed-in person sees it; no gender means no pill. */
+function renderShell(gender: "male" | "female" | null = null) {
+  const client = new QueryClient({
+    defaultOptions: { queries: { retry: false } },
+  });
+  client.setQueryData(queryKeys.me(), { id: "u1", gender });
   return render(
-    <AppShell>
-      <p>A screen</p>
-    </AppShell>,
+    <QueryClientProvider client={client}>
+      <AppShell>
+        <p>A screen</p>
+      </AppShell>
+    </QueryClientProvider>,
   );
 }
 
 beforeEach(() => {
   nav.pathname = "/discover";
+  vi.stubEnv("NEXT_PUBLIC_API_URL", "https://api.test");
+  useStoreSheet.setState({ open: false });
+});
+
+afterEach(() => {
+  vi.unstubAllGlobals();
+  vi.unstubAllEnvs();
 });
 
 describe("the app shell (T-5.6)", () => {
@@ -81,5 +100,76 @@ describe("the app shell (T-5.6)", () => {
     expect(
       screen.getAllByRole("link").filter((a) => a.hasAttribute("aria-current")),
     ).toEqual([]);
+  });
+});
+
+describe("the header's balance (T-5.5)", () => {
+  it("shows a man his balance from the wallet, as a button that opens the store sheet", async () => {
+    fakeApi({ "GET /v1/wallet": () => json(200, { balance: 1250 }) });
+    renderShell("male");
+
+    const header = screen.getByRole("banner");
+    const pill = await within(header).findByRole("button", {
+      name: t("wallet.pill", { velas: "1,250 Velas" }),
+    });
+    expect(pill).toHaveTextContent("1,250");
+    expect(header).not.toHaveTextContent(t("wallet.freeAccess"));
+
+    await userEvent.click(pill);
+    expect(useStoreSheet.getState().open).toBe(true);
+  });
+
+  it("says one Vela, not one Velas", async () => {
+    fakeApi({ "GET /v1/wallet": () => json(200, { balance: 1 }) });
+    renderShell("male");
+
+    expect(
+      await screen.findByRole("button", {
+        name: t("wallet.pill", { velas: "1 Vela" }),
+      }),
+    ).toBeInTheDocument();
+  });
+
+  it("says the balance is loading until the wallet answers", () => {
+    fakeApi({ "GET /v1/wallet": () => new Promise<Response>(() => {}) });
+    renderShell("male");
+
+    expect(
+      screen.getByRole("button", { name: t("wallet.pillLoading") }),
+    ).toBeInTheDocument();
+  });
+
+  it("says the balance is unavailable when the wallet fails, and still opens the store", async () => {
+    fakeApi({ "GET /v1/wallet": () => envelope(500, "INTERNAL") });
+    renderShell("male");
+
+    const pill = await screen.findByRole("button", {
+      name: t("wallet.pillUnavailable"),
+    });
+    expect(pill).not.toHaveTextContent(/\d/);
+    await userEvent.click(pill);
+    expect(useStoreSheet.getState().open).toBe(true);
+  });
+
+  it("shows a woman Free access, and never asks for a wallet", async () => {
+    const api = fakeApi({});
+    renderShell("female");
+
+    const header = screen.getByRole("banner");
+    expect(
+      within(header).getByText(t("wallet.freeAccess")),
+    ).toBeInTheDocument();
+    expect(within(header).queryByRole("button")).not.toBeInTheDocument();
+    await waitFor(() => expect(api.sent()).toEqual([]));
+  });
+
+  it("adds no link: the nav's four stay the shell's only ones", async () => {
+    fakeApi({ "GET /v1/wallet": () => json(200, { balance: 3 }) });
+    renderShell("male");
+
+    await screen.findByRole("button", {
+      name: t("wallet.pill", { velas: "3 Velas" }),
+    });
+    expect(screen.getAllByRole("link")).toHaveLength(4);
   });
 });
