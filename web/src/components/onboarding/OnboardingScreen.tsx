@@ -5,7 +5,6 @@ import { useMe } from "@/lib/queries/me";
 
 import { AboutStep } from "./AboutStep";
 import { BirthdayStep } from "./BirthdayStep";
-import { ComingNextStep } from "./ComingNextStep";
 import { GenderStep } from "./GenderStep";
 import { InterestsStep } from "./InterestsStep";
 import { LocationStep } from "./LocationStep";
@@ -13,6 +12,7 @@ import { LookingForStep } from "./LookingForStep";
 import { NameStep } from "./NameStep";
 import { PhotosStep } from "./PhotosStep";
 import { PinStep } from "./PinStep";
+import { SelfieStep } from "./SelfieStep";
 import { UsernameStep } from "./UsernameStep";
 
 /**
@@ -50,7 +50,7 @@ export function OnboardingScreen({
     case "pin":
       return <PinStep me={me} />;
     case "selfie":
-      return <ComingNextStep />;
+      return <SelfieStep me={me} />;
     case null:
       return null;
   }

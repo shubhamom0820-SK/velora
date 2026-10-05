@@ -40,6 +40,11 @@ the app has no visual design, only a prototype that shows which screens exist.
     compared with the profile's photos and nothing more is claimed (D-262, T-4.5): the badge says
     "Selfie matches photos" with a face (`ScanFace`), and `web/src/i18n/claims.test.ts` refuses the
     prototype's words.
+15. **The selfie's pose and its promise:** "Turn your head slightly left" and "The pose is randomly
+    chosen each time, so a saved photo won't pass", and a selfie sent the moment it's taken. No
+    pose is asked (T-4.5, D-263), nothing claims a saved photo can't pass (D-260), and the picture
+    is checked before it's sent, since each sent selfie is one of five a day (T-4.7). Its sub,
+    "This is what keeps fake accounts off the app", promises more than a comparison: P-110.
 
 What it is still trusted for there: the screen order (§5, D-068), the `Step` frame (back arrow,
 a segment of progress per screen, its 12 and now the location question's, title, body, footer,

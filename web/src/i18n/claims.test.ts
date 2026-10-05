@@ -82,11 +82,29 @@ describe("no published word claims more than a selfie compared (D-262)", () => {
       expect(CLAIMS.some((claim) => claim.test(old))).toBe(true);
   });
 
+  it("would catch the prototype's selfie screen, which T-4.7 doesn't say", () => {
+    // The prototype's words for the selfie step and the profile's line
+    // (08-DESIGN's list of where the prototype is wrong, item 14): each
+    // claims a person verified.
+    for (const old of [
+      "Face matched — verified",
+      "You're verified",
+      "Selfie verified",
+      "Optional — but verified profiles get noticeably more replies.",
+      "Not verified — you'll get fewer replies",
+    ])
+      expect(CLAIMS.some((claim) => claim.test(old))).toBe(true);
+  });
+
   it("keeps the sentence that says the team may look", () => {
     // D-264: the founder looks at every selfie until P-160 measures the
-    // threshold, so /privacy must say so, and never be softened away.
+    // threshold, so /privacy must say so, and never be softened away; the
+    // selfie step says it too, where the selfie is taken (T-4.7).
     expect(en.legal.privacy.collect.selfie).toContain(
       "our team may look at it to check a comparison",
+    );
+    expect(en.onboarding.selfie.private).toContain(
+      "Our team may look at it to check a comparison.",
     );
   });
 });

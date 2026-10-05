@@ -1774,12 +1774,30 @@ exist yet. The batch is a chain, T-3.10 → T-3.11 → T-3.12 → T-3.13, each n
 - [x] **Commit:** `feat(web): photo upload step [T-4.6]`
 
 ### T-4.7 · Web selfie step
-- [ ] **Needs:** T-4.5, T-4.6
-- [ ] Start the verification (no pose: T-4.5) → `getUserMedia({video:{facingMode:"user"}})` → live mirrored preview → capture to canvas → upload as `kind=selfie` → submit → poll `GET /verification/latest` every 2 s (max 60 s) → result. Handles permission denied with instructions per browser.
-- [ ] Men: "Skip for now". Women: cannot skip.
-- [ ] **The copy claims face matching only** (T-4.5's hard constraint): the screen says the selfie
+- [x] **Needs:** T-4.5, T-4.6
+- [x] Start the verification (no pose: T-4.5) → `getUserMedia({video:{facingMode:"user"}})` → live mirrored preview → capture to canvas → upload as `kind=selfie` → submit → poll `GET /verification/latest` every 2 s (max 60 s) → result. Handles permission denied with instructions per browser.
+  **Built** (`SelfieStep`, `SelfieCamera`, `useSelfie`, `selfieCopy`; `src/lib/camera.ts`; hooks
+  in `src/lib/queries/verification.ts`): the front camera asked for 1280 × 720 at best (most
+  browsers give 640 × 480 otherwise, small for comparing faces), the preview mirrored and the
+  picture taken not, a canvas JPEG with no EXIF. **The picture is checked before it's sent**
+  ("Use this selfie" / "Retake", right after capture and before any upload: each sent selfie is
+  one of five a day, and a woman can't skip; T-4.7's plan, question 2, answered in the text the
+  founder relayed, 5 October 2026). Asked every 2 s while compared, for a minute a round; then
+  "Check again" starts another. **Permission denied, per browser,** from each one's own help
+  pages, read 5 October 2026: Chrome on Android and on a computer, Firefox on a computer, Safari
+  on a Mac (Apple's Safari guide). The iPhone's steps are Safari's own menus (aA, Website
+  Settings) as help pages beyond Apple's describe them: Apple's iPhone guide didn't show them when
+  read. Edge, Samsung Internet, Opera and Firefox on Android get the general line, since their
+  menus differ. **None of the instructions has been seen on a real phone.**
+- [x] Men: "Skip for now". Women: cannot skip.
+  **Built:** "Skip for now" for `gender == "male"` only, an allowlist. It and a match's
+  "Continue" lead to a panel in place, "That's everything for now. The rest of sign-up opens
+  next.", never to `/discover`, whose gate sends anyone not `done` straight back to this step
+  (T-4.7's plan, question 1, answered in the text the founder relayed, 5 October 2026). T-4.8
+  wires both to its completion endpoint; the server's rule, not this screen, is what stops a woman.
+- [x] **The copy claims face matching only** (T-4.5's hard constraint): the screen says the selfie
   is compared with the profile photos, never that it confirms a real or live person.
-- [ ] **No spinner to watch** (D-261, the founder's constraint on T-4.5): the result usually comes
+- [x] **No spinner to watch** (D-261, the founder's constraint on T-4.5): the result usually comes
   in seconds, by the wake. While she waits, the screen says what is happening ("comparing your
   selfie with your photos"); if nothing has come after about 15 seconds, it says plainly that it
   can take a minute and she can leave, and the result is there when she is back (the queued job
@@ -1787,13 +1805,56 @@ exist yet. The batch is a chain, T-3.10 → T-3.11 → T-3.12 → T-3.13, each n
   comes from D-263's list, in words that say what to change, never an accusation; `attempts_left`
   says how many tries remain today. The prototype's "Face matched — verified" is overridden
   (D-262); `web/src/i18n/claims.test.ts` fails on it.
-- [ ] Built in T-3.11's `StepFrame`, at D-080's `/onboarding/selfie`, replacing T-3.12's placeholder.
-- [ ] **Allow the camera here (D-059):** T-2.5's Permissions-Policy has `camera=()`, so `getUserMedia` is refused until this task makes it `camera=(self)`; add `blob:` wherever the captured frame shows. T-4.9's fake-camera E2E fails until then.
-- [ ] **Commit:** `feat(web): selfie verification step [T-4.7]`
+  **Built:** the selfie shown in its circle with "Comparing your selfie with your photos…", the
+  can-leave line from 15 seconds, "Still comparing" and "Check again" at a minute. Each D-263
+  reason says what to change (`no_photos` links back to the photos step); anything unlisted reads
+  `other`; `RATE_LIMITED`'s `retry_after_s` becomes "about N minutes" or "about N hours". The step
+  repeats `/privacy`'s "Our team may look at it to check a comparison" where the selfie is taken,
+  and `claims.test.ts` holds that line and the prototype's selfie-screen words.
+- [x] Built in T-3.11's `StepFrame`, at D-080's `/onboarding/selfie`, replacing T-3.12's placeholder.
+  **Done:** `ComingNextStep` and its string are gone.
+- [x] **Allow the camera here (D-059):** T-2.5's Permissions-Policy has `camera=()`, so `getUserMedia` is refused until this task makes it `camera=(self)`; add `blob:` wherever the captured frame shows. T-4.9's fake-camera E2E fails until then.
+  **Done:** `camera=(self)` on every page, not only this one: a page reached by Next's client-side
+  navigation keeps the policy of the document first loaded, so a policy on one path would refuse
+  anyone arriving from the PIN step. `blob:` was already there: T-4.6's `img-src` has it on every
+  build with photo storage, and a build without storage can't upload a selfie either.
+  **Proved by its effect, 5 October 2026, by Claude,** in Playwright's Chromium against a
+  production build (`APP_ENV=local`), the API and the worker with the real face models (D-088) on
+  a database of their own (dropped after), a fake camera playing the committed NASA portraits:
+  - Served with T-2.5's `camera=()` (a loopback proxy rewriting only that header), the browser
+    refused in its own words, "Permissions policy violation: camera is not allowed in this
+    document.", and the step said the camera was blocked, with Chrome's way to allow it.
+  - Served as built, `camera=(self)`: the camera opened at 1280 × 720, the preview mirrored
+    (`scale: -1 1`), the picture checked as a `blob:` image, no CSP violation anywhere. A fresh
+    woman whose one public photo is `chari_2021`, signed in through the screens and never offered
+    "Skip for now", sent four selfies: Chrome's own test pattern → `no_face` (0 faces); three
+    people → `many_faces` (3); Williams → `no_match` (best 0.098); Chari's 2017 portrait → matched
+    (0.867, threshold 0.363). Tries read 4, 3, 2. **Each result showed about 2.4 seconds after
+    "Use this selfie"**, all four decided by the wake (`decided_by: wake`).
+  - With the worker stopped before the selfie was sent, so its wake was lost: the can-leave line
+    at 15.5 s, "Still comparing" at 60.2 s with no more asking, the worker started again, and
+    "Check again" showed the match at 85.5 s, decided by the queue (`decided_by: queue`): D-261's
+    other path, seen through the screen.
+  The run's script and fake-camera videos stay in that session's scratchpad: the evidence is this
+  record, and T-4.9's fake-camera E2E is the standing check. The run was on the branch before it
+  was rebased onto T-4.10, whose only overlap is the same header's `geolocation=(self)` and one
+  more progress segment (the selfie is now 13 of 13); `make lint test` and CI ran on the rebased
+  commit.
+- [x] **Tests, and every guard broken once:** `SelfieStep.test.tsx`, `camera.test.ts`,
+  `queries/verification.test.tsx`, `security-headers.test.ts`, `claims.test.ts`. **All 20 web
+  cases red,** each file restored by SHA-256, 5 October 2026 (`node scripts/break-guards.mts
+  t47-`). **One stayed green at first, a finding fixed:** asking every 10 seconds instead of 2
+  (`t47-poll-02`), because the hook's test advanced time by the constant itself, so a slower poll
+  slowed the test with it; it now waits the plan's own 6 seconds.
+- [x] **Commit:** `feat(web): selfie verification step [T-4.7]`
 
 ### T-4.8 · Finish onboarding
 - [ ] **Needs:** T-4.5, T-4.10
 - [ ] Service `onboarding.complete()`: requires profile fields, username, 5 interests, ≥ 1 public photo, location (T-4.10), and for women an `approved` verification → step `done`, compute `completeness`.
+- [ ] **Wire the selfie step's two ways on** (T-4.7): a man's "Skip for now" and a match's
+  "Continue" (`useSelfie`'s `finish()`) show an in-place panel until this task, since nothing
+  moves `selfie` to `done`. This task points both at its completion endpoint and its answer, and
+  drops the panel's string, `onboarding.selfie.next`.
 - [ ] **Commit:** `feat(onboarding): completion rules [T-4.8]`
 
 ### T-4.9 · E2E onboarding
@@ -4280,6 +4341,10 @@ The number comes from the session's own block, given in its brief, from P-100 up
   founder uploads from his iPhone settles it, and which browser he used is his to note beside it.
   At the founder's direction, 5 October 2026, in his own words; filed from T-4.5's session block
   (P-160 to P-169).
+  **And the selfie step, from the same iPhone** (T-4.7, added 5 October 2026 in the text the
+  founder relayed): its picture is drawn on a canvas and sent as a JPEG, so its format isn't this
+  question, but the step itself was seen only in Playwright's Chromium with a fake camera. Taking
+  one selfie in that session shows the camera opening on a real phone; its permission is P-123's.
 - [ ] P-170 · Read `Me.balance` through `wallet.service.balance()`, not users' own `balance_of`.
   **No deadline:** both read `wallets.balance`, so no risk today, but a change to how a balance is
   read (a cache, a derived balance) would have to be made twice. Filed from T-5.3's block, as its
@@ -4324,3 +4389,27 @@ The number comes from the session's own block, given in its brief, from P-100 up
   HTTPS. Seen means read from what the browser did: the API's row holding a position rather than
   an area's centroid, not the screen's word. At the founder's direction, 5 October 2026; filed from
   T-4.10's session block (P-120 to P-129).
+  **And the selfie camera, in the same session** (T-4.7, added 5 October 2026 in the text the
+  founder relayed): `camera=(self)` and the step's camera were seen only in Playwright's Chromium
+  over plain `http://127.0.0.1`. In Safari on the iPhone, over staging's HTTPS: the camera opens
+  when allowed, and, refused once, the step's iPhone instructions (aA, Website Settings, Camera)
+  match what Safari shows. Those words came from help pages, never a phone (T-4.7's line).
+- [ ] P-110 · Guarantee-shaped claims that D-262's word list can't see. Worst case: a line
+  promising protection the product doesn't give is published while `claims.test.ts` stays green,
+  because the test matches words ("verif", "genuine", "guarantee"…), not promises. One is live:
+  the gender screen says "Locked permanently after signup. This is what keeps fake accounts out."
+  (`onboarding.gender.lock`); locking a gender doesn't keep fake accounts out. The prototype's
+  selfie line, "This is what keeps fake accounts off the app", had the same shape (not used,
+  T-4.7). The founder's to choose: rewrite the gender line in words it can keep, and whether the
+  test gains patterns for this shape ("keeps fake", "won't pass", "stops") or a person reads every
+  new string. Found in T-4.7's plan; filed from T-4.7's session block (P-110 to P-119).
+- [ ] P-111 · Keep browser proofs run by hand out of the test runs' Redis databases. **Before the
+  next manual proof.** Worst case: another session's `make test` fails for no real reason, a job
+  taken by the proof's worker or the proof's queue emptied by the run's start-up flush, and nobody
+  can trace it afterwards, since which run held which slot isn't recorded. Test runs take Redis
+  databases 2 to 15, one per slot (`api/tests/infra.py`, `SLOTS`), and each empties its own when
+  it starts. T-4.7's proof used 13, by mistake, on 5 October 2026 between 15:19 and 15:30 IST.
+  The mistake was one session's; the trap is still there for the next. Name a database outside
+  that range for proofs, and make the wrong one refuse rather than rely on remembering: a guard
+  beats a rule. In the text the founder relayed, 5 October 2026; filed from T-4.7's session block
+  (P-110 to P-119).

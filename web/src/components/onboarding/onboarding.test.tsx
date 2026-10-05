@@ -19,7 +19,6 @@ import { WaitlistBox } from "@/components/marketing/WaitlistBox";
 
 import { AboutStep } from "./AboutStep";
 import { BirthdayStep } from "./BirthdayStep";
-import { ComingNextStep } from "./ComingNextStep";
 import { GenderStep } from "./GenderStep";
 import { InterestsStep } from "./InterestsStep";
 import { LocationStep } from "./LocationStep";
@@ -27,6 +26,7 @@ import { LookingForStep } from "./LookingForStep";
 import { NameStep } from "./NameStep";
 import { PhotosStep } from "./PhotosStep";
 import { PinStep } from "./PinStep";
+import { SelfieStep } from "./SelfieStep";
 import { SignIn } from "./SignIn";
 import { USERNAME_CHECK_DELAY_MS, UsernameStep } from "./UsernameStep";
 
@@ -838,24 +838,6 @@ describe("the PIN (T-3.12, D-069)", () => {
   });
 });
 
-describe("the selfie, until T-4.7", () => {
-  it("says it's next, with a way back and a way out", () => {
-    renderUi(<ComingNextStep />);
-
-    expect(
-      screen.getByRole("heading", { name: "Quick selfie check" }),
-    ).toBeInTheDocument();
-    expect(screen.getByText("This step is coming next.")).toBeInTheDocument();
-    expect(screen.getByRole("link", { name: "Back" })).toHaveAttribute(
-      "href",
-      "/onboarding/pin",
-    );
-    expect(
-      screen.getByRole("button", { name: "Sign out" }),
-    ).toBeInTheDocument();
-  });
-});
-
 describe("production's CSP allows no inline style (P-41)", () => {
   it("no screen renders a style attribute", async () => {
     fakeApi({
@@ -870,6 +852,7 @@ describe("production's CSP allows no inline style (P-41)", () => {
             url: "https://cdn.test/p/p1.jpg",
           },
         ]),
+      "GET /v1/verification/latest": () => envelope(404, "NOT_FOUND"),
     });
     const screens = [
       <SignIn key="s" />,
@@ -887,11 +870,13 @@ describe("production's CSP allows no inline style (P-41)", () => {
       <PhotosStep key="p" me={me({ onboarding_step: "photos" })} />,
       <InterestsStep key="i" me={me({ onboarding_step: "interests" })} />,
       <PinStep key="pin" me={me({ onboarding_step: "pin" })} />,
-      <ComingNextStep key="s" />,
+      <SelfieStep key="selfie" me={me({ onboarding_step: "selfie" })} />,
     ];
     for (const ui of screens) {
       const { container, unmount } = renderUi(ui);
       if (ui.key === "p") await screen.findByRole("list");
+      if (ui.key === "selfie")
+        await screen.findByRole("button", { name: "Open camera" });
       expect(container.querySelector("[style]")).toBeNull();
       unmount();
     }

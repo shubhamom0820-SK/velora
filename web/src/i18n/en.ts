@@ -21,8 +21,6 @@ export const en = {
     wallet: "Wallet",
     you: "You",
     admin: "Admin",
-    // An onboarding step whose screen isn't built yet (T-3.10 to T-3.12).
-    onboardingStep: "This step is coming next.",
   },
   // Restoring and ending a session (T-3.10).
   session: {
@@ -228,8 +226,107 @@ export const en = {
       skip: "Skip, I'll set it later",
       answered: "Your PIN is set.",
     },
+    // The selfie (T-4.7). D-262: it says what is done, the selfie compared
+    // with the profile's photos, and never that a person is verified, real or
+    // live; claims.test.ts holds every line here to that.
     selfie: {
       title: "Quick selfie check",
+      // Women can't skip it (D-008); for men it's optional.
+      subWoman:
+        "Needed before your profile goes live. We compare your selfie with the photos on your profile.",
+      subMan:
+        "Optional. We compare your selfie with the photos on your profile.",
+      // /privacy's words (D-262): "our team may look" is literally true
+      // (D-264), and stays.
+      private:
+        "Other people on {app} never see your selfie. Our team may look at it to check a comparison.",
+      intro: "We'll open your front camera",
+      openCamera: "Open camera",
+      skip: "Skip for now",
+      opening: "Opening your camera…",
+      preview: "Your camera",
+      // No pose is asked (T-4.5, D-263): the prototype's "Turn your head
+      // slightly left" is gone.
+      frame:
+        "Face the camera in good light, with your whole face in the frame.",
+      take: "Take selfie",
+      cancel: "Cancel",
+      captured: "Your selfie",
+      reviewHint:
+        "Check that your face is clear and in focus. Each selfie you send uses one of today's tries.",
+      use: "Use this selfie",
+      retake: "Retake",
+      sending: "Sending your selfie… {percent}%",
+      sendFailed:
+        "Your selfie didn't send — check your connection and try again.",
+      // D-261: what is happening, never a bare spinner; after about 15
+      // seconds, that it can take a minute and she can leave.
+      comparing: "Comparing your selfie with your photos…",
+      comparingLong:
+        "This can take up to a minute. You can leave this page — your result will be here when you come back.",
+      comparingStill:
+        "Still comparing. Come back in a few minutes — your result will be waiting here.",
+      checkAgain: "Check again",
+      matched: "Your selfie matches your photos.",
+      // Where "Continue" and "Skip for now" lead until T-4.8 finishes sign-up:
+      // never on to the app, whose gate would send the person straight back.
+      next: "That's everything for now. The rest of sign-up opens next.",
+      triesOne: "1 try left today.",
+      triesMany: "{count} tries left today.",
+      triesNone: "No tries left today.",
+      // RATE_LIMITED's retry_after_s: the day's five, or too many starts.
+      waitMinutes:
+        "You can't send another selfie yet. Try again in about {minutes} minutes.",
+      waitHours:
+        "You can't send another selfie yet. Try again in about {hours} hours.",
+      loadFailed: "We couldn't load your selfie check.",
+      goToPhotos: "Go to your photos",
+      // Why a selfie didn't match (D-263's list): what to change, never an
+      // accusation. Anything unlisted reads as `other`.
+      reasons: {
+        no_face:
+          "We couldn't find a face in your selfie. Face the camera in good light, with your whole face in the frame, and try again.",
+        many_faces:
+          "We found more than one face. Take your selfie with only you in the frame.",
+        no_match:
+          "Your selfie didn't match the photos on your profile closely enough. Try again facing the camera in good light, or add a clearer photo of your face.",
+        no_photos:
+          "None of your photos shows a face clearly enough to compare with. Add one that does, then take your selfie.",
+        unreadable: "We couldn't read that picture. Take your selfie again.",
+        unavailable:
+          "We couldn't compare your selfie just now. Try again in a few minutes.",
+        other: "We couldn't use this selfie. Try again.",
+      },
+      // Why the camera didn't open (src/lib/camera.ts), and what to do. Where
+      // each browser keeps a site's camera permission, from its own help
+      // pages, read 5 October 2026: Chrome Help "Use your camera and
+      // microphone in Chrome" (Android and computer), Mozilla's "How to
+      // manage your camera and microphone permissions with Firefox", and
+      // Apple's Safari User Guide for Mac, "Change Websites settings". The
+      // iPhone's steps are Safari's own menus (aA, Website Settings), as
+      // help pages beyond Apple's describe them: Apple's guide page didn't
+      // show them when read.
+      camera: {
+        denied: "Your camera is blocked for {app}.",
+        how: {
+          ios: "In Safari, tap aA in the address bar, then Website Settings, and set Camera to Allow. In another browser, open the Settings app, find that browser and turn on Camera. Then tap Try again.",
+          "chrome-android":
+            "Tap ⋮ to the right of the address bar, then Settings, Site settings and Camera. Find {host} under Blocked, tap it and choose Allow. Then come back and tap Try again.",
+          "chrome-desktop":
+            'Open ⋮ at the top right, then Settings, Privacy and security, Site settings and Camera. Under "Not allowed to use your camera", choose {host} and set it to Allow. Then click Try again.',
+          "safari-mac":
+            "Choose Safari > Settings, click Websites, then Camera, and set {host} to Allow. Then click Try again.",
+          firefox:
+            "Click the permissions icon at the left of the address bar, then the ✕ beside Blocked to clear it. Then click Try again and allow the camera.",
+          other:
+            "Allow the camera for {host} in your browser's settings, then tap Try again.",
+        },
+        none: "We couldn't find a camera. Use a phone or computer with a front camera.",
+        busy: "Your camera is in use by another app. Close it, then try again.",
+        unsupported:
+          "This browser can't open a camera here. Open {app} in Chrome or Safari and try again.",
+        other: "Your camera didn't open. Try again.",
+      },
     },
   },
   // What the API's error codes say on screen (T-3.11). A code the screen

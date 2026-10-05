@@ -331,11 +331,11 @@ secret is left empty. Real secret values are never committed.
   enforced CSP, `default-src 'self'; script-src 'self' 'unsafe-inline'; connect-src 'self' <the
   API>; object-src 'none'; base-uri 'none'; form-action 'self'; frame-ancestors 'none'`;
   `X-Frame-Options: DENY`; `X-Content-Type-Options: nosniff`; `Referrer-Policy:
-  strict-origin-when-cross-origin`; and `Permissions-Policy: camera=(), microphone=(),
-  geolocation=(self), browsing-topics=()`, location for this site alone since T-4.10; and
-  `Strict-Transport-Security: max-age=63072000; includeSubDomains`, never preloaded before launch
-  (D-074). **This is what is served, not a target.** On builds that sign in by Firebase (staging
-  and production, D-081), T-3.14 adds reCAPTCHA's hosts to `script-src` (`https://www.google.com/recaptcha/`,
+  strict-origin-when-cross-origin`; and `Permissions-Policy: camera=(self), microphone=(),
+  geolocation=(self), browsing-topics=()`, the camera for this site alone since T-4.7 and location
+  since T-4.10; and `Strict-Transport-Security: max-age=63072000; includeSubDomains`, never
+  preloaded before launch (D-074). **This is what is served, not a target.** On builds that sign
+  in by Firebase (staging and production, D-081), T-3.14 adds reCAPTCHA's hosts to `script-src` (`https://www.google.com/recaptcha/`,
   `https://www.gstatic.com/recaptcha/`), a `frame-src 'self' https://www.google.com/recaptcha/
   https://recaptcha.google.com/recaptcha/`, and to `connect-src` reCAPTCHA's and Firebase Auth's
   (`https://www.google.com/recaptcha/`, `https://identitytoolkit.googleapis.com`,
@@ -345,9 +345,12 @@ secret is left empty. Real secret values are never committed.
   (staging's `https://<R2_ACCOUNT_ID>.r2.cloudflarestorage.com/velora-staging-private/`); and an
   `img-src 'self' blob: <the private bucket> <the CDN>`, for previews, the signed links pending and
   private photos are shown by, and approved public photos (`https://cdn.staging.veloraapp.co.in`).
-  Never the whole endpoint, which staging and production share, and never a wildcard. Each task
-  that needs more widens it there, deliberately: App Check (P-68), the camera
-  (T-4.7), the microphone
+  Never the whole endpoint, which staging and production share, and never a wildcard. T-4.7
+  allows the camera to the site itself, `camera=(self)`, for the selfie, on every page rather
+  than only `/onboarding/selfie`: a page reached by Next's client-side navigation keeps the
+  policy of the document first loaded. Its captured frame shows as a `blob:` image, which T-4.6's
+  `img-src` already allows on every build with photo storage. Each task that needs more widens
+  it there, deliberately: App Check (P-68), the microphone
   (T-7.11), WebSockets (T-7.12), Razorpay (T-8.7), Sentry (T-9.12) and analytics (T-10.2). This
   line changes with each.
 - API headers (`app/core/headers.py`, P-42): `X-Content-Type-Options: nosniff` on every

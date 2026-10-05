@@ -14,4 +14,5 @@ export const queryKeys = {
     ["usernames", username, "available"] as const,
   myPhotos: () => ["photos", "mine"] as const,
   photo: (id: string) => ["photos", id] as const,
+  verificationLatest: () => ["verification", "latest"] as const,
 };

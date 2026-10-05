@@ -185,10 +185,28 @@ describe("the other headers", () => {
     );
   });
 
-  it("deny the camera and microphone until the task that needs each allows it, and allow location to this site alone (T-4.10)", () => {
-    expect(header(STAGING, "Permissions-Policy")).toBe(
-      "camera=(), microphone=(), geolocation=(self), browsing-topics=()",
-    );
+  it("allow the camera (T-4.7) and location (T-4.10) to this site alone, and deny the microphone until the task that needs it allows it", () => {
+    for (const env of [
+      STAGING,
+      { ...STAGING, APP_ENV: "staging" },
+      { ...STAGING, APP_ENV: "production" },
+      { NODE_ENV: "development" },
+    ])
+      expect(header(env, "Permissions-Policy")).toBe(
+        "camera=(self), microphone=(), geolocation=(self), browsing-topics=()",
+      );
+  });
+
+  it("keep blob: images wherever a selfie can be taken, for its captured frame (T-4.7)", () => {
+    // A selfie needs photo storage to go up, and every build with storage
+    // allows blob: images (T-4.6), so the frame shows wherever it's taken.
+    for (const env of [
+      { ...STAGING, APP_ENV: "local" },
+      { ...STAGING, APP_ENV: "ci" },
+      { ...STAGING, APP_ENV: "staging" },
+      { ...STAGING, APP_ENV: "production" },
+    ])
+      expect(contentSecurityPolicy(env)).toMatch(/img-src 'self' blob: /);
   });
 
   it("set HSTS as D-074 decided: two years, every subdomain", () => {

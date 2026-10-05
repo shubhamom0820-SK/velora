@@ -23,7 +23,13 @@
  *           bucket, the presigned PUT; img-src for blob: previews, the private
  *           bucket's signed links (pending and private photos) and the CDN
  *           (approved ones). Each bucket by its path, never the whole endpoint.
- *   T-4.7   Selfie: camera=(self); blob: for the captured frame.
+ *   T-4.7   Done: the selfie. camera=(self), on every page, not only
+ *           /onboarding/selfie: a page reached by Next's client-side
+ *           navigation keeps the policy of the document first loaded, so a
+ *           policy on that one path would refuse anyone who arrived from the
+ *           PIN step. The captured frame shows as a blob: image, which T-4.6's
+ *           img-src already allows on every build with photo storage; a build
+ *           without storage can't upload a selfie either.
  *   T-4.10  Done: location, geolocation=(self). Only this site's own pages,
  *           and only after the person taps to share it (lib/geolocation.ts).
  *           J1 is the proof: the browser hands its position to the page.
@@ -169,10 +175,12 @@ export function securityHeaders(env: BuildEnv = process.env): Header[] {
     { key: "Referrer-Policy", value: "strict-origin-when-cross-origin" },
     {
       key: "Permissions-Policy",
-      // Denied until the task that needs each allows it (see above);
-      // location for this site alone (T-4.10); browsing-topics opts users out
-      // of Chrome's ad-topics API.
-      value: "camera=(), microphone=(), geolocation=(self), browsing-topics=()",
+      // Denied until the task that needs each allows it (see above), and
+      // then to this site only, never a frame of another: the camera for the
+      // selfie (T-4.7), location (T-4.10). browsing-topics opts users out of
+      // Chrome's ad-topics API.
+      value:
+        "camera=(self), microphone=(), geolocation=(self), browsing-topics=()",
     },
     {
       key: "Strict-Transport-Security",

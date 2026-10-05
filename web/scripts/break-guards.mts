@@ -38,6 +38,9 @@ const UPLOAD_TEST = "src/lib/upload.test.ts";
 const HOOKS_TEST = "src/lib/queries/photos.test.tsx";
 const LINT_TEST = "src/lib/no-fetch-rule.test.ts";
 const CLAIMS_TEST = "src/i18n/claims.test.ts";
+const SELFIE_TEST = "src/components/onboarding/SelfieStep.test.tsx";
+const CAMERA_TEST = "src/lib/camera.test.ts";
+const VERIFICATION_TEST = "src/lib/queries/verification.test.tsx";
 
 const HEADERS = "src/lib/security-headers.ts";
 const CONNECT = "connect: ` ${storage.privateBucket}`,";
@@ -296,6 +299,175 @@ export const CASES: BreakCase[] = [
     new: 'import { Shield as ScanFace } from "lucide-react";',
     run: ["src/components/ui/Avatar.test.tsx"],
     expect: ["marks a matched selfie with a face, never a shield"],
+  },
+
+  // --- T-4.7: the selfie step ---
+  {
+    id: "t47-camera-01-still-denied",
+    file: HEADERS,
+    old: '"camera=(self), microphone=(), geolocation=(self), browsing-topics=()",',
+    new: '"camera=(), microphone=(), geolocation=(self), browsing-topics=()",',
+    run: [CSP_TEST],
+    expect: ["allow the camera (T-4.7) and location (T-4.10)"],
+  },
+  {
+    id: "t47-camera-02-any-site",
+    file: HEADERS,
+    old: '"camera=(self), microphone=(), geolocation=(self), browsing-topics=()",',
+    new: '"camera=*, microphone=(), geolocation=(self), browsing-topics=()",',
+    run: [CSP_TEST],
+    expect: ["allow the camera (T-4.7) and location (T-4.10)"],
+  },
+  {
+    id: "t47-camera-03-no-blob-for-the-frame",
+    file: HEADERS,
+    old: IMG,
+    new: "img: ` ${storage.privateBucket} ${storage.cdn}`,",
+    run: [CSP_TEST],
+    expect: ["keep blob: images wherever a selfie can be taken"],
+  },
+  {
+    id: "t47-camera-04-the-microphone-asked",
+    file: "src/lib/camera.ts",
+    old: "  audio: false,",
+    new: "  audio: true,",
+    run: [CAMERA_TEST],
+    expect: ["never the microphone"],
+  },
+  {
+    id: "t47-camera-05-the-back-camera",
+    file: "src/lib/camera.ts",
+    old: '    facingMode: "user",',
+    new: '    facingMode: "environment",',
+    run: [CAMERA_TEST],
+    expect: ["asks for the front camera"],
+  },
+  {
+    id: "t47-camera-06-the-picture-mirrored",
+    file: "src/lib/camera.ts",
+    old: "  context.drawImage(video, 0, 0, width, height);",
+    new: "  context.scale(-1, 1);\n  context.drawImage(video, -width, 0, width, height);",
+    run: [CAMERA_TEST],
+    expect: ["never mirrored"],
+  },
+  {
+    id: "t47-camera-07-the-preview-not-mirrored",
+    file: "src/components/onboarding/SelfieCamera.tsx",
+    old: 'className="size-full -scale-x-100 object-cover"',
+    new: 'className="size-full object-cover"',
+    run: [SELFIE_TEST],
+    expect: ["opens the front camera, mirrored"],
+  },
+  {
+    id: "t47-camera-08-left-on",
+    file: "src/components/onboarding/SelfieCamera.tsx",
+    old: "      closed = true;\n      stopCamera(stream);",
+    new: "      closed = true;",
+    run: [SELFIE_TEST],
+    expect: [
+      "switches the camera off on cancel",
+      "switches the camera off when the page goes",
+      "switches the camera off once the picture is taken",
+    ],
+  },
+  {
+    id: "t47-skip-01-a-woman-may-skip",
+    file: "src/components/onboarding/SelfieStep.tsx",
+    old: 'new Set(["male"]);',
+    new: 'new Set(["male", "female"]);',
+    run: [SELFIE_TEST],
+    expect: ["a woman can't"],
+  },
+  {
+    id: "t47-skip-02-a-man-may-not",
+    file: "src/components/onboarding/SelfieStep.tsx",
+    old: "const skip = maySkip ? (",
+    new: "const skip = false ? (",
+    run: [SELFIE_TEST],
+    expect: ["a man can", "can skip after a rejection too"],
+  },
+  {
+    id: "t47-review-01-sent-as-soon-as-taken",
+    file: "src/components/onboarding/useSelfie.ts",
+    old: '    setLocal({ kind: "review", shot, preview });',
+    new: "    void send(shot, preview);",
+    run: [SELFIE_TEST],
+    expect: ["sends nothing yet"],
+  },
+  {
+    id: "t47-poll-01-never-stops",
+    file: "src/lib/queries/verification.ts",
+    old: "      poll && isBeingCompared(query.state.data ?? null)",
+    new: "      isBeingCompared(query.state.data ?? null)",
+    run: [SELFIE_TEST, VERIFICATION_TEST],
+    expect: ["stops asking after a minute", "being compared, told to stop"],
+  },
+  {
+    id: "t47-poll-02-every-ten-seconds",
+    file: "src/lib/queries/verification.ts",
+    old: "export const VERIFICATION_POLL_MS = 2_000;",
+    new: "export const VERIFICATION_POLL_MS = 10_000;",
+    run: [VERIFICATION_TEST],
+    expect: ["being compared, asked to poll"],
+  },
+  {
+    id: "t47-poll-03-never-says-she-can-leave",
+    file: "src/components/onboarding/useSelfie.ts",
+    old: "export const COMPARING_LONG_MS = 15_000;",
+    new: "export const COMPARING_LONG_MS = 60_000;",
+    run: [SELFIE_TEST],
+    expect: ["says after about 15 s"],
+  },
+  {
+    id: "t47-poll-04-none-is-an-error",
+    file: "src/lib/queries/verification.ts",
+    old: '        if (error instanceof ApiError && error.code === "NOT_FOUND")\n          return null;\n',
+    new: "",
+    run: [SELFIE_TEST, VERIFICATION_TEST],
+    expect: ["reads none (NOT_FOUND) as null", "with none yet"],
+  },
+  {
+    id: "t47-copy-01-a-match-says-verified",
+    file: "src/i18n/en.ts",
+    old: '      matched: "Your selfie matches your photos.",',
+    new: '      matched: "You\'re verified.",',
+    run: [CLAIMS_TEST],
+    expect: ["says none of the claims anywhere but the two named keys"],
+  },
+  {
+    id: "t47-copy-02-the-team-may-look-dropped",
+    file: "src/i18n/en.ts",
+    old: '"Other people on {app} never see your selfie. Our team may look at it to check a comparison.",',
+    new: '"Other people on {app} never see your selfie.",',
+    run: [CLAIMS_TEST, SELFIE_TEST],
+    expect: ["keeps the sentence that says the team may look", "with none yet"],
+  },
+  {
+    id: "t47-reasons-01-an-unlisted-reason-unhandled",
+    file: "src/components/onboarding/selfieCopy.ts",
+    old: '  const known: Reason = REASONS.find((listed) => listed === reason) ?? "other";',
+    new: '  const known = (reason ?? "other") as Reason;',
+    run: [SELFIE_TEST],
+    expect: ["anything_new"],
+  },
+  {
+    id: "t47-reasons-02-one-tries",
+    file: "src/components/onboarding/selfieCopy.ts",
+    old: '  if (left === 1) return t("onboarding.selfie.triesOne");\n',
+    new: "",
+    run: [SELFIE_TEST],
+    expect: ["with 1 left"],
+  },
+  {
+    id: "t47-reasons-03-the-wait-unsaid",
+    file: "src/components/onboarding/selfieCopy.ts",
+    old: '    if (typeof after === "number") return waitCopy(after);\n',
+    new: "",
+    run: [SELFIE_TEST],
+    expect: [
+      "says how long to wait",
+      "says minutes when the wait is under an hour",
+    ],
   },
 ];
 
