@@ -9,6 +9,7 @@ export const queryKeys = {
   me: () => ["me"] as const,
   intents: () => ["intents"] as const,
   interests: () => ["interests"] as const,
+  areas: () => ["areas"] as const,
   usernameAvailable: (username: string) =>
     ["usernames", username, "available"] as const,
   myPhotos: () => ["photos", "mine"] as const,

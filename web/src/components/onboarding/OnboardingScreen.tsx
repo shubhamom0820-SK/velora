@@ -8,6 +8,7 @@ import { BirthdayStep } from "./BirthdayStep";
 import { ComingNextStep } from "./ComingNextStep";
 import { GenderStep } from "./GenderStep";
 import { InterestsStep } from "./InterestsStep";
+import { LocationStep } from "./LocationStep";
 import { LookingForStep } from "./LookingForStep";
 import { NameStep } from "./NameStep";
 import { PhotosStep } from "./PhotosStep";
@@ -36,6 +37,8 @@ export function OnboardingScreen({
       return <LookingForStep me={me} />;
     case "profile":
       return <NameStep me={me} />;
+    case "location":
+      return <LocationStep me={me} />;
     case "username":
       return <UsernameStep me={me} host={host} />;
     case "about":

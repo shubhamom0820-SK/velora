@@ -122,6 +122,35 @@ export const en = {
       city: "Where you live now",
       cityPlaceholder: "Phagwara",
     },
+    // The location question (T-4.10, D-220). What others see is /privacy's
+    // own promise, word for word in substance (D-034): a distance, rounded.
+    location: {
+      title: "Where are you?",
+      sub: "We use your location to show you people nearby. Other people see only a distance, rounded to the kilometre.",
+      share: "Share my location",
+      pickInstead: "Pick my area instead",
+      isSet:
+        "Your location is set. Share it again, or pick your area, to change it.",
+      keep: "Keep it as it is",
+      pickTitle: "Pick your area",
+      pickSub:
+        "Where you live. Distances to you are measured from the middle of it.",
+      areas: "Areas",
+      useLocation: "Use my location instead",
+      noAreas: "There are no areas to pick from yet.",
+      areasFailed: "We couldn't load the areas.",
+      // Why the picker shows instead: the browser said no, or couldn't say,
+      // or the server refused the position (outside India, D-220).
+      why: {
+        denied:
+          "Location is off for {app} in this browser, so pick your area instead.",
+        unavailable:
+          "We couldn't find your location, so pick your area instead.",
+        timeout:
+          "Finding your location took too long, so pick your area instead.",
+        outside: "That location is outside India, so pick your area instead.",
+      },
+    },
     username: {
       title: "Pick a username",
       sub: "This becomes your public page. Share it and anyone can find you.",

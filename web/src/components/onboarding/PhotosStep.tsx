@@ -57,7 +57,7 @@ export function PhotosStep({ me }: { me: Me }) {
 
   return (
     <StepFrame
-      index={8}
+      index={9}
       title={t("onboarding.photos.title")}
       sub={t("onboarding.photos.sub")}
       back={stepPath("about")}

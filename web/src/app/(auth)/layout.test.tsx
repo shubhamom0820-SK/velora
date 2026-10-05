@@ -72,7 +72,12 @@ describe("the sign-in layouts (T-5.6)", () => {
     fakeApi({
       "POST /v1/auth/refresh": () => json(200, { access_token: "t" }),
       "GET /v1/me": () =>
-        json(200, { id: "u1", onboarding_step: "profile", has_pin: false }),
+        json(200, {
+          id: "u1",
+          onboarding_step: "profile",
+          has_pin: false,
+          profile: { location: "none" },
+        }),
     });
 
     renderAuth(

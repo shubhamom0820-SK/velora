@@ -78,10 +78,10 @@ export function UsernameStep({ me, host }: { me: Me; host: string }) {
       }}
     >
       <StepFrame
-        index={6}
+        index={7}
         title={t("onboarding.username.title")}
         sub={t("onboarding.username.sub")}
-        back={stepPath("profile")}
+        back={stepPath("location")}
         signedIn
         footer={
           <Button

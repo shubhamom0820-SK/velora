@@ -178,6 +178,7 @@ async def test_me_comes_back_with_exactly_its_fields(
             "hide_distance": False,
             "show_kudos": True,
             "show_gifts": True,
+            "location": "none",
         },
     }
 

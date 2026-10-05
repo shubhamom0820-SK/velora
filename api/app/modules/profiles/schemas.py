@@ -3,8 +3,9 @@
 from __future__ import annotations
 
 from typing import Annotated
+from uuid import UUID
 
-from pydantic import BaseModel, Field, StringConstraints
+from pydantic import BaseModel, ConfigDict, Discriminator, Field, StringConstraints, Tag
 
 from app.core.enums import Seeking
 
@@ -67,3 +68,44 @@ class UsernameAvailability(BaseModel):
     available: bool
     # Offered when a name is taken: the name and two digits, checked free.
     suggestion: str | None = None
+
+
+class Area(BaseModel):
+    """One of the seeded areas, for the picker (T-4.10). Never its centroid:
+    the picker shows names, and data no screen shows isn't sent."""
+
+    id: UUID
+    city: str
+    name: str
+
+
+class PositionSet(BaseModel):
+    """A position the browser read. The schema takes any point on Earth; the
+    service requires one inside India (D-220), a rule beyond the schema
+    (D-082)."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    lat: Annotated[float, Field(strict=True, ge=-90, le=90, allow_inf_nan=False)]
+    lng: Annotated[float, Field(strict=True, ge=-180, le=180, allow_inf_nan=False)]
+
+
+class AreaSet(BaseModel):
+    """An area picked from `GET /areas`, when no position is shared."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    area_id: UUID
+
+
+def _location_form(body: object) -> str:
+    """Which of the two a body is trying to be: an area if it names one,
+    else a position. Checked against that one alone, so a refusal names only
+    its own fields, as `position.lng` or `area.area_id`."""
+    return "area" if isinstance(body, dict) and "area_id" in body else "position"
+
+
+LocationSet = Annotated[
+    Annotated[PositionSet, Tag("position")] | Annotated[AreaSet, Tag("area")],
+    Discriminator(_location_form),
+]

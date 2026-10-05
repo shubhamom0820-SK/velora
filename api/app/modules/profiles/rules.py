@@ -1,15 +1,18 @@
-"""What a profile's text may be (T-3.7): pure functions, shared by the service
-and the dev seed, so seeded profiles are held to the rules people are.
+"""What a profile's text may be (T-3.7), and where it may be (T-4.10): pure
+functions, shared by the service and the dev seed, so seeded profiles are held
+to the rules people are.
 
 Each `*_problem` returns None for a good value, or the problem, worded for
-`details.fields[].problem`. Values are checked as `clean_text` leaves them:
-trimmed and in NFC, the form they're stored in.
+`details.fields[].problem`. Text is checked as `clean_text` leaves it: trimmed
+and in NFC, the form it's stored in.
 """
 
 from __future__ import annotations
 
 import re
 import unicodedata
+from datetime import datetime, timedelta
+from typing import Literal
 
 from app.core.config import APP_NAME
 
@@ -206,3 +209,46 @@ def is_reserved(username: str) -> bool:
     return skeleton in {_skeleton(name) for name in RESERVED_USERNAMES} or (
         skeleton == _brand()
     )
+
+
+# --- Location (T-4.10, D-220) --------------------------------------------------------
+
+# India's bounding box: the mainland's extents (8°4'N to 37°6'N, 68°7'E to
+# 97°25'E) and Indira Point, the southernmost (6°45'N), each rounded outward to
+# the half degree. A box, so it also holds Nepal, Bhutan, Bangladesh, much of
+# Pakistan, Sri Lanka and parts of China and Myanmar: no box can do better
+# (D-220).
+INDIA_LAT = (6.5, 37.5)
+INDIA_LNG = (68.0, 97.5)
+
+# A shared position takes the nearest area whose centroid is this close, or
+# none: someone in Jalandhar is in none of Phagwara's areas (D-220).
+AREA_WITHIN_M = 2000
+
+# How long a location counts as current. The web refreshes an older one when
+# the app opens, if the browser already allows it (T-4.10).
+LOCATION_FRESH_FOR = timedelta(hours=6)
+
+LocationState = Literal["none", "fresh", "stale"]
+
+
+def position_problems(lat: float, lng: float) -> dict[str, str]:
+    """Each coordinate outside India's box, and why; empty if both are in."""
+    problems = {}
+    for field, value, (low, high) in (
+        ("lat", lat, INDIA_LAT),
+        ("lng", lng, INDIA_LNG),
+    ):
+        if not low <= value <= high:
+            problems[field] = f"must be inside India, {low} to {high}"
+    return problems
+
+
+def location_state(updated_at: datetime | None, now: datetime) -> LocationState:
+    """`none` before anyone sets one, then `fresh`, then `stale` once it's
+    over `LOCATION_FRESH_FOR` old, by the server's clock (D-220): a phone with
+    the wrong time would otherwise refresh on every open, or never. Every
+    write of a location writes `location_updated_at` with it."""
+    if updated_at is None:
+        return "none"
+    return "stale" if now - updated_at > LOCATION_FRESH_FOR else "fresh"

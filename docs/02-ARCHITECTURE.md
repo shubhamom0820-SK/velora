@@ -152,6 +152,10 @@ it with `ONBOARDING_INCOMPLETE` and the current step (D-068). `gender` and `dob`
 once set (T-1.9's trigger), and a date of birth under 18 deletes the account, keeping only the
 number's hash (D-072).
 
+The location question (T-4.10, D-220) has no step of its own. It is asked after `profile` (Name),
+before `username`: `PUT /me/location` works from `username` on and never moves the step, and `Me`
+says whether a location is set, so the web sends anyone past Name without one to it.
+
 ## 6. Real-time protocol
 
 Connect: `POST /v1/ws/ticket` → `{ticket}` (single use, 30 s) → `wss://api.veloraapp.co.in/ws?ticket=…`.
@@ -328,10 +332,10 @@ secret is left empty. Real secret values are never committed.
   API>; object-src 'none'; base-uri 'none'; form-action 'self'; frame-ancestors 'none'`;
   `X-Frame-Options: DENY`; `X-Content-Type-Options: nosniff`; `Referrer-Policy:
   strict-origin-when-cross-origin`; and `Permissions-Policy: camera=(), microphone=(),
-  geolocation=(), browsing-topics=()`; and `Strict-Transport-Security: max-age=63072000;
-  includeSubDomains`, never preloaded before launch (D-074). **This is what is served, not a
-  target.** On builds that sign in by Firebase (staging and production, D-081), T-3.14 adds
-  reCAPTCHA's hosts to `script-src` (`https://www.google.com/recaptcha/`,
+  geolocation=(self), browsing-topics=()`, location for this site alone since T-4.10; and
+  `Strict-Transport-Security: max-age=63072000; includeSubDomains`, never preloaded before launch
+  (D-074). **This is what is served, not a target.** On builds that sign in by Firebase (staging
+  and production, D-081), T-3.14 adds reCAPTCHA's hosts to `script-src` (`https://www.google.com/recaptcha/`,
   `https://www.gstatic.com/recaptcha/`), a `frame-src 'self' https://www.google.com/recaptcha/
   https://recaptcha.google.com/recaptcha/`, and to `connect-src` reCAPTCHA's and Firebase Auth's
   (`https://www.google.com/recaptcha/`, `https://identitytoolkit.googleapis.com`,
@@ -343,7 +347,7 @@ secret is left empty. Real secret values are never committed.
   private photos are shown by, and approved public photos (`https://cdn.staging.veloraapp.co.in`).
   Never the whole endpoint, which staging and production share, and never a wildcard. Each task
   that needs more widens it there, deliberately: App Check (P-68), the camera
-  (T-4.7), location (T-4.10), the microphone
+  (T-4.7), the microphone
   (T-7.11), WebSockets (T-7.12), Razorpay (T-8.7), Sentry (T-9.12) and analytics (T-10.2). This
   line changes with each.
 - API headers (`app/core/headers.py`, P-42): `X-Content-Type-Options: nosniff` on every
@@ -361,6 +365,7 @@ secret is left empty. Real secret values are never committed.
 | Send message | 30 / min / user |
 | Reports | 10 / day / user |
 | Username check | 30 / min / user |
+| `PUT /me/location` | 10 / hour / user (T-4.10). Onboarding's tries and a refresh each time the app opens fit easily; it slows someone moving themselves about to measure distances, and can't stop them (P-120) |
 | Waitlist | 5 / min / IP, invalid tries included (D-056) |
 | `GET /prices` | None (T-5.2): public and read-only, one read of a table of about ten rows, as `/readyz` with none; a per-IP limit would mostly catch men behind one carrier's shared address. Flooding is the edge's to stop |
 | Everything else | 300 / min / user, in `current_user`, so every authenticated route has it (T-3.5) |

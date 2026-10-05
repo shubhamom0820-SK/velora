@@ -2884,6 +2884,58 @@ the same day, chose `limit` refused rather than clamped and asked for this as a 
 four parts. **Locked by the founder, in his own words, 5 October 2026**, answering T-5.3's report:
 all four are settled for every list, and no later task reopens them.
 
+### D-220 · The location question: after Name, inside India's box, the nearest area within 2 km — Locked
+**The decision (T-4.10):**
+- **Where it's asked:** after Name and before Username, at `/onboarding/location`, a slug in D-080's
+  map. It has no `onboarding_t` step and never moves the step: `PUT /me/location` works from
+  `username` on, and before that is `ONBOARDING_INCOMPLETE` (D-068's rule, Name being the step it
+  follows). `Me.profile.location` says `none`, `fresh` or `stale`, and while it's `none` the web
+  sends anyone past Name to the question (`placeOf`, `web/src/lib/onboarding.ts`). Onboarding is 13
+  screens. No migration.
+- **`PUT /me/location` answers `Me`,** not the 204 04-API first said: every other onboarding write
+  answers `Me`, and the web routes by it. With 204 it would ask `GET /me` again, 1.8 to 3 s on
+  staging (P-49).
+- **A shared position must be inside India's bounding box:** latitude 6.5 to 37.5, longitude 68.0
+  to 97.5. These are the mainland's extents (8°4′N to 37°6′N, 68°7′E to 97°25′E) and Indira Point
+  (6°45′N), rounded outward to the half degree. Outside it: `VALIDATION_ERROR` naming `lat`, `lng`
+  or both, and the web shows the area picker. **What a box can't do:** it also holds Nepal, Bhutan,
+  Bangladesh, much of Pakistan, Sri Lanka and parts of China and Myanmar. No box can follow a
+  border, and a test says so (`test_the_box_is_known_to_hold_some_neighbours_too`). Who can sign up
+  narrows this more than the box: only `+91` numbers (`PHONE_NOT_SUPPORTED`, and Firebase's SMS
+  region policy, India only, T-3.14). That bounds the number, not where its holder stands: a `+91`
+  phone abroad still signs up, and if its position is outside the box, it picks an area.
+- **A shared position's area** is the nearest one whose centroid is within 2 km, or none, replacing
+  any area picked before. Someone in Jalandhar is in none of Phagwara's areas. The seed already
+  matched: its profiles sit within 250 m of their own centroid, nearer it than any other. A test now
+  holds the seed to the API's own rule and query.
+- **A picked area** stores exactly its centroid as the location (D-034).
+- **`area_id` is never shown to anyone.** `/privacy` promises that other people see only a
+  distance, rounded to the kilometre; an area's name would be more than that.
+- **Stale is the server's word:** over 6 hours old by `core.clock`. When the app opens, the web
+  refreshes a `stale` location only if the browser already allows it (the Permissions API says
+  `granted`), so never with a prompt nobody tapped for. Judged by the phone's clock, a phone set
+  wrong would refresh on every open, or never (rule 6).
+- **`GET /areas`** answers `{id, city, name}`, never a centroid, by city then name in any case,
+  whatever the database's collation. `city` is optional, matched in any case. The web asks for
+  every area: the launch city lives only in the data (D-013), and filtering by the city a person
+  typed would leave someone who typed "Jalandhar" with an empty picker and no way on.
+- **10 an hour per user** (02-ARCHITECTURE §12). It slows someone moving themselves about to measure
+  distances, and doesn't stop them: three readings are enough (P-120).
+- **The screen has no prototype** (08-DESIGN §5). It is the onboarding frame's existing parts, not a
+  design: one more case of P-57's gap, not a new one.
+
+**Rejected:** a new `onboarding_t` value, a migration for a question whose only state is
+`location_updated_at`; a shared position leaving `area_id` empty, which would cost the seed its
+areas and make `area_id` mean only "picked by hand"; the nearest area at any distance, which puts
+Delhi in Hadiabad; `stale` judged by the phone's clock; 204.
+
+Proposed by Claude in T-4.10's plan; approved, all six of its questions, by the advisor directing
+T-4.10 (Claude, in a separate chat), relayed by the founder, 5 October 2026. **Locked** by the
+founder in his own words the same day, confirmed when asked: the question after Name and before
+Username, `onboarding_step` never moving, `{lat,lng}` inside India's box or else an area's
+centroid, the 2 km rule, `PUT /me/location` answering `Me`, stale by the server's clock at 6 hours,
+and `GET /areas`'s shape; and no later task reopens them (his words, translated from Hindi).
+
 ---
 
 ## Adding a decision

@@ -40,7 +40,7 @@ export function AboutStep({ me }: { me: Me }) {
       }}
     >
       <StepFrame
-        index={7}
+        index={8}
         title={t("onboarding.about.title")}
         sub={t("onboarding.about.sub")}
         back={stepPath("username")}

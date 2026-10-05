@@ -33,7 +33,7 @@ export function PinStep({ me }: { me: Me }) {
   if (me.has_pin) {
     return (
       <StepFrame
-        index={10}
+        index={11}
         title={t("onboarding.pin.setTitle")}
         back={stepPath("interests")}
         signedIn
@@ -73,7 +73,7 @@ export function PinStep({ me }: { me: Me }) {
   const confirming = stage.kind === "confirm";
   return (
     <StepFrame
-      index={10}
+      index={11}
       title={
         confirming
           ? t("onboarding.pin.confirmTitle")

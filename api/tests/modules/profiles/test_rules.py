@@ -1,7 +1,10 @@
 """`profiles.rules` (T-3.7): what a first name, a place, an about and a
-username may be. Pure functions, each rule tested both ways."""
+username may be; and (T-4.10) where a position may be and when a location is
+current. Pure functions, each rule tested both ways."""
 
 from __future__ import annotations
+
+from datetime import UTC, datetime, timedelta
 
 import pytest
 
@@ -250,3 +253,70 @@ def test_a_username_in_the_format_is_accepted(name: str) -> None:
 )
 def test_a_username_outside_the_format_is_refused(name: str) -> None:
     assert rules.username_problem(name) == "must be 4 to 20 of a-z, 0-9, '.' and '_'"
+
+
+# --- Location (T-4.10, D-220) ------------------------------------------------------
+
+
+@pytest.mark.parametrize(
+    ("lat", "lng"),
+    [
+        (31.2240, 75.7708),  # Phagwara
+        (6.75, 93.83),  # Indira Point, the southernmost
+        # Each of the mainland's four extents the box is drawn from.
+        (37.1, 75.0),
+        (8.07, 77.55),
+        (24.0, 68.12),
+        (28.0, 97.42),
+        # Its corners.
+        (6.5, 68.0),
+        (37.5, 97.5),
+    ],
+)
+def test_a_position_inside_indias_box_has_no_problem(lat: float, lng: float) -> None:
+    assert rules.position_problems(lat, lng) == {}
+
+
+@pytest.mark.parametrize(
+    ("lat", "lng", "fields"),
+    [
+        (6.4999, 75.0, {"lat"}),
+        (37.5001, 75.0, {"lat"}),
+        (20.0, 67.9999, {"lng"}),
+        (20.0, 97.5001, {"lng"}),
+        (-31.2, -75.7, {"lat", "lng"}),  # a sign lost
+        (75.7, 31.2, {"lat", "lng"}),  # the two swapped
+    ],
+)
+def test_a_position_outside_indias_box_names_each_coordinate(
+    lat: float, lng: float, fields: set[str]
+) -> None:
+    problems = rules.position_problems(lat, lng)
+
+    assert set(problems) == fields
+    assert problems.get("lat", "must be inside India, 6.5 to 37.5") == (
+        "must be inside India, 6.5 to 37.5"
+    )
+    assert problems.get("lng", "must be inside India, 68.0 to 97.5") == (
+        "must be inside India, 68.0 to 97.5"
+    )
+
+
+def test_the_box_is_known_to_hold_some_neighbours_too() -> None:
+    """A box can't follow a border (D-220): these pass, and that is known."""
+    for lat, lng in [(27.7172, 85.3240), (23.8103, 90.4125), (6.9271, 79.8612)]:
+        assert rules.position_problems(lat, lng) == {}  # Kathmandu, Dhaka, Colombo
+
+
+NOW = datetime(2026, 10, 5, 12, 0, tzinfo=UTC)
+
+
+def test_a_location_is_none_until_set_then_fresh_then_stale_past_six_hours() -> None:
+    six = rules.LOCATION_FRESH_FOR
+    assert six == timedelta(hours=6)
+    assert rules.location_state(None, NOW) == "none"
+    assert rules.location_state(NOW, NOW) == "fresh"
+    assert rules.location_state(NOW - six, NOW) == "fresh"
+    assert rules.location_state(NOW - six - timedelta(microseconds=1), NOW) == "stale"
+    # Set "later" than the server's now, as a stored time never is: still fresh.
+    assert rules.location_state(NOW + timedelta(hours=1), NOW) == "fresh"

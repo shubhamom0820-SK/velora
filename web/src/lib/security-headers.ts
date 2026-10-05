@@ -24,7 +24,9 @@
  *           bucket's signed links (pending and private photos) and the CDN
  *           (approved ones). Each bucket by its path, never the whole endpoint.
  *   T-4.7   Selfie: camera=(self); blob: for the captured frame.
- *   T-4.10  Location: geolocation=(self).
+ *   T-4.10  Done: location, geolocation=(self). Only this site's own pages,
+ *           and only after the person taps to share it (lib/geolocation.ts).
+ *           J1 is the proof: the browser hands its position to the page.
  *   T-7.11  Voice notes: microphone=(self); media-src for voice notes and
  *           blob: previews.
  *   T-7.12  Real time: connect-src for wss:// on the API.
@@ -168,8 +170,9 @@ export function securityHeaders(env: BuildEnv = process.env): Header[] {
     {
       key: "Permissions-Policy",
       // Denied until the task that needs each allows it (see above);
-      // browsing-topics opts users out of Chrome's ad-topics API.
-      value: "camera=(), microphone=(), geolocation=(), browsing-topics=()",
+      // location for this site alone (T-4.10); browsing-topics opts users out
+      // of Chrome's ad-topics API.
+      value: "camera=(), microphone=(), geolocation=(self), browsing-topics=()",
     },
     {
       key: "Strict-Transport-Security",

@@ -1,5 +1,6 @@
 """Profiles: the onboarding steps that fill one in, from seeking (T-3.6) to
-name, places, about and username (T-3.7), and interests (T-3.8).
+name, places, about and username (T-3.7), interests (T-3.8), and the location
+question, which has no step of its own (T-4.10).
 
 Every step follows D-068's rule, `users.service.at_step`: it works at its
 step, advancing it, and after it, as an edit that doesn't advance; before it,
@@ -11,14 +12,22 @@ from __future__ import annotations
 
 import secrets
 from collections.abc import Mapping, Sequence
+from uuid import UUID
 
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core import clock
 from app.core.enums import OnboardingStep, Seeking
 from app.core.errors import AppError, invalid_field, invalid_fields
 from app.modules.profiles import repository, rules
-from app.modules.profiles.schemas import Intent, Interest, UsernameAvailability
+from app.modules.profiles.models import Profile
+from app.modules.profiles.schemas import (
+    Area,
+    Intent,
+    Interest,
+    UsernameAvailability,
+)
 from app.modules.users import service as users_service
 from app.modules.users.models import User
 from app.modules.users.schemas import Me
@@ -84,6 +93,58 @@ async def set_interests(
         if advancing:
             users_service.advance_past(user, OnboardingStep.INTERESTS)
         return await users_service.me(session, user)
+
+
+# --- Location (T-4.10, D-220) -------------------------------------------------------
+
+# The question comes after Name and before Username, with no step of its own:
+# it works from the `username` step on, and never moves the step. `Me` says
+# whether a location is set, which is how the web knows to ask (D-220).
+LOCATION_FROM = OnboardingStep.USERNAME
+
+
+async def areas(session: AsyncSession, city: str | None) -> list[Area]:
+    async with session.begin():
+        rows = await repository.areas(session, city)
+    # Every row has a city and a name, though the columns allow NULL (P-24).
+    return [Area(id=row.id, city=row.city, name=row.name) for row in rows]
+
+
+async def set_position(session: AsyncSession, user: User, lat: float, lng: float) -> Me:
+    """A position the browser shared, inside India's box, with the nearest
+    area within `AREA_WITHIN_M` of it, or none, replacing any area picked
+    before (D-220)."""
+    async with session.begin():
+        user = await users_service.locked_user(session, user.id)
+        users_service.at_step(user, LOCATION_FROM)
+        problems = rules.position_problems(lat, lng)
+        if problems:
+            raise invalid_fields(problems)
+        profile = await repository.profile_of(session, user.id)
+        profile.area_id = await repository.nearest_area_id(
+            session, lat, lng, within_m=rules.AREA_WITHIN_M
+        )
+        _locate(profile, repository.point(lat, lng))
+        return await users_service.me(session, user)
+
+
+async def set_area(session: AsyncSession, user: User, area_id: UUID) -> Me:
+    """An area picked instead: its centroid becomes the location (D-034)."""
+    async with session.begin():
+        user = await users_service.locked_user(session, user.id)
+        users_service.at_step(user, LOCATION_FROM)
+        if not await repository.area_exists(session, area_id):
+            raise invalid_field("area_id", "isn't an area")
+        profile = await repository.profile_of(session, user.id)
+        profile.area_id = area_id
+        _locate(profile, repository.centroid_of(area_id))
+        return await users_service.me(session, user)
+
+
+def _locate(profile: Profile, location: object) -> None:
+    """The location and its time, always together: `Me` reads the time alone."""
+    profile.location = location
+    profile.location_updated_at = clock.now()
 
 
 # --- Name, places and about (T-3.7) ------------------------------------------------

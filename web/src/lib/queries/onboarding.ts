@@ -171,6 +171,31 @@ export function useInterests() {
   });
 }
 
+export type Area = components["schemas"]["Area"];
+export type LocationSet =
+  components["schemas"]["PositionSet"] | components["schemas"]["AreaSet"];
+
+/** A shared position or a picked area (T-4.10): answers with `Me`, as every onboarding write does. */
+export function useSetLocation() {
+  return useMeMutation((body: LocationSet) =>
+    api.put("/v1/me/location", { body }),
+  );
+}
+
+/**
+ * Every area, for the picker: seeded reference data that changes by
+ * migration only. Every city's, since the launch city is only in the data
+ * (D-220). Asked for only once the picker shows.
+ */
+export function useAreas(enabled: boolean) {
+  return useQuery({
+    queryKey: queryKeys.areas(),
+    queryFn: ({ signal }) => api.get("/v1/areas", { signal }),
+    staleTime: Infinity,
+    enabled,
+  });
+}
+
 /**
  * Set the PIN at the `pin` step (D-069). The API answers 204, so `Me`, whose
  * step has moved on to `selfie`, is fetched afresh and handed back.

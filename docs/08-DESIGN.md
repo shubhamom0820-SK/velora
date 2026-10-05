@@ -42,7 +42,8 @@ the app has no visual design, only a prototype that shows which screens exist.
     prototype's words.
 
 What it is still trusted for there: the screen order (§5, D-068), the `Step` frame (back arrow,
-12-segment progress, title, body, footer, 520 px), each screen's composition, the PIN pad's layout
+a segment of progress per screen, its 12 and now the location question's, title, body, footer,
+520 px), each screen's composition, the PIN pad's layout
 and the lock screen's (black, ✦).
 
 ## 1. Tokens — the only place colours live
@@ -159,8 +160,14 @@ Every screen must exist in the prototype first. ✦ = uses the black chrome.
 
 **Marketing:** Landing ✦(header, hero, footer) · Terms · Privacy · Refunds · Contact · Public profile `/@username`.
 
-**Onboarding (12):** Phone · OTP · DOB · Gender · Seeking + intents · Name + places · Username ·
-About · Photos · Interests · PIN · Selfie.
+**Onboarding (13):** Phone · OTP · DOB · Gender · Seeking + intents · Name + places · Location ·
+Username · About · Photos · Interests · PIN · Selfie.
+
+**Location has no prototype screen** (T-4.10, D-220), the one exception to "every screen in the
+prototype first", made because the plan and D-034 need the question. It is the onboarding frame's
+existing parts and nothing new: a pin icon, the reason, "Share my location", and an area picker of
+radio rows like Gender's. That is a screen assembled, not designed: one more case of P-57's gap
+(the app's screens have no visual design), not a new one.
 
 **App:** Header ✦ · Bottom nav ✦ · Discover (deck, feeds, search, filters sheet) · Match sheet ✦ ·
 Liked you grid · Profile (gallery, gifts row + gift sheet, album, ⋯ menu, report sheet, block sheet, share sheet) ·

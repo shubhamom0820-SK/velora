@@ -99,6 +99,7 @@ function me(): Me {
       hide_distance: false,
       show_kudos: true,
       show_gifts: true,
+      location: "fresh",
     },
   } as Me;
 }

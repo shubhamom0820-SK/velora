@@ -10,7 +10,7 @@ import { StepFrame } from "./StepFrame";
 export function ComingNextStep() {
   return (
     <StepFrame
-      index={11}
+      index={12}
       title={t("onboarding.selfie.title")}
       back={stepPath("pin")}
       signedIn

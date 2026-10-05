@@ -325,6 +325,49 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/areas": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Areas
+         * @description Public, as 04-API marks it: reference data, nobody's. Every city's, or
+         *     one city's, in any case; the web asks for every one, since the launch
+         *     city lives only in the data (D-220).
+         */
+        get: operations["list_areas_v1_areas_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/me/location": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Set Location
+         * @description A shared position or a picked area (D-034, D-220). Never logged: the
+         *     body is where the position is, and no log reads a body.
+         */
+        put: operations["set_location_v1_me_location_put"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/photos/upload-url": {
         parameters: {
             query?: never;
@@ -577,6 +620,33 @@ export interface components {
             /** Access Token */
             access_token: string;
         };
+        /**
+         * Area
+         * @description One of the seeded areas, for the picker (T-4.10). Never its centroid:
+         *     the picker shows names, and data no screen shows isn't sent.
+         */
+        Area: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** City */
+            city: string;
+            /** Name */
+            name: string;
+        };
+        /**
+         * AreaSet
+         * @description An area picked from `GET /areas`, when no position is shared.
+         */
+        AreaSet: {
+            /**
+             * Area Id
+             * Format: uuid
+             */
+            area_id: string;
+        };
         /** DobSet */
         DobSet: {
             /**
@@ -740,6 +810,11 @@ export interface components {
             show_kudos: boolean;
             /** Show Gifts */
             show_gifts: boolean;
+            /**
+             * Location
+             * @enum {string}
+             */
+            location: "none" | "fresh" | "stale";
         };
         /**
          * OnboardingStep
@@ -812,6 +887,18 @@ export interface components {
         PinVerify: {
             /** Pin */
             pin: string;
+        };
+        /**
+         * PositionSet
+         * @description A position the browser read. The schema takes any point on Earth; the
+         *     service requires one inside India (D-220), a rule beyond the schema
+         *     (D-082).
+         */
+        PositionSet: {
+            /** Lat */
+            lat: number;
+            /** Lng */
+            lng: number;
         };
         /**
          * Prices
@@ -1469,6 +1556,70 @@ export interface operations {
         requestBody: {
             content: {
                 "application/json": components["schemas"]["InterestsSet"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Me"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_areas_v1_areas_get: {
+        parameters: {
+            query?: {
+                city?: string | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Area"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    set_location_v1_me_location_put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PositionSet"] | components["schemas"]["AreaSet"];
             };
         };
         responses: {

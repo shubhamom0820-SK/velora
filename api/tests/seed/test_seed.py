@@ -39,6 +39,8 @@ from app.core.security import decrypt_phone, hash_phone, normalize_phone, verify
 from app.modules.matches.models import Match
 from app.modules.notifications.models import NotificationPrefs
 from app.modules.photos.models import Photo
+from app.modules.profiles import repository as profiles_repository
+from app.modules.profiles import rules
 from app.modules.profiles.models import Profile, ProfileIntent, ProfileInterest
 from app.modules.swipes.models import Swipe
 from app.modules.users.models import User
@@ -646,6 +648,31 @@ async def test_each_profile_sits_at_its_scatter_inside_its_area(
         assert metres == pytest.approx(expected_metres, abs=0.001), username
         assert bearing == pytest.approx(expected_bearing, abs=1e-6), username
         assert nearest_is_own, username
+
+
+async def test_each_profile_has_the_area_its_position_would_get_if_shared(
+    db: AsyncSession, seeded: run.SeedReport
+) -> None:
+    """As if it had shared its position (T-4.10): the area `PUT /me/location`
+    would give that position, by the API's own rule and query (D-220), is
+    the one the seed wrote; and the time is written with it, so `Me` reads
+    the location as set."""
+    rows = (
+        await db.execute(
+            text(
+                "SELECT username, area_id, ST_Y(location::geometry), "
+                "ST_X(location::geometry), location_updated_at FROM profiles "
+                "WHERE location IS NOT NULL"
+            )
+        )
+    ).all()
+    assert len(rows) == 22  # everyone but the moderator
+    for username, area_id, lat, lng, updated_at in rows:
+        assert rules.position_problems(lat, lng) == {}, username
+        shared = await profiles_repository.nearest_area_id(
+            db, lat, lng, within_m=rules.AREA_WITHIN_M
+        )
+        assert (shared, updated_at is not None) == (area_id, True), username
 
 
 async def test_nobody_shares_a_spot(db: AsyncSession, seeded: run.SeedReport) -> None:

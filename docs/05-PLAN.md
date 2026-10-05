@@ -1807,12 +1807,12 @@ exist yet. The batch is a chain, T-3.10 → T-3.11 → T-3.12 → T-3.13, each n
 
 
 ### T-4.10 · Location
-- [ ] **Needs:** T-3.5, and **P-38** (the seeded areas are still Bengaluru's; D-013 is Phagwara), and **P-65** before P-38: P-38's data migration is the next migration in the plan, and its deploy must read back the database's own head and D-076/D-077's guards
-- [ ] `PUT /me/location` accepts `{lat,lng}` (must be inside India bounding box) or `{area_id}` (uses centroid). `GET /areas?city=`.
-- [ ] Web: onboarding asks permission once with a clear reason; on deny → area picker. Location refreshed on app open if > 6 h old. The question has no `onboarding_t` step: give it a slug in D-080's map and a place in the flow, in T-3.11's `StepFrame`.
-- [ ] The seed (T-1.15) gives each profile both its `area_id` and a location scattered near that area's centroid, as if it had shared its position. If `{lat,lng}` here leaves `area_id` empty, or sets it some other way, make the seed match.
-- [ ] **Allow location here (D-059):** T-2.5's Permissions-Policy has `geolocation=()`, so the browser refuses the position without ever asking until this task makes it `geolocation=(self)`. Until then everyone silently lands on the area picker.
-- [ ] **Commit:** `feat(profiles): location [T-4.10]`
+- [x] **Needs:** T-3.5, and **P-38** (the seeded areas are still Bengaluru's; D-013 is Phagwara), and **P-65** before P-38: P-38's data migration is the next migration in the plan, and its deploy must read back the database's own head and D-076/D-077's guards
+- [x] `PUT /me/location` accepts `{lat,lng}` (must be inside India bounding box) or `{area_id}` (uses centroid). `GET /areas?city=`.
+- [x] Web: onboarding asks permission once with a clear reason; on deny → area picker. Location refreshed on app open if > 6 h old. The question has no `onboarding_t` step: give it a slug in D-080's map and a place in the flow, in T-3.11's `StepFrame`.
+- [x] The seed (T-1.15) gives each profile both its `area_id` and a location scattered near that area's centroid, as if it had shared its position. If `{lat,lng}` here leaves `area_id` empty, or sets it some other way, make the seed match.
+- [x] **Allow location here (D-059):** T-2.5's Permissions-Policy has `geolocation=()`, so the browser refuses the position without ever asking until this task makes it `geolocation=(self)`. Until then everyone silently lands on the area picker.
+- [x] **Commit:** `feat(profiles): location [T-4.10]`
 
 
 ### T-4.11 · Liveness
@@ -2214,6 +2214,8 @@ prices don't depend on the web photos step, and the hold is lifted.
   "main" defined as the lowest place, before a `Card` carries a main photo (found building T-4.6)
   **P-161**: a public photo added after a verification compared with the selfie, or the badge
   cleared, before a `Card` carries `is_verified` to anyone (found building T-4.5)
+  **P-120**: distances snapped so they can't be trilaterated, before a `Card` carries
+  `distance_km` to anyone (found building T-4.10)
 - [ ] Repository implements the query in `02-ARCHITECTURE.md §8` with feeds: `foryou` (ranked), `new` (joined ≤ 7 days first), `online` (active ≤ 5 min). Filters: `intent_ids` (any overlap, D-041), verified.
 - [ ] Excludes: self, swiped, blocked either way, hidden, not `done`, status ≠ active, fraud band `freeze`; `shadow` band users only shown to others in `shadow`.
 - [ ] Response `Card`: id, first_name, age (null if hide_age), username, city, hometown, distance_km (null if hide_distance, else ≥ 1), intent_ids, bio line (first 90 chars of about), main photo URL, is_verified, is_online, is_new.
@@ -4288,3 +4290,37 @@ The number comes from the session's own block, given in its brief, from P-100 up
   T-5.3's report said 22, a line count that took in the schema's own definition), while the API
   answers `400 VALIDATION_ERROR` in our envelope. One gap across the whole API, so its own task.
   Filed from T-5.3's block, as the founder asked, 5 October 2026.
+- [ ] P-120 · Keep a distance from giving away where someone is. **Before T-6.2's `distance_km`
+  reaches anyone** (on T-6.2's Needs line). Worst case: a stalker finds where a woman lives. A
+  `Card`'s `distance_km` is whole kilometres, never under 1 (D-034), and anyone can put themselves
+  anywhere in India at will with `PUT /me/location` (T-4.10). Read her distance from three places
+  and the circles cross where she is: rounding makes each circle a band a kilometre wide, and
+  readings from more places narrow where the bands overlap. **The rate limit doesn't stop it:**
+  `PUT /me/location`'s 10 an hour (D-220) slows it, but three readings are enough, and a second
+  account starts its own hour. The fix is the distance's, not the limit's: T-6.2 decides how, as a
+  decision, for example measuring between positions the server has snapped to a grid about a
+  kilometre wide, so a move finer than the grid tells nothing. Found building T-4.10; filed from
+  its session block (P-120 to P-129).
+- [ ] P-121 · Correct 03-SCHEMA §9's seed list, which still says `areas` is "40 neighbourhoods for
+  the launch city". **Whenever 03-SCHEMA is next opened.** Worst case: someone sizes a picker or a
+  test on 40 when there are 17. P-38 replaced Bengaluru's 40 with Phagwara's 17, and §2 says so;
+  §9's line was missed. Found building T-4.10; filed from its session block (P-120 to P-129).
+- [ ] P-122 · Make `tests/tools/test_selfie_review.py` count only its own rows. **Before the next
+  task that touches verifications or reorders the suite** (P-48's shuffle among them). Worst case:
+  a check whose verdict depends on which tests ran before it, so a reorder turns the suite red for
+  no fault, or a real miscount in `selfie_review` hides behind rows another test left. Two of its
+  tests (`test_every_decision_is_listed_far_from_the_threshold_too`,
+  `test_the_seeds_rows_arent_decisions`) count every verification in the database, and find 2 or
+  3 too many when `tests/workers` or `tests/modules/verification` runs first in the same
+  invocation: `uv run pytest -m "not critical" tests/workers tests/tools/test_selfie_review.py`
+  fails 2, reproduced on a clean `e0f1245`, so not T-4.10's. The full suite's order passes, which
+  is why `make test` and CI are green. Found building T-4.10; filed from its session block (P-120
+  to P-129).
+- [ ] P-123 · See the location prompt work in Safari on an iPhone, and on staging over HTTPS. **No
+  deadline.** Worst case: on an iPhone the prompt behaves differently, and every woman on one
+  lands silently on the area picker, with nobody knowing. T-4.10's prompt, the browser's permission
+  and `geolocation=(self)` were seen only in Playwright's Chromium, over plain
+  `http://127.0.0.1` (J1 and its refused twin), never in Safari, on a phone, or on staging's
+  HTTPS. Seen means read from what the browser did: the API's row holding a position rather than
+  an area's centroid, not the screen's word. At the founder's direction, 5 October 2026; filed from
+  T-4.10's session block (P-120 to P-129).

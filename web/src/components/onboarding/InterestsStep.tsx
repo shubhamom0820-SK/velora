@@ -52,7 +52,7 @@ export function InterestsStep({ me }: { me: Me }) {
       }}
     >
       <StepFrame
-        index={9}
+        index={10}
         title={t("onboarding.interests.title")}
         sub={t("onboarding.interests.sub", { count: picked.length })}
         back={stepPath("photos")}

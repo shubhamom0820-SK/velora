@@ -35,22 +35,24 @@ named `<T>Page` (`LedgerEntryPage`). `limit` is 1 to 50, 20 when absent; outside
 | PUT | /me/username | 🔐 | `{username}` → `Me` or `USERNAME_TAKEN` | T-3.7 |
 | PUT | /me/interests | 🔐 | `{interest_ids[5]}` → `Me` | T-3.8 |
 | POST | /me/pin/skip | 🔐 | → `Me`, moving `pin` → `selfie` (D-069) | T-3.9 |
-| PUT | /me/location | 🔐 | `{lat, lng}` or `{area_id}` → 204 | T-4.10 |
+| PUT | /me/location | 🔐 | `{lat, lng}`, inside India's box, or `{area_id}`, stored at its centroid → `Me` (D-220). A position takes the nearest area within 2 km, or none. From the `username` step on, never moving it; before, `ONBOARDING_INCOMPLETE`. Outside the box, or an area that isn't one: `VALIDATION_ERROR`. 10 an hour per user | T-4.10 |
 | PATCH | /me/settings | ✅ | `{is_hidden?, hide_age?, hide_distance?, show_kudos?}` → `Me` | T-9.6 |
 | POST | /me/pause | ✅ | → 204 | T-9.6 |
 | POST | /me/export | ✅ | → 202 (emailed/downloadable later) | T-9.6 |
 | DELETE | /me | ✅ | → 202, 30-day window | T-9.6 |
 | GET | /interests | 🔓 | → `Interest[]` | T-3.8 |
 | GET | /intents | 🔐 | → `Intent[]` | T-3.6 |
-| GET | /areas?city= | 🔓 | → `Area[]` | T-4.10 |
+| GET | /areas?city= | 🔓 | → `Area[]`: `{id, city, name}`, never a centroid, by city then name; every city's, or `city`'s in any case (D-220) | T-4.10 |
 
 Onboarding endpoints work at their step and after it, never before (D-068).
 
 `Me` (T-3.5): `id`, `role`, `status`, `onboarding_step`, `gender`, `age`, `is_verified`,
 `has_pin`, `referral_code`, `balance`, and `profile`: `first_name`, `username`, `about`,
 `hometown`, `city`, `seeking`, `intent_ids`, `interest_ids`, `is_hidden`, `hide_age`,
-`hide_distance`, `show_kudos`, `show_gifts`. The age, never the date of birth, and no phone
-number: no screen shows either, so neither leaves the server (D-067's discipline).
+`hide_distance`, `show_kudos`, `show_gifts`, and `location` (T-4.10): `none`, `fresh`, or `stale`
+once over 6 hours old by the server's clock (D-220), never where it is. The age, never the date of
+birth, and no phone number: no screen shows either, so neither leaves the server (D-067's
+discipline).
 
 ## Photos & verification
 | Method | Path | Auth | Body → Response | Task |

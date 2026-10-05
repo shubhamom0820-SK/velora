@@ -185,9 +185,9 @@ describe("the other headers", () => {
     );
   });
 
-  it("deny camera, microphone and location until the task that needs each allows it", () => {
+  it("deny the camera and microphone until the task that needs each allows it, and allow location to this site alone (T-4.10)", () => {
     expect(header(STAGING, "Permissions-Policy")).toBe(
-      "camera=(), microphone=(), geolocation=(), browsing-topics=()",
+      "camera=(), microphone=(), geolocation=(self), browsing-topics=()",
     );
   });
 

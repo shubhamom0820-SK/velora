@@ -7,11 +7,11 @@ import { Icon } from "@/components/ui/Icon";
 import { t } from "@/i18n/t";
 import { cx } from "@/lib/cx";
 
-/** Phone, code, then the ten steps (08-DESIGN §5). */
-export const ONBOARDING_SCREENS = 12;
+/** Phone, code, the ten steps, and the location question after Name (08-DESIGN §5, D-220). */
+export const ONBOARDING_SCREENS = 13;
 
 type StepFrameProps = {
-  /** 0 for the phone screen, 11 for the selfie. */
+  /** 0 for the phone screen, 12 for the selfie. */
   index: number;
   title: string;
   sub?: string;
@@ -31,8 +31,8 @@ const BACK =
   "text-mute -m-2.5 p-2.5 focus-visible:outline-accent focus-visible:outline-2";
 
 /**
- * The onboarding frame (T-3.11), from the prototype's `Step`: back arrow, 12
- * segments of progress, title, body, footer, 520 px. Onboarding only, with no
+ * The onboarding frame (T-3.11), from the prototype's `Step`: back arrow, a
+ * segment of progress per screen (its 12, and the location question's), title, body, footer, 520 px. Onboarding only, with no
  * header or nav (T-5.6's are the app's); T-4.6 and T-4.7 reuse it.
  */
 export function StepFrame({

@@ -147,7 +147,7 @@ A test in this list is marked `@pytest.mark.critical`; CI runs them first and fa
 
 | # | Journey | Task |
 |---|---|---|
-| J1 | New man: phone → OTP → all onboarding → discover. T-3.13 runs it as far as the photos step; the rest is T-4.9's | T-3.13, T-4.9 |
+| J1 | New man: phone → OTP → all onboarding → discover. T-3.13 runs it as far as the photos step; the rest is T-4.9's. He shares a position in Phagwara, which the browser gives only under `geolocation=(self)`: the Permissions-Policy proved by its effect (T-4.10). Its twin, refused the position, picks an area from the API's 17 | T-3.13, T-4.10, T-4.9 |
 | J2 | New woman: blocked until selfie approved | T-4.9 |
 | J3 | Under-18 refused, same number can't retry | T-3.13 |
 | J4 | Swipe → match → open thread (−5) → chat both ways live | T-7.13 |

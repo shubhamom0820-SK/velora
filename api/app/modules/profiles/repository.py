@@ -3,12 +3,15 @@
 from __future__ import annotations
 
 from collections.abc import Collection
+from typing import Any
 from uuid import UUID
 
-from sqlalchemy import delete, select
+from geoalchemy2 import Geography
+from sqlalchemy import ScalarSelect, cast, delete, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.modules.profiles.models import (
+    Area,
     Intent,
     Interest,
     Profile,
@@ -77,3 +80,50 @@ async def username_owner(session: AsyncSession, username: str) -> UUID | None:
         select(Profile.user_id).where(Profile.username == username)
     )
     return owner
+
+
+# --- Location (T-4.10) ------------------------------------------------------------
+
+
+async def areas(session: AsyncSession, city: str | None) -> list[Area]:
+    """Every area, or one city's in any case, by city then name, in any case
+    whatever the database's collation."""
+    query = select(Area).order_by(func.lower(Area.city), func.lower(Area.name), Area.id)
+    if city is not None:
+        query = query.where(func.lower(Area.city) == city.lower())
+    rows = await session.scalars(query)
+    return list(rows)
+
+
+async def area_exists(session: AsyncSession, area_id: UUID) -> bool:
+    found = await session.scalar(select(Area.id).where(Area.id == area_id))
+    return found is not None
+
+
+def point(lat: float, lng: float) -> Any:
+    """A position as `profiles.location` stores it: a geography point, WGS 84,
+    longitude first."""
+    return cast(
+        func.ST_SetSRID(func.ST_MakePoint(lng, lat), 4326),
+        Geography(geometry_type="POINT", srid=4326),
+    )
+
+
+def centroid_of(area_id: UUID) -> ScalarSelect[Any]:
+    """An area's centroid, read by the statement that stores it."""
+    return select(Area.centroid).where(Area.id == area_id).scalar_subquery()
+
+
+async def nearest_area_id(
+    session: AsyncSession, lat: float, lng: float, within_m: float
+) -> UUID | None:
+    """The area whose centroid is nearest the position, if one is within
+    `within_m` metres."""
+    here = point(lat, lng)
+    found: UUID | None = await session.scalar(
+        select(Area.id)
+        .where(func.ST_DWithin(Area.centroid, here, within_m))
+        .order_by(func.ST_Distance(Area.centroid, here), Area.id)
+        .limit(1)
+    )
+    return found

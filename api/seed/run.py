@@ -429,6 +429,8 @@ async def write_seed(
         profile.about = person.about
         profile.hometown = person.hometown
         profile.city = AREA_CITY if area_id is not None else None
+        # Both, as `PUT /me/location` leaves a shared position: the nearest
+        # area within 2 km of it, which the scatter keeps its own (D-220).
         profile.area_id = area_id
         profile.location = location
         profile.location_updated_at = None if location is None else now

@@ -18,6 +18,7 @@ from app.core.errors import AppError, invalid_field
 from app.core.queue import DELETE_FILES, DELETE_FILES_FIRST_CHECK, Queue
 from app.core.security import E164, encrypt_phone, hash_phone
 from app.modules.profiles.models import Profile
+from app.modules.profiles.rules import location_state
 from app.modules.users import repository
 from app.modules.users.models import User
 from app.modules.users.schemas import Me, MeProfile
@@ -385,5 +386,6 @@ async def me(session: AsyncSession, user: User) -> Me:
             hide_distance=profile.hide_distance,
             show_kudos=profile.show_kudos,
             show_gifts=profile.show_gifts,
+            location=location_state(profile.location_updated_at, clock.now()),
         ),
     )

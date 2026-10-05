@@ -22,6 +22,7 @@ import { BirthdayStep } from "./BirthdayStep";
 import { ComingNextStep } from "./ComingNextStep";
 import { GenderStep } from "./GenderStep";
 import { InterestsStep } from "./InterestsStep";
+import { LocationStep } from "./LocationStep";
 import { LookingForStep } from "./LookingForStep";
 import { NameStep } from "./NameStep";
 import { PhotosStep } from "./PhotosStep";
@@ -71,6 +72,7 @@ function me(
       hide_distance: false,
       show_kudos: true,
       show_gifts: true,
+      location: "fresh",
       ...profile,
     },
   } as Me;
@@ -507,6 +509,21 @@ describe("name and places (T-3.7)", () => {
     });
   });
 
+  it("goes on to the location question while none is set (D-220)", async () => {
+    fakeApi({
+      "PATCH /v1/me/profile": () =>
+        json(200, me({ onboarding_step: "username" }, { location: "none" })),
+    });
+    renderUi(<NameStep me={me({ onboarding_step: "profile" })} />);
+
+    await fill("Rohit");
+    await userEvent.click(screen.getByRole("button", { name: "Continue" }));
+
+    await waitFor(() =>
+      expect(nav.push).toHaveBeenCalledWith("/onboarding/location"),
+    );
+  });
+
   it("goes back to the editable step before it", () => {
     renderUi(<NameStep me={me({ onboarding_step: "profile" })} />);
     expect(screen.getByRole("link", { name: "Back" })).toHaveAttribute(
@@ -517,6 +534,16 @@ describe("name and places (T-3.7)", () => {
 });
 
 describe("the username (T-3.7)", () => {
+  it("goes back to the location question (D-220)", () => {
+    renderUi(
+      <UsernameStep me={me({ onboarding_step: "username" })} host="h" />,
+    );
+    expect(screen.getByRole("link", { name: "Back" })).toHaveAttribute(
+      "href",
+      "/onboarding/location",
+    );
+  });
+
   it("asks the server once typing settles, and shows the page on this site's host", async () => {
     const api_ = fakeApi({
       "GET /v1/usernames/rohit_a/available": () =>
@@ -850,6 +877,7 @@ describe("production's CSP allows no inline style (P-41)", () => {
       <GenderStep key="g" me={me({ onboarding_step: "gender" })} />,
       <LookingForStep key="l" me={me({ onboarding_step: "seeking" })} />,
       <NameStep key="n" me={me({ onboarding_step: "profile" })} />,
+      <LocationStep key="loc" me={me({ onboarding_step: "username" })} />,
       <UsernameStep
         key="u"
         me={me({ onboarding_step: "username" })}

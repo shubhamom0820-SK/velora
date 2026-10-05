@@ -11,6 +11,7 @@ from uuid import UUID
 from pydantic import BaseModel, BeforeValidator
 
 from app.core.enums import Gender, OnboardingStep, Role, Seeking, UserStatus
+from app.modules.profiles.rules import LocationState
 
 _ISO_DATE = re.compile(r"[0-9]{4}-[0-9]{2}-[0-9]{2}")
 
@@ -41,6 +42,10 @@ class MeProfile(BaseModel):
     hide_distance: bool
     show_kudos: bool
     show_gifts: bool
+    # Whether a location is set and current, never where it is (T-4.10,
+    # D-220): the web asks for one when it's `none`, and refreshes a `stale`
+    # one when the app opens.
+    location: LocationState
 
 
 class Me(BaseModel):

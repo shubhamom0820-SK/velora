@@ -12,6 +12,11 @@ import {
   setCookie,
   type Route,
 } from "@/lib/testing/fakeApi";
+import {
+  restoreGeolocation,
+  stubPermission,
+  stubPosition,
+} from "@/lib/testing/fakeGeolocation";
 import { resetSession, useSession } from "@/store/session";
 
 import { AppGate } from "./AppGate";
@@ -26,8 +31,8 @@ vi.mock("next/navigation", () => ({
   usePathname: () => nav.pathname,
 }));
 
-function me(onboarding_step: string, has_pin = false) {
-  return { id: "u1", onboarding_step, has_pin };
+function me(onboarding_step: string, has_pin = false, location = "fresh") {
+  return { id: "u1", onboarding_step, has_pin, profile: { location } };
 }
 
 const restored: Route = () => json(200, { access_token: "t" });
@@ -55,6 +60,7 @@ beforeEach(() => {
 });
 
 afterEach(() => {
+  restoreGeolocation();
   vi.unstubAllGlobals();
   vi.unstubAllEnvs();
   vi.restoreAllMocks();
@@ -90,6 +96,46 @@ describe("the app's gate (T-3.10)", () => {
 
     expect(await screen.findByText("Behind the gate")).toBeInTheDocument();
     expect(nav.replace).not.toHaveBeenCalled();
+  });
+
+  it("refreshes a stale location on the way in, where the browser allows (T-4.10)", async () => {
+    stubPermission("granted");
+    stubPosition({ lat: 31.2224, lng: 75.7708 });
+    const api_ = fakeApi({
+      "POST /v1/auth/refresh": restored,
+      "GET /v1/me": () => json(200, me("done", false, "stale")),
+      "PUT /v1/me/location": () => json(200, me("done")),
+    });
+
+    renderGate(
+      <AppGate>
+        <Secret />
+      </AppGate>,
+    );
+
+    expect(await screen.findByText("Behind the gate")).toBeInTheDocument();
+    await waitFor(() =>
+      expect(api_.calls.filter((c) => c.method === "PUT")).toMatchObject([
+        { path: "/v1/me/location", body: { lat: 31.2224, lng: 75.7708 } },
+      ]),
+    );
+  });
+
+  it("sends someone past Name without a location to the location question (D-220)", async () => {
+    fakeApi({
+      "POST /v1/auth/refresh": restored,
+      "GET /v1/me": () => json(200, me("photos", false, "none")),
+    });
+
+    renderGate(
+      <AppGate>
+        <Secret />
+      </AppGate>,
+    );
+
+    await waitFor(() =>
+      expect(nav.replace).toHaveBeenCalledWith("/onboarding/location"),
+    );
   });
 
   it("sends an unfinished onboarding to its step's URL", async () => {
@@ -215,6 +261,60 @@ describe("onboarding's gate (T-3.10, D-080)", () => {
     },
   );
 
+  it("sends a later screen back to the location question while none is set (D-220)", async () => {
+    nav.pathname = "/onboarding/username";
+    fakeApi({
+      "POST /v1/auth/refresh": restored,
+      "GET /v1/me": () => json(200, me("about", false, "none")),
+    });
+
+    renderGate(
+      <OnboardingGate>
+        <Secret />
+      </OnboardingGate>,
+    );
+
+    await waitFor(() =>
+      expect(nav.replace).toHaveBeenCalledWith("/onboarding/location"),
+    );
+    expect(screen.queryByText("Behind the gate")).not.toBeInTheDocument();
+  });
+
+  it("opens the location question past Name, as an edit once one is set", async () => {
+    nav.pathname = "/onboarding/location";
+    fakeApi({
+      "POST /v1/auth/refresh": restored,
+      "GET /v1/me": () => json(200, me("about")),
+    });
+
+    renderGate(
+      <OnboardingGate>
+        <Secret />
+      </OnboardingGate>,
+    );
+
+    expect(await screen.findByText("Behind the gate")).toBeInTheDocument();
+    expect(nav.replace).not.toHaveBeenCalled();
+  });
+
+  it("keeps the location question for after Name", async () => {
+    nav.pathname = "/onboarding/location";
+    fakeApi({
+      "POST /v1/auth/refresh": restored,
+      "GET /v1/me": () => json(200, me("profile", false, "none")),
+    });
+
+    renderGate(
+      <OnboardingGate>
+        <Secret />
+      </OnboardingGate>,
+    );
+
+    await waitFor(() =>
+      expect(nav.replace).toHaveBeenCalledWith("/onboarding/name"),
+    );
+  });
+
   it("sends a finished onboarding to the app", async () => {
     nav.pathname = "/onboarding/birthday";
     fakeApi({
@@ -246,6 +346,19 @@ describe("onboarding's gate (T-3.10, D-080)", () => {
 });
 
 describe("/login with a session already (T-3.10)", () => {
+  it("moves on to the location question when that's where the person is (D-220)", async () => {
+    fakeApi({
+      "POST /v1/auth/refresh": restored,
+      "GET /v1/me": () => json(200, me("username", false, "none")),
+    });
+
+    renderGate(<SignedInRedirect />);
+
+    await waitFor(() =>
+      expect(nav.replace).toHaveBeenCalledWith("/onboarding/location"),
+    );
+  });
+
   it("moves on to the person's step", async () => {
     fakeApi({
       "POST /v1/auth/refresh": restored,

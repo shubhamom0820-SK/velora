@@ -21,7 +21,7 @@ vi.mock("next/navigation", () => ({
 }));
 
 function me(onboarding_step: string, has_pin = false) {
-  return { id: "u1", onboarding_step, has_pin };
+  return { id: "u1", onboarding_step, has_pin, profile: { location: "fresh" } };
 }
 
 function renderApp() {

@@ -1,20 +1,24 @@
 """The intent catalogue and the seeking step (T-3.6); name, places, about and
-username (T-3.7); the interest catalogue and the interests step (T-3.8)."""
+username (T-3.7); the interest catalogue and the interests step (T-3.8); the
+areas and the location (T-4.10)."""
 
 from __future__ import annotations
 
 from typing import Annotated
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.db import get_session
 from app.core.deps import current_user, user_rate_limit
 from app.modules.profiles import service
 from app.modules.profiles.schemas import (
+    Area,
     Intent,
     Interest,
     InterestsSet,
+    LocationSet,
+    PositionSet,
     ProfilePatch,
     SeekingSet,
     UsernameAvailability,
@@ -28,6 +32,10 @@ router = APIRouter(tags=["profiles"])
 # 02-ARCHITECTURE §12: checking names one keystroke at a time is fine; walking
 # the list of who is on the app isn't.
 USERNAME_CHECKS_PER_MINUTE = 30
+# 02-ARCHITECTURE §12: onboarding's tries and a refresh each time the app opens
+# fit easily. It slows someone moving themselves about to measure distances; it
+# can't stop them, since three readings are enough (P-120).
+LOCATION_SETS_PER_HOUR = 10
 
 
 @router.get("/intents", dependencies=[Depends(current_user)])
@@ -98,3 +106,34 @@ async def set_interests(
     session: Annotated[AsyncSession, Depends(get_session)],
 ) -> Me:
     return await service.set_interests(session, user, body.interest_ids)
+
+
+@router.get("/areas")
+async def list_areas(
+    session: Annotated[AsyncSession, Depends(get_session)],
+    city: Annotated[str | None, Query(max_length=40)] = None,
+) -> list[Area]:
+    """Public, as 04-API marks it: reference data, nobody's. Every city's, or
+    one city's, in any case; the web asks for every one, since the launch
+    city lives only in the data (D-220)."""
+    return await service.areas(session, city)
+
+
+@router.put(
+    "/me/location",
+    dependencies=[
+        Depends(
+            user_rate_limit("location", limit=LOCATION_SETS_PER_HOUR, window_s=3600)
+        )
+    ],
+)
+async def set_location(
+    body: LocationSet,
+    user: Annotated[User, Depends(current_user)],
+    session: Annotated[AsyncSession, Depends(get_session)],
+) -> Me:
+    """A shared position or a picked area (D-034, D-220). Never logged: the
+    body is where the position is, and no log reads a body."""
+    if isinstance(body, PositionSet):
+        return await service.set_position(session, user, body.lat, body.lng)
+    return await service.set_area(session, user, body.area_id)
