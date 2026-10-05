@@ -2995,6 +2995,54 @@ completeness as above; approved photos only; seeking and intents required; the t
 this task; the seed's completeness set, with a test. **Open:** the answers are the advisor's, not
 the founder's own words (his, the same day).
 
+### D-330 · The E2E runs the whole stack: the local S3, the worker, the real face match, a fake camera — Open
+**The decision (T-4.9), extending D-084, which stays as it is:** D-084 says what the E2E is (a
+production build, Chromium, a P-55 slot, nothing kept). From T-4.9 its journeys reach `/discover`,
+and that needs more than `make infra-up` gave them:
+- **Storage is the local S3** (D-086), as `make dev`'s is, with `STORAGE_PROVIDER=s3` in
+  `api/tests/e2e_server.py`: the browser uploads photos and a selfie by presigned PUT, which the
+  fake's `fake-storage://` links can't take. The private bucket admits the E2E's origin,
+  `http://127.0.0.1:3100`, by a CORS rule of its own beside `make dev`'s
+  (`infra/s3/private-cors.xml`, held by `api/tests/test_local_s3_cors.py`), PUT and Content-Type
+  only. CI's `e2e` job starts the S3 and runs `s3-init`, as the `api` job does. The buckets are
+  shared with every pytest run and `make dev`; each key carries its user's id.
+- **The worker runs beside the API,** a child of the launcher on the same slot, its settings in its
+  environment and never from `api/.env` (a working directory outside `api/`): photo moderation and
+  the selfie's comparison are its jobs, and without it no photo is approved, so T-4.8's completion
+  refuses everyone. It stops when the API does, from the signal handler uvicorn puts back.
+- **It polls every 0.5 seconds, not D-091's 10.** D-091's interval is Upstash's per-command price on
+  the deployed Redis; the E2E's Redis is Docker's, where a command costs nothing, and at 10 seconds
+  every run would wait that long on each photo for no benefit. D-091 is not changed: this is the
+  worker's own setting, set for this run alone, and the deployed worker keeps 10.
+- **Moderation is the fake** (Sightengine has no local stand-in; the fake approves), **and the face
+  match is the real one** (`sface`, D-088): J2's "your selfie matches your photos" is the models'
+  own verdict on what the browser sent. With the fake every selfie matches, so that line would be
+  true whatever the browser sent, and a test that can't fail proves nothing. The launcher refuses
+  to start without the models (`make models`; CI's `e2e` job fetches them, cached, as the `api`
+  job does).
+- **The camera is Chromium's fake one** (`--use-fake-device-for-media-stream`,
+  `--use-file-for-fake-video-capture`), playing NASA's 2017 portrait of Raja Chari from
+  `api/tests/fixtures/faces`, copied at load as a one-frame MJPEG; J2's profile photo is his 2021
+  portrait. Nothing new is committed. The journeys run on the full Chromium in its new headless
+  mode (`channel: "chromium"`), because Playwright's headless shell has no media capture
+  (`getUserMedia` there: "NotSupportedError: Not supported", 5 October 2026). Firefox's by-hand
+  run skips J2.
+
+**Why:** the E2E's purpose is the chain as a person meets it, and the two places it could have
+been faked, storage and the match, are the two where a fake passes whatever the browser does.
+Without this entry a reader of D-084 (Locked, and not edited) would take `make infra-up` for
+enough.
+
+**Rejected:** the fake face match (above); the worker's 10-second poll in the E2E (a minute added to
+every run for nothing); a third Playwright `webServer` for the worker (it can't know the slot the
+launcher took); committing a camera video (a copy of a committed JPEG, remade in a second).
+
+Proposed by Claude in T-4.9's plan, 5 October 2026. Its three questions, the real models, the
+0.5-second poll with its reason written down, and this entry, were answered by the advisor
+directing T-4.9 (Claude, in a separate chat), relayed by the founder, 5 October 2026; the founder
+confirmed whose words they were the same day. **Open** until the founder approves it in his own
+words.
+
 ---
 
 ## Adding a decision

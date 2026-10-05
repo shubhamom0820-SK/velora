@@ -152,10 +152,11 @@ jobs:
 
   # T-3.13 (06-TESTING's step 4): the user journeys in Playwright, after lint,
   # unit tests and the build passed. A production build of the web against the
-  # API on a P-55 slot of its own (api/tests/e2e_server.py). Nothing is uploaded
-  # from it, on purpose (decision 22): a trace records request and response
-  # bodies, phone numbers, codes and access tokens among them, and a page
-  # snapshot shows the phone screen. Failures speak through their assertions.
+  # API on a P-55 slot of its own (api/tests/e2e_server.py), the worker beside
+  # it and the local S3 behind it (T-4.9, D-330). Nothing is uploaded from it,
+  # on purpose (decision 22): a trace records request and response bodies,
+  # phone numbers, codes and access tokens among them, and a page snapshot
+  # shows the phone screen. Failures speak through their assertions.
   e2e:
     name: e2e — Playwright
     needs: [api, web]
@@ -166,8 +167,14 @@ jobs:
         with:
           persist-credentials: false
 
-      - name: Start Postgres and Redis (infra/docker-compose.yml)
-        run: docker compose -f infra/docker-compose.yml up -d --wait db redis
+      # Postgres, Redis and S3 (SeaweedFS, D-086) from the same compose file as
+      # `make infra-up`, its buckets and the private bucket's CORS rule included
+      # (s3-init): the journeys upload photos and a selfie from the browser
+      # (T-4.9), and the launcher refuses to start without the S3.
+      - name: Start Postgres, Redis and S3 (infra/docker-compose.yml)
+        run: |
+          docker compose -f infra/docker-compose.yml up -d --wait db redis s3
+          docker compose -f infra/docker-compose.yml run --rm s3-init
 
       - uses: astral-sh/setup-uv@c18668ad3cf93ea998bef934396af7bb5c839dc7 # v10.2.0
         with:
@@ -189,6 +196,18 @@ jobs:
         run: |
           (cd api && uv sync --locked)
           (cd web && pnpm install --frozen-lockfile)
+
+      # The face models (D-088), as the api job fetches them: J2's selfie is
+      # compared by the real models on the worker (T-4.9, D-330), and the
+      # launcher refuses to start without them.
+      - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: api/models
+          key: face-models-${{ hashFiles('api/app/core/facemodels.py') }}
+
+      - name: Fetch the face models
+        working-directory: api
+        run: uv run python -m app.core.facemodels
 
       - name: Install Chromium for Playwright
         working-directory: web

@@ -1884,13 +1884,89 @@ exist yet. The batch is a chain, T-3.10 → T-3.11 → T-3.12 → T-3.13, each n
 - [x] **Commit:** `feat(onboarding): completion rules [T-4.8]`
 
 ### T-4.9 · E2E onboarding
-- [ ] **Needs:** T-4.7, T-4.8, T-4.10
+- [x] **Needs:** T-4.7, T-4.8, T-4.10
   **Uploads need two things the E2E doesn't have yet** (found building T-4.6): the local S3's CORS
   rule (`infra/s3/private-cors.xml`) admits only `make dev`'s web, `http://127.0.0.1:3000`, and
   the E2E's is on 3100; and CI's e2e job starts Postgres and Redis but no S3, and its API
   (`api/tests/e2e_server.py`) stores to the fake. Each upload fails until both change.
-- [ ] Playwright with fake camera flags: man completes without selfie; woman is blocked until selfie approved.
-- [ ] **Commit:** `test(e2e): full onboarding [T-4.9]`
+  **Done, and a third found:** the rule has a second `CORSRule` for `http://127.0.0.1:3100`, PUT
+  and Content-Type only, held by `api/tests/test_local_s3_cors.py` for both origins (its 3100 case
+  was red before `make infra-up` applied the rule, green after); CI's `e2e` job starts the S3 and
+  runs `s3-init` as the `api` job does, and the launcher stores to it (`STORAGE_PROVIDER=s3`,
+  refusing to start when it isn't reachable). **The third: the E2E had no worker.** The launcher
+  ran uvicorn alone, so no photo was ever approved, T-4.8's completion refused `PROFILE_INCOMPLETE`
+  with `photo` missing, and no selfie was ever compared: both journeys stopped without one. The
+  launcher now runs `python -m app.workers` as a child on the same slot (D-330), its settings in
+  its environment and never from `api/.env` (its working directory is `tests/`, which has none;
+  `PYTHONPATH` names `api/`, since `app` isn't installed into the venv), polling every 0.5 s with
+  the reason written where it is set, and stopped from the signal handler uvicorn puts back after
+  its own shutdown: a plain `finally` never ran, and the first by-hand stop left the worker
+  running (seen, then fixed, 5 October 2026). The models are checked before anything starts, with
+  the worker's own refusal, so a missing model stops the run at once with D-088's message.
+- [x] Playwright with fake camera flags: man completes without selfie; woman is blocked until selfie approved.
+  **Built** (`web/e2e/signup.spec.ts`, `web/playwright.config.ts`): J1 now runs to Discover and
+  J2 is new, both at 390 × 844 and 1280 × 800, through the screens alone. The photo is chosen
+  through the slot's own picker (the file chooser answered), uploaded by the presigned PUT to the
+  local S3, checked by the worker (the fake moderation) and read back as "Approved" before
+  Continue, since finishing needs the approved public copy (D-310); five interests; J1 sets and
+  confirms a PIN (`4719`, one D-069 allows), J2 skips it. At the selfie: J1 sees "Skip for now"
+  and J2 doesn't; each visits `/discover` and is sent back by the gate. J1's "Skip for now"
+  finishes sign-up (T-4.8) and lands in Discover inside the shell's four-link nav; J2 opens the
+  camera (`camera=(self)`, T-4.7), waits for a presented frame, takes the shot, checks it, sends
+  it, reads "Comparing your selfie with your photos…", then "Your selfie matches your photos.",
+  the real models' verdict (D-088) on the browser's selfie against her photo, and "Continue"
+  finishes. Both reload once in the app. No URL carries the number (D-080); any CSP violation
+  fails them (T-3.13's fixture).
+  **The camera** is Chromium's fake one, playing NASA's 2017 portrait of Raja Chari
+  (`api/tests/fixtures/faces`) as a one-frame MJPEG copied at config load, never committed; her
+  profile photo is his 2021 portrait, so the match is between two photos of one person. His photo
+  is Sunita Williams', since a man's selfie is never compared. The names are the test's.
+  **Found on the way, 5 October 2026:**
+  - **Playwright's headless shell has no media capture:** `getUserMedia` there is
+    "NotSupportedError: Not supported" (probed before the spec was written). The journeys run on
+    the full Chromium in its new headless mode (`channel: "chromium"`), which `playwright install
+    chromium` already installs beside the shell. T-4.7's hand run was on that build.
+  - **The first frame isn't drawable the instant the shutter enables** (`loadeddata`): a frame
+    drawn then was black in the probe, a real one 1.5 s later. A person looks at the preview before
+    tapping; the spec waits for `requestVideoFrameCallback` to say a frame was presented. Not a
+    product bug: the review screen shows the shot before it's sent, and a black one would be retaken.
+  - **A restored session with a PIN is locked on an onboarding step too** (T-3.10, by design): J1's
+    visit to `/discover` is a full load, the gate sends him back to the selfie, and the lock sits
+    over it until his PIN; the first run's "Skip for now" waited two minutes under the dialog. J1
+    now unlocks there and again after its reload in the app, so the lock after a restore is in the
+    E2E as well.
+  - `getByRole("button", { name: "Men" })` also matches "Women": the name is a case-insensitive
+    substring unless `exact`.
+  **Recorded:** D-330 (Open, extending D-084, which is Locked and not edited); 06-TESTING's E2E
+  section and J1/J2 rows; CLAUDE.md's and the Makefile's `make e2e` lines (`make models` is now
+  a prerequisite).
+  **Proved, 5 October 2026, by Claude:** `make e2e`, all 14 journeys green in 2.5 minutes, the
+  build included (J1 9.1 s and 8.5 s, J2 11.3 s and 10.7 s, phone and desktop). **Read back from
+  the run's own database** (slot 2, before the next run dropped it): both men `done`, not
+  verified, completeness 50, one approved public photo each; both women `done` and `is_verified`;
+  both selfies approved, **decided by the wake** (D-261), best similarity 0.856 against the 0.363
+  threshold, 480 × 600 after re-encode; four public photos moderated. The first full run's two
+  failures were the spec's own, above (the lock over "Skip for now", "Men" in "Women"), and were
+  the only ones.
+  **Six breaks of what the journeys guard, each on the phone project, each file restored and
+  checked by SHA-256** (the script stays in that session's scratchpad: it weakens one file as a
+  careless change would, runs the journey, and puts the file back; the spec is the standing
+  check):
+  - the 3100 rule taken out of `private-cors.xml` (and `make infra-up` run): J1 red at the
+    "Approved" wait, the slot reading "This photo didn't upload — check your connection and try
+    again", the browser's refusal of the PUT's preflight;
+  - the worker not started (a sleeping child in its place): J1 red at the same wait, the slot
+    reading "Checking…" for 30 seconds;
+  - the fake camera's device flag removed from `playwright.config.ts`: J2 red, the camera's
+    ready line never shown;
+  - `MAY_SKIP` widened to women in `SelfieStep.tsx`: J2 red, one "Skip for now" where none may be;
+  - the gate's redirect for an unfinished sign-up replaced by none in `AppGate.tsx`: J1 and J2
+    both red, `/discover` served instead of the selfie step (a first weakening, `&& false`, didn't
+    build, so it proved nothing and was replaced);
+  - her profile photo swapped for Sunita Williams' in the spec, the camera still playing Chari:
+    J2 red, "Your selfie matches your photos." never shown in 30 seconds. **This is the one the
+    fake face match could never fail,** and why the E2E runs the real one (D-330).
+- [x] **Commit:** `test(e2e): full onboarding [T-4.9]`
 
 
 ### T-4.10 · Location

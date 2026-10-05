@@ -29,7 +29,8 @@
  *           policy on that one path would refuse anyone who arrived from the
  *           PIN step. The captured frame shows as a blob: image, which T-4.6's
  *           img-src already allows on every build with photo storage; a build
- *           without storage can't upload a selfie either.
+ *           without storage can't upload a selfie either. J2 is the standing
+ *           proof (T-4.9): the fake camera opens on this page.
  *   T-4.10  Done: location, geolocation=(self). Only this site's own pages,
  *           and only after the person taps to share it (lib/geolocation.ts).
  *           J1 is the proof: the browser hands its position to the page.

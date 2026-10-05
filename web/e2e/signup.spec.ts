@@ -1,22 +1,74 @@
+import { join, resolve } from "node:path";
+
 import { type Page } from "@playwright/test";
 
 import { codeFor, expect, freshNumber, signIn, test } from "./fixtures";
 
 /**
- * J1 and J3 (06-TESTING), on Path B with the fake SMS (T-3.13). J1 ends at the
- * photos step: nobody gets further before Sprint 4 (D-068).
+ * J1, J2 and J3 (06-TESTING), on Path B with the fake SMS (T-3.13, T-4.9).
+ *
+ * J1 and J2 run the whole of onboarding against the whole stack: a photo
+ * the browser uploads to the local S3, checked by the worker and approved;
+ * then, for her, a selfie from Chromium's fake camera (playwright.config.ts)
+ * compared by the real models (D-088, D-330), and sign-up finished by T-4.8's
+ * endpoint. The faces are NASA's public-domain portraits
+ * (api/tests/fixtures/faces): her photo is Raja Chari's 2021 portrait and the
+ * camera plays his 2017 one, so the match is between two photos of one
+ * person, which is what the models decide; his is anyone's, since a man's
+ * selfie is never compared. The names are the test's own.
  *
  * J1 shares a position in Phagwara (T-4.10): the browser hands it over only
  * because the Permissions-Policy allows `geolocation=(self)`, so this is the
- * policy proved by its effect. Its twin is refused, and picks an area.
+ * policy proved by its effect. Its twin is refused, and picks an area. J2's
+ * camera opens under `camera=(self)` the same way (T-4.7).
  */
 
 const WEB = "http://127.0.0.1:3100";
 // Beside Model Town, Phagwara (P-38's areas).
 const PHAGWARA = { latitude: 31.2139, longitude: 75.768 };
+const FACES = resolve(__dirname, "../../api/tests/fixtures/faces");
+// D-069 allows it: not a run, not a pair, not one of the common twenty.
+const PIN = "4719";
+// Five of the catalogue's labels (src/i18n/en.ts, P-26).
+const INTERESTS = ["Filter coffee", "Trekking", "Reading", "Cricket", "Travel"];
 
-/** Birthday to Name, as a man in Phagwara, ending on the location question. */
-async function asFarAsLocation(page: Page) {
+type Person = {
+  gender: RegExp;
+  seeking: string;
+  firstName: string;
+  hometown: string;
+  city: string;
+  username: string;
+  about: string;
+  /** The profile photo, in FACES. */
+  photo: string;
+};
+
+const ARJUN: Person = {
+  gender: /^Man/,
+  seeking: "Women",
+  firstName: "Arjun",
+  hometown: "Jalandhar",
+  city: "Phagwara",
+  username: "arjun",
+  about: "Weekend trekker, filter coffee loyalist, and slow reader of novels.",
+  photo: "williams_2004.jpg",
+};
+
+const PRIYA: Person = {
+  gender: /^Woman/,
+  seeking: "Men",
+  firstName: "Priya",
+  hometown: "Ludhiana",
+  city: "Phagwara",
+  username: "priya",
+  about:
+    "Pottery on weekends, street food on weeknights, and a dog called Momo.",
+  photo: "chari_2021.jpg",
+};
+
+/** Birthday to Name, ending on the location question. */
+async function asFarAsLocation(page: Page, who: Person) {
   await page.getByLabel("Date of birth").fill("2000-01-15");
   await page.getByRole("button", { name: "Continue" }).click();
   await expect(page.getByRole("dialog")).toContainText(
@@ -25,18 +77,19 @@ async function asFarAsLocation(page: Page) {
   await page.getByRole("button", { name: "Yes, that's right" }).click();
 
   await expect(page).toHaveURL(/\/onboarding\/gender$/);
-  await page.getByRole("radio", { name: /^Man/ }).check();
+  await page.getByRole("radio", { name: who.gender }).check();
   await page.getByRole("button", { name: "Continue" }).click();
 
   await expect(page).toHaveURL(/\/onboarding\/looking-for$/);
-  await page.getByRole("button", { name: "Women" }).click();
+  // Exactly: "Men" is also in "Women".
+  await page.getByRole("button", { name: who.seeking, exact: true }).click();
   await page.getByRole("button", { name: "Something serious" }).click();
   await page.getByRole("button", { name: "Continue" }).click();
 
   await expect(page).toHaveURL(/\/onboarding\/name$/);
-  await page.getByLabel("First name").fill("Arjun");
-  await page.getByLabel("Hometown, where you're from").fill("Jalandhar");
-  await page.getByLabel("Where you live now").fill("Phagwara");
+  await page.getByLabel("First name").fill(who.firstName);
+  await page.getByLabel("Hometown, where you're from").fill(who.hometown);
+  await page.getByLabel("Where you live now").fill(who.city);
   await page.getByRole("button", { name: "Continue" }).click();
 
   await expect(page).toHaveURL(/\/onboarding\/location$/);
@@ -45,7 +98,96 @@ async function asFarAsLocation(page: Page) {
   ).toBeVisible();
 }
 
-test("J1: a new man signs up as far as the photos step", async ({
+/** Username and About, from the username step to the photos step. */
+async function usernameAndAbout(page: Page, who: Person, phone: string) {
+  await expect(page).toHaveURL(/\/onboarding\/username$/);
+  await page.getByLabel("Username").fill(`${who.username}_${phone.slice(-6)}`);
+  await expect(page.getByText("That one's free.")).toBeVisible();
+  await page.getByRole("button", { name: "Continue" }).click();
+
+  await expect(page).toHaveURL(/\/onboarding\/about$/);
+  await page.getByLabel("About you").fill(who.about);
+  await page.getByRole("button", { name: "Continue" }).click();
+
+  await expect(page).toHaveURL(/\/onboarding\/photos$/);
+  await expect(
+    page.getByRole("heading", { name: "Add your photos" }),
+  ).toBeVisible();
+}
+
+/**
+ * One photo, chosen as a person does, through the first slot's picker: up to
+ * the local S3 by the presigned PUT, checked by the worker (T-4.4, the fake
+ * moderation), and approved, with its public copy made, which is what
+ * finishing sign-up needs (T-4.8). Then on to the interests.
+ */
+async function addPhoto(page: Page, file: string) {
+  const chooser = page.waitForEvent("filechooser");
+  await page.getByRole("button", { name: "Add a photo" }).first().click();
+  await (await chooser).setFiles(join(FACES, file));
+
+  const slot = page.getByRole("listitem", { name: "Photo 1" });
+  await expect(slot).toContainText("Approved", { timeout: 30_000 });
+  await page.getByRole("button", { name: "Continue" }).click();
+
+  await expect(page).toHaveURL(/\/onboarding\/interests$/);
+}
+
+/** Exactly five (T-3.8), then on to the PIN. */
+async function pickInterests(page: Page) {
+  for (const label of INTERESTS) {
+    await page.getByRole("button", { name: label, exact: true }).click();
+  }
+  await expect(page.getByText("5/5 chosen")).toBeVisible();
+  await page.getByRole("button", { name: "Continue" }).click();
+
+  await expect(page).toHaveURL(/\/onboarding\/pin$/);
+}
+
+/** Four taps on the keypad (the PIN step's and the lock's, T-3.10, T-3.12). */
+async function tapPin(page: Page, pin: string) {
+  for (const digit of pin) {
+    await page.getByRole("button", { name: digit, exact: true }).click();
+  }
+}
+
+/**
+ * A restored session with a PIN starts locked wherever it lands, an
+ * onboarding step included (T-3.10): a full page load is a restore, a sign-in
+ * by code isn't. The PIN opens it.
+ */
+async function unlock(page: Page, pin: string) {
+  await expect(
+    page.getByRole("heading", { name: "Enter your PIN" }),
+  ).toBeVisible();
+  await tapPin(page, pin);
+  await expect(
+    page.getByRole("heading", { name: "Enter your PIN" }),
+  ).toHaveCount(0);
+}
+
+async function atTheSelfieStep(page: Page) {
+  await expect(page).toHaveURL(/\/onboarding\/selfie$/);
+  await expect(
+    page.getByRole("heading", { name: "Quick selfie check" }),
+  ).toBeVisible();
+}
+
+/** The app is barred until sign-up is done: /discover sends them back. */
+async function barredFromTheApp(page: Page) {
+  await page.goto("/discover");
+  await expect(page).toHaveURL(/\/onboarding\/selfie$/);
+}
+
+/** In the app: Discover, inside the shell with its four-link nav (T-5.6). */
+async function inTheApp(page: Page) {
+  await expect(page).toHaveURL(/\/discover$/);
+  await expect(
+    page.getByRole("navigation", { name: "Main" }).getByRole("link"),
+  ).toHaveCount(4);
+}
+
+test("J1: a new man signs up all the way to Discover, with no selfie", async ({
   page,
   context,
   request,
@@ -55,27 +197,117 @@ test("J1: a new man signs up as far as the photos step", async ({
   await context.setGeolocation(PHAGWARA);
   const phone = freshNumber();
   await signIn(page, request, phone);
-  await asFarAsLocation(page);
+  await asFarAsLocation(page, ARJUN);
 
   await page.getByRole("button", { name: "Share my location" }).click();
 
-  await expect(page).toHaveURL(/\/onboarding\/username$/);
-  await page.getByLabel("Username").fill(`arjun_${phone.slice(-6)}`);
-  await expect(page.getByText("That one's free.")).toBeVisible();
-  await page.getByRole("button", { name: "Continue" }).click();
+  await usernameAndAbout(page, ARJUN, phone);
+  await addPhoto(page, ARJUN.photo);
+  await pickInterests(page);
 
-  await expect(page).toHaveURL(/\/onboarding\/about$/);
-  await page
-    .getByLabel("About you")
-    .fill(
-      "Weekend trekker, filter coffee loyalist, and slow reader of novels.",
-    );
-  await page.getByRole("button", { name: "Continue" }).click();
-
-  await expect(page).toHaveURL(/\/onboarding\/photos$/);
+  // A PIN, set and confirmed (T-3.12).
   await expect(
-    page.getByRole("heading", { name: "Add your photos" }),
+    page.getByRole("heading", { name: "Set a 4-digit PIN" }),
   ).toBeVisible();
+  await tapPin(page, PIN);
+  await expect(
+    page.getByRole("heading", { name: "Confirm your PIN" }),
+  ).toBeVisible();
+  await tapPin(page, PIN);
+
+  // A man may skip the selfie (D-008), and not before then is he in the app.
+  // The visit to /discover is a full load, so his lock comes first.
+  await atTheSelfieStep(page);
+  await expect(
+    page.getByRole("button", { name: "Skip for now" }),
+  ).toBeVisible();
+  await barredFromTheApp(page);
+  await unlock(page, PIN);
+  await page.getByRole("button", { name: "Skip for now" }).click();
+  await inTheApp(page);
+
+  // And again after a reload, in the app this time.
+  await page.reload();
+  await unlock(page, PIN);
+  await inTheApp(page);
+
+  // D-080: the number never went in a URL.
+  expect(urls.filter((url) => url.includes(phone.slice(-8)))).toEqual([]);
+});
+
+test("J2: a new woman is held at the selfie until it matches her photos", async ({
+  page,
+  context,
+  request,
+  urls,
+  browserName,
+}) => {
+  test.skip(
+    browserName === "firefox",
+    "the fake camera is Chromium's (playwright.config.ts)",
+  );
+  await context.grantPermissions(["geolocation", "camera"], { origin: WEB });
+  await context.setGeolocation(PHAGWARA);
+  const phone = freshNumber();
+  await signIn(page, request, phone);
+  await asFarAsLocation(page, PRIYA);
+
+  await page.getByRole("button", { name: "Share my location" }).click();
+
+  await usernameAndAbout(page, PRIYA, phone);
+  await addPhoto(page, PRIYA.photo);
+  await pickInterests(page);
+  await page.getByRole("button", { name: "Skip, I'll set it later" }).click();
+
+  // No way past the selfie for a woman (D-008): no skip, and the app barred.
+  await atTheSelfieStep(page);
+  await expect(page.getByRole("button", { name: "Open camera" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Skip for now" })).toHaveCount(
+    0,
+  );
+  await barredFromTheApp(page);
+
+  // The camera, which `camera=(self)` lets the page ask for (T-4.7).
+  await page.getByRole("button", { name: "Open camera" }).click();
+  await expect(
+    page
+      .getByRole("status")
+      .filter({ hasText: "Face the camera in good light" }),
+  ).toBeVisible();
+  // A frame on screen before the shutter, as a person who looks at the
+  // preview has: the first frame isn't drawable the instant the shutter
+  // enables, and a shot taken then is black.
+  await page.evaluate(
+    () =>
+      new Promise<void>((presented) => {
+        document
+          .querySelector("video")
+          ?.requestVideoFrameCallback(() => presented());
+      }),
+  );
+  await page.getByRole("button", { name: "Take selfie" }).click();
+
+  // Checked before it's sent (T-4.7), then compared by the models on the
+  // worker, woken for it (D-261), and matched: two portraits of one person.
+  await expect(page.getByRole("img", { name: "Your selfie" })).toBeVisible();
+  await page.getByRole("button", { name: "Use this selfie" }).click();
+  await expect(
+    page
+      .getByRole("status")
+      .filter({ hasText: "Comparing your selfie with your photos" }),
+  ).toBeVisible();
+  await expect(
+    page
+      .getByRole("status")
+      .filter({ hasText: "Your selfie matches your photos." }),
+  ).toBeVisible({ timeout: 30_000 });
+
+  await page.getByRole("button", { name: "Continue" }).click();
+  await inTheApp(page);
+  // No PIN, so a reload restores her straight in.
+  await page.reload();
+  await inTheApp(page);
+
   // D-080: the number never went in a URL.
   expect(urls.filter((url) => url.includes(phone.slice(-8)))).toEqual([]);
 });
@@ -86,7 +318,7 @@ test("J1, refused: a browser that won't say where lands on the area picker", asy
 }) => {
   // No permission granted: the browser refuses without asking.
   await signIn(page, request, freshNumber());
-  await asFarAsLocation(page);
+  await asFarAsLocation(page, ARJUN);
 
   await page.getByRole("button", { name: "Share my location" }).click();
 

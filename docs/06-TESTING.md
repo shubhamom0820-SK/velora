@@ -151,8 +151,8 @@ A test in this list is marked `@pytest.mark.critical`; CI runs them first and fa
 
 | # | Journey | Task |
 |---|---|---|
-| J1 | New man: phone → OTP → all onboarding → discover. T-3.13 runs it as far as the photos step; the rest is T-4.9's. He shares a position in Phagwara, which the browser gives only under `geolocation=(self)`: the Permissions-Policy proved by its effect (T-4.10). Its twin, refused the position, picks an area from the API's 17 | T-3.13, T-4.10, T-4.9 |
-| J2 | New woman: blocked until selfie approved | T-4.9 |
+| J1 | New man: phone → OTP → all onboarding → discover. T-3.13 ran it as far as the photos step; T-4.9 takes it the rest of the way: a photo the browser uploads to the local S3, checked by the worker (the fake moderation) and approved, 5 interests, a PIN set and confirmed, `/discover` barred until he's done, "Skip for now" at the selfie (D-008, through T-4.8's completion), Discover inside the shell, and the PIN lock after a reload, opened by his PIN. He shares a position in Phagwara, which the browser gives only under `geolocation=(self)`: the Permissions-Policy proved by its effect (T-4.10). Its twin, refused the position, picks an area from the API's 17 | T-3.13, T-4.10, T-4.9 |
+| J2 | New woman: the same to the selfie, the PIN skipped; no "Skip for now", and `/discover` barred; the camera opens under `camera=(self)` (T-4.7) on Chromium's fake camera, playing a committed portrait; the shot is checked, sent, and compared on the worker by the real models (D-088) with her photo, the same person's other portrait, and matched; "Continue" finishes sign-up (T-4.8) and a reload keeps her in | T-4.9 |
 | J3 | Under-18 refused, same number can't retry | T-3.13 |
 | J4 | Swipe → match → open thread (−5) → chat both ways live | T-7.13 |
 | J5 | Voice note from woman → man unlocks (−5) → plays | T-7.13 |
@@ -164,13 +164,32 @@ A test in this list is marked `@pytest.mark.critical`; CI runs them first and fa
 | J11 | Moderator resolves a report and freezes the account | T-9.5 |
 | J12 | Clear chat → undo → restore from You tab | T-7.10 |
 
-**How it runs (T-3.13).** `make e2e` (CI's `e2e` job, on every push, after `api` and `web` pass):
-Playwright drives a production build of the web (`next build && next start`, `APP_ENV=local`, so
-production's strict CSP is the one tested) on `127.0.0.1:3100`, against the API from
-`api/tests/e2e_server.py` on `127.0.0.1:8100`. The launcher takes a P-55 slot, so the run has a
-database and a Redis database of its own, created empty: it never meets a pytest run, and every run
-starts with no accounts, bans or rate-limit windows. Chromium at 390 × 844 and 1280 × 800; one
-worker, because the fake SMS's outbox lives in the API's one process.
+**How it runs (T-3.13, T-4.9).** `make e2e` (CI's `e2e` job, on every push, after `api` and `web`
+pass; locally it needs `make infra-up` and `make models`): Playwright drives a production build of
+the web (`next build && next start`, `APP_ENV=local`, so production's strict CSP is the one tested)
+on `127.0.0.1:3100`, against the API from `api/tests/e2e_server.py` on `127.0.0.1:8100`. The
+launcher takes a P-55 slot, so the run has a database and a Redis database of its own, created
+empty: it never meets a pytest run, and every run starts with no accounts, bans or rate-limit
+windows. Chromium at 390 × 844 and 1280 × 800; one worker, because the fake SMS's outbox lives in
+the API's one process.
+- **The whole stack, from T-4.9 (D-330):** storage is the local S3 (D-086), whose private bucket
+  admits the E2E's origin by a CORS rule of its own (`infra/s3/private-cors.xml`, held by
+  `api/tests/test_local_s3_cors.py`), since the browser uploads by presigned PUT; the launcher
+  runs the worker beside the API, a child process on the same slot, with its settings in its
+  environment and never from `api/.env`; moderation is the fake, which approves; the face match
+  is the real one (D-088), so the launcher refuses to start without the models. The S3's two
+  buckets are shared with every pytest run and `make dev` (P-55 gives the S3 no slot); each
+  object's key carries its user's id, so runs never meet there.
+- **The worker polls every 0.5 seconds here, not D-091's 10.** D-091's interval is Upstash's
+  per-command price on the deployed Redis; this Redis is Docker's and free, and at 10 seconds a
+  run would wait that long on every photo for nothing. The wake (D-261) decides the selfie either
+  way. Nothing of D-091 is changed: it is the worker's setting, for this run alone.
+- **The camera** is Chromium's fake one (`--use-fake-device-for-media-stream`,
+  `--use-file-for-fake-video-capture`), playing NASA's 2017 portrait of Raja Chari from
+  `api/tests/fixtures/faces`, copied at load as a one-frame MJPEG; J2's profile photo is his 2021
+  portrait, so the models are given two photos of one person. The journeys run on the full
+  Chromium in its new headless mode (`channel: "chromium"`), not Playwright's headless shell,
+  which has no media capture. Firefox's by-hand run skips J2: the fake camera is Chromium's.
 - **Codes** come from `POST /v1/test/sms/last-code` (04-API, local only): what the fake actually
   sent, so a number nothing was sent to, a banned one (D-073), gets none.
 - **Any CSP violation fails the journey** (`web/e2e/fixtures.ts`), and the journeys check no URL
