@@ -508,6 +508,9 @@ def test_the_worker_reads_the_same_settings_as_the_api_on_staging() -> None:
 
 
 def test_the_workers_fly_settings_start_as_staging_with_its_secrets() -> None:
+    # fly.worker.toml says FACEMATCH_PROVIDER=sface, so the worker's check reads
+    # the models (D-088): skipped without `make models` locally, failed in CI.
+    require_models()
     values = {
         "DATABASE_URL": "postgresql+asyncpg://app:x@db.example:5432/postgres",
         "REDIS_URL": "rediss://default:x@redis.example:6379/0",
