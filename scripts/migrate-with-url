@@ -31,11 +31,13 @@ from sqlalchemy.pool import NullPool
 
 # Alembic's schema comparison never sees a trigger or a function, nor a partial
 # index's condition, so a matching head can't vouch for these. They carry the
-# regulatory position (D-076) and one entry per event (D-077). A later guard of
+# regulatory position (D-076), one entry per event (D-077), and a woman's
+# profile never live without a matched selfie (D-008, D-310). A later guard of
 # the same weight is added here by the task that builds it; nothing else is.
 TRIGGERS = (
     ("ledger_entries", "ledger_entries_only_men"),
     ("wallets", "wallets_only_men"),
+    ("users", "users_done_needs_a_match"),
 )
 UNIQUE_INDEXES = (("ledger_entries", "uq_ledger_entries_one_per_event"),)
 

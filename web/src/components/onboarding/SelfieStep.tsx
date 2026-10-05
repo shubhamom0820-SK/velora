@@ -16,7 +16,12 @@ import { stepPath } from "@/lib/onboarding";
 import type { Me } from "@/lib/queries/me";
 
 import { SELFIE_CIRCLE, SelfieCamera } from "./SelfieCamera";
-import { cameraCopy, selfieReasonCopy, triesCopy } from "./selfieCopy";
+import {
+  cameraCopy,
+  selfieReasonCopy,
+  triesCopy,
+  type FinishCopy,
+} from "./selfieCopy";
 import { StepFrame } from "./StepFrame";
 import { useSelfie, type SelfieView } from "./useSelfie";
 
@@ -70,12 +75,34 @@ function Lines({ children }: { children: ReactNode }) {
 const SKIP =
   "text-small text-mute mt-3 w-full py-2 underline underline-offset-2";
 
+/** Why finishing was refused (T-4.8), with the way back when there is one. */
+function finishFailure(copy: FinishCopy | null): ReactNode {
+  if (!copy) return null;
+  return (
+    <p role="alert" className="text-small text-accent mt-3 text-center">
+      {copy.message}
+      {copy.place && (
+        <>
+          {" "}
+          <Link
+            href={stepPath(copy.place)}
+            className="underline underline-offset-2"
+          >
+            {t("onboarding.selfie.finish.goThere")}
+          </Link>
+        </>
+      )}
+    </p>
+  );
+}
+
 /**
  * The selfie (T-4.7), the `selfie` step: the front camera, a picture checked
  * before it's sent, and the result, said plainly while it's compared (D-261).
  * It says what is done, the selfie compared with the profile's photos, and
  * never that the person is verified, real or live (D-262). Men may skip it;
- * women can't, and the server holds that (T-4.8), whatever this screen shows.
+ * women can't, and the server holds that (T-4.8), whatever this screen shows:
+ * "Skip for now" and "Continue" both ask it to finish sign-up.
  */
 export function SelfieStep({ me }: { me: Me }) {
   const selfie = useSelfie({ alreadyMatched: me.is_verified });
@@ -89,7 +116,12 @@ export function SelfieStep({ me }: { me: Me }) {
   const { view } = selfie;
 
   const skip = maySkip ? (
-    <button type="button" className={SKIP} onClick={selfie.finish}>
+    <button
+      type="button"
+      className={SKIP}
+      disabled={selfie.finishing}
+      onClick={selfie.finish}
+    >
       {t("onboarding.selfie.skip")}
     </button>
   ) : null;
@@ -264,12 +296,6 @@ function body(
           </Lines>
         </>
       );
-    case "next":
-      return (
-        <p role="status" className="text-body text-ink text-center">
-          {t("onboarding.selfie.next")}
-        </p>
-      );
   }
 }
 
@@ -286,6 +312,7 @@ function footer(view: SelfieView, selfie: Selfie, skip: ReactNode): ReactNode {
             {t("onboarding.selfie.openCamera")}
           </Button>
           {skip}
+          {finishFailure(selfie.finishFailure)}
         </>
       );
     case "camera":
@@ -356,13 +383,15 @@ function footer(view: SelfieView, selfie: Selfie, skip: ReactNode): ReactNode {
       ) : null;
     case "matched":
       return (
-        <Button fullWidth onClick={selfie.finish}>
-          {t("onboarding.continue")}
-        </Button>
+        <>
+          <Button fullWidth loading={selfie.finishing} onClick={selfie.finish}>
+            {t("onboarding.continue")}
+          </Button>
+          {finishFailure(selfie.finishFailure)}
+        </>
       );
     case "loading":
     case "failed":
-    case "next":
       return null;
   }
 }

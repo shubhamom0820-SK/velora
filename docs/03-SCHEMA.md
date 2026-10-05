@@ -64,7 +64,7 @@ Intent is not an enum: it is the `intents` catalogue, picked 1 to 3 per user (D-
 | dob | date null | immutable after set (trigger) |
 | role | role_t not null default 'user' | |
 | status | user_status_t not null default 'active' | |
-| onboarding_step | onboarding_t not null default 'dob' | |
+| onboarding_step | onboarding_t not null default 'dob' | moves to `done` only for a man or `is_verified` (trigger `users_done_needs_a_match`, D-310) |
 | is_verified | boolean not null default false | the selfie matched the profile's photos (T-4.5, D-260); never "verified" in copy (D-262) |
 | pin_hash | text null | argon2id over a pepper kept off the database (D-062) |
 | pin_failed | smallint not null default 0 | |
@@ -121,7 +121,7 @@ Unique `(kind, value)`.
 | hide_distance | boolean default false | |
 | show_kudos | boolean default true | |
 | show_gifts | boolean default true | received gifts on profile |
-| completeness | smallint default 0 | 0–100, computed by service |
+| completeness | smallint default 0 | 0–100, computed by service: 50, and 10 for each approved public photo after the first, set when onboarding finishes (T-4.8, D-310); kept current after that by P-210 |
 
 Indexes: `GIST(location)`, `GIN(username gin_trgm_ops)`, `GIN(first_name gin_trgm_ops)`,
 `(is_hidden)`. Intent lives in `profile_intents` (D-041).

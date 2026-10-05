@@ -38,6 +38,9 @@ from app.core.providers.storage import FakeStorage
 from app.core.security import decrypt_phone, hash_phone, normalize_phone, verify_pin
 from app.modules.matches.models import Match
 from app.modules.notifications.models import NotificationPrefs
+from app.modules.onboarding import repository as onboarding_repository
+from app.modules.onboarding import rules as onboarding_rules
+from app.modules.onboarding import service as onboarding_service
 from app.modules.photos.models import Photo
 from app.modules.profiles import repository as profiles_repository
 from app.modules.profiles import rules
@@ -562,6 +565,29 @@ async def test_who_is_verified_and_who_is_still_onboarding(
     assert len(verified) == 15  # 7 women, 7 men, the test woman: T-4.5's rows
 
 
+async def test_every_finished_profile_could_have_finished(
+    db: AsyncSession, seeded: run.SeedReport
+) -> None:
+    """T-4.8's requirements, read as `POST /me/onboarding/complete` reads them,
+    hold for everyone the seed leaves `done`, and their completeness is what
+    finishing makes it (D-310): never signup's 0, which no finished profile
+    has. One approved photo each, so 50 for all, until a seeded profile shows
+    more."""
+    finished = [p for p in PEOPLE if p.step is OnboardingStep.DONE]
+    for person in finished:
+        user = await _user(db, person.phone)
+        profile = await onboarding_repository.profile_of(db, user.id)
+        facts = await onboarding_service.facts_of(db, profile)
+        assert onboarding_rules.missing(facts) == [], person.key
+        assert user.is_verified or not onboarding_rules.needs_a_match(user.gender)
+        assert profile.completeness == onboarding_rules.completeness(
+            facts.approved_photos
+        ), person.key
+        assert profile.completeness == 50, person.key
+    assert seeded.completeness_set == [p.key for p in finished]
+    assert "Completeness set for 19 finished profiles (D-310)." in summary(seeded)
+
+
 async def test_the_moderator_has_not_started_onboarding(
     db: AsyncSession, seeded: run.SeedReport
 ) -> None:
@@ -754,6 +780,7 @@ async def test_a_second_run_changes_nothing(
     assert again.created == []
     assert again.existing == [p.key for p in PEOPLE]
     assert again.swipes_added == 0
+    assert again.completeness_set == []
     assert (again.credited, again.already_credited) == ([], ["test_man"])
     assert "Anyone already there was left as they are" in summary(again)
     assert "(test_man had them already)" in summary(again)

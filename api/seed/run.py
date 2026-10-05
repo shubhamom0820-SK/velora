@@ -8,7 +8,7 @@ Every account is created by signup's own service (`users.service`, T-3.3),
 with the keys the local API reads, and the PIN goes through `hash_pin`, so
 sign-in finds these accounts exactly as it finds anyone else.
 
-Insert-only, with two exceptions, each made once: a person's seeded credits
+Insert-only, with exceptions, each made once: a person's seeded credits
 (the test man's 60) are granted even if he is already there, by an account from
 before T-5.1 or a seed that ran before credits existed. They go through
 `wallet.service.credit()` like any other credit (rule 5), under a key of the
@@ -20,6 +20,9 @@ the prototype's gradient, re-encoded like any upload and stored through
 marked verified gets an approved verification with a placeholder selfie in the
 private bucket (T-4.5) if they have no approved verification yet: never
 compared with anything, and its record says so (`{"decided_by": "seed"}`).
+And every finished profile's completeness is what finishing would have made it
+(T-4.8, D-310), read from what the seed wrote, since signup leaves it 0: set
+only where it differs, so a second run sets nothing.
 """
 
 from __future__ import annotations
@@ -57,6 +60,9 @@ from app.core.providers.storage import FakeStorage, StorageProvider
 from app.core.security import hash_phone, hash_pin, normalize_phone
 from app.core.storage_keys import public_photo_key, raw_key
 from app.modules.auth import pins
+from app.modules.onboarding import repository as onboarding_repository
+from app.modules.onboarding import rules as onboarding_rules
+from app.modules.onboarding import service as onboarding_service
 from app.modules.photos.models import Photo
 from app.modules.profiles import rules
 from app.modules.profiles.models import (
@@ -332,6 +338,7 @@ class SeedReport:
     already_credited: list[str] = field(default_factory=list)
     photos_added: list[str] = field(default_factory=list)
     verifications_added: list[str] = field(default_factory=list)
+    completeness_set: list[str] = field(default_factory=list)
 
 
 async def write_seed(
@@ -343,9 +350,10 @@ async def write_seed(
     storage: StorageProvider | None = None,
 ) -> SeedReport:
     """Write everyone who isn't there yet, the swipes, the credits and the
-    placeholder photos. Insert-only but for credits and photos: someone found
-    by their phone hash is left exactly as they are, except that their seeded
-    credits are granted once and a missing photo at place 0 is added once.
+    placeholder photos. Insert-only but for credits, photos and completeness:
+    someone found by their phone hash is left exactly as they are, except that
+    their seeded credits are granted once, a missing photo at place 0 is added
+    once, and a finished profile's completeness is what T-4.8's rule makes it.
     `make seed` stores the photos' files through the configured storage; a test
     that doesn't read them leaves `storage` out and they go to a fake."""
     storage = storage or FakeStorage()
@@ -479,6 +487,9 @@ async def write_seed(
             await _verification(
                 session, settings, storage, person, user_ids[person.key], report
             )
+    for person in people:
+        if person.step is OnboardingStep.DONE:
+            await _completeness(session, person, user_ids[person.key], report)
     return report
 
 
@@ -525,6 +536,23 @@ async def _photo(
     )
     await session.flush()
     report.photos_added.append(person.key)
+
+
+async def _completeness(
+    session: AsyncSession, person: Person, user_id: UUID, report: SeedReport
+) -> None:
+    """A finished profile's completeness, as `POST /me/onboarding/complete`
+    computes it (D-310), read from what the seed wrote: signup leaves 0, which
+    no finished profile has. Set only if it differs, so a second run changes
+    nothing."""
+    profile = await onboarding_repository.profile_of(session, user_id)
+    facts = await onboarding_service.facts_of(session, profile)
+    completeness = onboarding_rules.completeness(facts.approved_photos)
+    if profile.completeness == completeness:
+        return
+    profile.completeness = completeness
+    await session.flush()
+    report.completeness_set.append(person.key)
 
 
 async def _verification(
@@ -650,11 +678,17 @@ def summary(report: SeedReport) -> str:
             "  Placeholder selfies, approved, added for "
             f"{len(report.verifications_added)} people."
         )
+    if report.completeness_set:
+        lines.append(
+            "  Completeness set for "
+            f"{len(report.completeness_set)} finished profiles (D-310)."
+        )
     if report.existing:
         lines.append(
             "  Anyone already there was left as they are, even if seed/data.py "
-            "changed since, except that seeded credits are granted once, and a "
-            "missing placeholder photo or selfie added once"
+            "changed since, except that seeded credits are granted once, a "
+            "missing placeholder photo or selfie added once, and a finished "
+            "profile's completeness set by D-310's rule"
             + (
                 f" ({', '.join(report.already_credited)} had them already)."
                 if report.already_credited

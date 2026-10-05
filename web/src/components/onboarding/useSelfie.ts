@@ -6,6 +6,7 @@ import { useEffect, useRef, useState } from "react";
 import { ApiError } from "@/lib/api";
 import type { CameraFailure } from "@/lib/camera";
 import { queryKeys } from "@/lib/queries/keys";
+import { useCompleteOnboarding } from "@/lib/queries/onboarding";
 import {
   isBeingCompared,
   useLatestVerification,
@@ -16,7 +17,8 @@ import {
   type Verification,
 } from "@/lib/queries/verification";
 
-import { refusalCopy, sendFailedCopy } from "./selfieCopy";
+import { finishCopy, refusalCopy, sendFailedCopy } from "./selfieCopy";
+import { useAdvance } from "./useAdvance";
 
 /**
  * After this long being compared, the screen says it can take a minute and
@@ -46,9 +48,7 @@ export type SelfieView =
       /** Past `VERIFICATION_POLL_FOR_MS`: no longer asked; "Check again". */
       stopped: boolean;
     }
-  | { kind: "matched"; preview: string | null }
-  /** "Continue" or "Skip for now": the end of what is built until T-4.8. */
-  | { kind: "next" };
+  | { kind: "matched"; preview: string | null };
 
 /** What this page knows that the API doesn't. */
 type Local =
@@ -57,14 +57,14 @@ type Local =
   | { kind: "cameraFailed"; failure: CameraFailure }
   | { kind: "review"; shot: Blob; preview: string }
   | { kind: "sending"; shot: Blob; preview: string; percent: number }
-  | { kind: "sendFailed"; shot: Blob; preview: string; copy: string }
-  | { kind: "next" };
+  | { kind: "sendFailed"; shot: Blob; preview: string; copy: string };
 
 /**
  * The selfie step's flow (T-4.7): start the verification, open the camera,
  * take a frame, check it, send it (upload as `kind=selfie`, then submit), and
  * follow `GET /verification/latest` every 2 s while it's compared, for at most
- * a minute at a time. Whether a selfie matched is the server's alone (D-082).
+ * a minute at a time. Then finish sign-up (T-4.8). Whether a selfie matched,
+ * and whether sign-up may finish, are the server's alone (D-082).
  */
 export function useSelfie({ alreadyMatched }: { alreadyMatched: boolean }) {
   const queryClient = useQueryClient();
@@ -83,6 +83,8 @@ export function useSelfie({ alreadyMatched }: { alreadyMatched: boolean }) {
   const start = useStartVerification();
   const upload = useUploadSelfie();
   const submit = useSubmitSelfie();
+  const complete = useCompleteOnboarding();
+  const advance = useAdvance();
 
   // The minute of asking is counted per selfie being compared, per round:
   // asked until that round's minute is up.
@@ -134,6 +136,7 @@ export function useSelfie({ alreadyMatched }: { alreadyMatched: boolean }) {
   /** Start (or reopen) the verification, then open the camera. */
   async function openCamera() {
     setNotice(null);
+    complete.reset();
     try {
       await start.mutateAsync();
       setLocal({ kind: "camera" });
@@ -224,14 +227,29 @@ export function useSelfie({ alreadyMatched }: { alreadyMatched: boolean }) {
     void latest.refetch();
   }
 
-  /** "Continue" after a match, or a man's "Skip for now". */
+  /**
+   * "Continue" after a match, or a man's "Skip for now": the server finishes
+   * sign-up and the person goes where its `Me` says, the app; or it says what
+   * is still needed, shown with the way back (T-4.8).
+   */
   function finish() {
-    setLocal({ kind: "next" });
+    complete.mutate(undefined, {
+      onSuccess: advance,
+      onError: (error) => {
+        // The server knows of no match: `Me` and the latest say what it has.
+        if (
+          error instanceof ApiError &&
+          error.code === "VERIFICATION_REQUIRED"
+        ) {
+          void queryClient.invalidateQueries({ queryKey: queryKeys.me() });
+          void latest.refetch();
+        }
+      },
+    });
   }
 
   let view: SelfieView;
-  if (local.kind === "next") view = { kind: "next" };
-  else if (alreadyMatched || last?.status === "approved")
+  if (alreadyMatched || last?.status === "approved")
     view = { kind: "matched", preview: sent };
   else if (latest.isPending) view = { kind: "loading" };
   else if (latest.isError) view = { kind: "failed" };
@@ -269,5 +287,8 @@ export function useSelfie({ alreadyMatched }: { alreadyMatched: boolean }) {
     checkAgain,
     retryLoad: () => void latest.refetch(),
     finish,
+    finishing: complete.isPending,
+    /** Why finishing was refused, until the next try. */
+    finishFailure: complete.error ? finishCopy(complete.error) : null,
   };
 }

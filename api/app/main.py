@@ -26,6 +26,7 @@ from app.modules.auth.router import firebase_router, otp_router
 from app.modules.auth.router import router as auth_router
 from app.modules.e2e.router import router as e2e_router
 from app.modules.health.router import router as health_router
+from app.modules.onboarding.router import router as onboarding_router
 from app.modules.photos.router import router as photos_router
 from app.modules.pricing.router import router as pricing_router
 from app.modules.profiles.router import router as profiles_router
@@ -133,6 +134,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.include_router(auth_router, prefix="/v1")
     app.include_router(users_router, prefix="/v1")
     app.include_router(profiles_router, prefix="/v1")
+    app.include_router(onboarding_router, prefix="/v1")
     app.include_router(photos_router, prefix="/v1")
     app.include_router(pricing_router, prefix="/v1")
     app.include_router(verification_router, prefix="/v1")

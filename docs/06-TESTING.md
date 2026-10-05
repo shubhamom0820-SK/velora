@@ -118,6 +118,10 @@ If any of these fails, nothing ships.
    attached" is a row in every table the app role may delete from (D-078, P-54), and every file
    behind them, queued before the commit and read back as gone once the user is (D-090, T-4.2).
 8. **Gender immutable** (T-1.16, T-3.6): second set → `IMMUTABLE_FIELD`; DB trigger also blocks.
+8b. **No woman goes live unmatched** (T-4.8, D-310, D-008): finishing onboarding without a matched
+    selfie → `VERIFICATION_REQUIRED` for anyone but a man, someone with no gender included; and the
+    database refuses any write moving such a user to `done`, inserts too, and an upgrade over one
+    already there. Proved by breaking the service's check, the trigger, and each into a blacklist.
 9. **Blocks are total** (T-9.1): after a block, neither side appears to the other anywhere.
 10. **Clearing is one-sided** (T-7.8): A clears → B still sees every message.
 11. **Contact masking** (T-7.3): numbers, spaced digits, emails, UPI IDs, social handles masked in

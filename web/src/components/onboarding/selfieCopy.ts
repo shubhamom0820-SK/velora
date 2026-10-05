@@ -2,6 +2,7 @@ import { t } from "@/i18n/t";
 import { ApiError } from "@/lib/api";
 import { APP_NAME } from "@/lib/app";
 import type { CameraBrowser, CameraFailure } from "@/lib/camera";
+import type { Place } from "@/lib/onboarding";
 import { UploadError } from "@/lib/upload";
 
 import { errorCopy } from "./errorCopy";
@@ -62,6 +63,59 @@ export function sendFailedCopy(error: unknown): string {
       : t("apiErrors.unknown");
   }
   return errorCopy(error).message;
+}
+
+/**
+ * Each requirement `PROFILE_INCOMPLETE` may name (the API's
+ * `onboarding.rules.Missing`, D-310), and the screen that fills it in. The API
+ * names them in onboarding's order, so the first is the earliest to go back to.
+ */
+const MISSING_PLACE = {
+  seeking: "seeking",
+  intents: "seeking",
+  first_name: "profile",
+  hometown: "profile",
+  city: "profile",
+  location: "location",
+  username: "username",
+  about: "about",
+  photo: "photos",
+  interests: "interests",
+} as const satisfies Record<string, Place>;
+type Missing = keyof typeof MISSING_PLACE;
+const MISSING = Object.keys(MISSING_PLACE) as Missing[];
+
+const isMissing = (name: unknown): name is Missing =>
+  MISSING.some((listed) => listed === name);
+
+export type FinishCopy = {
+  message: string;
+  /** The screen to go back to, when the server named one. */
+  place: Place | null;
+};
+
+/**
+ * Why finishing was refused (T-4.8): the first thing still needed, with its
+ * screen; that the selfie hasn't matched; otherwise the shared wording. A name
+ * this list doesn't know reads as the general line, with nowhere to go.
+ */
+export function finishCopy(error: unknown): FinishCopy {
+  if (error instanceof ApiError && error.code === "PROFILE_INCOMPLETE") {
+    const named = error.details?.missing;
+    const first = Array.isArray(named) ? named.find(isMissing) : undefined;
+    if (!first) {
+      return { message: t("onboarding.selfie.finish.incomplete"), place: null };
+    }
+    const place = MISSING_PLACE[first];
+    return {
+      message: t(`onboarding.selfie.finish.missing.${place}`),
+      place,
+    };
+  }
+  if (error instanceof ApiError && error.code === "VERIFICATION_REQUIRED") {
+    return { message: t("onboarding.selfie.finish.needsMatch"), place: null };
+  }
+  return { message: errorCopy(error).message, place: null };
 }
 
 /** Why the camera didn't open, and, when it's blocked, where to allow it. */

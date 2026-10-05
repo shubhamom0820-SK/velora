@@ -19,7 +19,7 @@ from sqlalchemy import select, text, update
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession
 
 from app.core import security
-from app.core.enums import OnboardingStep, Role
+from app.core.enums import Gender, OnboardingStep, Role
 from app.core.errors import AppError
 from app.core.providers import FakeProviders
 from app.core.security import (
@@ -345,6 +345,8 @@ async def test_the_window_is_the_sign_in_never_the_refresh(
     clock.freeze(START)
     signed_in = await _sign_in(client, fake_providers, clock)
     user = await _account(db)
+    # A man, as only a man finishes without a matched selfie (D-310's trigger).
+    user.gender = Gender.MALE
     user.onboarding_step = OnboardingStep.DONE
     await _with_pin(db, user)
 

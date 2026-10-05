@@ -217,3 +217,12 @@ export function useSetPin() {
 export function useSkipPin() {
   return useMeMutation(() => api.post("/v1/me/pin/skip"));
 }
+
+/**
+ * Finish sign-up (T-4.8, D-310): the server checks every requirement, and a
+ * matched selfie for anyone but a man, then answers with `Me` at `done`; or
+ * `PROFILE_INCOMPLETE` naming what's missing, or `VERIFICATION_REQUIRED`.
+ */
+export function useCompleteOnboarding() {
+  return useMeMutation(() => api.post("/v1/me/onboarding/complete"));
+}

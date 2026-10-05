@@ -358,9 +358,25 @@ export const en = {
         "Still comparing. Come back in a few minutes — your result will be waiting here.",
       checkAgain: "Check again",
       matched: "Your selfie matches your photos.",
-      // Where "Continue" and "Skip for now" lead until T-4.8 finishes sign-up:
-      // never on to the app, whose gate would send the person straight back.
-      next: "That's everything for now. The rest of sign-up opens next.",
+      // "Continue" and "Skip for now" finish sign-up (T-4.8, D-310); when the
+      // server says something is still needed, the first thing it names, with
+      // the way back to its screen.
+      finish: {
+        missing: {
+          seeking: "Say who you're looking for first.",
+          profile: "Add your name, hometown and city first.",
+          location: "Add your location first.",
+          username: "Choose a username first.",
+          about: "Write a few lines about yourself first.",
+          photos:
+            "Your profile needs at least one approved photo. One may still be being checked, or need replacing.",
+          interests: "Pick your 5 interests first.",
+        },
+        incomplete: "Something on your profile isn't finished yet.",
+        needsMatch:
+          "Your selfie has to match your photos before you can finish.",
+        goThere: "Take me there",
+      },
       triesOne: "1 try left today.",
       triesMany: "{count} tries left today.",
       triesNone: "No tries left today.",

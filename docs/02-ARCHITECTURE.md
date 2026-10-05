@@ -39,7 +39,7 @@ api/app/
     providers/            sms.py payments.py moderation.py facematch.py push.py storage.py
                           each: Protocol + RealImpl + FakeImpl
   modules/
-    auth users profiles photos verification discovery swipes matches
+    auth users profiles onboarding photos verification discovery swipes matches
     threads messages album kudos gifts safety wallet payments referrals
     notifications admin waitlist realtime
   workers/
@@ -144,13 +144,15 @@ sequenceDiagram
 
 ## 5. Onboarding state machine
 
-`users.onboarding_step`: `dob → gender → seeking → profile → username → about → photos → interests
-→ pin → selfie → done`. The API rejects discovery/threads calls with `ONBOARDING_INCOMPLETE` until
-`done`. Women cannot reach `done` without an approved selfie verification. Each step's endpoint
-works at its step (advancing it) and after it (an edit that doesn't advance), and refuses before
-it with `ONBOARDING_INCOMPLETE` and the current step (D-068). `gender` and `dob` are immutable
-once set (T-1.9's trigger), and a date of birth under 18 deletes the account, keeping only the
-number's hash (D-072).
+`users.onboarding_step`: `dob → gender → seeking → profile → username → about → photos → interests →
+pin → selfie → done`. The API rejects discovery/threads calls with `ONBOARDING_INCOMPLETE` until
+`done`. Women cannot reach `done` without an approved selfie verification:
+`POST /me/onboarding/complete` moves `selfie` to `done` once every requirement is met, and for anyone but
+a man only with a matched selfie; a trigger refuses any write that moves anyone else to `done`
+unmatched (T-4.8, D-310). Each step's endpoint works at its step (advancing it) and after it (an
+edit that doesn't advance), and refuses before it with `ONBOARDING_INCOMPLETE` and the current step
+(D-068). `gender` and `dob` are immutable once set (T-1.9's trigger), and a date of birth under 18
+deletes the account, keeping only the number's hash (D-072).
 
 The location question (T-4.10, D-220) has no step of its own. It is asked after `profile` (Name),
 before `username`: `PUT /me/location` works from `username` on and never moves the step, and `Me`

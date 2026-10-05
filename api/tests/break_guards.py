@@ -2497,6 +2497,348 @@ T45: list[tuple[Case, list[str]]] = [
     ),
 ]
 
+# --- T-4.8: finishing onboarding, D-310's trigger, the seed's completeness ----------
+
+ONBOARDING = "tests/modules/onboarding"
+RULES48 = "app/modules/onboarding/rules.py"
+SERVICE48 = "app/modules/onboarding/service.py"
+REPO48 = "app/modules/onboarding/repository.py"
+MIGRATION48 = "alembic/versions/20261005_15a9b138750b_done_needs_a_matched_selfie.py"
+EACH = "test_each_requirement_is_refused_by_name"
+
+
+def requirement_dropped(key: str, check: str, *expect: str) -> Case:
+    """One requirement always met, as a careless edit to the rules leaves it."""
+    return Case(
+        id=f"t48-{key.replace('_', '-')}-not-required",
+        what=f"{key} not required",
+        edits=[(RULES48, f'        "{key}": {check},\n', f'        "{key}": True,\n')],
+        expect=[f"{EACH}[{case}]" for case in expect],
+    )
+
+
+T48: list[tuple[Case, list[str]]] = [
+    (
+        requirement_dropped("seeking", "facts.seeking is not None", "no seeking"),
+        [ONBOARDING],
+    ),
+    (
+        requirement_dropped(
+            "intents",
+            "INTENTS_MIN <= facts.intents <= INTENTS_MAX",
+            "no intent",
+            "four intents",
+        ),
+        [ONBOARDING],
+    ),
+    (
+        Case(
+            id="t48-more-than-three-intents",
+            what="more than three intents taken (D-041)",
+            edits=[
+                (
+                    RULES48,
+                    '        "intents": INTENTS_MIN <= facts.intents <= INTENTS_MAX,\n',
+                    '        "intents": INTENTS_MIN <= facts.intents,\n',
+                )
+            ],
+            expect=[f"{EACH}[four intents]"],
+        ),
+        [ONBOARDING],
+    ),
+    (
+        requirement_dropped("first_name", "bool(facts.first_name)", "no first name"),
+        [ONBOARDING],
+    ),
+    (
+        requirement_dropped("hometown", "bool(facts.hometown)", "no hometown"),
+        [ONBOARDING],
+    ),
+    (requirement_dropped("city", "bool(facts.city)", "no city"), [ONBOARDING]),
+    (requirement_dropped("location", "facts.located", "no location"), [ONBOARDING]),
+    (
+        requirement_dropped("username", "bool(facts.username)", "no username"),
+        [ONBOARDING],
+    ),
+    (requirement_dropped("about", "bool(facts.about)", "no about"), [ONBOARDING]),
+    (
+        requirement_dropped(
+            "photo",
+            "facts.approved_photos >= 1",
+            "no photo",
+            "a photo still being checked",
+            "a photo rejected by moderation",
+            "a photo its owner removed",
+            "a private photo only",
+            "a selfie only",
+        ),
+        [ONBOARDING],
+    ),
+    (
+        requirement_dropped(
+            "interests", "facts.interests == INTERESTS_PER_PROFILE", "four interests"
+        ),
+        [ONBOARDING],
+    ),
+    (
+        Case(
+            id="t48-a-removed-photo-counted",
+            what="a photo its owner removed counted: its public_key stays",
+            edits=[
+                (REPO48, "            Photo.status == ReviewStatus.APPROVED,\n", "")
+            ],
+            expect=[
+                f"{EACH}[a photo its owner removed]",
+                "test_completeness_counts_approved_public_photos_only",
+            ],
+        ),
+        [ONBOARDING],
+    ),
+    (
+        Case(
+            id="t48-any-approved-photo-counted",
+            what="a private photo or a selfie counted",
+            edits=[
+                (
+                    REPO48,
+                    "            Photo.kind == PhotoKind.PUBLIC,\n            Photo.status == ReviewStatus.APPROVED,\n            Photo.public_key.is_not(None),\n",
+                    "            Photo.status == ReviewStatus.APPROVED,\n",
+                )
+            ],
+            expect=[
+                f"{EACH}[a private photo only]",
+                f"{EACH}[a selfie only]",
+                "test_completeness_counts_approved_public_photos_only",
+            ],
+        ),
+        [ONBOARDING],
+    ),
+    (
+        Case(
+            id="t48-a-woman-finishes-unmatched",
+            what="the service's match check removed (the trigger alone stops her)",
+            edits=[
+                (
+                    SERVICE48,
+                    "        if rules.needs_a_match(user.gender) and not user.is_verified:\n",
+                    "        if False:\n",
+                )
+            ],
+            expect=[
+                "test_a_woman_without_a_match_is_refused",
+                "test_no_gender_needs_a_match_too",
+            ],
+        ),
+        [ONBOARDING],
+    ),
+    (
+        Case(
+            id="t48-the-allowlist-a-blacklist",
+            what="women named instead of men: no gender finishes unmatched",
+            edits=[
+                (
+                    RULES48,
+                    "    return gender not in MAY_FINISH_UNMATCHED\n",
+                    "    return gender is Gender.FEMALE\n",
+                )
+            ],
+            expect=[
+                "test_no_gender_needs_a_match_too",
+                "test_only_a_man_finishes_without_a_match[no gender]",
+            ],
+        ),
+        [ONBOARDING],
+    ),
+    (
+        Case(
+            id="t48-match-checked-before-the-profile",
+            what="the selfie refused before what's missing is named",
+            edits=[
+                (
+                    SERVICE48,
+                    '        missing = rules.missing(facts)\n        if missing:\n            raise AppError(\n                "PROFILE_INCOMPLETE",\n',
+                    '        missing = rules.missing(facts)\n        if rules.needs_a_match(user.gender) and not user.is_verified:\n            raise AppError("VERIFICATION_REQUIRED", "", status=403)\n        if missing:\n            raise AppError(\n                "PROFILE_INCOMPLETE",\n',
+                )
+            ],
+            expect=["test_a_profile_short_of_something_is_told_that_before_the_selfie"],
+        ),
+        [ONBOARDING],
+    ),
+    (
+        Case(
+            id="t48-finished-from-any-step",
+            what="D-068's step rule removed: a step before selfie finishes",
+            edits=[
+                (
+                    SERVICE48,
+                    "        if not users_service.at_step(user, OnboardingStep.SELFIE):\n",
+                    "        if user.onboarding_step is OnboardingStep.DONE:\n",
+                )
+            ],
+            expect=["test_before_the_selfie_step_is_onboarding_incomplete"],
+        ),
+        [ONBOARDING],
+    ),
+    (
+        Case(
+            id="t48-done-checked-again",
+            what="a finished profile checked again, and refused",
+            edits=[
+                (
+                    SERVICE48,
+                    "        if not users_service.at_step(user, OnboardingStep.SELFIE):\n            return await users_service.me(session, user)\n",
+                    "        users_service.at_step(user, OnboardingStep.SELFIE)\n",
+                )
+            ],
+            expect=["test_once_done_it_changes_nothing_and_checks_nothing"],
+        ),
+        [ONBOARDING],
+    ),
+    (
+        Case(
+            id="t48-the-row-not-locked",
+            what="the user's row read, not locked, before the facts",
+            edits=[
+                (
+                    SERVICE48,
+                    "        user = await users_service.locked_user(session, user.id)\n",
+                    "        user = await users_service.get_user(session, user.id)\n",
+                )
+            ],
+            expect=["test_finishing_waits_for_the_photos_decision"],
+        ),
+        [ONBOARDING],
+    ),
+    (
+        Case(
+            id="t48-completeness-not-set",
+            what="the step moved, completeness left at signup's 0",
+            edits=[
+                (
+                    SERVICE48,
+                    "        profile.completeness = rules.completeness(facts.approved_photos)\n",
+                    "",
+                )
+            ],
+            expect=[
+                "test_a_man_finishes_without_a_selfie",
+                "test_completeness_counts_approved_public_photos_only",
+                "test_finishing_waits_for_the_photos_decision",
+            ],
+        ),
+        [ONBOARDING],
+    ),
+    (
+        Case(
+            id="t48-trigger-removed",
+            what="D-310's trigger never created",
+            edits=[(MIGRATION48, "    op.execute(sa.text(TRIGGER))\n", "")],
+            expect=[
+                "test_only_a_man_moves_to_done_unmatched",
+                "test_a_row_written_as_done_is_held_to_the_same_rule",
+                "test_the_app_is_refused_by_the_trigger_itself",
+            ],
+        ),
+        [ONBOARDING],
+    ),
+    (
+        Case(
+            id="t48-trigger-a-blacklist",
+            what="the trigger names women instead of men: no gender passes",
+            edits=[
+                (
+                    MIGRATION48,
+                    "    if new.gender is distinct from 'male' and not new.is_verified then\n",
+                    "    if new.gender = 'female' and not new.is_verified then\n",
+                )
+            ],
+            expect=["test_only_a_man_moves_to_done_unmatched"],
+        ),
+        [ONBOARDING],
+    ),
+    (
+        Case(
+            id="t48-trigger-on-update-only",
+            what="a row inserted as done not checked",
+            edits=[
+                (
+                    MIGRATION48,
+                    '    "before insert or update of onboarding_step on users "\n',
+                    '    "before update of onboarding_step on users "\n',
+                )
+            ],
+            expect=["test_a_row_written_as_done_is_held_to_the_same_rule"],
+        ),
+        [ONBOARDING],
+    ),
+    (
+        Case(
+            id="t48-trigger-decides-p161",
+            what="a row already done checked too, deciding P-161 and P-163",
+            edits=[
+                (
+                    MIGRATION48,
+                    "    if tg_op = 'UPDATE' and old.onboarding_step = 'done' then\n        return new;\n    end if;\n",
+                    "",
+                )
+            ],
+            expect=["test_a_row_already_done_is_left_to_p161_and_p163"],
+        ),
+        [ONBOARDING],
+    ),
+    (
+        Case(
+            id="t48-migration-precheck",
+            what="the upgrade guards a woman already done unmatched",
+            edits=[
+                (
+                    MIGRATION48,
+                    "    op.execute(sa.text(REQUIRE_NONE_DONE_WITHOUT_A_MATCH))\n",
+                    "",
+                )
+            ],
+            expect=[
+                "test_the_migration_refuses_to_guard_a_woman_already_done_unmatched"
+            ],
+        ),
+        [ONBOARDING],
+    ),
+    (
+        Case(
+            id="t48-deploy-readback-skips-it",
+            what="the deploy's readback doesn't ask for D-310's trigger",
+            edits=[
+                (
+                    "../scripts/migrate-with-url",
+                    '    ("users", "users_done_needs_a_match"),\n',
+                    "",
+                )
+            ],
+            expect=[
+                "test_an_empty_database_is_migrated_and_read_back",
+                "test_a_head_stamped_without_its_migration_is_refused",
+                "test_a_trigger_that_refuses_nothing_is_refused[",
+            ],
+        ),
+        ["tests/test_migrate_with_url.py"],
+    ),
+    (
+        Case(
+            id="t48-seed-completeness-left-0",
+            what="the seed's finished profiles left at signup's 0",
+            edits=[
+                (
+                    "seed/run.py",
+                    "            await _completeness(session, person, user_ids[person.key], report)\n",
+                    "            pass\n",
+                )
+            ],
+            expect=["test_every_finished_profile_could_have_finished"],
+        ),
+        ["tests/seed/test_seed.py"],
+    ),
+]
+
 CASES: list[tuple[Case, list[str]]] = (
     [(c, T51_SELECTION) for c in T51]
     + [(c, T54_SELECTION) for c in T54]
@@ -2508,6 +2850,7 @@ CASES: list[tuple[Case, list[str]]] = (
     + P143
     + [(c, P38_SELECTION) for c in P38]
     + T45
+    + T48
 )
 
 # The fifty-connection fixture's own message when Postgres refuses a connection.
@@ -2520,7 +2863,8 @@ def sha(path: Path) -> str:
 
 def tracked() -> dict[str, str]:
     """Every file under api/ but caches and the virtualenv, infra/'s Fly configs
-    (T-4.4 breaks one) and the landing guard's scripts, by SHA-256, keyed by
+    (T-4.4 breaks one), the landing guard's scripts and `migrate-with-url`
+    (T-4.8 breaks it), by SHA-256, keyed by
     their path from api/."""
     skip = {".venv", "__pycache__", ".pytest_cache", ".mypy_cache", ".ruff_cache"}
     files = {
@@ -2530,7 +2874,12 @@ def tracked() -> dict[str, str]:
     }
     for path in (API.parent / "infra").glob("fly.*.toml"):
         files[f"../infra/{path.name}"] = sha(path)
-    for name in ("push-gate", "mark-checked", "require-main-checkout"):
+    for name in (
+        "push-gate",
+        "mark-checked",
+        "require-main-checkout",
+        "migrate-with-url",
+    ):
         files[f"../scripts/{name}"] = sha(API.parent / "scripts" / name)
     files["../Makefile"] = sha(API.parent / "Makefile")
     return files

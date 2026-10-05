@@ -2936,6 +2936,65 @@ Username, `onboarding_step` never moving, `{lat,lng}` inside India's box or else
 centroid, the 2 km rule, `PUT /me/location` answering `Me`, stale by the server's clock at 6 hours,
 and `GET /areas`'s shape; and no later task reopens them (his words, translated from Hindi).
 
+### D-310 · Finishing onboarding: what `done` needs, its refusals, completeness, and a guard in the database — Open
+**The decision (T-4.8):**
+- **`POST /me/onboarding/complete` answers `Me`:** the `selfie` step's way to `done`. A man's "Skip
+  for now" and a match's "Continue" both call it. D-068's rule: before `selfie`,
+  `ONBOARDING_INCOMPLETE`; at it, it finishes; once `done`, it answers `Me` unchanged, checking and
+  recomputing nothing. No body, and no rate limit: a few reads and one row, nothing sent anywhere,
+  like every other onboarding step.
+- **What `done` needs,** each named in `PROFILE_INCOMPLETE` (403) `details.missing`, all at once, in
+  the order onboarding asks for them, so the first is the earliest screen to go back to: `seeking`,
+  `intents` (1 to 3, D-041), `first_name`, `hometown`, `city`, `location` (T-4.10), `username`,
+  `about`, `photo`, `interests` (exactly 5). Seeking and intents are included because discovery
+  reads both (T-6.2 filters by `intent_ids`).
+- **A photo means an approved public photo with its public copy.** One still being checked doesn't
+  count: the discovery card shows only approved photos, so a profile that finished on a pending one
+  would show none if moderation then refused it. Nor does one its owner removed: `DELETE
+  /photos/{id}` rejects it as `user_deleted` and keeps its `public_key` (T-4.3), so the status is
+  checked, not the key alone. A breaking run found that, against a test that had assumed otherwise.
+- **The selfie:** anyone but a man needs `users.is_verified`, which is T-4.5's own record of the
+  match, set in the same transaction as the verification's `approved`, and what its `start` reads.
+  It is an allowlist (`MAY_FINISH_UNMATCHED`, men only), as the web's "Skip for now" is: a woman, or
+  someone with no gender, gets `VERIFICATION_REQUIRED` (403). What's missing is said first: the
+  selfie is compared with the photos.
+- **In the database too:** `users_done_needs_a_match` (migration `15a9b138750b`) refuses any insert,
+  or update of `onboarding_step`, that moves a user to `done` unless they are a man or
+  `is_verified`. It raises `check_violation` naming itself, as D-076's triggers do. It checks only
+  the move to `done`: a row already there is left alone, so what happens when a live woman's match
+  is cleared stays P-161's and P-163's to decide. Its upgrade first counts users already `done`
+  who are neither men nor verified, and fails if there are any. The deploy's readback
+  (`scripts/migrate-with-url`, P-65) checks it beside D-076's two, and the app's database role
+  can't disable it.
+- **Completeness:** 50 for meeting the requirements, plus 10 for each approved public photo after
+  the first, up to 100 (six places). It is computed once, at `done`. P-210 keeps it current after
+  that, before T-6.2 ranks by it. The seed's finished profiles get it by the same rule: 50 each, one
+  photo apiece.
+- **The web:** "Skip for now" and "Continue" call it and go where the `Me` it returns says
+  (`/discover`). A refusal says the first thing missing, with a link to its screen ("Take me
+  there"), or that the selfie hasn't matched, and then reads `Me` and the latest verification
+  afresh. T-4.7's stand-in panel and its string are gone.
+
+**Why:** the server decides (rule 6, D-082). The screen only hides "Skip for now" from women; this
+check is what stops one finishing. A service check holds only while every writer goes through the
+service, and D-008 (Locked) says a woman's profile never goes live without the selfie, so the
+database refuses it too, rather than a rule written down. Completeness is already in the schema and
+ranking reads it (D-032): at 100 for everyone the column would mean nothing, and a later task would
+have to build it again. (The reasons are the advisor's, given with the answers below.)
+
+**Rejected:** every finished profile at 100; a pending photo counted, which would leave a card with
+no photo; seeking and intents left out, without which no profile can be ranked or filtered; the
+trigger left to a Proposed task, leaving a service check that any later code path can bypass;
+`ONBOARDING_INCOMPLETE` reused with a step the person is already past, when D-068 says
+`details.step` is their current step; a trigger that also refuses rows already `done`, which would
+decide P-161 and P-163 for them; a rate limit.
+
+Proposed by Claude in T-4.8's plan, 5 October 2026. Its five questions were answered by the
+advisor directing T-4.8 (Claude, in a separate chat), relayed by the founder, 5 October 2026:
+completeness as above; approved photos only; seeking and intents required; the trigger built in
+this task; the seed's completeness set, with a test. **Open:** the answers are the advisor's, not
+the founder's own words (his, the same day).
+
 ---
 
 ## Adding a decision

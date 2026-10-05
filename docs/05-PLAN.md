@@ -1849,13 +1849,39 @@ exist yet. The batch is a chain, T-3.10 → T-3.11 → T-3.12 → T-3.13, each n
 - [x] **Commit:** `feat(web): selfie verification step [T-4.7]`
 
 ### T-4.8 · Finish onboarding
-- [ ] **Needs:** T-4.5, T-4.10
-- [ ] Service `onboarding.complete()`: requires profile fields, username, 5 interests, ≥ 1 public photo, location (T-4.10), and for women an `approved` verification → step `done`, compute `completeness`.
-- [ ] **Wire the selfie step's two ways on** (T-4.7): a man's "Skip for now" and a match's
+- [x] **Needs:** T-4.5, T-4.10
+- [x] Service `onboarding.complete()`: requires profile fields, username, 5 interests, ≥ 1 public photo, location (T-4.10), and for women an `approved` verification → step `done`, compute `completeness`.
+  **Built** (`app/modules/onboarding/`, D-310): `POST /me/onboarding/complete` answers `Me`. Each
+  requirement missing is named in `PROFILE_INCOMPLETE`'s `details.missing`, all at once, in
+  onboarding's order (seeking and 1 to 3 intents among them; a photo means an approved public
+  one). Anyone but a man without `is_verified`, T-4.5's own record of the match, gets
+  `VERIFICATION_REQUIRED`: an allowlist. Completeness is 50, and 10 for each approved public
+  photo after the first. **And in the database:** `users_done_needs_a_match` refuses any write
+  moving anyone else to `done` unmatched, read back by the deploy beside D-076's triggers. The
+  seed's finished profiles get their completeness by the same rule (all 50). The five answers
+  that shaped it are D-310's, by the advisor directing T-4.8 (Claude, in a separate chat), relayed
+  by the founder, 5 October 2026.
+- [x] **Wire the selfie step's two ways on** (T-4.7): a man's "Skip for now" and a match's
   "Continue" (`useSelfie`'s `finish()`) show an in-place panel until this task, since nothing
   moves `selfie` to `done`. This task points both at its completion endpoint and its answer, and
   drops the panel's string, `onboarding.selfie.next`.
-- [ ] **Commit:** `feat(onboarding): completion rules [T-4.8]`
+  **Built:** both call `useCompleteOnboarding()` and go where the `Me` it returns says
+  (`/discover`). A refusal names the first thing missing, with "Take me there" to its screen, or
+  says the selfie hasn't matched and reads `Me` and the latest verification afresh. The panel and
+  its string are gone.
+- [x] **Tests, and every guard broken once:** `tests/modules/onboarding/` (each requirement,
+  each refusal, the step rule, the trigger and its migration, a forced race with moderation),
+  `tests/seed/test_seed.py`, `tests/test_migrate_with_url.py`, `tests/test_app_role.py`, and
+  `SelfieStep.test.tsx`. **All 8 web cases red** (`node scripts/break-guards.mts t48-`), each
+  file restored by SHA-256, 5 October 2026. **All 27 API cases red** (`uv run python -m
+  tests.break_guards t48-`), the same day. The race test was changed after that full run, to put
+  its committed man back as `fresh_man` leaves one (its intents had stopped
+  `test_migrations_round_trip`'s downgrade); the two cases resting on it were run again, red.
+  **One stayed green at first, a finding fixed:** counting a photo whatever its status
+  (`t48-a-removed-photo-counted`). The test's rejected photo had no `public_key`, but `DELETE
+  /photos/{id}` keeps it (T-4.3), so the test hid the case the status check exists for. The test
+  now holds a removed photo as T-4.3 leaves it, and the case is red.
+- [x] **Commit:** `feat(onboarding): completion rules [T-4.8]`
 
 ### T-4.9 · E2E onboarding
 - [ ] **Needs:** T-4.7, T-4.8, T-4.10
@@ -2277,6 +2303,8 @@ prices don't depend on the web photos step, and the hold is lifted.
   cleared, before a `Card` carries `is_verified` to anyone (found building T-4.5)
   **P-120**: distances snapped so they can't be trilaterated, before a `Card` carries
   `distance_km` to anyone (found building T-4.10)
+  **P-210**: `profiles.completeness` kept current after onboarding finishes, before the ranking
+  reads it (found building T-4.8)
 - [ ] Repository implements the query in `02-ARCHITECTURE.md §8` with feeds: `foryou` (ranked), `new` (joined ≤ 7 days first), `online` (active ≤ 5 min). Filters: `intent_ids` (any overlap, D-041), verified.
 - [ ] Excludes: self, swiped, blocked either way, hidden, not `done`, status ≠ active, fraud band `freeze`; `shadow` band users only shown to others in `shadow`.
 - [ ] Response `Card`: id, first_name, age (null if hide_age), username, city, hometown, distance_km (null if hide_distance, else ≥ 1), intent_ids, bio line (first 90 chars of about), main photo URL, is_verified, is_online, is_new.
@@ -4446,3 +4474,15 @@ The number comes from the session's own block, given in its brief, from P-100 up
   on the lock screen. Not seen: any misdrawn pad; all ten digits showed and the PIN unlocked.
   Fix: a key no digit can have (`"blank"`), and a test that the pad renders with no React key
   warning. Found in T-5.5's session; filed from its block (P-220 to P-229).
+- [ ] P-210 · Keep `profiles.completeness` current after onboarding finishes. **Before T-6.2 ranks
+  by it** (on T-6.2's Needs line). Worst case: discovery ranks people by a number that no longer
+  describes their profile, and the ranking D-030 promises to explain in plain words doesn't do what
+  it says. Someone who adds five photos after finishing stays at 50; someone who removes all but
+  one keeps the higher number. T-4.8 computes it once, at `done` (D-310), and asking
+  `POST /me/onboarding/complete` again recomputes nothing, by design. What changes it after that:
+  a public photo approved later (T-4.4's decision), one removed (`DELETE /photos/{id}`), and
+  anything a later task adds to the formula. How, the doer's to choose: recompute it in each of
+  those writes with `onboarding.rules.completeness`, under the user's row lock each already takes,
+  or have the ranking compute it from the photos as it queries. Found in T-4.8's plan; filed from
+  T-4.8's session block (P-210 to P-219), at the direction of the advisor directing T-4.8 (Claude,
+  in a separate chat), relayed by the founder, 5 October 2026.

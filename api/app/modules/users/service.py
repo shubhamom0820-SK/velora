@@ -333,7 +333,8 @@ async def set_gender(session: AsyncSession, user: User, gender: Gender) -> Me:
 # T-1.9's trigger refuses a change to a set gender or dob with this SQLSTATE,
 # behind the checks above: it catches any write that gets past them. Read by
 # code, never by message, which Postgres may reword. `users` has no CHECK
-# constraint, so on this table only the trigger raises it.
+# constraint, and its other trigger raising it, `users_done_needs_a_match`
+# (D-310), sees only the move to `done`, which no dob or gender write makes.
 CHECK_VIOLATION = "23514"
 
 

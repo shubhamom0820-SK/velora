@@ -130,6 +130,7 @@ async def test_an_empty_database_is_migrated_and_read_back(first_run: Run) -> No
         f"migrate: that is the repo's head, {HEAD}.\n"
         "migrate: trigger ledger_entries_only_men on ledger_entries: present and enabled.\n"
         "migrate: trigger wallets_only_men on wallets: present and enabled.\n"
+        "migrate: trigger users_done_needs_a_match on users: present and enabled.\n"
         "migrate: index uq_ledger_entries_one_per_event on ledger_entries: "
         "present, unique and valid.\n"
     )
@@ -194,7 +195,8 @@ async def test_a_head_stamped_without_its_migration_is_refused(
     case: AsyncEngine,
 ) -> None:
     """`alembic stamp head` on a database short of D-076's migration: the head
-    matches, and the guards that migration builds aren't there."""
+    matches, and the guards that migration and the later ones build aren't
+    there (T-4.8's, D-310, among them)."""
     revision = SCRIPTS.get_revision(D076)
     assert revision is not None and isinstance(revision.down_revision, str)
     await run_alembic(case, command.downgrade, revision.down_revision)
@@ -207,12 +209,14 @@ async def test_a_head_stamped_without_its_migration_is_refused(
     assert run.err.endswith(
         "migrate: refused. trigger ledger_entries_only_men on ledger_entries is missing.\n"
         "migrate: refused. trigger wallets_only_men on wallets is missing.\n"
+        "migrate: refused. trigger users_done_needs_a_match on users is missing.\n"
     )
 
 
 TRIGGERS = [
     ("ledger_entries", "ledger_entries_only_men"),
     ("wallets", "wallets_only_men"),
+    ("users", "users_done_needs_a_match"),
 ]
 
 

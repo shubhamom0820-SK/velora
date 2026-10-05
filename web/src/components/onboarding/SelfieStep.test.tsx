@@ -74,6 +74,7 @@ function verification(overrides: Partial<Verification> = {}): Verification {
 }
 
 const NONE: Route = () => envelope(404, "NOT_FOUND");
+const COMPLETE = "POST /v1/me/onboarding/complete";
 
 /** `GET /verification/latest` answering each in turn, the last for good. */
 function latests(...answers: (Verification | null)[]): Route {
@@ -232,8 +233,12 @@ describe("who may skip it (D-008)", () => {
     ).toBeInTheDocument();
   });
 
-  it("a man can, and lands on what's built so far, never the app's gate (T-4.8)", async () => {
-    const api = fakeApi({ "GET /v1/verification/latest": NONE });
+  it("a man can: the server finishes sign-up, and he goes to the app (T-4.8)", async () => {
+    const api = fakeApi({
+      "GET /v1/verification/latest": NONE,
+      [COMPLETE]: () =>
+        json(200, me({ gender: "male", onboarding_step: "done" })),
+    });
     renderStep(me({ gender: "male" }));
 
     expect(screen.getByText(/^Optional\./)).toBeInTheDocument();
@@ -241,13 +246,9 @@ describe("who may skip it (D-008)", () => {
       await screen.findByRole("button", { name: "Skip for now" }),
     );
 
-    expect(
-      screen.getByText(
-        "That's everything for now. The rest of sign-up opens next.",
-      ),
-    ).toBeInTheDocument();
-    expect(nav.push).not.toHaveBeenCalled();
-    expect(api.sent()).toEqual(["GET /v1/verification/latest"]);
+    await waitFor(() => expect(nav.push).toHaveBeenCalledWith("/discover"));
+    expect(api.sent()).toEqual(["GET /v1/verification/latest", COMPLETE]);
+    expect(client.getQueryData<Me>(["me"])?.onboarding_step).toBe("done");
   });
 
   it("can skip after a rejection too", async () => {
@@ -720,13 +721,16 @@ describe("while it's compared (D-261): never a bare spinner", () => {
     expect(screen.queryByRole("button", { name: "Open camera" })).toBeNull();
   });
 
-  it("says a match plainly, reads Me afresh, and Continue goes as far as is built (T-4.8)", async () => {
+  it("says a match plainly, reads Me afresh, and Continue finishes sign-up (T-4.8)", async () => {
     vi.useFakeTimers({ shouldAdvanceTime: true });
-    fakeApi({
+    const api = fakeApi({
       "GET /v1/verification/latest": latests(
         COMPARING,
         verification({ status: "approved", submitted: true }),
       ),
+      "GET /v1/me": () => json(200, me({ is_verified: true })),
+      [COMPLETE]: () =>
+        json(200, me({ is_verified: true, onboarding_step: "done" })),
     });
     renderStep();
     await screen.findByText("Comparing your selfie with your photos…");
@@ -740,12 +744,8 @@ describe("while it's compared (D-261): never a bare spinner", () => {
       expect(client.getQueryState(["me"])?.isInvalidated).toBe(true),
     );
     await userEvent.click(screen.getByRole("button", { name: "Continue" }));
-    expect(
-      screen.getByText(
-        "That's everything for now. The rest of sign-up opens next.",
-      ),
-    ).toBeInTheDocument();
-    expect(nav.push).not.toHaveBeenCalled();
+    await waitFor(() => expect(nav.push).toHaveBeenCalledWith("/discover"));
+    expect(calls(api, COMPLETE)).toBe(1);
   });
 
   it("shows a selfie matched before as matched, with no way to send another", async () => {
@@ -861,5 +861,133 @@ describe("the frame (T-3.11)", () => {
       "href",
       "/onboarding/pin",
     );
+  });
+});
+
+describe("finishing sign-up: the server says what's still needed (T-4.8, D-310)", () => {
+  async function skipRefused(details: Record<string, unknown>) {
+    const api = fakeApi({
+      "GET /v1/verification/latest": NONE,
+      [COMPLETE]: () => envelope(403, "PROFILE_INCOMPLETE", details),
+    });
+    renderStep(me({ gender: "male" }));
+    await userEvent.click(
+      await screen.findByRole("button", { name: "Skip for now" }),
+    );
+    return api;
+  }
+
+  it.each([
+    [
+      ["photo"],
+      "Your profile needs at least one approved photo. One may still be being checked, or need replacing.",
+      "/onboarding/photos",
+    ],
+    [["location"], "Add your location first.", "/onboarding/location"],
+    [
+      ["seeking", "about"],
+      "Say who you're looking for first.",
+      "/onboarding/looking-for",
+    ],
+    [
+      ["intents"],
+      "Say who you're looking for first.",
+      "/onboarding/looking-for",
+    ],
+    [
+      ["first_name"],
+      "Add your name, hometown and city first.",
+      "/onboarding/name",
+    ],
+    [
+      ["hometown"],
+      "Add your name, hometown and city first.",
+      "/onboarding/name",
+    ],
+    [["city"], "Add your name, hometown and city first.", "/onboarding/name"],
+    [["username"], "Choose a username first.", "/onboarding/username"],
+    [["about"], "Write a few lines about yourself first.", "/onboarding/about"],
+    [["interests"], "Pick your 5 interests first.", "/onboarding/interests"],
+  ])(
+    "names the first of %j, with the way back, and stays",
+    async (missing, message, href) => {
+      await skipRefused({ missing });
+
+      const alert = await screen.findByRole("alert");
+      expect(alert).toHaveTextContent(message);
+      expect(
+        screen.getByRole("link", { name: "Take me there" }),
+      ).toHaveAttribute("href", href);
+      expect(nav.push).not.toHaveBeenCalled();
+      // Still here, and still able to try again.
+      expect(
+        screen.getByRole("button", { name: "Skip for now" }),
+      ).toBeEnabled();
+    },
+  );
+
+  it("a name it doesn't know reads as the general line, with nowhere to go", async () => {
+    await skipRefused({ missing: ["height"] });
+
+    expect(await screen.findByRole("alert")).toHaveTextContent(
+      "Something on your profile isn't finished yet.",
+    );
+    expect(screen.queryByRole("link", { name: "Take me there" })).toBeNull();
+  });
+
+  it("a match the server doesn't know of: said, and Me and the latest read afresh", async () => {
+    const api = fakeApi({
+      "GET /v1/verification/latest": NONE,
+      "GET /v1/me": () => json(200, me()),
+      [COMPLETE]: () => envelope(403, "VERIFICATION_REQUIRED"),
+    });
+    renderStep(me({ is_verified: true }));
+    await userEvent.click(
+      await screen.findByRole("button", { name: "Continue" }),
+    );
+
+    expect(await screen.findByRole("alert")).toHaveTextContent(
+      "Your selfie has to match your photos before you can finish.",
+    );
+    await waitFor(() =>
+      expect(calls(api, "GET /v1/verification/latest")).toBe(2),
+    );
+    expect(client.getQueryState(["me"])?.isInvalidated).toBe(true);
+    expect(nav.push).not.toHaveBeenCalled();
+  });
+
+  it("anything else gets the shared wording, and the button works again", async () => {
+    let n = 0;
+    const api = fakeApi({
+      "GET /v1/verification/latest": NONE,
+      [COMPLETE]: () =>
+        n++ === 0
+          ? envelope(500, "INTERNAL")
+          : json(200, me({ gender: "male", onboarding_step: "done" })),
+    });
+    renderStep(me({ gender: "male" }));
+    const skip = await screen.findByRole("button", { name: "Skip for now" });
+    await userEvent.click(skip);
+
+    expect(await screen.findByRole("alert")).toHaveTextContent(
+      "Something went wrong. Try again.",
+    );
+    await userEvent.click(skip);
+    await waitFor(() => expect(nav.push).toHaveBeenCalledWith("/discover"));
+    expect(calls(api, COMPLETE)).toBe(2);
+  });
+
+  it("can't be asked twice at once", async () => {
+    const api = fakeApi({
+      "GET /v1/verification/latest": NONE,
+      [COMPLETE]: () => new Promise(() => {}),
+    });
+    renderStep(me({ gender: "male" }));
+    const skip = await screen.findByRole("button", { name: "Skip for now" });
+    await userEvent.click(skip);
+
+    await waitFor(() => expect(skip).toBeDisabled());
+    await userEvent.click(skip);
+    expect(calls(api, COMPLETE)).toBe(1);
   });
 });

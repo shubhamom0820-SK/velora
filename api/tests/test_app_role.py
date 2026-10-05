@@ -212,6 +212,11 @@ async def test_the_app_role_credits_and_debits_through_the_wallet(
             "drop trigger ledger_entries_only_men on ledger_entries",
             "must be owner of relation ledger_entries",
         ),
+        # D-310's: no woman reaches `done` without a matched selfie (D-008).
+        (
+            "alter table users disable trigger users_done_needs_a_match",
+            "must be owner of table users",
+        ),
         ("alter table users add column sneaky int", "must be owner of table users"),
         ("create table app_role_probe (id int)", "permission denied for schema public"),
         (
