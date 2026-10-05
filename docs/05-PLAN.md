@@ -650,6 +650,9 @@ waits on the founder's decisions, so it is a task of its own, outside the sprint
   **And P-130, with no condition** (D-230, 4 October 2026): `/refunds` rewritten to say there is no
   product refund. As published it promises Velas back on a ban and on a declined album request,
   which the product will never return.
+  **And P-165, with no condition** (the founder, 5 October 2026): one upload from Safari on an
+  iPhone, its format recorded from the bytes as they arrive. T-4.6's box closed on "not HEIC", and
+  which format an iPhone sends, and from which browser, was never seen.
   **And one found building T-4.6, with no condition:** production's private bucket's CORS rule
   (`infra/PRODUCTION.md` §3), set by the founder and checked by a preflight from
   `https://veloraapp.co.in`. Without it no browser can upload a photo, so nobody gets past the
@@ -1734,7 +1737,7 @@ exist yet. The batch is a chain, T-3.10 → T-3.11 → T-3.12 → T-3.13, each n
   both legs.) **Then through the photos step itself,** signed in, on 5 October 2026 (below).
   **And narrowed to `PUT` only** the same night, `GET` removed by the founder: checked at 19:12
   UTC, the staging origin's `PUT` preflight names `PUT` alone, and a `GET` preflight gets R2's 403.
-- [ ] **Done when, on a real iPhone, on this control (D-089):** iOS Safari's upload sends JPEG, not
+- [x] **Done when, on a real iPhone, on this control (D-089):** iOS Safari's upload sends JPEG, not
   HEIC, read from what the API received (its bytes), never reasoned about. If it sends HEIC, "no
   HEIC" breaks every iPhone sign-up: stop and tell the founder before anything ships. D-089 is
   Locked when this passes.
@@ -1752,6 +1755,17 @@ exist yet. The batch is a chain, T-3.10 → T-3.11 → T-3.12 → T-3.13, each n
   **What it rests on, open for the founder:** which device made the 01:06 sign-up. The evidence is
   the iPhone's only if it was the iPhone, in Safari; until he says, this box stays unticked and
   D-089 stays Open.
+  **Closed by the founder, 5 October 2026, in his own words (given in Hinglish, recorded here in
+  English), on exactly this basis:** on staging at 01:08 IST two photos arrived; `complete` read
+  each one's bytes and accepted both, and the same place refuses HEIC, so no HEIC arrived. That
+  excludes D-089's real risk, a HEIC refused breaking every iPhone sign-up. **The device that made
+  that sign-up wasn't recorded, so "iOS Safari" was not separately confirmed, and that is this
+  box's one gap.** D-089 stays Open, not Locked as this box's first lines once said, because the
+  format (JPEG, or PNG or WebP) and the device are both still open; P-165 records an iPhone's
+  upload before REL-1. **The rows, read by Claude the same day** (read-only, on staging's API
+  machine): two public photos created at 19:38:04 and 19:38:33 UTC (01:08 IST), both scored by
+  moderation, which only a photo `complete` accepted reaches (a refused upload is rejected there
+  and never scored); one approved, one rejected `no_face`.
   **To settle first, 5 October 2026 (the founder):** whether the photo completed at 00:44:59 IST
   (the desktop one, most likely: the only upload then) and the 01:08 photo that was refused both
   had a clear face. If they did, D-101's `no_face`
@@ -4254,3 +4268,13 @@ The number comes from the session's own block, given in its brief, from P-100 up
   live in the selfie's `moderation` record (D-263), and the column stays empty. A migration, so P-65
   (landed) applies. Filed so the empty column reads as a decision, not an oversight. Found in
   T-4.5's plan.
+- [ ] P-165 · Upload one photo from Safari on an iPhone and record its format from the bytes as
+  they arrive. **Before REL-1** (on its Needs line). Worst case: the format an iPhone sends was
+  never seen, and a format other than HEIC that gives trouble is found by a real user. T-4.6's box
+  closed on two staging uploads that `complete` accepted, so not HEIC (D-089's real risk), but the
+  device wasn't recorded and the bytes as received were overwritten by the worker's re-encode
+  within seconds. How, the doer's to choose: `complete` already judges each upload's type by its
+  first bytes, so recording that judged type (never the key, the user or the bytes) while the
+  founder uploads from his iPhone settles it, and which browser he used is his to note beside it.
+  At the founder's direction, 5 October 2026, in his own words; filed from T-4.5's session block
+  (P-160 to P-169).

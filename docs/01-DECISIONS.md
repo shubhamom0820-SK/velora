@@ -2119,6 +2119,11 @@ were accepted by `complete`, which reads the bytes on arrival and refuses HEIC, 
 HEIC; whether they were JPEG rather than PNG or WebP is unknown, since the worker replaces the
 upload with its re-encode within seconds. Still Open: which device made them is the founder's to
 confirm (T-4.6's Done-when).
+**Why it stays Open (the founder, 5 October 2026, in his own words):** T-4.6's box is closed on
+that evidence, which excludes the real risk, a HEIC refused breaking every iPhone sign-up. It is
+not Locked, because two things are still open: whether an iPhone sends JPEG rather than PNG or
+WebP, and which device and browser made those uploads, which wasn't recorded. P-165 records an
+iPhone's upload before REL-1.
 
 ### D-090 · An under-18 refusal queues its files' deletion before it commits — Locked
 **Supersedes one sentence of D-078:** "The enqueue comes after the commit, so a refusal that rolls
