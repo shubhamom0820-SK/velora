@@ -45,7 +45,7 @@ velora/
   .github/workflows/    CI pipelines
   api/                  FastAPI app
     app/core/           config, db, redis, events, security, errors, deps, providers (fakes local-only),
-                        storage_keys
+                        storage_keys, pagination (every list's page and cursor, D-270)
     app/modules/<name>/ router.py service.py repository.py schemas.py models.py
     app/workers/        ARQ worker (main.py, `python -m app.workers`) + tasks/
     app/tools/          checks run by hand inside a deployed machine (storage_probe, T-4.1;

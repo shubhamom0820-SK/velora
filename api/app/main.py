@@ -32,6 +32,7 @@ from app.modules.profiles.router import router as profiles_router
 from app.modules.users.router import router as users_router
 from app.modules.verification.router import router as verification_router
 from app.modules.waitlist.router import router as waitlist_router
+from app.modules.wallet.router import router as wallet_router
 
 SCHEMA_SERVED_IN: frozenset[str] = frozenset({"local"})
 # Path B's sign-in routes (/v1/auth/otp/*) are served only for these providers:
@@ -135,6 +136,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.include_router(photos_router, prefix="/v1")
     app.include_router(pricing_router, prefix="/v1")
     app.include_router(verification_router, prefix="/v1")
+    app.include_router(wallet_router, prefix="/v1")
     for sign_in_router, served_for in SIGN_IN_PATHS:
         if settings.AUTH_PHONE_PROVIDER in served_for:
             app.include_router(sign_in_router, prefix="/v1")

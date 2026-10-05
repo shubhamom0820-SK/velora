@@ -479,6 +479,40 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/wallet": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Wallet */
+        get: operations["wallet_v1_wallet_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/wallet/ledger": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Ledger */
+        get: operations["ledger_v1_wallet_ledger_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/auth/otp/send": {
         parameters: {
             query?: never;
@@ -614,6 +648,44 @@ export interface components {
             /** Interest Ids */
             interest_ids: number[];
         };
+        /**
+         * LedgerEntry
+         * @description One change to the balance, as its owner sees it. Never its ref or its
+         *     key: what an entry was for is named by `reason`, which the web turns into
+         *     words (D-033, P-26).
+         */
+        LedgerEntry: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Delta */
+            delta: number;
+            /** Balance After */
+            balance_after: number;
+            reason: components["schemas"]["LedgerReason"];
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+        };
+        /**
+         * LedgerEntryPage
+         * @description `Page<LedgerEntry>`: newest first by `(created_at, id)`.
+         */
+        LedgerEntryPage: {
+            /** Items */
+            items: components["schemas"]["LedgerEntry"][];
+            /** Next Cursor */
+            next_cursor: string | null;
+        };
+        /**
+         * LedgerReason
+         * @enum {string}
+         */
+        LedgerReason: "purchase" | "purchase_bonus" | "referral_reward" | "admin_grant" | "refund" | "gift" | "refund_banned_partner" | "refund_album_declined" | "thread_open" | "dm_open" | "thread_reopen" | "voice_unlock" | "album_request" | "super_like" | "liked_you_reveal" | "thread_extend" | "dm_message";
         /**
          * Me
          * @description The age, never the date of birth, and no phone number: no screen shows
@@ -914,6 +986,14 @@ export interface components {
          *     anyone could find out whether an address is on our list.
          */
         WaitlistJoined: Record<string, never>;
+        /**
+         * Wallet
+         * @description `{balance}`, in Velas. A woman's is 0, always (D-076).
+         */
+        Wallet: {
+            /** Balance */
+            balance: number;
+        };
     };
     responses: never;
     parameters: never;
@@ -1680,6 +1760,58 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["Verification"];
+                };
+            };
+        };
+    };
+    wallet_v1_wallet_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Wallet"];
+                };
+            };
+        };
+    };
+    ledger_v1_wallet_ledger_get: {
+        parameters: {
+            query?: {
+                cursor?: string | null;
+                limit?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LedgerEntryPage"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };

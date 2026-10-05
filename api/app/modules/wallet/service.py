@@ -23,20 +23,25 @@ Nothing external runs under the lock; the event is published after the request
 captured payment is still credited (D-077).
 
 A transaction locks one wallet, or several in `user_id` order (D-077).
+
+The owner's two reads, `balance()` and `ledger()`, are at the end (T-5.3).
 """
 
 from __future__ import annotations
 
 from dataclasses import dataclass
+from datetime import datetime
 from uuid import UUID
 
 import structlog
+from pydantic import AwareDatetime
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core import events
 from app.core.enums import Gender, LedgerReason
 from app.core.errors import AppError
-from app.modules.wallet import repository, rules
+from app.core.pagination import Cursor, PageParams
+from app.modules.wallet import repository, rules, schemas
 from app.modules.wallet.models import LedgerEntry
 from app.modules.wallet.rules import Direction, Ref
 
@@ -163,3 +168,38 @@ def _details(
     entry: LedgerEntry,
 ) -> tuple[UUID, LedgerReason, int, str | None, UUID | None]:
     return entry.user_id, entry.reason, entry.delta, entry.ref_type, entry.ref_id
+
+
+# --- The owner's reads (T-5.3) ---------------------------------------------------
+
+# The ledger's sort key, `(created_at, id)` (D-270).
+LEDGER_CURSOR: Cursor[tuple[datetime, UUID]] = Cursor(tuple[AwareDatetime, UUID])
+
+
+async def balance(session: AsyncSession, user_id: UUID) -> schemas.Wallet:
+    """The balance as it stands. Read, never refused: a woman's is 0 because
+    D-076's triggers hold it there, so she gets 0 the same way a man gets his."""
+    async with session.begin():
+        return schemas.Wallet(balance=await repository.balance_of(session, user_id))
+
+
+async def ledger(
+    session: AsyncSession, user_id: UUID, params: PageParams
+) -> schemas.LedgerEntryPage:
+    """The user's entries, newest first by `(created_at, id)`. A woman's list
+    is empty, as D-076's trigger keeps it, and never refused.
+
+    A cursor names a position, never whose: the query is the caller's own
+    ledger, whatever the cursor says (D-270).
+    """
+    after = None if params.cursor is None else LEDGER_CURSOR.decode(params.cursor)
+    async with session.begin():
+        rows = await repository.ledger_page(
+            session, user_id, after=after, limit=params.fetch
+        )
+    entries = [schemas.LedgerEntry(**row._asdict()) for row in rows]
+    return schemas.LedgerEntryPage.of(
+        entries,
+        params,
+        lambda entry: LEDGER_CURSOR.encode((entry.created_at, entry.id)),
+    )

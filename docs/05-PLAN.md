@@ -2147,15 +2147,15 @@ prices don't depend on the web photos step, and the hold is lifted.
 - [x] **Commit:** `feat(pricing): server-side prices [T-5.2]`
 
 ### T-5.3 · Wallet endpoints
-- [ ] **Needs:** T-5.1
-- [ ] `GET /wallet` → `{balance}`. `GET /wallet/ledger?cursor=` → `Page<LedgerEntry>`: `id`,
+- [x] **Needs:** T-5.1
+- [x] `GET /wallet` → `{balance}`. `GET /wallet/ledger?cursor=&limit=` → `Page<LedgerEntry>`: `id`,
   `delta`, `balance_after`, `reason`, `created_at`; never refs or the key. The web turns `reason`
   into words from `en.ts` (D-033, P-26); the API doesn't.
-- [ ] Newest first by `(created_at, id)`. Entries from one transaction share `created_at`, so their
+- [x] Newest first by `(created_at, id)`. Entries from one transaction share `created_at`, so their
   order is stable but arbitrary. The opaque cursor and the page type live in `core`, since this is
   the first paginated endpoint.
-- [ ] Women get a balance of 0 and an empty list, not a refusal. No rate limit on these reads.
-- [ ] **Commit:** `feat(wallet): balance and history [T-5.3]`
+- [x] Women get a balance of 0 and an empty list, not a refusal. No rate limit on these reads.
+- [x] **Commit:** `feat(wallet): balance and history [T-5.3]`
 
 ### T-5.6 · App shell
 - [x] **Needs:** T-3.10
@@ -2199,7 +2199,7 @@ prices don't depend on the web photos step, and the hold is lifted.
 - [ ] Global handler: any `INSUFFICIENT_CREDITS` from a mutation (the query client's mutation error
   hook; queries never) opens the store sheet, a "coming soon" placeholder until T-8.7, with its open
   state in Zustand.
-- [ ] Words for all 15 ledger reasons in `en.ts`, in a map typed from the generated enum, so a new
+- [ ] Words for all 17 ledger reasons in `en.ts`, in a map typed from the generated enum, so a new
   reason without words fails `tsc`.
 - [ ] **Commit:** `feat(web): wallet screen and balance pill [T-5.5]`
 
@@ -2292,7 +2292,7 @@ prices don't depend on the web photos step, and the hold is lifted.
 
 ### T-7.3 · Messages
 - [ ] **Needs:** T-7.2
-- [ ] `GET /threads/{id}/messages?cursor=` (newest first, respects my `cleared_at`; voice notes locked for men without unlock → no media URL).
+- [ ] `GET /threads/{id}/messages?cursor=&limit=` (newest first, respects my `cleared_at`; voice notes locked for men without unlock → no media URL).
 - [ ] `POST /threads/{id}/messages`: participant only; thread `expired` → `THREAD_EXPIRED` for his send, while hers is delivered (D-097: an expired Thread refuses his sends and accepts hers); text 1–2000; abuse/solicitation rules → `MESSAGE_REJECTED` (+ fraud event); masking if `message_count < mask_first_n` (store `body_raw`, set `masked`); dedupe on `client_msg_id` (return existing); update `last_message_at`, `message_count`; publish `message.new`; notify recipient if not connected.
 - [ ] **When she wrote first, he pays to answer: the 2-Vela re-open, `thread_reopen`** (D-250,
   the founder, 4 October 2026; T-5.2's item 10(b)). Charged through `pricing.service.charge`
@@ -4278,3 +4278,13 @@ The number comes from the session's own block, given in its brief, from P-100 up
   founder uploads from his iPhone settles it, and which browser he used is his to note beside it.
   At the founder's direction, 5 October 2026, in his own words; filed from T-4.5's session block
   (P-160 to P-169).
+- [ ] P-170 · Read `Me.balance` through `wallet.service.balance()`, not users' own `balance_of`.
+  **No deadline:** both read `wallets.balance`, so no risk today, but a change to how a balance is
+  read (a cache, a derived balance) would have to be made twice. Filed from T-5.3's block, as its
+  plan's answers asked; rule 3 kept it out of T-5.3.
+- [ ] P-171 · Make the generated types say what the API sends for a request that fails validation.
+  **No deadline.** `web/src/types/api.ts` shows FastAPI's default `422` with `HTTPValidationError`
+  on every route that takes a body or parameters (20 operations: T-5.3's ledger and 19 before it;
+  T-5.3's report said 22, a line count that took in the schema's own definition), while the API
+  answers `400 VALIDATION_ERROR` in our envelope. One gap across the whole API, so its own task.
+  Filed from T-5.3's block, as the founder asked, 5 October 2026.

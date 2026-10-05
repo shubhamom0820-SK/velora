@@ -3,9 +3,11 @@ balance or the ledger (CLAUDE.md rule 5)."""
 
 from __future__ import annotations
 
+from collections.abc import Sequence
+from datetime import datetime
 from uuid import UUID
 
-from sqlalchemy import insert, select, update
+from sqlalchemy import Row, insert, select, tuple_, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.enums import Gender, LedgerReason
@@ -73,3 +75,46 @@ async def add_entry(
     )
     assert entry is not None
     return entry
+
+
+# --- Reads (T-5.3) -------------------------------------------------------------
+
+
+async def balance_of(session: AsyncSession, user_id: UUID) -> int:
+    balance = await session.scalar(
+        select(Wallet.balance).where(Wallet.user_id == user_id)
+    )
+    if balance is None:
+        raise LookupError("a user without a wallet: signup creates both")
+    return balance
+
+
+async def ledger_page(
+    session: AsyncSession,
+    user_id: UUID,
+    *,
+    after: tuple[datetime, UUID] | None,
+    limit: int,
+) -> Sequence[Row[tuple[UUID, int, int, LedgerReason, datetime]]]:
+    """Up to `limit` of the user's entries, newest first by `(created_at, id)`,
+    from just after `after`. Entries from one transaction share `created_at`,
+    so `id` orders them: stable, though not the order they were written.
+
+    Only the columns the owner sees: the ref and the key never leave here.
+    """
+    query = (
+        select(
+            LedgerEntry.id,
+            LedgerEntry.delta,
+            LedgerEntry.balance_after,
+            LedgerEntry.reason,
+            LedgerEntry.created_at,
+        )
+        .where(LedgerEntry.user_id == user_id)
+        .order_by(LedgerEntry.created_at.desc(), LedgerEntry.id.desc())
+        .limit(limit)
+    )
+    if after is not None:
+        # A plain tuple, so each bind takes its column's type: timestamptz, uuid.
+        query = query.where(tuple_(LedgerEntry.created_at, LedgerEntry.id) < after)
+    return (await session.execute(query)).all()

@@ -5,6 +5,12 @@ All routes under `/v1`. 🔓 = public, 🔐 = logged in, ✅ = logged in **and**
 Request/response bodies are Pydantic schemas in each module's `schemas.py`; the OpenAPI output is
 the source for `web/src/types/api.ts`.
 
+**Lists (D-270, 02-ARCHITECTURE §3).** Every route returning `Page<T>` takes `cursor` and `limit`
+beside its own parameters, and the rows below write both. `Page<T>` is `{items: T[], next_cursor}`,
+`next_cursor` null on the last page and sent back as `cursor` for the next; each list's schema is
+named `<T>Page` (`LedgerEntryPage`). `limit` is 1 to 50, 20 when absent; outside that, and any
+`cursor` the API didn't give, is `VALIDATION_ERROR`, never clamped or ignored.
+
 ## Auth & session
 | Method | Path | Auth | Body → Response | Task |
 |---|---|---|---|---|
@@ -77,21 +83,21 @@ more: no published word calls it verification (D-262).
 ## Discovery
 | Method | Path | Auth | Body → Response | Task |
 |---|---|---|---|---|
-| GET | /discover | ✅ | `?feed=foryou|new|online&intent_ids=&verified=&cursor=` → `Page<Card>` (`intent_ids`: any overlap, D-041) | T-6.2 |
+| GET | /discover | ✅ | `?feed=foryou|new|online&intent_ids=&verified=&cursor=&limit=` → `Page<Card>` (`intent_ids`: any overlap, D-041) | T-6.2 |
 | POST | /swipes | ✅ | `{target_id, dir}` → `{matched, match_id?, swipes_left}` | T-6.4 |
 | GET | /users/{id} | ✅ | → `PublicProfile` | T-6.3 |
 | GET | /users/by-username/{u} | ✅ | → `PublicProfile` | T-6.6 |
-| GET | /search | ✅ | `?q=` → `Page<CardLite>` (`@` prefix = username lookup) | T-6.6 |
-| GET | /likes | ✅ | → `Page<LikeCard>` (blurred unless revealed; free for women) | T-6.7 |
+| GET | /search | ✅ | `?q=&cursor=&limit=` → `Page<CardLite>` (`@` prefix = username lookup) | T-6.6 |
+| GET | /likes | ✅ | `?cursor=&limit=` → `Page<LikeCard>` (blurred unless revealed; free for women) | T-6.7 |
 | POST | /likes/{user_id}/reveal | ✅ | → `PublicProfile` (20 Velas) | T-6.7 |
 
 ## Threads & messages
 | Method | Path | Auth | Body → Response | Task |
 |---|---|---|---|---|
-| GET | /threads | ✅ | `?tier=threads|knots&filter=all|unread|recent&q=&cursor=` → `Page<ThreadRow>` | T-7.2 |
+| GET | /threads | ✅ | `?tier=threads|knots&filter=all|unread|recent&q=&cursor=&limit=` → `Page<ThreadRow>` | T-7.2 |
 | POST | /threads | ✅ | `{match_id}` or `{user_id, first_message}` → `Thread` (5 Velas from a match; 8 for a private message, D-231) | T-7.1 |
 | GET | /threads/{id} | ✅ | → `Thread` | T-7.2 |
-| GET | /threads/{id}/messages | ✅ | `?cursor=` → `Page<Message>` | T-7.3 |
+| GET | /threads/{id}/messages | ✅ | `?cursor=&limit=` → `Page<Message>` | T-7.3 |
 | POST | /threads/{id}/messages | ✅ | `{client_msg_id, kind, body?, media_key?, duration_s?}` → `Message` | T-7.3 |
 | POST | /threads/{id}/read | ✅ | `{up_to_message_id}` → 204 | T-7.5 |
 | POST | /threads/{id}/reopen | ✅ | → `Thread` (2 Velas, D-098) | T-7.6 |
@@ -114,7 +120,7 @@ more: no published word calls it verification (D-262).
 | GET | /users/{id}/album | ✅ | → `{photos: [{url}]}` watermarked, only if granted | T-8.4 |
 | GET | /gifts | ✅ | → `Gift[]` (id, label, asset, credits) | T-8.9 |
 | POST | /gifts/send | ✅ | `{recipient_id, gift_id}` + Idempotency-Key → `GiftSend` | T-8.9 |
-| GET | /me/gifts | ✅ | `?cursor=` → `Page<GiftSend>` received, with sender card | T-8.9 |
+| GET | /me/gifts | ✅ | `?cursor=&limit=` → `Page<GiftSend>` received, with sender card | T-8.9 |
 | GET | /users/{id}/gifts | ✅ | → `{counts:[{gift_id,count}]}` if `show_gifts` | T-8.9 |
 | POST | /kudos | ✅ | `{to_id, kind}` → 201 | T-8.5 |
 | GET | /me/kudos | ✅ | → `Kudos[]` | T-8.5 |
@@ -130,8 +136,8 @@ turns them into copy.
 
 | Method | Path | Auth | Body → Response | Task |
 |---|---|---|---|---|
-| GET | /wallet | ✅ | → `{balance}` | T-5.3 |
-| GET | /wallet/ledger | ✅ | `?cursor=` → `Page<LedgerEntry>` | T-5.3 |
+| GET | /wallet | ✅ | → `Wallet`: `{balance}`. A woman's is 0, never a refusal (D-076). No rate limit of its own (02-ARCHITECTURE §12) | T-5.3 |
+| GET | /wallet/ledger | ✅ | `?cursor=&limit=` → `Page<LedgerEntry>`, newest first by `(created_at, id)`. A woman's is empty, never a refusal. No rate limit of its own | T-5.3 |
 | GET | /prices | 🔓 | → `{action: credits}`: every active action's price for a man; a woman pays 0 for each (D-098). Never gifts (`GET /gifts`), never an inactive action. No rate limit (02-ARCHITECTURE §12) | T-5.2 |
 | GET | /packs | ✅ | → `Pack[]` (variant-aware) | T-8.1 |
 | POST | /payments/orders | ✅ | `{pack_id}` + Idempotency-Key → `{payment_id, order_id, key_id, amount_paise}` | T-8.1 |
@@ -141,6 +147,12 @@ turns them into copy.
 | GET | /referrals/me | ✅ | → `{code, invited, rewarded}` | T-8.6 |
 | POST | /referrals/apply | 🔐 | `{code}` → 204 (only during onboarding) | T-8.6 |
 
+`LedgerEntry` (T-5.3): `id`, `delta`, `balance_after`, `reason` (`LedgerReason`, every value) and
+`created_at`. Never its ref or its key. The web turns `reason` into words from `en.ts` (D-033,
+P-26); the API sends the enum only. Entries from one transaction share `created_at`, so among them
+the order is by `id`: stable, though not the order they were written. Whatever the cursor, the
+list is the caller's own (D-270).
+
 ## Notifications
 | Method | Path | Auth | Body → Response | Task |
 |---|---|---|---|---|
@@ -148,23 +160,23 @@ turns them into copy.
 | DELETE | /push/subscriptions | ✅ | `{endpoint}` → 204 | T-9.4 |
 | GET | /notification-prefs | ✅ | → `Prefs` | T-9.4 |
 | PATCH | /notification-prefs | ✅ | `Partial<Prefs>` → `Prefs` | T-9.4 |
-| GET | /notifications | ✅ | `?cursor=` → `Page<Notification>` | T-9.4 |
+| GET | /notifications | ✅ | `?cursor=&limit=` → `Page<Notification>` | T-9.4 |
 | POST | /notifications/read | ✅ | → 204 | T-9.4 |
 
 ## Admin 🛡
 | Method | Path | Body → Response | Task |
 |---|---|---|---|
 | GET | /admin/metrics | → counts, revenue, reports open | T-9.5 |
-| GET | /admin/users | `?q=` → `Page<AdminUser>` | T-9.5 |
+| GET | /admin/users | `?q=&cursor=&limit=` → `Page<AdminUser>` | T-9.5 |
 | GET | /admin/users/{id} | → full detail incl. fraud, reports, ledger | T-9.5 |
 | POST | /admin/users/{id}/status | `{status, reason}` → 204 (freeze/ban/unban) | T-9.5 |
 | POST | /admin/users/{id}/credits | `{delta, reason}` → 204 | T-9.5 |
-| GET | /admin/reports | `?status=open` → `Page<Report>` | T-9.5 |
+| GET | /admin/reports | `?status=open&cursor=&limit=` → `Page<Report>` | T-9.5 |
 | POST | /admin/reports/{id}/resolve | `{action, note}` → 204 | T-9.5 |
-| GET | /admin/moderation | → `Page<Photo>` pending/flagged | T-9.5 |
+| GET | /admin/moderation | `?cursor=&limit=` → `Page<Photo>` pending/flagged | T-9.5 |
 | POST | /admin/photos/{id}/decide | `{approve, reason?}` → 204 | T-9.5 |
 | GET | /admin/threads/{id}/messages | → includes `body_raw` + cleared (audited) | T-9.5 |
-| GET | /admin/audit | `?cursor=` → `Page<AuditEntry>` | T-9.5 |
+| GET | /admin/audit | `?cursor=&limit=` → `Page<AuditEntry>` | T-9.5 |
 
 ## Misc
 | Method | Path | Auth | Task |

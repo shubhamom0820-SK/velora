@@ -2848,6 +2848,42 @@ Proposed by Claude in T-4.5's plan; chosen, with the verdicts, by the advisor di
 (Claude, in a separate chat), relayed by the founder, 5 October 2026. **Open** until the founder
 approves it in his own words.
 
+### D-270 · Every list pages by an unsigned cursor, 1 to 50 at a time, refused outside that — Locked
+**The decision (T-5.3, the first list):** every endpoint that returns a list a page at a time does
+it one way, through `app/core/pagination.py`:
+- **The cursor isn't signed.** It is the last item's sort key: a position, never a permission.
+  Every list's query also filters by who is asking, so an edited or borrowed cursor only moves
+  within the caller's own list. Signing it would add a secret to keep, rotate and keep out of logs,
+  guarding nothing that filter doesn't.
+- **Its format:** the sort key as compact JSON, then base64url without padding (the ledger's is
+  `(created_at, id)`). The client treats it as opaque and only sends back what it was given. A
+  cursor is accepted only if it is exactly what the API would write for the position it names;
+  anything else, the same position spelt another way included, is `VALIDATION_ERROR` on `cursor`
+  (400).
+- **`limit` is 1 to 50, 20 when absent, and refused outside that, never clamped:**
+  `VALIDATION_ERROR` on `limit`. A caller asking for 500 and given 50 would get something it
+  never asked for, and the web's bug would never show.
+- **Each list names its page:** `class LedgerEntryPage(Page[LedgerEntry])`, so the OpenAPI schema
+  and `web/src/types/api.ts` say `LedgerEntryPage`, not Pydantic's `Page_LedgerEntry_`. A page is
+  `{items, next_cursor}`, `next_cursor` null on the last. Each list fetches one row more than its
+  page, so a last page that is exactly full still ends with null.
+
+**Why a decision, not only 02-ARCHITECTURE §3's line:** every later list (discovery, threads,
+messages, gifts, notifications, admin) follows this, and a later task could change a line in §3
+without knowing it was a rule.
+
+**Rejected:**
+- a signed cursor, for the reason above;
+- clamping `limit`;
+- a cursor on `created_at` alone, which skips or repeats entries that share one (every entry of one
+  transaction does);
+- offset paging, which shifts as rows arrive.
+
+Proposed by Claude in T-5.3's plan, 5 October 2026. The answers to that plan, pasted by the founder
+the same day, chose `limit` refused rather than clamped and asked for this as a decision with these
+four parts. **Locked by the founder, in his own words, 5 October 2026**, answering T-5.3's report:
+all four are settled for every list, and no later task reopens them.
+
 ---
 
 ## Adding a decision

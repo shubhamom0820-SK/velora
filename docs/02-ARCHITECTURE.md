@@ -35,7 +35,7 @@ api/app/
     errors.py             AppError + handlers → error envelope
     enums.py              the 20 Postgres enum types as Python enums (shared across modules)
     deps.py               current_user, require_role, rate_limit
-    pagination.py         cursor encode/decode
+    pagination.py         every list's Page[T], cursor and limit (T-5.3, D-270)
     providers/            sms.py payments.py moderation.py facematch.py push.py storage.py
                           each: Protocol + RealImpl + FakeImpl
   modules/
@@ -63,8 +63,11 @@ session and never commit.
 - **Except the probes:** `/healthz` and `/readyz` are mounted at the root, unversioned. They
   are read by Fly and uptime checks, not clients, so they are not part of the versioned API.
 - Auth: `Authorization: Bearer <access_jwt>` on every route except those marked public.
-- **Pagination:** cursor-based. Request `?cursor=<opaque>&limit=20` (max 50).
-  Response `{ "items": [...], "next_cursor": "..." | null }`.
+- **Pagination (D-270):** cursor-based, through `core/pagination.py`. Request
+  `?cursor=<opaque>&limit=20`, `limit` 1 to 50: outside that, `VALIDATION_ERROR`, never clamped.
+  Response `{ "items": [...], "next_cursor": "..." | null }`, named `<Item>Page` in the schema. The
+  cursor is the last item's sort key, unsigned: a position, never a permission, since every list
+  filters by who is asking. One the API didn't write is `VALIDATION_ERROR` on `cursor`.
 - **Idempotency:** mutating money routes accept an `Idempotency-Key` header. The guarantee is the
   ledger's own key in Postgres, permanent and namespaced by the wallet module (D-077); a client's
   key only ever fills its event part. A Redis store, if a route builds one (T-8.1 or T-8.9), only
