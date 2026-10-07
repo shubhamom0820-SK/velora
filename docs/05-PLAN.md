@@ -5088,3 +5088,21 @@ The number comes from the session's own block, given in its brief, from P-100 up
   as a decision in its own block. The price a user pays doesn't move (D-099, D-450). Filed by
   Claude at the direction of the advisor (Claude, in a separate chat, relayed by the founder),
   8 October 2026; its session's block, P-350 to P-359.
+- [ ] P-330 · The wake listener says "subscribed" before Redis does, and `test_wake.py`'s first test
+  can go red on a commit that never touched it. **Before the next landing that hits it; the fix is
+  a line in `app/workers/wake.py` and a test.** Worst case first: a red CI on a docs-only commit,
+  and a landing that re-runs until green, which teaches every session to shrug at red (P-140's
+  silent direction). Seen 8 October 2026 on a5f650c (run 37685930558), three docs commits:
+  `test_it_hears_a_wake_and_hands_on_the_id` got `publish(...) == 0` where it expects 1; 2,085
+  passed, and locally the same tree passed twice. **Why:** `WakeListener._listen` sets its
+  `subscribed` event right after `await pubsub.subscribe(channel)`, but redis-py's
+  `PubSub.execute_command` only sends the command (`connection.send_command`) and reads the
+  server's confirmation later, as a message `get_message` then ignores. So the event fires before
+  the server holds the subscription, and a PUBLISH from another connection in that window finds
+  0 subscribers. On a loaded runner the window is wide enough; on this Mac it wasn't, twice.
+  **The product isn't at risk:** the worker's listener runs for the life of the process,
+  subscribed long before any wake, and a missed wake is caught by the 10 s poll (D-091, D-261).
+  **Fix:** set `subscribed` only after reading the subscribe confirmation
+  (`get_message(ignore_subscribe_messages=False)` until a `subscribe` message arrives), and a test
+  that publishes the instant the event is set, many times over, and never sees 0. Filed by Claude
+  landing P-57, P-150 and D-253, 8 October 2026; its session's block, P-330 to P-339.
