@@ -128,6 +128,13 @@ fake or operated profiles.
 Gender is chosen once at signup and cannot be changed by the user. Selfie liveness verification is
 mandatory for women before the profile goes live, optional (but encouraged) for men.
 
+**Amended 7 October 2026 (the founder): the selfie and its face match are mandatory; liveness waits
+until after launch (D-380).** A woman's profile still goes live only once her selfie has been
+compared with her photos and matched (T-4.5): that is built, and the database refuses anything
+else (`users_done_needs_a_match`, D-310). Liveness moves to T-4.11, which is no longer in REL-1's
+tag or on T-9.15's Needs line. The sentence above stands as written, struck by this amendment where
+it says liveness. Men stay optional. Why, in the founder's words, is D-380's.
+
 ### D-009 · Hard 18+ gate — Locked
 Date of birth under 18 → signup refused; the phone hash is added to `banned_identities`.
 Age is recomputed server-side; the browser's value is never trusted.
@@ -2731,6 +2738,16 @@ at the selfie stops that. Until one of them exists, the human isn't optional. Fo
 T-4.5's plan: it refuted the near-threshold review the advisor first proposed as the stand-in for
 the measurement set, since that list would have shown nothing and felt like cover.
 
+**Amended 7 October 2026 (D-380): passive liveness doesn't stop it either.** The sentence above,
+"Only liveness (T-4.11) or a person looking at the selfie stops that", stands as written, struck by
+this amendment where it names liveness: T-4.11's research (Claude, 5 October 2026) found that a
+single-photo liveness check, ours or Sightengine's, can't stop this attack on the web. The selfie
+reaches the server as bytes, by a presigned PUT (`photos/service.py`, `storage.presign_put`), so
+the server can't tell a camera from a file: the man uploads her real selfie as it is, a photo of a
+live face, which such a model is built to call real. What would stop it is a freshness mechanism,
+something in the selfie that couldn't exist before the request, and that is a separate decision
+(D-380, its first). The human stays not optional, as above.
+
 **Locked** on the founder's words, confirmed by him on 5 October 2026 as his own (the
 surrounding reasoning is the advisor's, relayed).
 
@@ -3042,6 +3059,93 @@ Proposed by Claude in T-4.9's plan, 5 October 2026. Its three questions, the rea
 directing T-4.9 (Claude, in a separate chat), relayed by the founder, 5 October 2026; the founder
 confirmed whose words they were the same day. **Open** until the founder approves it in his own
 words.
+
+### D-380 · Liveness waits until after launch: six decisions on T-4.11's research — Open
+**The decisions (the founder, 7 October 2026),** on six questions the advisor (Claude, in a
+separate chat) put to him from Claude's T-4.11 research report of 5 October 2026, and taken on the
+advisor's advice:
+1. **T-4.11 is for a print, a screen or a replay held in front of the camera.** A selfie that
+   already exists, uploaded as a file, isn't its to stop: that needs a freshness mechanism, which
+   is a separate decision. The pose challenge stays rejected (the founder, 4 October 2026); the
+   research didn't evaluate it.
+2. **Passive liveness is not D-008's "liveness verification".**
+3. **The measurement set (30 consenting people, 1,350 captures) isn't now:** after launch
+   (P-280).
+4. **MiniFASNet's training-data flag goes onto P-0.7 beside SFace's, never softened.**
+5. **DAMO's model-card tag is not a licence.**
+6. **Both Proposed tasks are filed:** P-280, the measurement set; P-281, the worker held to one
+   image at a time by a check, not a comment.
+
+**What changes with them:** D-008 is amended (the selfie and its face match mandatory, liveness
+after launch), and so is D-260 (passive liveness doesn't stop its attack either). T-4.11 leaves
+REL-1's tag and T-9.15's Needs line; its research half is ticked, its accuracy half open on P-280.
+
+**What they rest on** (T-4.11's research, Claude, 5 October 2026: T-4.11's line has it in full,
+and `api/bench/liveness/` re-runs its numbers, D-381):
+- **Passive single-photo liveness doesn't stop D-260's attack** (D-260's amendment says how). A
+  NASA portrait, never in front of our camera, scored 0.8949 "real" through the real pipeline: one
+  image, not a rate.
+- **Retries:** an attacker gets 5 tries a day (D-263); at 1% a try he passes within a week 29.7%
+  of the time. Passive liveness slows a stubborn attacker; it doesn't stop him.
+- **MiniFASNet** (minivision, Apache-2.0) costs single-digit MB more at peak through OpenCV's DNN
+  (409 to 410 MB, mostly 410, against a baseline of 392 to 406, mostly 403 to 404), with no new
+  dependency, and its weights are verified; DAMO's two models carry a model card's tag and no
+  licence text. **The probe's baseline varies 392 to 406 MB run to run with no code change, so a
+  difference under about 15 MB between two routes is not something this probe can tell apart.
+  MiniFASNet's +6 MB is inside that; the decision rests on single-digit MB against about 400, not
+  on the 6.**
+- **Sightengine's** liveness is on its Pro plan, $99 a month, which the founder declined on 4
+  October 2026 (about ₹1 lakh a year), and it judges a single photo too.
+- **What a measurement can show:** 30 people, none breached, bounds the rate at 9.5% (95%), no
+  lower. "Nobody can be impersonated" can't be shown at that size.
+
+**The founder's reason, in his words** (written by the advisor and approved by the founder, 7
+October 2026, as the brief relayed them): "Liveness ka kaam fake rokna hai. Maine 7 October 2026
+ko tay kiya ki fake account ban sakte hain — ek aurat apni asli photo dikhane ko majboor nahi. Aur
+research ne naapa ki passive liveness upload wala attack rokta hi nahi. To ₹1 lakh saal
+(Sightengine Pro) ya 30 logon ka measurement set, dono us chhed ke liye hain jo main pehle hi khula
+chhod chuka hoon. Liveness launch ke baad, asli users ke saath." In English: "Liveness exists to
+stop fakes. On 7 October 2026 I decided that fake accounts can be made: a woman isn't forced to
+show her real photo. And the research measured that passive liveness doesn't stop the upload
+attack at all. So ₹1 lakh a year (Sightengine Pro) and a 30-person measurement set are both for a
+hole I have already left open. Liveness after launch, with real users."
+
+**The reason quotes a decision this entry doesn't record:** that fake accounts can be made and a
+woman isn't forced to show her real photo (the founder, 7 October 2026). It isn't on `main`; the
+next session files it, from its own block (P-290 to P-299). It meets two things already built,
+T-4.5's match against her approved public photos and D-101's `no_face`; working that out is the
+filing session's.
+
+**Rejected:** Sightengine Pro (the founder, 4 October 2026: about ₹8,300 a month before the
+product has a single paying user; and it judges a single photo, the same blind spot); DAMO's
+models (decision 5).
+
+**Open:** the reason's words are the advisor's, approved by the founder. The founder can Lock this
+entry with one line saying they are his.
+
+### D-381 · torch and onnxruntime: the liveness bench's, and nowhere else — Open
+**The decision (the founder, 7 October 2026, under rule 4), with three conditions:** T-4.11's
+probe (`api/bench/liveness/`) needs torch (2.14.1, CPU-only, from PyTorch's own index) and
+onnxruntime (1.30.0) for two of its routes and for its weights check, since minivision's own
+`.pth` files run only through torch. Approved on these conditions:
+1. **They are installed in `api/bench/liveness/Dockerfile` and nowhere else:** never in
+   `uv.lock`, never in the API image.
+2. **A check holds it, because "never" is a claim** (the founder's condition).
+   `tests/bench/liveness/test_bench_only.py` reads `uv.lock` (neither, nor a variant of either's
+   name), the API's Dockerfile (its RUN lines exactly the four it has, the only installs the
+   lock's, and neither named anywhere) and `api/.dockerignore` (`bench` kept out); each guard was
+   broken on 7 October 2026 and went red (`python -m tests.break_guards t411-`, cases 01 to 04).
+   CI's `scripts/check-image-no-bench-tools` looks inside the built image with the image's own
+   Python.
+3. **A `.pth` file is a pickle, which can run code as it loads, so it is never in production.** The
+   probe loads one only with `weights_only=True`, which refuses anything but tensors.
+
+**Not `uv.lock`'s dev group** (Claude's reasoning): that would install about 150 MB of torch into
+every developer's and CI's environment for a probe run by hand, and the lock is what the image is
+built from.
+
+**Open:** the conditions are the founder's, relayed in the brief of 7 October 2026. The founder can
+Lock this entry with one line saying so.
 
 ---
 

@@ -182,6 +182,7 @@ never done silently.
   (D-088), and that account's unfinished payment verification is abandoned.
 - [ ] **P-0.7** Review our own legal text before real users arrive — no lawyer at this stage (the founder's call, 1 October 2026). Check Terms, Privacy, Refunds and Contact (T-2.2) against the decisions they cite and against what the product actually does at go-live; against the IT Rules 2021 (Grievance Officer, timelines) and the DPDP Act (notice, consent, rights — section 16 and Rule 15 take effect on 13 May 2027; check for any restricted-country notification); and gender-based pricing. Start with the law-and-courts text (D-052), the weakest part we wrote ourselves. Look closely, not in passing, at the under-18 section: it keeps a hashed phone number of someone just identified as a minor (D-009). The mechanism and saying so openly are right, but minors plus retention is the most scrutinised combination there is. Privacy has no section yet on what happens to people's data if the app shuts down or is sold; add one when there is something honest to say. Gates T-9.15, not the production build (D-053). Terms' consumer-rights line (D-058) was written without a lawyer, by the founder and Claude: if the terms are ever reviewed properly, show it to one.
   **The face-match model's training data** (D-088, 4 October 2026), as written there, and never softened (the founder): the code and the weights permit commercial use (MIT, Apache-2.0). The weights' training data is a separate question: OpenCV Zoo doesn't say which set trained the shipped SFace model, and the SFace paper's experiments used CASIA-WebFace, VGGFace2 and MS-Celeb-1M, collections of faces of people who weren't asked. That is a question about the model's origins, not a restriction on using it.
+  **The liveness model's training data, the same question** (D-380's fourth decision, the founder, 7 October 2026: beside SFace's, and never softened). MiniFASNet, the model T-4.11's research named (minivision's Silent-Face-Anti-Spoofing, Apache-2.0, "Copyright 2020 Minivision"), was trained on data minivision keeps private. Its own member, asked (read by Claude, 5 October 2026, in the repository's issues): "We did not use any open source datasets" and "about 5 million images in each class" (issue #25, 21 August 2020); and, asked to release it, that the data involves legal and privacy matters, so it isn't open-sourced (issue #29, 26 August 2020, in Chinese). Whose faces, and whether anyone was asked, is unknown. As with SFace, a question about the model's origins, not a restriction on using it.
   **No lawyer is engaged: an open item, and its owner is the founder, Shubham Kumar** (recorded 3
   October 2026). This review is his own, with Claude; no lawyer has read the legal pages. D-048
   calls this item "the DPDP session" and P-36 "the DPDP lawyer session", but none is booked. A
@@ -659,7 +660,7 @@ waits on the founder's decisions, so it is a task of its own, outside the sprint
   photos step.
   **And P-180, with no condition:** CI required at GitHub before `main` moves (D-280). The landing
   guard protects only the clones that installed it; this protects every clone.
-  **And three that block only under their condition** (the founder, 3 and 4 October 2026), each
+  **And six that block only under their condition** (the founder, 3 and 4 October 2026), each
   condition written beside it so nobody reads it as unconditional and blocks a release that
   doesn't need it:
   - **P-66, if REL-1's tag includes T-3.14.** That tag opens sign-in, into the Firebase user pool
@@ -670,8 +671,8 @@ waits on the founder's decisions, so it is a task of its own, outside the sprint
     after launch that is an outage with no warning (the founder, 3 October 2026): a tag with
     T-3.14 is launch in that sense, as for P-66. The date covers the rest: a month or less before
     the trial ends ("a month" is Claude's reading of the founder's "anywhere near it", approved).
-  - **T-4.11, if REL-1's tag includes T-3.14.** Liveness before the first real user (the founder,
-    4 October 2026): D-008 makes it mandatory for women, and T-4.5 ships without it.
+  - **T-4.11 left this list on 7 October 2026:** liveness waits until after launch (the founder,
+    D-380); D-008 is amended, and the selfie's face match (T-4.5) is what stays mandatory.
   - **P-72, if REL-1's tag includes T-4.4.** A human for repeated possible-minor flags (D-093), so
     a model's probability never becomes an automatic action against a real woman.
   - **P-81, if REL-1's tag includes T-4.4.** The lawyer's answer on a photo that scores as both a
@@ -1607,8 +1608,9 @@ exist yet. The batch is a chain, T-3.10 → T-3.11 → T-3.12 → T-3.13, each n
   2026; liveness is T-4.11). Face matching compares the selfie with the profile's photos. It does
   not prove a live person was in front of the camera, and **it does not stop a man holding a
   woman's photos and one real selfie of her: that selfie matches her photos closely, nowhere near
-  the threshold** (D-260). Only T-4.11 or a person looking stops that; until one exists, the person
-  isn't optional (D-264). **The hard constraint:** nothing in `/privacy`, the UI copy or any badge
+  the threshold** (D-260). Only T-4.11 or a person looking stops that **(a passive liveness check
+  doesn't, T-4.11's research found: D-260's amendment of 7 October 2026, D-380)**; until one
+  exists, the person isn't optional (D-264). **The hard constraint:** nothing in `/privacy`, the UI copy or any badge
   may say or imply that we confirm a real person, a live person, or that someone "is who they say
   they are". **Done as D-262:** the four strings found on 4 October 2026 rewritten (`/privacy`'s
   selfie line, which now says our team may look at it; the landing page's "Verified, moderated" and
@@ -1992,13 +1994,18 @@ exist yet. The batch is a chain, T-3.10 → T-3.11 → T-3.12 → T-3.13, each n
 - [x] **Commit:** `feat(profiles): location [T-4.10]`
 
 
-### T-4.11 · Liveness
-- [ ] **Needs:** T-4.5; the research below naming a model; and the founder's decision on it.
-  **Before the first real user:** on REL-1's Needs line if REL-1's tag includes T-3.14, and on
-  T-9.15's. Split out of T-4.5 by the founder, 4 October 2026, so T-4.5 ships face matching
-  without it. D-008 (Locked) makes liveness mandatory for women before their profile goes live:
-  this is the task that makes that true.
-- [ ] **What is known, so the research starts from it** (read by Claude, 4 October 2026):
+### T-4.11 · Liveness — deferred past launch (D-380)
+- [x] **Needs:** T-4.5 (built, `3ed0f6d`); the research below naming a model (done, Claude, 5
+  October 2026); and the founder's decision on it: **made, 7 October 2026, on six questions the
+  advisor (Claude, in a separate chat) put to him from the research, taken on the advisor's advice
+  (D-380). Liveness waits until after launch, with real users.** That day this task left REL-1's
+  conditional list and T-9.15's Needs line, and D-008 was amended: the selfie and its face match
+  (T-4.5) stay mandatory for women, and passive liveness is not D-008's "liveness verification"
+  (D-380's second decision). Split out of T-4.5 by the founder, 4 October 2026, so T-4.5 ships face
+  matching without it. **Its scope (D-380's first decision):** a print, a screen or a replay held in
+  front of the camera. A selfie that already exists, uploaded as a file, isn't this task's to stop:
+  that takes a freshness mechanism, a separate decision, not yet made.
+- [x] **What is known, so the research starts from it** (read by Claude, 4 October 2026):
   Sightengine's `liveness` model is passive, one photo, no head turns: a score from 0 to 1 and a
   rejection reason (`no_face`, `too_many_faces`, `inanimate_face`, `invalid_face`, `spoof`,
   `deepfake`, `ai_generated`), on the same `check.json` endpoint as T-4.4's moderation. It isn't on
@@ -2006,16 +2013,112 @@ exist yet. The batch is a chain, T-3.10 → T-3.11 → T-3.12 → T-3.13, each n
   "Access to the Liveness Detection API is restricted. Feature not available on the free plan.
   Switch to a paid plan" (0 operations charged). Its pricing page lists it under Pro, $99 a month,
   and its documented example consumed 10 operations a check. **Not bought** (the founder): about
-  ₹8,300 a month, roughly ₹1 lakh a year, before the product has a single paying user.
-- [ ] **The research, first:** passive liveness, or presentation-attack detection, models whose
-  licence permits commercial use. D-088's standard: the actual licence text read, and anything
-  research-only rejected the way InsightFace was; memory measured and accuracy measured, on attacks
-  we make ourselves (prints, screens, replays) against the measurement set's consenting people,
-  never a paper's claims. Reported to the founder, who decides.
-- [ ] **The pose challenge stays rejected** until that research exists (the founder, 4 October
-  2026): Claude called it weak and so did he, and "a weak check that looks like a strong one is
-  worse than no check".
-- [ ] **Commit:** `feat(verification): liveness [T-4.11]`
+  ₹8,300 a month, roughly ₹1 lakh a year, before the product has a single paying user. **Still so on
+  7 October 2026** (Claude, both pages read again that day): the pricing page lists "Liveness
+  Detection" under Pro, $99 a month, and not under Starter ($29) or the Free tier; the docs' example
+  response still shows `"operations": 10`, and the seven rejection reasons above are still the
+  documented ones. **The refused call of 4 October was not run again.** Sightengine is the baseline
+  the research compared against, not an option (the founder): it judges "a single static photo or
+  frame" too (its docs' words), and the word "injection" is nowhere on its page.
+- [x] **The research, first: the licences read, memory measured, a model named** (Claude, 5 October
+  2026, reported to the founder; the advisor put six questions to him from it, answered 7 October
+  2026, D-380). **Every number below can be run again:** the probe is `api/bench/liveness/` (D-381),
+  its package docstring says how; every run's raw readings are in `out/t-4.11-probe/` on the machine
+  that ran them (git-ignored); the plan holds ranges and modes.
+- **The research named MiniFASNet** (Claude's recommendation; the founder chose no model, he
+    deferred the task): minivision's Silent-Face-Anti-Spoofing, MiniFASNetV2 at crop scale 2.7 and
+    MiniFASNetV1SE at 4.0, the pair its authors ship, 0.43M parameters each, about 3.5 MB of ONNX in
+    all. **Its licence, read:** the repository's `LICENSE` (commit `b6d5f04`, 5 August 2020) is the
+    Apache License 2.0, "Copyright 2020 Minivision", and the weights sit in that repository under it
+    (`resources/anti_spoof_models/`, 1,849,453 and 1,856,130 bytes, SHA-256 `a5eb02e1…` and
+    `84ee1d37…`); neither README adds a research-only term. **Its weights, verified:** the two ONNX
+    exports the probe runs (yakhyo/face-anti-spoofing's release, Apache-2.0) and a third
+    (garciafido's on Hugging Face, which states the upstream `.pth`'s SHA-256, matching minivision's
+    file) were run through OpenCV's DNN beside minivision's own `.pth` through its own network code:
+    over 506 inputs (500 random patches and the 6 faces YuNet finds in the four NASA fixtures, at
+    both crop scales) the largest softmax difference is 2.38e-07 (V2, both exports) and 3.58e-07
+    (V1SE) (`same_weights.py`; the same on 7 October 2026). **Its training data:** private, by
+    minivision's own words (P-0.7 carries the flag, D-380's fourth decision). **One caution:**
+    minivision's repository also ships InsightFace's RetinaFace detector
+    (`Widerface-RetinaFace.caffemodel`), which D-088's rejection covers; it is never fetched or
+    shipped, and the crop takes YuNet's box, the worker's own detector. MiniFASNet was trained on
+    RetinaFace's boxes, and what YuNet's do to its accuracy only P-280's set can show.
+- **Memory, measured** (this Mac's arm64 Docker, one CPU, 1 GB, no swap: not Fly, where 962 MB is
+    usable; the API image built from the repository; the worker's own `SFaceFaceMatch.compare` on a
+    1,600-pixel selfie against two 1,600-pixel photos, as T-4.5's probe on Fly did, then the route's
+    liveness score, 22 times; peak is the process's VmHWM). **Baseline, face matching alone: 392 to
+    406 MB, mostly 403 to 404 (the committed probe, 20 runs on 7 October 2026; 5 October's probe,
+    not committed, read 392 to 404, mostly 404, over the same 20 interleaved runs).** T-4.5 measured
+    the same comparison at 403 MB here and 405 MB on Fly, so the method agrees with the machine.
+    **MiniFASNet through OpenCV's DNN, the image's own, no new dependency: 409 to 410 MB, mostly 410
+    (20 runs on 7 October 2026, and the same from 5 October's probe).** The same two files through
+    onnxruntime 1.30.0: 441 MB (441/441/442 on 5 October, 441 three times on 7 October), and a 20 MB
+    dependency. minivision's `.pth` through PyTorch 2.14.1 (CPU): 628 to 630 MB, a 152 MB wheel, and
+    a `.pth` is a pickle (D-381). On Fly, adding each route's cost to T-4.5's worst moment (207 MB
+    resident plus 343 MB for the worst photo decode, about 550 of 962): about 556, 570 and 742 MB, a
+    projection, not a measurement.
+- **A finding about the probe itself, so the next measurer doesn't trust n = 3:** 5 October's three
+    identical readings (404/404/404) were taken as deterministic. Eight runs on 7 October showed
+    they were not (392 to 407), and in 20 interleaved runs the original went to 392 five times.
+    Three identical draws are not proof of determinism. **So: the probe's baseline varies 392 to 406
+    MB run to run with no code change (5 October's, 392 to 407), and a difference under about 15 MB
+    between two routes is not something this probe can tell apart. MiniFASNet's +6 MB is inside
+    that; the decision rests on single-digit MB against about 400, not on the 6.** **And the
+    committed probe against 5 October's:** the probe is a port of that day's `bench.py` (kept
+    outside the repository, its DAMO routes dropped); run 20 times each, interleaved, in the same
+    image with the same flags, the original read 392 to 404 MB, mostly 404, and the port 392 to 406,
+    mostly 403 to 404; on MiniFASNet both read 409 to 410, mostly 410. The record here is the
+    port's, since it is what can be run again; the raw readings of all 60 runs are in
+    `out/t-4.11-probe/interleaved/` and `interleaved-2/` on the machine that ran them.
+- **Four comparisons at once don't fit, with or without liveness:** about 1,060 MB (1,062 to 1,064
+    observed, swap allowed, face matching alone or with MiniFASNet loaded), and with swap off, as
+    Fly runs the worker, the process is killed, exit 137. The worker never does that today, by the
+    comment at `app/workers/main.py:64-66`, not by a check: P-281.
+- **DAMO's two models (ModelScope, `damo/cv_manual_face-liveness_flrgb` and `_flxc`): no licence**
+    (D-380's fifth decision). Each repository holds `.gitattributes`, `configuration.json`,
+    `model.onnx`, `README.md` and an image, and no LICENSE file (listed 5 October, and again 7
+    October 2026); the model card's front matter says `license: MIT License` and nothing more, with
+    no copyright line, while MIT's own text requires that "the above copyright notice and this
+    permission notice shall be included". A tag isn't a licence text, so D-088's standard isn't met;
+    not research-only, so not InsightFace's rejection either. Their training data is private
+    ("在私有数据集上", the cards). **The probe's two DAMO routes, and their memory readings, were dropped
+    together on 7 October 2026** (the founder): a rejected model's numbers decide nothing later, and
+    numbers nobody can re-run are worse than none; if the licence is ever settled, measuring again
+    is cheap. (modelscope.cn reset the connection three times on 5 October.)
+- **Rejected on their licences, each read:** facenox/face-antispoof-onnx, and
+    kprokofi/light-weight-face-anti-spoofing with Intel's OMZ `anti-spoof-mn3`, all trained on
+    CelebA-Spoof, whose agreement says it "is available for **non-commercial research purposes**
+    only" and "You agree **not to** … exploit for any commercial purposes, any portion of the images
+    and any portion of derived data" (a trained weight is derived data: rejected as InsightFace
+    was); the Hugging Face ViT and DINOv2 fine-tunes (nguyenkhoa's, Molkaatb's and others), each "on
+    an unknown dataset"; biometric-ai-lab/Antispoofing (its tag says apache-2.0, its badge MIT);
+    KBY-AI ("requires a license for each machine or instance"); uniface (no model of its own: it
+    downloads yakhyo's files, and needs onnxruntime); InsightFace (D-088, unchanged).
+- **The finding that shaped D-380: passive single-photo liveness, ours or Sightengine's, doesn't
+    stop D-260's attack.** The selfie reaches the server as bytes, by a presigned PUT
+    (`photos/service.py`, `storage.presign_put`); the server can't tell a camera from a file, so a
+    man with one real selfie of her uploads it as it is, a photo of a live face, which such a model
+    is built to call real. Shown by its effect: a NASA portrait, never in front of our camera,
+    scored 0.8949 "real" through the real pipeline (5 October, and again 7 October 2026). One image,
+    not a rate. What stops that is freshness, something in the selfie that couldn't exist before the
+    request, chosen by the server; the pose challenge stays rejected; so until such a thing exists,
+    D-264's human is the only thing in that attack's way (D-260's amendment).
+- **Retries:** an attacker gets 5 tries a day (D-263). At 1% a try he is through within a week 29.7%
+    of the time; at 5%, 83.4%. Passive liveness slows a stubborn attacker; it doesn't stop him. And
+    no measurement of 30 people can show "nobody can be impersonated": 0 breached of 30 bounds it at
+    9.5%, no lower (P-280).
+- [ ] **The research, second: accuracy measured, on attacks we make ourselves against consenting
+  people, never a paper's claims** (D-088's standard, as this task's research line put it on 4
+  October 2026). **Open, on P-280:** 30 consenting people, 1,350 captures, on the real capture path,
+  after launch (D-380's third decision). No README's accuracy number stands in for it, and this box
+  doesn't tick without it. That is the founder's standard, held on his word, not a mechanism: D-260
+  shows he has shipped face matching unmeasured.
+- [x] **The pose challenge stays rejected.** Its condition, "until that research exists", is met:
+  the research exists (above). The founder's rejection of 4 October 2026 stands, unchanged on 7
+  October (D-380's first decision): Claude called it weak and so did he, and "a weak check that
+  looks like a strong one is worse than no check". The research didn't evaluate a pose; what a
+  freshness mechanism would be is a separate decision, not made.
+- [ ] **Commit:** `feat(verification): liveness [T-4.11]`, after launch, with real users (D-380).
 
 ---
 
@@ -2768,7 +2871,7 @@ prices don't depend on the web photos step, and the hold is lifted.
 - [ ] **Commit:** `docs(ops): backup and restore runbook [T-9.14]`
 
 ### T-9.15 · Go live
-- [ ] **Needs:** T-9.13, T-9.14, P-0.5, P-0.7, P-0.8; **P-80**: no query value in the API's database errors (rule 15); **P-81**: the lawyer's answer on a possible minor's photo that is also sexual (D-093); **P-73**: who the two unidentified staging accounts are; **P-74** and **P-76**: a photo rejected after the person left the photos step reaches them, and an upload that never arrived stops showing as "Checking…" (found building T-4.6); **P-72**: a human path for repeated possible-minor flags (D-093); **T-4.11**: liveness before the first real user (the founder, 4 October 2026); **P-66**: until staging has a Firebase project of its own, its sign-ins land in production's user pool, which is not acceptable after launch (the founder, 3 October 2026, on T-3.14); **P-0.18**: the billing account converted from its free trial, after App Check (P-68), since after launch the trial's end is an outage with no warning (the founder, 3 October 2026); and **P-68**: App Check enforced on Authentication and proved by its effect, before the site is public for sign-in (the founder, 4 October 2026); **P-162**: whether one matching photo may carry a whole profile (T-4.5); and **P-163**: the founder able to undo a selfie decision his review finds wrong, since until then a woman he marks "different" stays live with the badge (T-4.5, D-264)
+- [ ] **Needs:** T-9.13, T-9.14, P-0.5, P-0.7, P-0.8; **P-80**: no query value in the API's database errors (rule 15); **P-81**: the lawyer's answer on a possible minor's photo that is also sexual (D-093); **P-73**: who the two unidentified staging accounts are; **P-74** and **P-76**: a photo rejected after the person left the photos step reaches them, and an upload that never arrived stops showing as "Checking…" (found building T-4.6); **P-72**: a human path for repeated possible-minor flags (D-093); **P-66**: until staging has a Firebase project of its own, its sign-ins land in production's user pool, which is not acceptable after launch (the founder, 3 October 2026, on T-3.14); **P-0.18**: the billing account converted from its free trial, after App Check (P-68), since after launch the trial's end is an outage with no warning (the founder, 3 October 2026); and **P-68**: App Check enforced on Authentication and proved by its effect, before the site is public for sign-in (the founder, 4 October 2026); **P-162**: whether one matching photo may carry a whole profile (T-4.5); and **P-163**: the founder able to undo a selfie decision his review finds wrong, since until then a woman he marks "different" stays live with the badge (T-4.5, D-264)
 - [ ] Production env: real SMS, real Razorpay live keys + webhook URL, real moderation and face match, VAPID keys. Run the pre-launch checklist in `07-CHECKLISTS.md`. Do one real ₹ purchase yourself and refund it, under D-076's rule 3: the refund reverses that purchase's Velas in the ledger in the same step (T-8.2), so money never goes back while its Velas stand.
 - [ ] **Write to the waitlist** (T-2.3): its copy promises to tell people when Velora opens near them. Nothing can send bulk email yet, so choose how before launch day, or the list is one we can't write to. A sending service is a new dependency and another processor `/privacy` must name, and its From address needs SPF and DKIM, like the mailboxes (P-0.3). B-14, a second city, writes to it again, by city.
   **DKIM before the first send, or the launch email goes to spam:** our DMARC record says
@@ -4609,3 +4712,71 @@ The number comes from the session's own block, given in its brief, from P-100 up
   may stay as an early stop on a failure, but the document must not say its run is what the push
   reads. `done.md` is outside T-4.4's scope (rule 3), so filed, not fixed. Found closing T-4.4's
   retention box, 7 October 2026; filed from that session's block (P-260 to P-269).
+- [ ] P-280 · The liveness measurement set: 30 consenting people, 1,350 captures, on the real
+  capture path. **After launch** (the founder, 7 October 2026, D-380's third decision; it was
+  T-4.11's accuracy half, and T-4.11 can't tick that half without it). Worst case while it is
+  missing: a liveness check ships on a README's accuracy number, "a weak check that looks like a
+  strong one" (the founder, 4 October 2026), because the one standard that stops it, accuracy
+  measured on our own attacks against consenting people (T-4.11's research line, D-088's way), is
+  a measurement nobody has made; and nothing stops it but the founder's refusal to ship without
+  one (D-260 shows he has shipped face matching unmeasured, on his own word, so this is his
+  standard, not a mechanism). **The set, as T-4.11's research designed it** (Claude, 5 October
+  2026), the founder's to change: 30 people who agree in writing, at least 15 women, spread the
+  way T-4.5's dropped set was (skin tones, glasses, beards, a dupatta, a turban, since the model
+  learned from other faces), each giving 45 captures, 1,350 in all: 10 real selfies (2 phones,
+  their own and a cheap Android, in 5 conditions: window light, a tube light at night, low light,
+  outdoors, as they usually look); 10 print attacks (an A4 printout and a glossy print, flat and
+  curved, at several distances); 10 screen attacks (their photo on a phone and on a laptop, bright
+  and dim); 10 replay attacks (a video of them played on a phone and a laptop); and 5 injections,
+  their real selfie sent straight to the API, **which must pass**, so the gap D-380 names is shown
+  by its effect, never assumed. One or two people genuinely trying to beat the model, not going
+  through the motions. **The capture path is the real one,** T-4.7's screen or exactly its steps
+  (`getUserMedia`, a canvas, a JPEG, our q85 re-encode): MiniFASNet reads fine texture and
+  frequency, which a JPEG chain erases, so a phone camera app's photos would flatter it. **The
+  threshold is chosen on the real selfies only** (the lowest refusing at most 5% of real people,
+  T-4.5's rule) and the attacks counted at that threshold; chosen on the attacks it would flatter
+  the result. Why these numbers (exact binomial bounds, Claude, 5 October 2026): 30 people, since
+  errors cluster by person and a trait 10% of users have (a turban, a dupatta over the hair, a
+  dark skin tone under a tube light) appears in 30 people with 95.8% probability and in 20 with
+  87.8%; 300 real selfies, since a 5% refusal rate then has a 95% interval of 2.8% to 8.1%, tight
+  enough to apply the 5% rule; 300 of each attack, since zero passes bound the per-try rate at
+  1.0% and two passes at 2.1% (one-sided 95%), and an attacker gets 5 tries a day (D-263), so at
+  5% a try he is through within a week 83.4% of the time and at 1% 29.7%. **Its honest limit:**
+  per person, 0 breached of 30 bounds the rate at 9.5%, no lower; "nobody can be impersonated"
+  can't be shown at this size, and passive liveness slows a stubborn attacker, never stops him.
+  Consent in writing; never a user's data; stored privately, used for nothing else, deleted when
+  the founder says; and **never inside the repository:** the probe's faces guard refuses a
+  directory inside it or any worktree of it (`api/bench/liveness/run.py`, `faces_dir`, tested),
+  so the set lives outside, where no `git add` can take it. Cost: about 7.5 hours of capture (the
+  advisor's estimate, unmeasured) plus gathering 30 people. Filed by Claude from T-4.11's research
+  (5 October 2026), at the founder's direction, 7 October 2026; its session's block, P-280 to
+  P-289.
+- [ ] P-281 · Hold the worker to one image at a time by a check, not a comment. **Before anything
+  moves decoding or inference off the event loop, and before T-4.11 builds** (a third model in
+  the same process). Worst case: the worker is killed by the kernel in the middle of a
+  verification; ARQ tries its running jobs again; and, since `restart = always`
+  (`infra/fly.worker.toml`), it comes back, takes the same four heavy jobs and is killed again, a
+  crash loop that leaves every upload and every selfie pending. The loop isn't measured, only
+  possible; the kill is measured. **Today this is a comment, not a check:**
+  `app/workers/main.py:64-66` says, with its reasons and citing D-092 and D-088, that decoding is
+  synchronous on the event loop, so only one image is ever decoded at a time whatever `MAX_JOBS`
+  (line 67, 4) says. True today. A comment can't go red: the day inference or decoding moves to
+  `asyncio.to_thread`, `MAX_JOBS = 4` overlaps for real, the comment is false, and no test fails.
+  **Measured** (Claude, 5 October 2026, and again on 7 October with the committed probe,
+  `api/bench/liveness/run.py baseline --at-once 4`; this Mac's arm64 Docker, one CPU, 1 GB: not
+  Fly, where 962 MB is usable): one YuNet + SFace set, 191 to 195 MB resident; four threads, each
+  with a set of its own, since OpenCV's model objects can't be shared across threads, 368 MB
+  before any comparison; four concurrent face-match comparisons, swap allowed, peak about 1,060 MB (1,062 to 1,064 observed); swap
+  off, as Fly runs it, the process is killed, exit 137, with face matching alone. **Two things not
+  measured:** the overlap of two decodes (the probe's threads overlap whole comparisons); and two
+  calls on one shared model object, which is what `asyncio.to_thread` with a single model set
+  would do: there the memory is less than four sets', so the hazard is thread safety, not memory,
+  and nothing above speaks to it. **The memory numbers are the probe's, not a property of the
+  worker:** its baseline varies 392 to 406 MB from run to run with no code change (T-4.11's
+  research line), so read them as about 400 MB a comparison and about 1,060 for four, never as
+  exact. **Fix, the doer's choice:** a test that forces the overlap (four jobs whose compare is
+  held on an event, then an assertion that at most one is inside the decode or the inference at
+  any moment), or an explicit semaphore of one permit around decode and inference that a test can
+  hold; a test that doesn't force the overlap stays green with the guard removed, which is to say
+  it isn't a check. Filed by Claude from T-4.11's research (5 October 2026), at the founder's
+  direction, 7 October 2026; its session's block, P-280 to P-289.
