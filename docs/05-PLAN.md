@@ -673,6 +673,10 @@ waits on the founder's decisions, so it is a task of its own, outside the sprint
     the trial ends ("a month" is Claude's reading of the founder's "anywhere near it", approved).
   - **T-4.11 left this list on 7 October 2026:** liveness waits until after launch (the founder,
     D-380); D-008 is amended, and the selfie's face match (T-4.5) is what stays mandatory.
+  - **T-4.12, if REL-1's tag includes T-4.6: the advisor's recommendation (Claude, in a separate
+    chat, 7 October 2026), for the founder to confirm, not his decision.** A tag with T-4.6 is the
+    first that asks women for photos, and asking the first cohort to show a face is the opposite
+    of the redesign (D-392); and T-4.12 changes what `/privacy` says the selfie is compared with.
   - **P-72, if REL-1's tag includes T-4.4.** A human for repeated possible-minor flags (D-093), so
     a model's probability never becomes an automatic action against a real woman.
   - **P-81, if REL-1's tag includes T-4.4.** The lawyer's answer on a photo that scores as both a
@@ -1413,12 +1417,16 @@ exist yet. The batch is a chain, T-3.10 → T-3.11 → T-3.12 → T-3.13, each n
 - [x] **Commit:** `feat(photos): upload url and completion [T-4.2]`
 
 ### T-4.3 · Manage photos
+**Changed by T-4.12 (D-392, filed 7 October 2026):** the step is left without a public photo,
+and the last one may be removed; these boxes record what T-4.3 built and proved.
 - [x] **Needs:** T-4.2
 - [x] `GET /me/photos`, `PATCH /me/photos/order`, `DELETE /photos/{id}` (soft: status `rejected` + reason `user_deleted`, object removed from public bucket).
 - [x] Onboarding `photos` step completes when ≥ 1 public photo is `approved` **or** `pending` (pending ones stay invisible to others until approved).
 - [x] **Commit:** `feat(photos): list, reorder, delete [T-4.3]`
 
 ### T-4.4 · Moderation worker
+**Changed by T-4.12 (D-391, D-392, filed 7 October 2026):** `no_face` applies to the face photo
+and never to a public photo (D-101 amended); these boxes record what T-4.4 built and proved.
 - [x] **Needs:** T-4.2, T-1.15, and a **Sightengine account with API keys** — created by the founder on 4 October 2026, free plan, its keys in the Keychain (P-0.6)
 - [x] ARQ worker bootstrap (`workers/main.py`) + `make worker`.
   `python -m app.workers` (`make worker`; `make dev` starts it too): `moderate_photo` and
@@ -1583,6 +1591,9 @@ exist yet. The batch is a chain, T-3.10 → T-3.11 → T-3.12 → T-3.13, each n
 - [x] **Commit:** `feat(worker): photo moderation pipeline [T-4.4]`
 
 ### T-4.5 · Selfie verification
+**Changed by T-4.12 (D-391, D-393, filed 7 October 2026):** the selfie is compared with the face
+photo alone, and each shown photo with a face is compared with the selfie for the badge; these
+boxes record what T-4.5 built and proved.
 - [x] **Needs:** T-4.4; D-088 (approved by the founder, 4 October 2026: the model and
   `opencv-python-headless`). No third party matches faces (D-087). Liveness isn't here: it is
   T-4.11. **The measurement set this line once named is dropped, and isn't happening before
@@ -1683,6 +1694,9 @@ exist yet. The batch is a chain, T-3.10 → T-3.11 → T-3.12 → T-3.13, each n
 - [x] **Commit:** `feat(verification): selfie face match [T-4.5]`
 
 ### T-4.6 · Web photos step
+**Changed by T-4.12 (D-391, D-392, filed 7 October 2026):** a slot of its own for the face photo
+and its toggle, and the step left without a public photo; these boxes record what T-4.6 built
+and proved.
 - [x] **Needs:** T-4.3, T-3.12
 - [x] 6-slot grid; tap empty slot → file picker (`accept="image/*"`, `capture` not forced); client resize to ≤ 2000 px before upload (canvas) to save data; PUT to presigned URL with progress; states per slot: uploading %, checking, approved, rejected (with reason + retry). Drag to reorder (or up/down buttons on mobile).
   **Built** (`PhotosStep`, `PhotoSlot`, `usePhotoSlots`; hooks in `src/lib/queries/photos.ts`):
@@ -1790,6 +1804,8 @@ exist yet. The batch is a chain, T-3.10 → T-3.11 → T-3.12 → T-3.13, each n
 - [x] **Commit:** `feat(web): photo upload step [T-4.6]`
 
 ### T-4.7 · Web selfie step
+**Changed by T-4.12 (D-391, filed 7 October 2026):** the copy says the selfie is compared with
+the face photo, not "your photos"; these boxes record what T-4.7 built and proved.
 - [x] **Needs:** T-4.5, T-4.6
 - [x] Start the verification (no pose: T-4.5) → `getUserMedia({video:{facingMode:"user"}})` → live mirrored preview → capture to canvas → upload as `kind=selfie` → submit → poll `GET /verification/latest` every 2 s (max 60 s) → result. Handles permission denied with instructions per browser.
   **Built** (`SelfieStep`, `SelfieCamera`, `useSelfie`, `selfieCopy`; `src/lib/camera.ts`; hooks
@@ -1865,6 +1881,8 @@ exist yet. The batch is a chain, T-3.10 → T-3.11 → T-3.12 → T-3.13, each n
 - [x] **Commit:** `feat(web): selfie verification step [T-4.7]`
 
 ### T-4.8 · Finish onboarding
+**Changed by T-4.12 (D-392, filed 7 October 2026):** `photo` leaves what `done` needs,
+completeness unchanged; these boxes record what T-4.8 built and proved.
 - [x] **Needs:** T-4.5, T-4.10
 - [x] Service `onboarding.complete()`: requires profile fields, username, 5 interests, ≥ 1 public photo, location (T-4.10), and for women an `approved` verification → step `done`, compute `completeness`.
   **Built** (`app/modules/onboarding/`, D-310): `POST /me/onboarding/complete` answers `Me`. Each
@@ -1900,6 +1918,8 @@ exist yet. The batch is a chain, T-3.10 → T-3.11 → T-3.12 → T-3.13, each n
 - [x] **Commit:** `feat(onboarding): completion rules [T-4.8]`
 
 ### T-4.9 · E2E onboarding
+**Changed by T-4.12 (filed 7 October 2026):** J1 and J2 follow the redesign; these boxes record
+what T-4.9 built and proved.
 - [x] **Needs:** T-4.7, T-4.8, T-4.10
   **Uploads need two things the E2E doesn't have yet** (found building T-4.6): the local S3's CORS
   rule (`infra/s3/private-cors.xml`) admits only `make dev`'s web, `http://127.0.0.1:3000`, and
@@ -2119,6 +2139,117 @@ exist yet. The batch is a chain, T-3.10 → T-3.11 → T-3.12 → T-3.13, each n
   looks like a strong one is worse than no check". The research didn't evaluate a pose; what a
   freshness mechanism would be is a separate decision, not made.
 - [ ] **Commit:** `feat(verification): liveness [T-4.11]`, after launch, with real users (D-380).
+
+### T-4.12 · Photos and verification redesign: a face photo for the check, public photos as she likes, nobody needs one (D-390 to D-393)
+**Filed 7 October 2026, docs only; nothing is built yet.** The founder's decision of that day, in
+five parts, written by the advisor (Claude, in a separate chat) and relayed by the founder; the
+badge's rule (D-393) in his own words. **Why one new task and not six boxes reopened** (the
+founder, 7 October 2026, on the advisor's advice and Claude's): rule 11 wants a new migration
+whatever happens; T-4.3 to T-4.9's Done-whens quote staging runs and break-guard runs on named
+commits, and reopening them would make those records claim things about code that no longer
+exists; and one task is one commit series and one break-guard sweep. Each task this changes keeps
+its box and carries one pointer line to here. **Where it sits:** on T-6.2's Needs line, since the
+`Card`'s badge and its photo-less fallback are this task's rules; and on REL-1's conditional list,
+"if the tag includes T-4.6", as the advisor's recommendation for the founder to confirm.
+- [ ] **Needs:** T-4.5, T-4.8, T-4.9 (all built); D-390 to D-393 (filed, below); and this task's
+  own plan, answering its four open points (below) before any code.
+- [ ] **What changes, in one place:**
+  1. **Gender isn't verified, and now that is deliberate (D-390).** Nothing is built for it; D-264's
+     human review is what stands against a man who picks "Woman" and matches his own face.
+  2. **A face photo for the selfie check (D-391).** `PhotoKind` gains `verification` (the
+     identifier only: in copy the photo is never called that, since `claims.test.ts` refuses
+     `/verif/i`; "face photo" is the advisor's recommendation). One migration: the type rebuilt as
+     `4a7e20790605` rebuilt `ledger_reason_t`, never `ALTER TYPE … ADD VALUE` (a value added that
+     way can't be removed, nor used in the transaction that added it), and the partial unique
+     index and `ck_photos_public_position_range` on `photos`, which name `kind`, re-created from
+     the database's own definitions; `tests/core/test_enums.py` holds Python to the database. One
+     live per person, as the selfie (`_check_room`); uploaded at the `photos` step or after
+     (`_STEP_OF`, D-068); moderated by all four of D-101's checks, `no_face` among them, since she
+     may choose to show it; private bucket only, no public copy unless she chooses; listed to its
+     owner by `GET /me/photos` and read by `GET /photos/{id}` (today both see public and private
+     only: `photos/repository.py`, D-096); `verify_selfie` compares the selfie with it alone
+     (`approved_public_photos` and `public_photos_waiting` read it instead, and `no_photos` comes
+     to mean "no face photo yet", its words with it); D-078's deletion takes it with an under-18
+     refusal, with a test, as T-4.5 wrote one for the selfie.
+  3. **Public photos need no face (D-392).** `moderation.verdict`'s `no_face` reads the new kind
+     and never `public`; `test_no_face_only_for_public_photos` turns into its opposite. Hair over
+     the face, a mask, a crop, a photo from behind, an emoji over the face: all pass. Nudity, a
+     possible minor and text over the photo are refused as before.
+  4. **Nobody needs a public photo (D-392), men included.** `photo` leaves `rules.missing` and
+     `PROFILE_INCOMPLETE`'s `details.missing` (04-API); the photos step gains a way to be left
+     without one (today only a public photo's `complete` moves the step on, `photos/service.py`;
+     the way is this task's plan's: an endpoint of the step's own, or the face photo's `complete`);
+     T-4.3's "the last public photo can't be removed past the step" goes (`DELETE /photos/{id}`).
+     Completeness is unchanged (D-310 amended): zero photos is 50, the bottom of discovery's
+     ranking (D-032), on purpose.
+  5. **The badge and the card (D-393).** Each approved public photo whose moderation record says a
+     face (`moderation.faces >= 1`, which T-4.4 already records) is compared with the kept selfie,
+     when it is approved (a selfie already decided) or when the selfie is decided (photos already
+     there), one comparison at a time (P-281), the result in that photo's `moderation` record,
+     never a rejection. The badge is `is_verified` **and** at least one such photo matched; its
+     icon a tick in `--accent`; its label and aria-label "Selfie matched" (D-262's rule on words
+     unchanged, `claims.test.ts` as strict). T-6.2's `Card` carries the badge as this computes it,
+     never raw `is_verified`, and a null main photo when there is none, which the web shows as a
+     grey silhouette with the name. This task gives T-6.2 the rule and the query; the `Card`
+     itself stays T-6.2's.
+- [ ] **Web:** the photos step gets a slot of its own for the face photo ("this is only for the
+  check; nobody sees it") and the toggle that also shows it on the profile; the step's "At least
+  one to be visible" and "Add at least one photo" go; the selfie step's lines that say "your
+  photos" (`subWoman`, `subMan`, `comparing`, `matched`, `finish.needsMatch`, `finish.missing.photos`,
+  `reasons.no_match`, `reasons.no_photos`) say the face photo instead; `/privacy`
+  (`collect.selfie`, `where.faceMatch`, and a new line: a photo of her face is kept for the check
+  and never shown unless she chooses, and why: so the photos others see need not show her face),
+  `/terms`' `profile.body` and the landing's `safety.body` ("Selfies compared with profile
+  photos") rewritten inside D-262's rule; `Avatar`'s badge a red tick; every new string under
+  `claims.test.ts`.
+- [ ] **Seed:** a face-photo row (a placeholder, private) for every seeded user marked verified,
+  and for the three women at the selfie step, who verify against it from then on; seeded public
+  photos get a `moderation` record with `faces`, or carry none and show no badge, decided in the
+  plan. A re-run adds nothing twice.
+- [ ] **E2E (T-4.9):** J2 uploads the portrait as her face photo and finishes with no public
+  photo; J1 finishes with none; 06-TESTING's J1/J2 rows follow.
+- [ ] **Contracts, changed with the code and not before:** 03-SCHEMA (`photo_kind_t`, `photos`,
+  the note on `users.is_verified`), 04-API (`/photos/upload-url`'s kinds, `/me/photos`,
+  `/photos/{id}`, `DELETE`, `PROFILE_INCOMPLETE`, `Verification`'s description, the step's exit),
+  02-ARCHITECTURE §8 (the `Card`'s badge, an EXISTS on `photos`), 06-TESTING #14 (the face photo
+  joins what is never public unless chosen) and J1/J2, 08-DESIGN §4's Avatar row; `make types`
+  (`PhotoKind` changes).
+- [ ] **Four points this task's plan decides, Claude's recommendation beside each, none decided
+  today** (the founder, 7 October 2026):
+  1. **The toggle's mechanism.** A separate `public` row made from the face photo's scored bytes,
+     with a place of its own, so every reader of "public photo" (discovery, completeness, T-6.3,
+     the badge's comparison) stays as it is, and turning it off is `user_deleted` on that row; or
+     the face photo's own row given a place and a public copy, which touches every reader.
+     Recommended: the separate row.
+  2. **Whether a woman may leave the photos step without a face photo.** Recommended: no, by an
+     allowlist like `MAY_FINISH_UNMATCHED` (men may), in place of today's "one public photo,
+     pending or approved"; the server's rule, not the screen's.
+  3. **The photo's name in copy.** "face photo" (the advisor's recommendation: no claim, just what
+     it is) or "selfie-check photo"; never a word matching `/verif/i`.
+  4. **Replacing the face photo after a match** (found filing): refused while a verification is
+     approved, as a selfie's removal is refused today, so the match can't be left pointing at a
+     photo that is gone; a change then goes through P-163's path. Recommended: refused.
+- [ ] **Tests, and every guard broken once,** as T-4.5 to T-4.9 did (`tests.break_guards`,
+  `scripts/break-guards.mts`, each file restored by SHA-256, the log kept): `tests/modules/photos/`
+  (the kind, its one-at-a-time rule, `no_face` on the face photo and never on a public one, the
+  last public photo removable), `tests/modules/verification/` (the selfie against the face photo
+  alone; a public photo's comparison on approval and on the selfie's decision; a non-match that
+  doesn't reject), `tests/modules/onboarding/` (`done` with zero photos, for a man and a woman;
+  completeness 50 at zero), `tests/seed/`, the enum and migration tests, and the web's
+  `PhotosStep.test.tsx`, `SelfieStep.test.tsx`, `Avatar.test.tsx`, `claims.test.ts`,
+  `e2e/signup.spec.ts`. A photo with no face approved as public and refused as a face photo,
+  each at D-101's edge.
+- [ ] **Done when, on a per-run database (P-55):** a fresh woman finishes with zero public photos,
+  her selfie matched against her face photo alone, `is_verified` true and **no badge**; she adds a
+  public photo with a face that matches, and the badge appears; a public photo of hers with no
+  face is approved; her face photo appears in no public response and in nobody else's (06-TESTING
+  #14, extended); a man finishes with no photo and no selfie; `claims.test.ts` is green with every
+  new string; `make lint test`, then CI, on the commit that lands.
+- [ ] **The trade-off, weighed, and written down so nobody later thinks it was missed** (the
+  founder, 7 October 2026): on a dating app a card with no face gets far fewer swipes. The woman
+  this change is for may arrive, show nothing, receive nothing, and conclude the app doesn't work.
+  The founder weighed that and chose to let her in rather than stop her at the door.
+- [ ] **Commit:** `feat(photos): face photo for the selfie check; public photos need no face; nobody needs one [T-4.12]`
 
 ---
 
@@ -2493,7 +2624,10 @@ prices don't depend on the web photos step, and the hold is lifted.
 - [ ] **Needs:** T-4.10, T-4.8; **P-75**: public photo places kept 0 onwards by the server, or
   "main" defined as the lowest place, before a `Card` carries a main photo (found building T-4.6)
   **P-161**: a public photo added after a verification compared with the selfie, or the badge
-  cleared, before a `Card` carries `is_verified` to anyone (found building T-4.5)
+  cleared, before a `Card` carries `is_verified` to anyone (found building T-4.5): **resolved in
+  shape by D-393 and built by T-4.12**, which is on this line for it
+  **T-4.12**: the face photo, the badge's rule and the card with no photo (D-391 to D-393), before
+  a `Card` carries a badge or a main photo
   **P-120**: distances snapped so they can't be trilaterated, before a `Card` carries
   `distance_km` to anyone (found building T-4.10)
   **P-210**: `profiles.completeness` kept current after onboarding finishes, before the ranking
@@ -2501,6 +2635,12 @@ prices don't depend on the web photos step, and the hold is lifted.
 - [ ] Repository implements the query in `02-ARCHITECTURE.md §8` with feeds: `foryou` (ranked), `new` (joined ≤ 7 days first), `online` (active ≤ 5 min). Filters: `intent_ids` (any overlap, D-041), verified.
 - [ ] Excludes: self, swiped, blocked either way, hidden, not `done`, status ≠ active, fraud band `freeze`; `shadow` band users only shown to others in `shadow`.
 - [ ] Response `Card`: id, first_name, age (null if hide_age), username, city, hometown, distance_km (null if hide_distance, else ≥ 1), intent_ids, bio line (first 90 chars of about), main photo URL, is_verified, is_online, is_new.
+  **From 7 October 2026 (D-392, D-393, T-4.12):** the main photo URL is null when there is no
+  approved public photo, and the web shows a grey silhouette with the name; the badge field is
+  D-393's rule (a selfie matched the face photo **and** at least one approved public photo's face
+  matched the selfie), computed by the query, never raw `is_verified`, and its name is this task's
+  (`is_verified` stays in `Me`, for the owner). Whether the ranking's `is_verified` term stays is
+  P-290.
 - [ ] Cursor = (score, user_id).
 - [ ] Performance test: seed 50k profiles, assert p95 < 80 ms with `EXPLAIN ANALYZE` showing the GIST index.
 - [ ] **Commit:** `feat(discovery): ranked nearby feed [T-6.2]`
@@ -2551,9 +2691,11 @@ prices don't depend on the web photos step, and the hold is lifted.
 ### T-6.9 · Filters
 - [ ] **Needs:** T-6.5
 - [ ] Filter sheet: intent multi-select, verified only, online now; active count badge; stored in URL search params.
-  **The "verified only" chip's words follow D-262** (T-4.5): it filters on a selfie matched to
-  photos, so it says that ("Selfie matched", or the founder's choice), never "Verified only", which
-  the prototype says and `web/src/i18n/claims.test.ts` refuses.
+  **The "verified only" chip's words follow D-262** (T-4.5), and its meaning D-393 (T-4.12, 7
+  October 2026): it filters on the badge, a selfie matched to the face photo and a shown face
+  that matched the selfie, never on `is_verified` alone, so it says that ("Selfie matched", or the
+  founder's choice), never "Verified only", which the prototype says and
+  `web/src/i18n/claims.test.ts` refuses.
 - [ ] **Commit:** `feat(web): discovery filters [T-6.9]`
 
 ---
@@ -4142,6 +4284,9 @@ The number comes from the session's own block, given in its brief, from P-100 up
   anywhere says why. T-4.6 shows a rejection only in the slot that showed it, while that page is
   open (D-096); a reload, or going on, forgets it. Where it belongs (a notification, the You
   screen, a gate before discovery) is a product decision.
+  **7 October 2026 (D-392, T-4.12):** the worst case changes shape, not weight: once nobody needs a
+  public photo, she isn't invisible for lack of one, she is a grey silhouette (D-392), and still
+  nothing tells her why her photo was refused. The fix is the same.
 
   Found building T-4.6.
 - [ ] P-75 · Keep public photo places 0 onwards on the server. **Before T-6.2 serves `Card`s with a main photo URL.**
@@ -4150,6 +4295,9 @@ The number comes from the session's own block, given in its brief, from P-100 up
   says 0 is the main one; the API allows gaps (upload to any free place, delete without closing
   up), and only the web closes them (after a delete, a cleared rejection, and at Continue, T-4.6).
   Either the API closes gaps itself, or "main" becomes the lowest place, decided once.
+  **7 October 2026 (D-392, T-4.12):** "main" must also cover there being no public photo at all:
+  the `Card`'s main photo URL is null then, and the web shows a grey silhouette with the name.
+  Whichever way this is settled, T-6.2 handles none.
 
   Found building T-4.6.
 - [ ] P-76 · Free an upload that never arrived when the owner's photos are listed, not only at the
@@ -4532,6 +4680,13 @@ The number comes from the session's own block, given in its brief, from P-100 up
   verification, and clear `is_verified` if it no longer matches; or show the badge only while the
   photos are the ones compared. The founder decides which (a cleared badge on a live woman's
   profile is a product rule, T-4.8's). Found building T-4.5.
+  **Resolved in shape, 7 October 2026 (D-393, Locked; built by T-4.12, and ticked when it lands):**
+  the redesign widened this from "a photo added after" to every public photo, since the selfie is
+  compared with the face photo alone (D-391) and never with a public one. The founder chose the
+  first option, in his own words: each approved public photo with a face is compared with the kept
+  selfie, when it is approved or when the selfie is decided, and the badge shows only while at
+  least one matched; a photo that doesn't match isn't rejected and doesn't count. A cleared
+  `is_verified` is rejected; undoing a decision stays P-163's.
 - [ ] P-162 · Decide whether one matching photo may carry a whole profile. **Before real users**
   (on T-9.15's Needs line, and REL-1's if its tag includes T-4.5). Worst
   case: a man verifies with a selfie of himself against one photo of himself among five of a
@@ -4540,6 +4695,11 @@ The number comes from the session's own block, given in its brief, from P-100 up
   require the main photo (place 0) to match, or every photo with one face; each is unmeasured
   (D-260), and each turns away real women whose other photos are in sunglasses or in profile. The
   founder decides, ideally with P-160's numbers. Found in T-4.5's plan.
+  **7 October 2026 (D-391, D-393, T-4.12):** the selfie now has one reference, the face photo, so
+  "the best of five" no longer arises for the selfie's own decision. The question returns on the
+  badge's side: a profile of someone else's photos with one of the man's own among them shows the
+  badge on that one match, since D-393 counts at least one. D-264's `mixed` flag keeps marking
+  such profiles; the founder decides as before.
 - [ ] P-163 · Let the founder undo a decision his review finds wrong. **Before real users** (on
   T-9.15's Needs line, and REL-1's if its tag includes T-4.5). Worst case: he records "different" for a woman's approved
   selfie, and she stays live with the badge until someone edits production's database by hand.
@@ -4831,3 +4991,15 @@ The number comes from the session's own block, given in its brief, from P-100 up
   question with couplings of its own, and the `repo` job, whose pre-commit pass reads every file,
   docs included, runs either way. Filed by Claude at the founder's direction, 7 October 2026,
   from the day's outage; its session's block, P-280 to P-289.
+- [ ] P-290 · Decide whether discovery's ranking keeps its `is_verified` boost for a profile whose
+  badge is hidden. **Before T-6.2 writes `rank_score`.** Worst case: two rules that look like one.
+  D-032 (Locked) ranks by `is_verified`, the selfie's match; D-393 shows the badge only with a
+  shown face that matched the selfie. So a woman with a matched selfie and no shown face is
+  ranked as verified and shown without a badge, and a reader of the two entries can't tell which
+  rule discovery means, or whether the boost is a claim D-262 forbids. **The advisor's opinion
+  (Claude, in a separate chat, relayed by the founder, 7 October 2026): leave D-032 alone.**
+  Ranking is not a claim; D-262 is about copy. `is_verified` is a real check, the selfie matched,
+  and the boost is that check's; the badge is a separate, stricter condition. And a profile with
+  no photo sits at the bottom anyway, at completeness 50 (D-310, D-392). The founder decides;
+  D-032 is Locked, so a change supersedes it with a new entry. Filed by Claude while filing
+  T-4.12, 7 October 2026; its session's block, P-290 to P-299.

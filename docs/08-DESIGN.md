@@ -40,6 +40,11 @@ the app has no visual design, only a prototype that shows which screens exist.
     compared with the profile's photos and nothing more is claimed (D-262, T-4.5): the badge says
     "Selfie matches photos" with a face (`ScanFace`), and `web/src/i18n/claims.test.ts` refuses the
     prototype's words.
+    **Amended 7 October 2026 (D-393):** the founder chose a tick on 7 October 2026, knowing a tick
+    reads as "verified" where the words may not say it (D-262). The words still never say it: the
+    badge's label and aria-label stay "Selfie matched", and `claims.test.ts` holds them. The tick
+    is `--accent`; the shield stays rejected. The item above stands as written, struck where it
+    says a face (`ScanFace`). Built by T-4.12.
 15. **The selfie's pose and its promise:** "Turn your head slightly left" and "The pose is randomly
     chosen each time, so a saved photo won't pass", and a selfie sent the moment it's taken. No
     pose is asked (T-4.5, D-263), nothing claims a saved photo can't pass (D-260), and the picture
@@ -142,7 +147,7 @@ Checked value by value against the prototype in T-1.19, and corrected where the 
 | Toggle | on · off · disabled |
 | Sheet | bottom (mobile) / centred (desktop); title; scroll body; sticky footer |
 | Toast | info (ink) · error (accent) · with action (Undo) |
-| Avatar | photo · initial fallback · online dot · selfie-matched badge (a face, never a shield or "Verified": D-262) |
+| Avatar | photo · initial fallback · online dot · selfie-matched badge (a face, never a shield or "Verified": D-262; from T-4.12 a tick in `--accent`, the founder's choice, the words unchanged: D-393) |
 | Badge | count · status pill (Online, New, Knotted, intents) |
 | Skeleton | line · card · avatar |
 | Spinner | sizes; announced as a status, pulses instead of spinning under reduced motion |

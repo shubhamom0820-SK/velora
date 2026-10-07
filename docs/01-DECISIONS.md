@@ -135,6 +135,14 @@ else (`users_done_needs_a_match`, D-310). Liveness moves to T-4.11, which is no 
 tag or on T-9.15's Needs line. The sentence above stands as written, struck by this amendment where
 it says liveness. Men stay optional. Why, in the founder's words, is D-380's.
 
+**Amended again, 7 October 2026 (the founder; D-391): the selfie is compared with her face photo,
+not her profile photos.** A woman's profile still goes live only once her selfie has been
+compared and matched, and the database still refuses anything else; what it is compared with is
+the one photo she gives for the check, private unless she chooses to show it (D-391). Her profile
+photos need show no face, and she needs none (D-392). The amendment above stands as written,
+struck where it says "with her photos". What others see of the match is D-393's badge, a
+separate rule. Built by T-4.12.
+
 ### D-009 · Hard 18+ gate — Locked
 Date of birth under 18 → signup refused; the phone hash is added to `banned_identities`.
 Age is recomputed server-side; the browser's value is never trusted.
@@ -2673,6 +2681,14 @@ for moderation (rule 12), and T-4.6 proposes naming to the owner only reasons on
 **Its number predates the D-number blocks** (CLAUDE.md, "P- and D-numbers"): it was on `main`
 before that rule, so it keeps it; renumbering would risk the stale reference the rule prevents.
 
+**Amended 7 October 2026 (the founder; D-391, D-392): `no_face` applies to the face photo and
+never to a public photo.** Item 3 stands as written, struck where it says a public photo: a public
+photo with no real face passes, since nobody need see the person's face there (D-392); the face
+photo, whose only job is the selfie check, is rejected `no_face` exactly as item 3 says; a private
+album photo needs none, as before. The selfie's own `no_face` is D-263's, YuNet's count on the
+worker, not this threshold. Items 1, 2 and 4 apply to every kind, the face photo included. Built
+by T-4.12.
+
 ### D-280 · Required status checks work without pull requests, so D-044's reason for rejecting them was false — Open
 **The correction (T-4.6, 4 and 5 October 2026):** D-044 (Locked) rejected required status checks
 because "GitHub attaches them to pull requests, and this project merges by fast-forward without
@@ -2814,6 +2830,16 @@ profiles get noticeably more replies" are overridden here (08-DESIGN).
 Rewrites proposed by Claude; approved with two changes (the reports clause, the icon) by the
 advisor directing T-4.5 (Claude, in a separate chat), relayed by the founder, 5 October 2026.
 **Open** until the founder approves it in his own words.
+
+**Amended 7 October 2026 (the founder; D-393): the badge's icon is a tick in `--accent`, the
+founder's choice.** He chose it knowing a tick reads as "verified" where the words may not say it;
+the face (`ScanFace`) above is struck. **The words don't move:** the badge's label and aria-label
+say "Selfie matched", every string stays under `claims.test.ts`, and nothing on this list is
+loosened. The strings above that say "profile photos" are rewritten once more by T-4.12, since the
+selfie is compared with the face photo (D-391) and public photos with a face are compared with
+the selfie for the badge (D-393), inside this rule; and the face photo's name in copy never
+matches `/verif/i` ("face photo", the advisor's recommendation). 08-DESIGN's item 14 carries the
+same amendment.
 
 ### D-263 · A verification's shape, without a migration — Open
 **The decision (T-4.5):**
@@ -3012,6 +3038,14 @@ completeness as above; approved photos only; seeking and intents required; the t
 this task; the seed's completeness set, with a test. **Open:** the answers are the advisor's, not
 the founder's own words (his, the same day).
 
+**Amended 7 October 2026 (the founder; D-392): `photo` leaves what `done` needs, and completeness
+is unchanged.** Anyone, a man or a woman, may finish with no approved public photo, so `photo`
+leaves `details.missing`; the bullet above that defines a photo stands for the completeness count
+and for the badge. The formula stays exactly as written: 50 for meeting the requirements, 10 for
+each approved public photo after the first. So zero photos is 50, the same as one, and such a
+profile sits at the bottom of discovery's ranking (D-032): chosen, not overlooked. The trigger
+`users_done_needs_a_match` is unchanged. Built by T-4.12.
+
 ### D-330 · The E2E runs the whole stack: the local S3, the worker, the real face match, a fake camera — Open
 **The decision (T-4.9), extending D-084, which stays as it is:** D-084 says what the E2E is (a
 production build, Chromium, a P-55 slot, nothing kept). From T-4.9 its journeys reach `/discover`,
@@ -3114,7 +3148,7 @@ hole I have already left open. Liveness after launch, with real users."
 woman isn't forced to show her real photo (the founder, 7 October 2026). It isn't on `main`; the
 next session files it, from its own block (P-290 to P-299). It meets two things already built,
 T-4.5's match against her approved public photos and D-101's `no_face`; working that out is the
-filing session's.
+filing session's. **Filed, 7 October 2026: D-390 to D-393, built by T-4.12.**
 
 **Rejected:** Sightengine Pro (the founder, 4 October 2026: about ₹8,300 a month before the
 product has a single paying user; and it judges a single photo, the same blind spot); DAMO's
@@ -3146,6 +3180,157 @@ built from.
 
 **Open:** the conditions are the founder's, relayed in the brief of 7 October 2026. The founder can
 Lock this entry with one line saying so.
+
+### D-390 · Gender isn't verified, and that is deliberate — Open
+**The decision (the founder, 7 October 2026; written by the advisor, Claude in a separate chat,
+relayed by the founder):** nothing checks that someone who chose "Woman" at sign-up is a woman:
+no model, no person. A man can choose "Woman", upload his own photos and his own face photo, take
+his own selfie, and the selfie matches, since it is his face; the match is genuine and the badge
+follows (D-393). The founder accepts this for now. **No gender check is built.** What stands
+against it at beta is D-264's human review: the founder looks at every decision.
+
+**What the vendor has, so nobody assumes a model would fix this** (read by Claude, 7 October
+2026): the three Sightengine models the worker calls (`nudity-2.1`, `face-age`, `text`; D-101)
+returned no gender field in the shape T-4.4 recorded on 4 October 2026 (D-094), and Sightengine's
+current Face Analysis page names no gender attribute. Its deprecated `face-attributes` model once
+offered one: a search result that day named female and male probabilities, while the page itself,
+read the same day, names only `minor` and `sunglasses`. None of that decides anything: the
+decision is that no gender check is built, whether or not a vendor sells one.
+
+**Why, in the founder's words** (D-380's quote, approved by him): "ek aurat apni asli photo
+dikhane ko majboor nahi", a woman isn't forced to show her real photo. The same decision that lets
+a woman show no face (D-392) means nothing in the product can tell her from a man who says he is
+one; this entry says so plainly so the two are read together.
+
+**What follows:** docs/09-RESEARCH.md's C2 "fake profiles" row leaves "Closed by design", where it
+never belonged: the face match compares a face with a face, not a gender. D-380's reason quotes
+this decision, and its "the next session files it" paragraph now points here.
+
+**Rejected:** a gender check of any kind, by a model or by a person (the founder, 7 October 2026).
+
+**Open:** the decision is the founder's; the words are the advisor's. The founder can Lock this
+entry with one line saying so.
+
+### D-391 · A face photo for the selfie check, private unless she chooses; the selfie is compared with it alone — Open
+**The decision (the founder, 7 October 2026; written by the advisor, Claude in a separate chat,
+relayed by the founder):**
+- **One photo whose only job is the selfie check.** `PhotoKind` gains `verification`, an
+  identifier like `is_verified`; in copy the photo is never called that, since
+  `web/src/i18n/claims.test.ts` refuses `/verif/i` ("face photo", the advisor's recommendation;
+  T-4.12 chooses). It must show a face: D-101's `no_face` applies to it, and so do D-101's other
+  three checks, since she may choose to show it.
+- **Private by default.** It lives in the private bucket, has no public copy, is listed to its
+  owner alone (`GET /me/photos`, `GET /photos/{id}`) and appears in nobody else's response, as a
+  selfie doesn't (06-TESTING #14). **She chooses whether it also shows on her profile,** a toggle
+  on the photos step; its mechanism is T-4.12's plan's (Claude recommends a separate `public` row
+  from the same scored bytes, so every reader of "public photo" stays as it is).
+- **The selfie is compared with it alone,** never with the public photos: `verify_selfie` reads
+  the face photo where it read `approved_public_photos`, and `no_photos` comes to mean "no face
+  photo yet". The public photos' own comparison with the selfie is D-393's, for the badge, a
+  different purpose.
+- **Where and how many:** uploaded at the `photos` step or after (D-068), in a slot of its own;
+  one live per person, as the selfie, a new one replacing an unsent old one. Replacing it after a
+  match is T-4.12's plan's (Claude recommends refusing while a verification is approved, as a
+  selfie's removal is refused; a change then goes through P-163's path).
+- **Men may add one;** it is needed only if a man takes the optional selfie (D-008).
+- **An under-18 refusal takes it** with the rest (D-078, P-54): it is a photo row, so
+  `UNDERAGE_FILES` already reads its key; a test says so, as T-4.5's did for the selfie.
+- **`/privacy` says it:** a photo of her face is kept for the check and never shown unless she
+  chooses, and why: so the photos others see need not show her face (D-392). The selfie line and
+  "where your data is" say the face photo where they say "the photos on your profile" today.
+
+**Why:** today the selfie is compared with her approved public photos, so a woman must show her
+face to strangers to be on the app at all. The founder's decision is that she needn't (D-390's
+quote). A face photo nobody sees keeps a face to compare the selfie with, and keeps D-008: she
+still doesn't go live until her selfie has matched.
+
+**Rejected:** comparing the selfie with the public photos (today's shape, which forces a face
+onto the profile); a face photo that is always public; a face photo without the `no_face` check,
+which would leave the selfie's `no_photos` to catch a faceless one, after the fact.
+
+**Open:** the decision is the founder's; the words are the advisor's and Claude's. The founder can
+Lock this entry with one line saying so.
+
+### D-392 · Public photos need no face; nobody needs a public photo; completeness unchanged; the card with no photo — Open
+**The decision (the founder, 7 October 2026; written by the advisor, Claude in a separate chat,
+relayed by the founder):**
+- **A public photo may show anything D-101's other three checks allow.** Hair over the face, a
+  mask, a crop, a photo from behind, an emoji over the face: all pass. `no_face` leaves public
+  photos (D-101 amended) and applies to the face photo and the selfie only.
+- **Zero public photos may finish onboarding, for everyone.** `photo` leaves what `done` needs
+  (D-310 amended) and T-4.3's "one public photo, pending or approved" leaves the photos step; the
+  last public photo may be removed past the step. **Men too** (the founder, 7 October 2026): one
+  rule is simpler than one per gender, and a man with no photo gets no likes, which corrects
+  itself.
+- **Completeness is unchanged** (D-310's formula): 50 at zero photos, the same as at one, so a
+  profile that shows nothing sits at the bottom of discovery's ranking (D-032). Deliberate, not an
+  oversight. The ranking's `is_verified` term is P-290's question.
+- **The card:** a photo shows as it is, whatever it shows; with none, a grey silhouette with the
+  name (T-6.2's `Card`, its main photo URL null). The `Avatar` primitive's initial-on-gradient
+  fallback (08-DESIGN §4) is another fallback for another place; whether the two align is the
+  design pass's (P-57).
+
+**The trade-off, weighed, and written here so a later reader knows the cost was seen and not
+missed** (the founder, 7 October 2026): on a dating app a card with no face gets far fewer swipes.
+The woman this change is for may arrive, show nothing, receive nothing, and conclude the app
+doesn't work. The founder weighed that and chose to let her in rather than stop her at the door.
+
+**Rejected:** a rule by gender (women may show no photo, men must); a face photo counted toward
+completeness; a profile hidden from discovery at zero photos (it would make "let her in" a door
+that opens onto nothing); `no_face` kept for public photos with an exemption she asks for.
+
+**Open:** the decision is the founder's; the words are the advisor's and Claude's. The founder can
+Lock this entry with one line saying so.
+
+### D-393 · The badge: the selfie matched the face photo, and a shown face matched the selfie; a red tick — Locked
+**The decision, in the founder's words, 7 October 2026:** "agar ladki photo nahi daal rahi to usko
+verified mat dikhao; jiska ho jaye usko red tick badge de do." In English: if a woman isn't putting
+up a photo, don't show her as verified; whoever's matches, give them the red tick badge. It is
+option (b) of the filing's first question (P-161 made wider: the redesign had turned "a photo
+added after the check" into every public photo, since the selfie is compared with the face photo
+alone, D-391). The rule:
+1. **The badge shows when `is_verified` is true** (the selfie matched the face photo, D-391) **and
+   at least one approved public photo's face matched the selfie.**
+2. **Each approved public photo with a face** (`photos.moderation.faces >= 1`, which T-4.4 already
+   records for every moderated photo) **is compared with the kept selfie:** when it is approved,
+   if a selfie has been decided; when the selfie is decided, for the photos already there. The
+   result goes in that photo's `moderation` record, as the selfie's numbers go in its own (D-263).
+   One comparison at a time, on the worker (P-281).
+3. **A public photo that doesn't match isn't rejected; it doesn't count toward the badge**
+   (Claude's recommendation, taken by the founder). Her photo from behind, in sunglasses or with a
+   friend stays on her profile.
+4. **No shown face, no badge:** zero public photos, or public photos with no face, means no badge,
+   verification or not.
+5. **The same rule for men;** their selfie stays optional (D-008).
+6. **`/privacy`'s "we compare your selfie with the photos on your profile" stays true,** and the
+   face photo joins it (D-391).
+7. **The icon is a tick in `--accent`.** The founder chose a tick on 7 October 2026, knowing a tick
+   reads as "verified" where the words may not say it (D-262). The words still never say it: the
+   badge's label and aria-label are "Selfie matched" (today's "Selfie matches photos" is also true
+   under this rule; T-4.12 keeps one, neither claiming more), and `claims.test.ts` holds them.
+   08-DESIGN's item 14 and D-262 carry the amendment; a shield stays rejected.
+
+**Why (b) and not a badge whose words shrink** (the filing's other option; Claude's reasoning, 7
+October 2026): under (a) the badge would mean "a selfie matched a photo you can't see", which a
+viewer can do nothing with, and the founder's own condition, no badge without a shown face, would
+do no work for honesty, since that face was never compared. Under (b) the badge is literally true
+where it shows, and T-6.9's "verified only" filter filters on something a viewer can see.
+
+**What it costs, so the next reader knows:** D-260's unmeasured threshold is now applied to every
+face on a profile, not one, so real women's side-on or sunglasses photos may not count and the
+badge hides though the selfie matched; D-264's review grows by those comparisons, and its `mixed`
+flag (P-162) keeps its meaning on the badge's side; the worker does one SFace comparison per face
+photo, about 400 MB at peak (T-4.5's measurement on Fly), one at a time. The selfie is read again
+later, privately, which `/privacy` already covers ("we compare your selfie with the photos on your
+profile").
+
+**Rejected:** (a), the badge's words shrunk to what one hidden comparison shows (above); clearing
+`is_verified` when a public photo doesn't match (P-161's other option: a cleared badge on a live
+woman's profile is P-163's path, never an automatic one); the badge on `is_verified` alone (the
+founder's words).
+
+**Locked** on the founder's words, 7 October 2026. The rule's seven parts and the icon are his; the
+reasoning paragraphs are Claude's and the advisor's, relayed. Built by T-4.12.
 
 ---
 
