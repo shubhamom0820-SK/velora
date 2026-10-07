@@ -4,7 +4,8 @@ exists, and its parser reads node ids the way pytest prints them.
 
 Without this, an edit to a guarded file would leave a case that can't apply,
 and the claim it backed (T-5.1's thirty-five, T-5.4's six, T-4.4's thirty-seven, T-4.6's three,
-the landing guard's five, T-5.2's twenty-two, P-38's eleven, T-4.8's twenty-seven)
+the landing guard's five, T-5.2's twenty-two, P-38's eleven, T-4.8's twenty-seven,
+T-4.11's eight)
 unrecheckable.
 """
 
@@ -50,6 +51,7 @@ def test_case_ids_are_unique_and_name_their_task() -> None:
         "p38",
         "t45",
         "t48",
+        "t411",
     }
     assert len([i for i in ids if i.startswith("t51-")]) == 35
     assert len([i for i in ids if i.startswith("t54-")]) == 6
@@ -61,6 +63,7 @@ def test_case_ids_are_unique_and_name_their_task() -> None:
     assert len([i for i in ids if i.startswith("p38-")]) == 11
     assert len([i for i in ids if i.startswith("t48-")]) == 27
     assert len([i for i in ids if i.startswith("t45-")]) == 32
+    assert len([i for i in ids if i.startswith("t411-")]) == 8
 
 
 def test_failed_tests_reads_ids_whole() -> None:

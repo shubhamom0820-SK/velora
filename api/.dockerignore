@@ -27,3 +27,9 @@ models
 # people's. Code that isn't in the image can't run in production, whatever a
 # bug does to ENV. CI checks the built image has no /app/seed.
 seed
+
+# Benchmarks run by hand (T-4.11): mounted into a container when they run,
+# never built into the image. The liveness probe's tools, torch and
+# onnxruntime, never reach production (D-381). CI checks the built image has
+# no /app/bench, and neither of them.
+bench

@@ -2839,6 +2839,118 @@ T48: list[tuple[Case, list[str]]] = [
     ),
 ]
 
+# --- T-4.11: D-381's bench-only tools, and the probe's faces guard ------------
+
+T411_SELECTION = ["tests/bench"]
+FACES411 = "bench/liveness/run.py"
+FACES_TESTS = "tests/bench/liveness/test_faces.py::"
+T411: list[Case] = [
+    Case(
+        id="t411-01-torch-in-the-lock",
+        what="torch locked, so `uv sync --locked` puts it in the API image",
+        edits=[
+            (
+                "uv.lock",
+                '\n[[package]]\nname = "aioboto3"\n',
+                (
+                    '\n[[package]]\nname = "torch"\nversion = "2.14.1"\n'
+                    'source = { registry = "https://pypi.org/simple" }\n'
+                    '\n[[package]]\nname = "aioboto3"\n'
+                ),
+            )
+        ],
+        expect=["test_the_lock_holds_no_bench_only_package"],
+    ),
+    Case(
+        id="t411-02-a-variant-in-the-lock",
+        what="onnxruntime-gpu locked: a variant's name, not the exact one",
+        edits=[
+            (
+                "uv.lock",
+                '\n[[package]]\nname = "alembic"\n',
+                (
+                    '\n[[package]]\nname = "onnxruntime-gpu"\nversion = "1.30.0"\n'
+                    'source = { registry = "https://pypi.org/simple" }\n'
+                    '\n[[package]]\nname = "alembic"\n'
+                ),
+            )
+        ],
+        expect=["test_the_lock_holds_no_bench_only_package"],
+    ),
+    Case(
+        id="t411-03-the-api-image-installs-torch",
+        what="a RUN in the API's Dockerfile installs torch beside the lock",
+        edits=[
+            (
+                "Dockerfile",
+                "RUN uv sync --locked --no-dev\n",
+                "RUN uv sync --locked --no-dev\nRUN uv pip install torch\n",
+            )
+        ],
+        expect=["test_the_api_image_installs_only_the_lock"],
+    ),
+    Case(
+        id="t411-04-the-bench-in-the-image",
+        what="api/.dockerignore no longer keeps the bench out of the image",
+        edits=[
+            (
+                ".dockerignore",
+                "# no /app/bench, and neither of them.\nbench\n",
+                "# no /app/bench, and neither of them.\n",
+            )
+        ],
+        expect=["test_the_bench_never_enters_the_api_image"],
+    ),
+    Case(
+        id="t411-05-the-faces-guard-off",
+        what="a faces directory inside the repository is read",
+        edits=[
+            (
+                FACES411,
+                "        if target.is_relative_to(root.resolve()):\n",
+                "        if False:\n",
+            )
+        ],
+        expect=[
+            FACES_TESTS + "test_a_directory_inside_the_repository_is_refused",
+            FACES_TESTS + "test_a_link_into_the_repository_is_refused",
+            FACES_TESTS + "test_another_worktree_of_the_repository_is_refused",
+            FACES_TESTS + "test_the_real_repository_is_asked",
+            FACES_TESTS + "test_the_command_refuses_before_starting_anything",
+        ],
+    ),
+    Case(
+        id="t411-06-a-link-taken-at-its-word",
+        what="a link judged by where it sits, not where it leads",
+        edits=[
+            (
+                FACES411,
+                "    target = chosen.resolve()\n",
+                "    target = chosen.absolute()\n",
+            )
+        ],
+        expect=[FACES_TESTS + "test_a_link_into_the_repository_is_refused"],
+    ),
+    Case(
+        id="t411-07-only-this-checkout",
+        what="the other worktrees of the repository forgotten",
+        edits=[
+            (
+                FACES411,
+                "    return [REPO, *worktrees(porcelain)]\n",
+                "    return [REPO]\n",
+            )
+        ],
+        expect=[FACES_TESTS + "test_another_worktree_of_the_repository_is_refused"],
+    ),
+    Case(
+        id="t411-08-git-failing-opens-it",
+        what="git unable to list the worktrees, and every directory read",
+        edits=[(FACES411, "    if code != 0:\n", "    if False:\n")],
+        expect=[FACES_TESTS + "test_if_git_cant_list_the_worktrees_only_the_fixtures"],
+    ),
+]
+
 CASES: list[tuple[Case, list[str]]] = (
     [(c, T51_SELECTION) for c in T51]
     + [(c, T54_SELECTION) for c in T54]
@@ -2851,6 +2963,7 @@ CASES: list[tuple[Case, list[str]]] = (
     + [(c, P38_SELECTION) for c in P38]
     + T45
     + T48
+    + [(c, T411_SELECTION) for c in T411]
 )
 
 # The fifty-connection fixture's own message when Postgres refuses a connection.

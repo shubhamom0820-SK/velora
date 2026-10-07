@@ -67,9 +67,15 @@ extend-select = [
 [tool.mypy]
 python_version = "3.12"
 strict = true
-files = ["app", "tests", "alembic", "seed"]
+files = ["app", "tests", "alembic", "seed", "bench"]
 # Ships inside pydantic: types model and Settings constructors properly.
 plugins = ["pydantic.mypy"]
+
+# The liveness probe's bench-only tools (D-381) and minivision's network code,
+# fetched at run time: none is installed where mypy runs, by design.
+[[tool.mypy.overrides]]
+module = ["torch", "torch.*", "onnxruntime", "MiniFASNet"]
+ignore_missing_imports = true
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"

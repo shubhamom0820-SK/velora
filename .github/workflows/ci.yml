@@ -268,6 +268,13 @@ jobs:
             if test -e /app/seed; then echo "::error::/app/seed is in the image: api/.dockerignore must exclude seed."; exit 1; fi
             echo "No dev seed in the image."'
 
+      # D-381: torch and onnxruntime, the liveness probe's tools, live only in
+      # api/bench/liveness/Dockerfile. A .pth file is a pickle, which can run code
+      # as it loads, so neither, nor the bench itself, ever ships. The lock and
+      # the Dockerfile are held by tests/bench/liveness; this looks inside the image.
+      - name: No liveness bench and no bench tools in the image
+        run: scripts/check-image-no-bench-tools "$IMAGE"
+
       - name: Serves /healthz, hides its schema outside local
         run: |
           # Outside local, Redis must be rediss:// (TLS); it's never reached here.

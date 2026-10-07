@@ -1,0 +1,28 @@
+#!/usr/bin/env bash
+# Fails if an API image holds the liveness bench or its tools (T-4.11, D-381):
+# /app/bench, torch or onnxruntime. They belong only to the bench-tools image
+# (api/bench/liveness/Dockerfile); a .pth file is a pickle, which can run code
+# as it loads, and has no business in production.
+#
+#   scripts/check-image-no-bench-tools IMAGE
+#
+# It looks inside the image, with the image's own Python, as the worker would
+# import. Finding /app/app/main.py first proves it looked inside an API image,
+# not at some image where nothing is anywhere.
+# Exit codes: 0 none of them · 1 one was found · 2 not an API image
+set -euo pipefail
+
+docker run --rm --entrypoint python "$1" -c '
+import importlib.util, os, sys
+
+name = "check-image-no-bench-tools"
+if not os.path.isfile("/app/app/main.py"):
+    print(f"{name}: no /app/app/main.py, so not an API image: checked nothing.", file=sys.stderr)
+    sys.exit(2)
+found = ["/app/bench"] if os.path.exists("/app/bench") else []
+found += [module for module in ("torch", "onnxruntime") if importlib.util.find_spec(module)]
+if found:
+    print(f"{name}: {", ".join(found)} in the image (D-381).", file=sys.stderr)
+    sys.exit(1)
+print(f"{name}: no /app/bench, no torch, no onnxruntime in the image.")
+'

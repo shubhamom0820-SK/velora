@@ -52,11 +52,15 @@ velora/
                         sightengine_shape, T-4.4; selfie_review, the founder's, T-4.5, D-264)
     alembic/            migrations
     seed/               make seed: dev data, local stack only, never in the image (D-064)
-    tests/              mirrors app/ (and seed/)
+    bench/              benchmarks run by hand, never in the image nor `make test`: liveness/,
+                        T-4.11's probe and weights check, its torch and onnxruntime only in its
+                        own Dockerfile (D-381)
+    tests/              mirrors app/ (and seed/, bench/)
   web/                  Next.js app (App Router, TypeScript strict, Tailwind v4)
   infra/                docker-compose.yml, fly.api.toml + fly.worker.toml + STAGING.md (staging's
                         runbook), fly.api.production.toml + PRODUCTION.md (production's: released by tag)
-  scripts/              ci-gate, release-gate, with-tools, staging-smoke, check-image-no-env, migrate-with-url
+  scripts/              ci-gate, release-gate, with-tools, staging-smoke, check-image-no-env,
+                        check-image-no-bench-tools, migrate-with-url
   Makefile
 ```
 
