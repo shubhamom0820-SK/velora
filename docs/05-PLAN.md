@@ -1498,7 +1498,7 @@ exist yet. The batch is a chain, T-3.10 → T-3.11 → T-3.12 → T-3.13, each n
   {minor: number}}}]`; `artificial_faces []` (no element seen); `text {has_artificial,
   has_natural: number; boxes [{x1, y1, x2, y2, prob: number; label: string}], absent when there
   is no text}`; `media {id, uri: string}`. Three runs in all, 15 operations of the free plan's.
-- [ ] **Sightengine keeps nothing by default, and this task stays on that default.** There is no
+- [x] **Sightengine keeps nothing by default, and this task stays on that default.** There is no
   setting to turn on: deleting is Sightengine's default, which `/privacy`'s "deleted there after the
   check" (D-048) rests on. Its FAQ, "What happens to our images, videos and audio files after
   processing?", at https://sightengine.com/faq/data-retention-after-processing, read by Claude on
@@ -1527,6 +1527,20 @@ exist yet. The batch is a chain, T-3.10 → T-3.11 → T-3.12 → T-3.13, each n
   **Held by a test:** `test_every_request_stays_on_the_plain_image_api`: every request goes to
   `/1.0/check.json` with nothing in its URL and exactly four form fields (`models`, `api_user`,
   `api_secret`, `media`); a workflow field, or `check-workflow.json`, fails it.
+  **Closed, 7 October 2026, by Claude, on the test read and broken, not on this plan's word.**
+  `test_every_request_stays_on_the_plain_image_api`, `api/tests/core/test_moderation.py:180`,
+  read that day: three checks through `httpx.MockTransport`, once per outcome the fake gives,
+  and every request held to host `api.sightengine.com`, path `/1.0/check.json`, an empty query,
+  a form of exactly `models`, `api_user`, `api_secret` and `media`, and the three models. Broken
+  that day on `c9a5aaf`: `uv run python -m tests.break_guards t44`, 37 of 37 red, every file
+  restored by SHA-256, exit 0 (the log in `out/t-4.4-breaks/`, local); the three cases on this
+  box, `t44-15` (a `workflow` field in the request), `t44-16` (`check-workflow.json` as the
+  endpoint) and `t44-19` (the keys in the URL), each failed all five of the test's
+  parametrisations. So this box rests on no promise to take care: a test in the repo goes red the
+  day a workflow, or anything else, joins the check request. **What it doesn't see:** a second
+  call to another Sightengine endpoint, the Feedback API's `feedback.json` or the Upload API's,
+  added as a method of its own, never passes through it, and nothing else in the repo holds the
+  module to one endpoint (grepped that day). That gap is P-260.
 - [x] Tests with the fake provider for approve and each reject path; test that output has no EXIF.
   `tests/modules/photos/test_moderate.py`, `tests/core/test_moderation.py`,
   `tests/core/test_reencode.py`, `tests/workers/`. **Every guard broken once, all 32 red,**
@@ -4562,3 +4576,16 @@ The number comes from the session's own block, given in its brief, from P-100 up
   or have the ranking compute it from the photos as it queries. Found in T-4.8's plan; filed from
   T-4.8's session block (P-210 to P-219), at the direction of the advisor directing T-4.8 (Claude,
   in a separate chat), relayed by the founder, 5 October 2026.
+- [ ] P-260 · Hold the moderation provider to one Sightengine endpoint at the source, not only
+  per check. **Before any second call to Sightengine is written** (a moderator's override sent to
+  the Feedback API is the likely first). Worst case: `/privacy`'s "deleted there after the check"
+  (D-048) goes false the day a `feedback()` method lands, every test green. Sightengine keeps a
+  file sent to the Feedback API (its FAQ, quoted on T-4.4), and
+  `test_every_request_stays_on_the_plain_image_api` sees only the requests `check()` makes: a
+  method of its own posting to `feedback.json` never passes through it. `t44-15`, `t44-16` and
+  `t44-19` each break the check request; none adds a second call. Nothing else in the repo holds
+  `app/core/providers/moderation.py` to one endpoint (grepped 7 October 2026). Fix, the doer's to
+  choose: a test that the module names `api.sightengine.com` once and posts once, to `CHECK_URL`;
+  or every request routed through one method the test wraps; and a `t44-` case that adds a
+  `feedback()` method and must go red. Found closing T-4.4's retention box, 7 October 2026; filed
+  from that session's block (P-260 to P-269).
