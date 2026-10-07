@@ -4780,3 +4780,54 @@ The number comes from the session's own block, given in its brief, from P-100 up
   hold; a test that doesn't force the overlap stays green with the guard removed, which is to say
   it isn't a check. Filed by Claude from T-4.11's research (5 October 2026), at the founder's
   direction, 7 October 2026; its session's block, P-280 to P-289.
+- [ ] P-282 · CI minutes: no duplicate run on `main`, e2e only when code changes, and the
+  cancel-in-progress that already exists kept off `main`. **Before the next week of several
+  sessions landing at once.** Worst case, seen 7 October 2026: GitHub Free's 2,000 Actions
+  minutes a month (D-280) ran out mid-week, at 481 runs that week and about 800 billed minutes a
+  day (the founder, from the billing page); GitHub then refuses to *start* a job and closes a
+  green run as "failure" (run 37641734875 for `6e6392b`: api, web, image and repo green, `e2e`
+  never created, "failure" seven seconds after api finished, and HTTP 500 to a re-run), the gate
+  reads exit 1 as it must, and every session is blocked at once with nothing to fix on any
+  branch, until the founder raises the spending limit, which is what happened. **What a run
+  costs, each job rounded up to the minute as GitHub bills it** (read by Claude from the runs
+  that day): `main`'s run 37611479267 for `68c3078`, 17 minutes (api 5, e2e 5, web 3, image 2,
+  repo 2); the branch run 37641734875, 12 without e2e (api 6, web 2, image 2, repo 2); a docs-only
+  commit pays the same 17; and the `timing` endpoint answers 0 ms for every run, so the billing
+  page, not the API, is the number to trust. **Three cuts, each with the gate it touches, since
+  every one of them reads CI:**
+  1. **No second run on `main` for a commit CI already checked.** Landing is a fast-forward to a
+     commit whose branch run the gate read (ci-gate, P-140), so `main`'s run repeats 17 minutes
+     for nothing. The coupling: the staging deploy fires on `workflow_run` of CI on `main`
+     (`deploy.yml:21-24`, `conclusion == 'success' && event == 'push'`) and then runs
+     `scripts/ci-gate --branch main "$SHA"`, and `release-gate` reads `main` too (D-075). So
+     `main`'s workflow can't be skipped: it must still complete, green, for that SHA. The shape
+     that keeps both: on `main`, one short job that asks GitHub for a passed CI run of exactly
+     this SHA on a branch of this repository (never the newest run, never another SHA: P-140) and
+     succeeds only then, so the deploy still fires and the gates still read a green run of the
+     SHA on `main`; with no such run it fails closed and `main`'s full CI runs instead. About 15
+     of 17 minutes saved per landing; proved by a landing whose `main` run shows one job, a deploy
+     that still fired, and `ci-gate --branch main` reading it as passed; and by the fail-closed
+     case, a commit pushed to `main` with no branch run, refused.
+  2. **Cancel-in-progress per branch: already there** (`ci.yml:18-20`,
+     `concurrency: ci-${{ github.ref }}`, `cancel-in-progress: true`), so a second push to a task
+     branch cancels the first's run, and a cancelled run reads as exit 1 in ci-gate, so nothing
+     lands on one. **What it gets wrong:** the group is per ref with no exception, so a push to
+     `main` while `main`'s run is in flight cancels that run, and the deploy, which fires only on
+     `conclusion == 'success'`, never fires for the cancelled commit: the next landing deploys
+     both, or nothing deploys until someone notices. Make it `cancel-in-progress:
+     ${{ github.ref != 'refs/heads/main' }}`; proved by two pushes to `main` in quick succession
+     (on a scratch branch named like it in a test, or once, deliberately), both runs completing.
+  3. **e2e only when code changed.** A docs-only commit pays e2e's 5 minutes (and the 12 of the
+     rest). Gate e2e on the paths changed since the push's `before` SHA (the merge base with
+     `main` when `before` is zeros, a new branch), by an **allowlist of paths that can't reach a
+     journey** (`docs/**`, `**/*.md`, `.claude/**`), never a list of what counts as code (rule
+     16): anything not on the allowlist runs it. A skipped job leaves the run's conclusion
+     `success`, which ci-gate and the deploy both read as today. The coupling: P-180's required
+     status checks, once GitHub Pro allows them, must not name `e2e` as required, or a skipped
+     e2e blocks every docs commit; name the jobs that always run. Proved by a docs-only push
+     whose run shows e2e skipped and the gate passing, and a one-line code change whose run shows
+     e2e run.
+  Not in it: skipping api and web on docs-only commits too (another 11 minutes): a separate
+  question with couplings of its own, and the `repo` job, whose pre-commit pass reads every file,
+  docs included, runs either way. Filed by Claude at the founder's direction, 7 October 2026,
+  from the day's outage; its session's block, P-280 to P-289.
