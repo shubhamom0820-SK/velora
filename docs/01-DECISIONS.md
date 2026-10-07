@@ -2355,6 +2355,19 @@ follows from step 4 and the founder's answer above; Claude first wrote it down, 
 The names, the lifetime and the rules are the founder's decision, 4 October 2026. The write-up
 they came in is the advisor's (Claude, in a separate chat), relayed by the founder.
 
+**Answered 8 October 2026 (the founder): the hour is hers alone.** The two questions D-250 moved
+to P-150, decided at 12:40 at night, in his words:
+- (a) "P-150 ka a ka nahi": **his own message never restarts the hour.** Only hers does, as step 2
+  says; step 2 was silent on his, and now isn't. So he can't keep a Thread open alone by writing
+  every 59 minutes, and an hour of her silence expires it whatever he sent.
+- (d) "ghanta uske aakhri message se gina jayega": **when Extend's 24 hours end, the hour is
+  counted from her last message,** not from the moment Extend ends. Extend bought 24 hours, never
+  25. So a Thread he extended can expire the instant the extension ends, if her last message is
+  more than an hour old by then: the case P-150 named as the worst if guessed, now decided, not
+  guessed.
+Nothing above changes; the five steps stand, and step 2's "restarted by her message" now means
+hers only. Written up by Claude, 8 October 2026.
+
 ### D-098 · What things cost: men pay per action, women pay nothing — Locked (values tunable)
 Prices stay data (D-004, D-016): `action_prices` and `gifts`, changed by a row, not a deploy.
 
@@ -2575,7 +2588,9 @@ after Extend, go to P-150, the 1-hour task, with a pointer at T-7.6; (c)'s two q
 them, moved by Claude (the founder to confirm), since they touch no file of T-5.2's either.
 **(c)'s two were answered instead, 5 October 2026, by D-253** (the advisor's, Open until the
 founder's word), and never moved: P-150 keeps (a)
-and (d).
+and (d). **(a) and (d) were answered 8 October 2026** (the founder; D-097's amendment): his own
+message never restarts the hour, and when Extend's 24 hours end the hour runs from her last
+message.
 
 **Supersedes** D-005's beta entry variant (₹999 for 25).
 

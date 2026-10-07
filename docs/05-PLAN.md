@@ -2769,10 +2769,11 @@ prices don't depend on the web photos step, and the hold is lifted.
 
 ### T-7.6 · Expiry and re-open
 - [ ] **Needs:** T-7.4
-- **Two questions of how a Thread lives are P-150's,** moved from T-5.2's item 10 on 4 October
-  2026, and still open: does his own message restart the hour, and when Extend's 24 hours end,
-  does the hour start then or run from her last message? They decide when this task's cron expires
-  a Thread once the 1-hour task lands. **Beside them, the advisor's rule (D-253, Open until the
+- **How a Thread lives, answered 8 October 2026** (the founder; D-097's amendment, P-150): his own
+  message never restarts the hour, only hers does; and when Extend's 24 hours end, the hour runs
+  from her last message, so an extended Thread can expire the instant the extension ends. They
+  decide when this task's cron expires a Thread once the 1-hour task lands (P-150, still nobody's).
+  **Beside them, the advisor's rule (D-253, Open until the
   founder's word):** Extend on an expired Thread re-opens it too, for 10 in all, never this task's
   2 and then 10.
 - [ ] Cron `expire_threads` (every minute, batches of 500, `FOR UPDATE SKIP LOCKED`) → `expired` + event. Cron `warn_expiring` (< 2 h, once) → push + event.
@@ -4559,19 +4560,23 @@ The number comes from the session's own block, given in its brief, from P-100 up
   checked by SHA-256.
 - [ ] P-150 · Write the 1-hour task D-097 names, which moves a Thread from 24 hours to 1 and lists
   every place that says 24 hours. **Needs:** the founder's word on D-253, the advisor's rule for
-  Extend from an expired Thread (Open); and his answers to the two questions moved here from
-  T-5.2's item 10 on 4 October 2026 (the founder), still open:
-  - (a) **Does his own message restart the hour?** D-097's step 2 says hers does and is silent on
-    his. Worst case if it's guessed: his did, so he keeps a Thread open alone, free, by writing
-    every 59 minutes, and never pays a re-open.
-  - (d) **When Extend's 24 hours end, does the hour start then, or run from her last message?**
-    Worst case if it's guessed: from her last message, so a Thread he paid 10 Velas to extend can
-    expire the instant the extension ends.
+  Extend from an expired Thread (Open). The two questions moved here from T-5.2's item 10 on 4
+  October 2026 were **answered 8 October 2026 (the founder, in his words; D-097's amendment):**
+  - (a) **Does his own message restart the hour? No.** "P-150 ka a ka nahi": only hers does, as
+    D-097's step 2 says. The worst case if it had been guessed the other way, a Thread he keeps
+    open alone, free, by writing every 59 minutes, never arises.
+  - (d) **When Extend's 24 hours end, does the hour start then, or run from her last message? From
+    her last message.** "ghanta uske aakhri message se gina jayega": Extend bought 24 hours, not
+    25. So a Thread he paid 10 Velas to extend can expire the instant the extension ends, if her
+    last message is more than an hour old by then: named here as the worst case if guessed, and
+    now decided, not guessed.
 
   **Also unowned: no task sells Extend yet.** T-5.2 prices it (`thread_extend`, 10 Velas, as many
   times as he likes for one Thread, D-250, and at any time: from expired the 10 re-opens it too,
   D-253, Open), but no endpoint charges it; this task is its natural home, the founder to confirm.
   T-7.6 points here. Found in T-5.2; filed from this session's block (P-150 to P-159).
+  **Still nobody's, 8 October 2026:** the questions are answered, and the work, the 1-hour task
+  that sells Extend, is unwritten. This box stays open until it is.
 - [x] P-141 · Let only `main` deploy to staging. **Before the next session that can push a
   branch.** Worst case: a workflow file edited on any branch runs with staging's secrets, among
   them the database owner's connection used for migrations, and the Vercel and Fly tokens: it can
