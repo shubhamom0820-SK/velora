@@ -198,7 +198,27 @@ never done silently.
   (D-093) conflicts with a duty under Indian law to preserve or report it is the one legal
   question that can't wait for this review: getting it wrong is not a commercial mistake. It is
   on REL-1's Needs line for that reason.
-- [ ] **P-0.17** A chartered accountant confirms how prepaid Velas are treated, **before the first real sale. Owner: the founder, Shubham Kumar. Trigger: Sprint 8, not launch:** it is on T-8.1's Needs line, so `/task` stops there. Recorded 3 October 2026, at the direction of the advisor directing Sprint 5 (Claude, in a separate chat).
+- [x] **P-0.17** A chartered accountant confirms how prepaid Velas are treated, **before the first real sale. Owner: the founder, Shubham Kumar. Trigger: Sprint 8, not launch:** it is on T-8.1's Needs line, so `/task` stops there. Recorded 3 October 2026, at the direction of the advisor directing Sprint 5 (Claude, in a separate chat).
+  **Answered 8 October 2026** (the founder, Shubham Kumar, after a phone call with a chartered
+  accountant; the CA's name is the founder's to add here when given). Recorded as D-450, Open
+  until that name is in. The five points, as the founder relayed them:
+  1. **No GST registration now.** The threshold for services is ₹20 lakh aggregate turnover in a
+     financial year, Section 22 of the CGST Act as the CA put it: the law's number, not the
+     founder's choice. Below it Velora stays unregistered and charges no user GST.
+  2. **Prices are GST-inclusive.** A user pays ₹1,500 for the entry pack, today and after
+     registration. Registration doesn't move the price: Velora's share becomes ₹1,271 and ₹229
+     is the government's (18%, digital services).
+  3. **Unregistered, a receipt says nothing about GST:** no "incl. GST", no rate, no GSTIN. The
+     total alone. Showing or collecting GST without a GSTIN is against the law.
+  4. **Unspent paid Velas are a liability** (deferred revenue), revenue when spent. An accounting
+     rule, separate from GST; the first bullet below stands as written.
+  5. **The voucher-timing question** (GST at sale or at spend) is asked of the CA on the day
+     Velora registers, not before: while unregistered it doesn't arise.
+  **What follows:** T-8.1's Needs line reads this as answered, and two boxes there carry what the
+  answer needs built: a `gst_paise` that stays 0 and a receipt in which the word GST appears
+  nowhere, and the aggregate turnover counter with its ₹15 lakh alert. **P-350** is the
+  registration itself, within 30 days of crossing ₹20 lakh. D-099 notes that its prices are
+  inclusive.
   **What the CA confirms:**
   - **Revenue recognition:** unspent paid Velas are a liability until spent. They never expire and
     are never refunded (D-050, D-076).
@@ -208,9 +228,19 @@ never done silently.
     lists GST as unconfirmed. Google's tax form (P-0.13) went in as an unregistered individual with
     PAN (the founder, 3 October 2026): today's status, not whether registration is required.
 
-  **No CA is engaged today.** Neither Claude nor the advisor has read the GST law, and neither
-  makes any claim about it. Getting it wrong accrues quietly from the first sale and is expensive
-  to unwind. When one is engaged, record who and when here, beside P-0.7's lawyer.
+  **Of the three, on 8 October 2026:** revenue recognition is **answered**, point 4, as written.
+  Registration is **answered**, point 1: not required below ₹20 lakh aggregate turnover in a
+  financial year, and not done; the advisor's "below the threshold" was right, and this names
+  the threshold. P-0.2's GST line is answered by the same point, and P-0.2 stays open for PAN
+  and the current account. GST timing is **deferred to registration day**, point 5, on P-350:
+  it is the CA's question then, and doesn't arise before.
+
+  **A chartered accountant was consulted, by phone, on 8 October 2026** (the founder); the name
+  goes here when the founder gives it, beside P-0.7's lawyer, and D-450 Locks on it. Until 8
+  October 2026 this paragraph read "No CA is engaged today." Neither Claude nor the advisor
+  has read the GST law, and neither makes any claim about it: the five points above are the
+  CA's, as the founder relayed them. Getting it wrong accrues quietly from the first sale and is
+  expensive to unwind, which is why P-350 leads with the threshold crossed unnoticed.
 - [ ] **P-0.8** After T-2.2 is live: apply to Razorpay and Cashfree. Before applying, confirm each gateway's exact refund and cancellation-policy requirement against `/refunds` (D-050).
   **A gateway's refund-policy requirement is answered by D-076's rule 3** (3 October 2026): money
   goes back only for a payment with no Velas still standing against it. Never "refund unspent
@@ -2798,13 +2828,32 @@ prices don't depend on the web photos step, and the hold is lifted.
 # Sprint 8 — Payments, album, kudos, referrals (week 13)
 
 ### T-8.1 · Packs and orders
-- [ ] **Needs:** T-5.1, T-1.21, and P-0.17: a chartered accountant has confirmed how prepaid Velas are treated, before any real sale can happen; and **P-130**: no Velas are sold while `/refunds` promises returns that don't exist (D-230)
+- [ ] **Needs:** T-5.1, T-1.21, and P-0.17: a chartered accountant has confirmed how prepaid Velas are treated, before any real sale can happen, **answered 8 October 2026 (below)**; and **P-130**: no Velas are sold while `/refunds` promises returns that don't exist (D-230)
 - [ ] `GET /packs`: active packs for the user's price-test variant (`users.id` hash → A/B, stable). `POST /payments/orders {pack_id}` + `Idempotency-Key`: copy amount + `credits` from the pack, compute first-purchase bonus, create provider order, insert `payments` (`created`), return checkout params.
 - [ ] **A woman can't order Velas** → `NOT_ALLOWED` (D-076). The database would refuse her credit anyway; the route says so first, before she pays for something she could never use.
 - [ ] **Variant B has no active pack** since T-5.2 retired `entry-25` (D-250). Worst case: a man
   hashed into B opens the store and finds nothing to buy. This task decides what B is shown until
   T-10.4 proposes a new test, and tests that no man ever gets an empty list.
 - [ ] Fake provider: returns a fake order and exposes a local-only endpoint that simulates the webhook.
+- [ ] **GST, as P-0.17 and D-450 have it (the founder, 8 October 2026):** `gst_paise` on the
+  `payments` row, 0 while `GST_REGISTERED` is false, which it is today and stays until P-350;
+  and a `gst_rate_bps` config, 1800 once registered. Prices are GST-inclusive (D-099), so
+  registration never moves `amount_paise`: it splits it. A receipt, anything the user is shown
+  about a payment (the order's response, `GET /payments/{id}`, T-8.7's copy, T-5.5's history),
+  carries a GST line only when registered. Unregistered it shows the total alone: no "incl.
+  GST", no rate, no GSTIN, since showing or collecting GST without a GSTIN is against the law.
+  **Test:** an unregistered payment, serialised as the user sees it, contains the string "GST"
+  nowhere. 03-SCHEMA and 04-API take the column and the fields in this task (rule 10).
+- [ ] **Aggregate turnover counter, P-350's companion:** the sum of paid payments' `amount_paise`
+  (`status = 'paid'`, Razorpay's captured) with `paid_at` in the financial year, 1 April to 31
+  March, at `GET /admin/turnover` or wherever the admin reads it (T-9.5's `/admin/metrics`
+  otherwise), and an **alert at ₹15 lakh**: by whatever alerting exists before T-9.12, at the
+  least a line the worker logs once a day with the year's figure, at warning level once ₹15
+  lakh is passed. Counted from `payments`, never from the ledger: turnover is money in, and
+  bonus Velas aren't. Worst case without it: the ₹20 lakh threshold is crossed and nobody
+  knows, and registration is late, with penalty and interest from the first day over (P-350).
+  **Test:** payments either side of 1 April fall into the right year, and the alert line
+  appears at ₹15 lakh and not below it.
 - [ ] **Commit:** `feat(payments): packs and order creation [T-8.1]`
 
 ### T-8.2 · Webhook
@@ -5003,3 +5052,21 @@ The number comes from the session's own block, given in its brief, from P-100 up
   no photo sits at the bottom anyway, at completeness 50 (D-310, D-392). The founder decides;
   D-032 is Locked, so a change supersedes it with a new entry. Filed by Claude while filing
   T-4.12, 7 October 2026; its session's block, P-290 to P-299.
+- [ ] P-350 · Register for GST within 30 days of aggregate turnover crossing ₹20 lakh in a
+  financial year; at that moment, the CA answers the voucher-timing question (GST at sale or at
+  spend), and a task flips `GST_REGISTERED`, adds the GST line to receipts, and files the timing
+  rule as a decision. **Owner: the founder. Trigger: T-8.1's turnover counter and its alert at
+  ₹15 lakh.** Worst case first: the threshold is crossed and nobody notices. Registration is
+  then late, and penalty and interest run from the first day over, on sales already made at an
+  inclusive price with no tax set aside, and nothing in the product would have said a word.
+  That is why T-8.1 builds the counter and the alert alongside the first order: without them
+  the threshold can't be known, and this task has no trigger. **What the day looks like:** the
+  counter passes ₹20 lakh; the founder registers within 30 days of the crossing (the figure as
+  the founder relayed it from the CA, 8 October 2026) and asks the CA the timing question,
+  which doesn't arise before (D-450, point 5); then one task flips `GST_REGISTERED` on, sets
+  `gst_rate_bps` to 1800, splits each new payment's inclusive `amount_paise` into Velora's share
+  and `gst_paise` (₹1,500 into ₹1,271 and ₹229, D-450; the paise rounding is that task's to
+  settle), puts the GST line, the rate and the GSTIN on the receipt, and files the timing rule
+  as a decision in its own block. The price a user pays doesn't move (D-099, D-450). Filed by
+  Claude at the direction of the advisor (Claude, in a separate chat, relayed by the founder),
+  8 October 2026; its session's block, P-350 to P-359.

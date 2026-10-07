@@ -2422,6 +2422,10 @@ the first-purchase bonus, T-10.4's price test, the prototype's packs and its "Mo
 the dominated pack, and 09-RESEARCH's "about ₹300".
 **Answered 4 October 2026 by D-231,** all but T-10.4's price test and whether "Most popular" can
 be true on day one. **D-250:** `entry-25` is retired; the day-one question moved to T-8.7.
+**Noted 8 October 2026, D-450:** these prices are GST-inclusive (the founder, after a chartered
+accountant, by phone). A user pays ₹1,500 today, with Velora unregistered, and ₹1,500 after
+registration, when ₹1,271 is Velora's and ₹229 the government's. The table's rupees don't move;
+what moves is the split.
 
 The packs are the founder's decision, 4 October 2026. The reasoning beside them (the dominated
 pack, the ₹250 and ₹111) is the advisor's write-up (Claude, in a separate chat), relayed by the
@@ -3331,6 +3335,53 @@ founder's words).
 
 **Locked** on the founder's words, 7 October 2026. The rule's seven parts and the icon are his; the
 reasoning paragraphs are Claude's and the advisor's, relayed. Built by T-4.12.
+
+### D-450 · No GST until the threshold: inclusive prices, receipts silent on it, unspent Velas a liability — Open
+**The decision (the founder, Shubham Kumar, 8 October 2026, after a phone call with a chartered
+accountant; written by the advisor, Claude in a separate chat, relayed by the founder):**
+1. **No GST registration now.** Services have a threshold of ₹20 lakh aggregate turnover in a
+   financial year, Section 22 of the CGST Act as the CA put it. It is the law's number, not the
+   founder's preference. Until Velora crosses it, Velora is unregistered and collects no GST from
+   anyone. P-350 is the registration, within 30 days of the crossing.
+2. **Prices are GST-inclusive.** A user always pays the pack's price, ₹1,500 for the entry pack
+   (D-099). Registration doesn't change it: Velora's share becomes ₹1,271 and ₹229 is tax (18%,
+   digital services). The exact paise split is the registration task's (P-350).
+3. **Unregistered, no receipt or invoice mentions GST:** not "incl. GST", not a rate, not a GSTIN.
+   The total alone. Showing or collecting GST without a GSTIN is against the law, as the founder
+   relayed it from the CA; T-8.1 holds it with a test that the word appears nowhere.
+4. **Unspent paid Velas are a liability** (deferred revenue), revenue when spent. An accounting
+   rule, separate from GST; P-0.17's first point was right as written.
+5. **The voucher-timing question**, whether GST falls due when Velas are sold or when they are
+   spent, is asked of the CA on registration day (P-350), not before. While unregistered it does
+   not arise.
+
+**Why:** the one question P-0.17 couldn't answer without a CA, now answered by one. Below the
+threshold a registration would have Velora collect and remit a tax the law doesn't ask of it, at
+18% of every sale or a price rise at launch; above it, not registering accrues penalty and interest
+from the first day over. The inclusive price keeps the store's numbers (D-099) true on either side
+of the threshold. Point 3 follows from point 1: a receipt can't name a tax Velora has no number to
+collect under.
+
+**What is built, and where:** T-8.1 carries `gst_paise` (0 until registered), a `gst_rate_bps`
+config (1800 once registered), a receipt that shows the total alone while unregistered, with a
+test that "GST" appears nowhere, and the aggregate turnover counter with its ₹15 lakh alert, the
+only thing that can tell anyone the threshold is near. P-350 registers, asks the timing question,
+flips `GST_REGISTERED` and files the timing rule as a decision of its own.
+
+**Not decided here, and a question for the CA before the first sale, not a reading of the law
+(Claude, 8 October 2026):** whether the ₹20 lakh threshold holds as stated when the business sits
+in Bihar (D-058) and its users are across India, an inter-state supply of services. Neither Claude
+nor the advisor has read the GST Act, and this entry makes no claim about it; the founder puts the
+question to the CA when the name is recorded, and the answer goes here.
+
+**Rejected (the alternative each point closes):** registering voluntarily now, tax on every sale
+below a threshold that doesn't ask for it; GST-exclusive prices, where registration would raise
+the user's price by 18% (the founder: the user pays ₹1,500, always); "incl. GST" on an
+unregistered receipt as a courtesy, unlawful without a GSTIN; asking the timing question now, for
+a registration that may be a year off (the CA: it doesn't arise until then).
+
+**Open:** the decision is the founder's and the figures the CA's; the words are the advisor's,
+relayed. **Lock** when the CA's name is recorded here and on P-0.17.
 
 ---
 
