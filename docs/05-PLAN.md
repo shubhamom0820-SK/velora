@@ -2773,9 +2773,9 @@ prices don't depend on the web photos step, and the hold is lifted.
   message never restarts the hour, only hers does; and when Extend's 24 hours end, the hour runs
   from her last message, so an extended Thread can expire the instant the extension ends. They
   decide when this task's cron expires a Thread once the 1-hour task lands (P-150, still nobody's).
-  **Beside them, the advisor's rule (D-253, Open until the
-  founder's word):** Extend on an expired Thread re-opens it too, for 10 in all, never this task's
-  2 and then 10.
+  **Beside them, the advisor's rule (D-253, Open until the founder's word; Locked on it 8 October
+  2026):** Extend on an expired Thread re-opens it too, for 10 in all, never this task's 2 and
+  then 10.
 - [ ] Cron `expire_threads` (every minute, batches of 500, `FOR UPDATE SKIP LOCKED`) → `expired` + event. Cron `warn_expiring` (< 2 h, once) → push + event.
 - [ ] `POST /threads/{id}/reopen` (expired only) → debit 2 (men; D-098), `active`, `expires_at = now + 24h`, reset warning.
 - [ ] Tests using a controllable clock.
@@ -4559,9 +4559,10 @@ The number comes from the session's own block, given in its brief, from P-100 up
   filter (4 scenarios), its read-back check (1), `release-gate`'s filter (3); each restored and
   checked by SHA-256.
 - [ ] P-150 · Write the 1-hour task D-097 names, which moves a Thread from 24 hours to 1 and lists
-  every place that says 24 hours. **Needs:** the founder's word on D-253, the advisor's rule for
-  Extend from an expired Thread (Open). The two questions moved here from T-5.2's item 10 on 4
-  October 2026 were **answered 8 October 2026 (the founder, in his words; D-097's amendment):**
+  every place that says 24 hours. **Needs:** nothing now. The founder's word on D-253, the
+  advisor's rule for Extend from an expired Thread, came 8 October 2026 (Locked). The two questions
+  moved here from T-5.2's item 10 on 4 October 2026 were **answered 8 October 2026 (the founder, in
+  his words; D-097's amendment):**
   - (a) **Does his own message restart the hour? No.** "P-150 ka a ka nahi": only hers does, as
     D-097's step 2 says. The worst case if it had been guessed the other way, a Thread he keeps
     open alone, free, by writing every 59 minutes, never arises.
@@ -4573,7 +4574,8 @@ The number comes from the session's own block, given in its brief, from P-100 up
 
   **Also unowned: no task sells Extend yet.** T-5.2 prices it (`thread_extend`, 10 Velas, as many
   times as he likes for one Thread, D-250, and at any time: from expired the 10 re-opens it too,
-  D-253, Open), but no endpoint charges it; this task is its natural home, the founder to confirm.
+  D-253, Locked 8 October 2026), but no endpoint charges it; this task is its natural home, the
+  founder to confirm.
   T-7.6 points here. Found in T-5.2; filed from this session's block (P-150 to P-159).
   **Still nobody's, 8 October 2026:** the questions are answered, and the work, the 1-hour task
   that sells Extend, is unwritten. This box stays open until it is.

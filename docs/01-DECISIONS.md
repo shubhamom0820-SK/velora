@@ -2334,7 +2334,7 @@ then.
 the files it touches. **Answered or moved 4 October 2026 by D-250:** a man answering her first
 message pays the 2-Vela re-open; Extend can be bought again and again; (a) and (d) went to
 P-150. (c)'s own two were answered by D-253, 5 October 2026: Extend from expired is 10 in all
-(the advisor's rule, Open until the founder's word).
+(the advisor's rule, Open until the founder's word; Locked on it 8 October 2026).
 
 **Answered 4 October 2026 (the founder): an expired Thread stays readable.** "Unavailable" means he
 can't send, not that he can't read: the history he paid 5 Velas for stays visible to both of them.
@@ -2587,7 +2587,7 @@ which owns the screen, on its Needs line; the tag stays on the ₹4,500 pack, ch
 after Extend, go to P-150, the 1-hour task, with a pointer at T-7.6; (c)'s two questions go with
 them, moved by Claude (the founder to confirm), since they touch no file of T-5.2's either.
 **(c)'s two were answered instead, 5 October 2026, by D-253** (the advisor's, Open until the
-founder's word), and never moved: P-150 keeps (a)
+founder's word; Locked on it 8 October 2026), and never moved: P-150 keeps (a)
 and (d). **(a) and (d) were answered 8 October 2026** (the founder; D-097's amendment): his own
 message never restarts the hour, and when Extend's 24 hours end the hour runs from her last
 message.
@@ -2648,7 +2648,7 @@ Proposed by Claude in T-5.2, 4 October 2026; confirmed 5 October 2026 in the adv
 gave it the gifts to choose (the advisor, 5 October 2026). It is Locked on that delegation, which
 is the founder's word.
 
-### D-253 · Extend is one price, at any time, an expired Thread included — Open (the advisor's rule)
+### D-253 · Extend is one price, at any time, an expired Thread included — Locked (the advisor's rule, on the founder's word)
 **Extend costs 10 Velas and can be bought at any time, on an expired Thread too. From expired, the
 10 both re-opens the Thread and extends it: he never pays 2 and then 10.** In the ledger that is
 one `thread_extend` debit (D-251), never a `thread_reopen` beside it.
@@ -2664,6 +2664,10 @@ The rule and its reason came 5 October 2026 in the advisor's relay (Claude, in a
 **The rule is the advisor's,** not the founder's (the advisor, 5 October 2026), so it stays Open
 until he approves it: an advisor's decision is Locked only on the founder's word. It was first
 written Locked; corrected the same day.
+
+**Locked 8 October 2026 on the founder's word:** "d 253 ka sahi hai" (D-253's is right). The rule
+and its reason above are the advisor's, as written; the founder's word makes them his. Nothing
+above changes.
 
 ### D-101 · What moderation's scores mean — Locked (the minor threshold revisited from real scores)
 **The decision (T-4.4; proposed by Claude, decided by the founder, 4 October 2026):** the worker
