@@ -164,8 +164,9 @@ A test in this list is marked `@pytest.mark.critical`; CI runs them first and fa
 | J11 | Moderator resolves a report and freezes the account | T-9.5 |
 | J12 | Clear chat → undo → restore from You tab | T-7.10 |
 
-**How it runs (T-3.13, T-4.9).** `make e2e` (CI's `e2e` job, on every push, after `api` and `web`
-pass; locally it needs `make infra-up` and `make models`): Playwright drives a production build of
+**How it runs (T-3.13, T-4.9).** `make e2e` (CI's `e2e` job, after `api` and `web` pass, on a
+push that changed a path outside the docs allowlist, P-282 and D-410; locally it needs
+`make infra-up` and `make models`): Playwright drives a production build of
 the web (`next build && next start`, `APP_ENV=local`, so production's strict CSP is the one tested)
 on `127.0.0.1:3100`, against the API from `api/tests/e2e_server.py` on `127.0.0.1:8100`. The
 launcher takes a P-55 slot, so the run has a database and a Redis database of its own, created
@@ -215,10 +216,19 @@ and anything already enforced by the type checker.
 
 ## CI order
 
-`.github/workflows/ci.yml` (T-1.20) runs on every push as three parallel jobs: `api` (full-history
-secrets scan, lint, migrate, pytest), `web` (lint, vitest, `next build`) and `repo` (types are
-fresh, every pre-commit hook, the `/done` gate's own tests). `/done` fast-forwards `main` only when
-the run for that exact commit passed (D-044). Within each job:
+`.github/workflows/ci.yml` (T-1.20) runs on every push: `api` (full-history secrets scan, lint,
+migrate, pytest), `web` (lint, vitest, `next build`), `image` (the API image: no `.env` inside,
+serves, fails fast) and `repo` (types are fresh, every pre-commit hook, the gates' own tests) in
+parallel, then `e2e` (Playwright, T-3.13) after `api` and `web`. `/done` fast-forwards `main` only
+when the run for that exact commit passed (D-044). **Minutes (P-282, D-410):** on `main` a first
+job, `vouch`, asks GitHub for a passed branch run of the same SHA (`scripts/ci-vouch`) and, finding
+one, the four jobs are skipped: the run is still a green run of the SHA on `main`, which the
+deploy and the gates read; nothing vouching, as after a manual-path landing, runs them all. `e2e`
+runs only when a changed path is outside the allowlist of what can't reach a journey, `docs/`,
+`*.md`, `.claude/` (`scripts/ci-e2e-needed`, decided in the `api` job: on a branch, everything it
+changed since it left `main`; on `main`, since the previous tip); skipped, it leaves the run
+`success`. A second push to a task branch cancels the first's run, never on `main`. Each script
+has its test beside it, run by `repo`. Within each job:
 
 1. Lint first, failing fast: ruff + mypy · eslint + tsc + prettier
 2. `pytest -m critical`, then the rest of pytest (`make test-api`) · vitest
@@ -251,4 +261,8 @@ extensions itself, not on local Postgres.
 **GitHub only triggers a workflow that exists on the default branch.** `workflow_run`,
 `workflow_dispatch`, and `gh run list --workflow <file>` all resolve against `main`, so a new or
 renamed workflow can't be triggered or looked up by file from its own branch until it merges.
-This cost T-1.20 (the gate's run lookup) and T-1.22 (the first deploy).
+This cost T-1.20 (the gate's run lookup) and T-1.22 (the first deploy). **And a skipped job skips
+every job downstream of it in the needs chain,** however green the jobs between, unless that
+job's `if` opts out with a status function (`!cancelled()`) and names the results it needs:
+P-282's first proof run had `e2e` skipped on a branch with `e2e=true` printed, because `vouch`
+above it was (D-410).

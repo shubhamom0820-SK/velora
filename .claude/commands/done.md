@@ -59,11 +59,13 @@ stop and ask me. Take this path only when I say so, after you've shown me the ga
    - `make types && git diff --exit-code -- web/src/types/api.ts`
    - `SKIP=gitleaks uv run --project api pre-commit run --all-files --show-diff-on-failure`
    - `scripts/ci-gate-test`
+   - `scripts/ci-vouch-test` and `scripts/ci-e2e-needed-test`
 
    The full-history secrets scan needs GitHub; CI runs it on `main` once GitHub is back (step 4).
 3. Do steps 9 and 10 above, pushing with `VELORA_PUSH_GATE_MANUAL_PATH=1 git push origin main`:
    the landing guard then skips its CI half only, never `make lint test`'s. If the push fails because git can't reach GitHub either, stop and tell
    me: `main` has then moved locally only, and must be pushed before the next task starts.
-4. When GitHub answers again, check CI on what went to `main`: `scripts/ci-gate main`. If it isn't
+4. When GitHub answers again, check CI on what went to `main`: `scripts/ci-gate main`. No branch
+   run vouches for a commit landed this way, so `main` runs the full CI for it (P-282). If it isn't
    green, tell me at once — `main` is red, and fixing it comes before anything else.
 5. In your report, say the gate was bypassed, quote its exit-4 output, and list the local results.

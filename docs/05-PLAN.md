@@ -4394,10 +4394,12 @@ The number comes from the session's own block, given in its brief, from P-100 up
   plans page lists protected branches in private repositories among what Pro adds, and today its
   API refuses them here (403, "Upgrade to GitHub Pro or make this repository public"). **The
   steps, the founder's:** upgrade the account `shubhamom0820-SK` to Pro; then Settings → Branches →
-  a rule for `main`: "Require status checks to pass", naming each of CI's jobs (`api — secrets,
-  lint, migrate, pytest`, `web — lint, vitest, build`, `e2e — Playwright`, `image — no .env inside,
-  serves, fails fast`, `repo — types, hooks, gate`), and "Do not allow bypassing the above
-  settings". **Proved by its effect:** a commit CI never ran on, pushed to `main`, refused by
+  a rule for `main`: "Require status checks to pass", naming the jobs that run on every branch
+  push (`api — secrets, lint, migrate, pytest`, `web — lint, vitest, build`, `image — no .env
+  inside, serves, fails fast`, `repo — types, hooks, gate`), **never `e2e — Playwright`, which
+  P-282 skips on a docs-only push, so a check on it would hold every docs commit, and never
+  `vouch`, which runs on `main` alone (D-410, 8 October 2026)**, and "Do not allow bypassing the
+  above settings". **Proved by its effect:** a commit CI never ran on, pushed to `main`, refused by
   GitHub in its own words; then a commit CI passed on its branch, fast-forwarded, accepted. Not
   tonight (the advisor, 5 October 2026): today there is one machine and the guard covers it, and
   $4 a month is not the obstacle; remembering is, which is why it is on REL-1's Needs line.

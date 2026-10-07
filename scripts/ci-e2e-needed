@@ -1,0 +1,116 @@
+#!/usr/bin/env bash
+# Do the journeys need to run? (P-282, D-410.) Names the paths a push changed,
+# each with its verdict, and prints one line for $GITHUB_OUTPUT:
+#
+#   e2e=true    a changed path is outside the allowlist below
+#   e2e=false   every changed path is on it, or nothing changed
+#
+#   scripts/ci-e2e-needed --from-main MAIN_REF COMMIT   a branch: what it changed since it left main
+#   scripts/ci-e2e-needed --before SHA COMMIT           main: what changed since the previous tip,
+#                                                       the push's `before`
+#
+# The allowlist names what can't reach a journey, never what counts as code
+# (CLAUDE.md rule 16): docs/, any .md file, and .claude/. Anything else runs
+# them, this workflow and these scripts included.
+#
+# On a branch the base is the merge base with main, never the push's `before`:
+# a code push whose run a quick docs push cancelled (ci.yml's cancel-in-progress)
+# would otherwise leave the branch tip with no e2e run on its tree, since the
+# second push's diff is docs only. The merge base sees everything the branch
+# adds over main. On main the previous tip is right, since main only ever moves
+# by fast-forward; zeros (main's first push), no SHA at all (a dispatch) or one
+# this clone doesn't have all mean the journeys run.
+#
+# Exit 0 either way; 2 for a usage error. A caller that can't read a verdict
+# runs the journeys (ci.yml).
+set -euo pipefail
+
+say() { printf 'ci-e2e-needed: %s\n' "$*" >&2; }
+usage() {
+  say "usage: scripts/ci-e2e-needed (--from-main MAIN_REF | --before SHA) COMMIT"
+  exit 2
+}
+zero=0000000000000000000000000000000000000000
+
+journeys_run() {
+  say "$*: the journeys run."
+  printf 'e2e=true\n'
+  exit 0
+}
+
+mode="" main_ref="" before="" ref=""
+while (($#)); do
+  case "$1" in
+    --from-main)
+      mode=branch
+      main_ref="${2:-}"
+      shift 2 || usage
+      ;;
+    --before)
+      mode=main
+      before="${2-}"
+      shift 2 || usage
+      ;;
+    -*) usage ;;
+    *)
+      [[ -z "$ref" ]] || usage
+      ref="$1"
+      shift
+      ;;
+  esac
+done
+[[ -n "$mode" && -n "$ref" ]] || usage
+[[ "$mode" != branch || -n "$main_ref" ]] || usage
+commit="$(git rev-parse --verify "${ref}^{commit}")"
+short="${commit:0:7}"
+
+case "$mode" in
+  branch)
+    if ! base="$(git merge-base "$main_ref" "$commit" 2>/dev/null)"; then
+      journeys_run "no merge base between $main_ref and $short"
+    fi
+    say "$short on a branch: the paths it changed since it left $main_ref (${base:0:7})"
+    ;;
+  main)
+    if [[ -z "$before" ]]; then
+      journeys_run "no previous tip given (a dispatch?)"
+    fi
+    if [[ "$before" == "$zero" ]]; then
+      journeys_run "main's first push, before is zeros"
+    fi
+    if ! base="$(git rev-parse --verify --quiet "${before}^{commit}")"; then
+      journeys_run "before '${before:0:7}' isn't a commit this clone has"
+    fi
+    say "$short on main: the paths changed since the previous tip (${base:0:7})"
+    ;;
+esac
+
+# The allowlist. `*.md` matches a .md file in any directory.
+allowlisted() {
+  case "$1" in
+    docs/* | *.md | .claude/*) return 0 ;;
+    *) return 1 ;;
+  esac
+}
+
+outside=0 total=0
+while IFS= read -r path; do
+  [[ -n "$path" ]] || continue
+  total=$((total + 1))
+  if allowlisted "$path"; then
+    say "  allowlisted  $path"
+  else
+    say "  outside      $path"
+    outside=$((outside + 1))
+  fi
+done < <(git diff --name-only "$base" "$commit")
+
+if ((total == 0)); then
+  say "nothing changed between ${base:0:7} and $short: the journeys are skipped."
+  printf 'e2e=false\n'
+elif ((outside == 0)); then
+  say "every changed path is on the allowlist ($total): the journeys are skipped."
+  printf 'e2e=false\n'
+else
+  journeys_run "$outside of $total changed paths outside the allowlist"
+fi

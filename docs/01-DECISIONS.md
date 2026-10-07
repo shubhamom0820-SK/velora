@@ -510,6 +510,11 @@ merges by fast-forward without pull requests, so there is nothing to require the
 gate does the same job without one. **Rejected: `gitleaks/gitleaks-action`** — third-party code in
 CI, for what a checksum-verified binary does.
 
+**Amended 8 October 2026 (D-410): on `main` the run vouches from the branch run of the same SHA;
+full CI there only when nothing vouches.** The decision isn't reopened: CI is binding through
+`/done` as above, and `main`'s run still completes green for the exact commit, which is what the
+deploy and both gates read.
+
 
 ### D-045 · Fake providers run only where ENV is local — Locked
 Every external service sits behind a provider (D-028; storage joined in T-1.21), selected by a
@@ -3401,6 +3406,70 @@ a registration that may be a year off (the CA: it doesn't arise until then).
 
 **Open:** the decision is the founder's and the figures the CA's; the words are the advisor's,
 relayed. **Lock** when the CA's name is recorded here and on P-0.17.
+
+### D-410 · CI minutes: `main`'s run vouches from the branch run, e2e only off the docs allowlist, no cancel on `main` — Open
+**The decision (P-282; the founder, 8 October 2026, on the advisor's recommendation, Claude in a
+separate chat, relayed):** three cuts to what a landing costs in GitHub Actions minutes, each
+shaped so that `deploy.yml`, `scripts/ci-gate`, `scripts/release-gate` and `scripts/push-gate` go
+on reading exactly what they read today: a completed, green run of the CI workflow for the exact
+SHA, on the branch they ask about. None of the four changed.
+
+1. **On `main`, the run vouches.** A first job, `vouch`, runs only on a push to `main` and asks
+   GitHub (`scripts/ci-vouch`) for a completed, passed push run of the CI workflow for exactly
+   this SHA on a branch other than `main`, re-checking SHA, workflow, event, branch and
+   conclusion in jq (P-140). Landing is a fast-forward to a commit whose branch run the gate
+   read (D-044), so `main`'s full run repeated 17 minutes for nothing. When one exists the other
+   jobs are skipped, and a run of one green job and skipped jobs concludes `success`, so the
+   staging deploy fires on it and the gates read it as passed. Anything the script can't be
+   sure of is "false": no run, a red, cancelled or unfinished one, another workflow or event,
+   GitHub not answering, the script itself crashing. False runs the full CI on `main`, which is
+   what a manual-path landing (`/done`, GitHub unreachable) gets, since no branch run vouches
+   for it. A run started by hand on `main` never vouches, so it stays the way to run everything
+   there.
+2. **`main`'s runs are never cancelled.** `cancel-in-progress` is
+   `github.ref != 'refs/heads/main'`, the form GitHub's own docs give: a second push to a task
+   branch still supersedes the first's run, and `ci-gate` still reads a cancelled run as not
+   green; a second landing no longer cancels the first's run, which left the first commit with
+   no green run and so no deploy. `main`'s runs queue, first in, first out. GitHub keeps one
+   pending run per concurrency group, so a third landing inside the window replaces the
+   second's pending run; with `main`'s run at about a minute that needs three landings in a
+   minute. GitHub's `queue: max` would hold up to a hundred, but can't combine with a true
+   `cancel-in-progress`, and whether it takes an expression is untested: the fix if that is ever
+   seen, not used now.
+3. **The journeys run only when a changed path could reach one.** `scripts/ci-e2e-needed`, a
+   step at the top of the `api` job, which has the full history for gitleaks and which `e2e`
+   needs anyway, so the decision costs no billed minute of its own. The allowlist names what
+   can't reach a journey, never what counts as code (CLAUDE.md rule 16): `docs/`, any `.md`
+   file, `.claude/`. Anything else runs them, the workflow and these scripts included. A
+   skipped `e2e` leaves the run's conclusion `success`, as the gates expect, so a required
+   status check (P-180) must never name `e2e`. **What it measures from:** on `main`, the push's
+   previous tip (`before`), right because `main` only moves by fast-forward; zeros, no SHA (a
+   dispatch) or one the clone doesn't have all run the journeys. On a branch, the merge base
+   with `main`, never the push's `before`: a code push whose run a quick docs push cancelled
+   would otherwise leave the branch tip with no e2e run on its tree, since the second push's
+   diff is docs only. The merge base sees everything the branch adds over `main`, so every tree
+   that reaches `main` is an e2e-tested tree or allowlisted paths away from one. **A trap the
+   first proof run found (37684502234, 8 October 2026):** GitHub carries a skip down the whole
+   needs chain, so `vouch`, skipped on every branch, skipped `e2e` too, however green `api` and
+   `web` were and with `e2e=true` printed, because `e2e`'s condition had no status function.
+   Every job downstream of `vouch` therefore opts out with `!cancelled()` and names the results
+   it needs itself.
+
+**Why:** on 7 October 2026 GitHub Free's 2,000 Actions minutes a month ran out mid-week. GitHub
+then refuses to start a job and closes a green run as "failure" (P-282 names the runs), the gate
+reads exit 1 as it must, and every session is blocked at once with nothing to fix on any branch.
+Measured on that day's ten CI runs, each job rounded up to the minute as GitHub bills: 189
+minutes for five landings, every one docs-only, 36 to 38 a landing; with the three cuts, 71, 14
+to 15 a landing. What each cut was seen to do, run by run, is on P-282's tick.
+
+**Rejected:** skipping `api` and `web` on docs-only commits too (another 11 minutes): a separate
+question with couplings of its own, and `repo`, whose pre-commit pass reads every file, runs
+either way. Not running `main`'s workflow at all (`paths-ignore`, or no trigger on `main`): the
+deploy fires on `workflow_run` of CI on `main` and both gates read `main`'s run, so it must
+complete, green, for the SHA. A required status check in place of the vouch: GitHub refuses them
+on this plan (D-280, P-180). The push's `before` on a branch: the cancel hole above. A job of its
+own for the e2e decision: a billed minute on every run, which is what the cut saves. Open until
+the first week of landings shows the deploys firing as before.
 
 ---
 

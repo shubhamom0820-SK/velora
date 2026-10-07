@@ -1,0 +1,67 @@
+#!/usr/bin/env bash
+# The vouch (P-282, D-410): on a push to main, says whether a branch run of the
+# CI workflow already passed this exact commit, so main's run needn't repeat it.
+# Landing is a fast-forward to a commit whose branch run the gate read
+# (scripts/ci-gate, D-044), so main's full run repeated 17 minutes for nothing.
+# Prints one line for $GITHUB_OUTPUT:
+#
+#   vouched=true    a completed, passed push run of the CI workflow exists for
+#                   exactly this SHA on a branch other than BRANCH
+#   vouched=false   anything else: no run, a red, cancelled or unfinished one,
+#                   another workflow or event, or GitHub not answering
+#
+#   scripts/ci-vouch SHA BRANCH
+#
+# It never waits and it never fails the job: "can't tell" is false, and false
+# means BRANCH's full CI runs instead (ci.yml). So a vouched run on main is one
+# green job and skipped jobs, which GitHub concludes `success`: the staging
+# deploy fires on it and ci-gate and release-gate read it as passed, for the
+# exact SHA, never the newest run (P-140). Exit 0 either way; 2 for a usage
+# error. It says what it found on stderr, so the run's log names the run that
+# vouched, or why none did.
+set -euo pipefail
+
+say() { printf 'ci-vouch: %s\n' "$*" >&2; }
+usage() {
+  say "usage: scripts/ci-vouch SHA BRANCH"
+  exit 2
+}
+
+sha="${1:-}"
+branch="${2:-}"
+[[ -n "$sha" && -n "$branch" ]] || usage
+if [[ ! "$sha" =~ ^[0-9a-f]{40}$ ]]; then
+  say "SHA must be the full 40-hex commit, not '$sha'."
+  exit 2
+fi
+short="${sha:0:7}"
+# The workflow's `name:` in .github/workflows/ci.yml, matched by name as
+# ci-gate matches it: `--workflow ci.yml` resolves against the default branch.
+workflow="${CI_VOUCH_WORKFLOW_NAME:-CI}"
+errors="$(mktemp)"
+trap 'rm -f "$errors"' EXIT
+
+nothing_vouches() {
+  say "$*"
+  say "Nothing vouches for $short: $branch's full CI runs."
+  printf 'vouched=false\n'
+  exit 0
+}
+
+# The runs for exactly this commit: gh filters by SHA and event, and jq checks
+# every field again (P-140). A run on BRANCH itself never counts: on main that
+# is this run, or an earlier one for the same push.
+if ! found="$(gh run list --commit "$sha" --event push --limit 50 \
+  --json databaseId,headSha,headBranch,workflowName,event,status,conclusion,createdAt \
+  --jq "[.[] | select(.headSha == \"$sha\" and .workflowName == \"$workflow\" and .event == \"push\" and .headBranch != \"$branch\" and .status == \"completed\" and .conclusion == \"success\")] | sort_by(.createdAt) | last | if . == null then \"\" else \"\(.databaseId)|\(.headBranch)\" end" \
+  2>"$errors")"; then
+  say "GitHub didn't answer while listing runs for $short:"
+  sed 's/^/ci-vouch:   /' "$errors" >&2
+  nothing_vouches "Can't tell whether a branch run passed it."
+fi
+if [[ -z "$found" ]]; then
+  nothing_vouches "No completed, passed push run of '$workflow' for $short on a branch other than $branch."
+fi
+IFS='|' read -r run run_branch <<<"$found"
+say "run $run on $run_branch passed '$workflow' for $short: it vouches, and $branch's other jobs are skipped."
+printf 'vouched=true\n'

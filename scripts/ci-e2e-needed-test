@@ -1,0 +1,167 @@
+#!/usr/bin/env bash
+# Tests scripts/ci-e2e-needed (P-282) in a throwaway git repository: the
+# journeys are skipped only when every path a push changed is on the allowlist
+# (docs/, *.md, .claude/), on a branch measured from its merge base with main
+# and on main from the previous tip; everything unclear runs them. Every case
+# checks the verdict, the exit code and the message. Runs locally and in CI.
+set -euo pipefail
+
+here="$(cd "$(dirname "$0")" && pwd)"
+needed="$here/ci-e2e-needed"
+work="$(mktemp -d)"
+trap 'rm -rf "$work"' EXIT
+
+repo="$work/repo"
+git init -q -b main "$repo"
+g() { git -C "$repo" -c user.name=test -c user.email=test@example.com "$@"; }
+# write PATH CONTENT: a file in the repo, directories made as needed.
+write() {
+  mkdir -p "$repo/$(dirname "$1")"
+  printf '%s\n' "$2" >"$repo/$1"
+  g add -- "$1"
+}
+commit() { g commit -q -m "$1"; }
+# A main with one of everything.
+write README.md "readme"
+write CLAUDE.md "rules"
+write docs/05-PLAN.md "plan"
+write .claude/commands/task.md "task"
+write api/app/x.py "x = 1"
+write web/src/y.ts "const y = 1;"
+write .github/workflows/ci.yml "name: CI"
+write Makefile "all:"
+commit "main: one of everything"
+main0="$(g rev-parse HEAD)"
+# A branch for each case starts from main0.
+branch() {
+  g checkout -q main
+  g checkout -q -b "$1" "$main0"
+}
+
+passed=0 failed=0
+# expect NAME VERDICT EXIT MESSAGE ARGS...: runs the script from the repo.
+expect() {
+  local name="$1" verdict="$2" want="$3" message="$4" got=0
+  shift 4
+  (cd "$repo" && "$needed" "$@") >"$work/$name.out" 2>"$work/$name.err" || got=$?
+  if [[ "$got" == "$want" && "$(cat "$work/$name.out")" == "$verdict" ]] && grep -qF -- "$message" "$work/$name.err"; then
+    passed=$((passed + 1))
+    printf 'ok    %-40s %s, exit %s\n' "$name" "${verdict:-(no verdict)}" "$got"
+  else
+    failed=$((failed + 1))
+    printf 'FAIL  %-40s got "%s" exit %s, want "%s" exit %s saying "%s"\n' "$name" "$(cat "$work/$name.out")" "$got" "$verdict" "$want" "$message"
+    sed 's/^/        /' "$work/$name.err"
+  fi
+}
+skipped="the journeys are skipped"
+runs="the journeys run"
+
+# --- A branch: what it changed since it left main ----------------------------
+
+branch docs-only
+write docs/05-PLAN.md "plan, ticked"
+commit "docs"
+expect docs-only e2e=false 0 "every changed path is on the allowlist (1): $skipped" --from-main main HEAD
+grep -qF "allowlisted  docs/05-PLAN.md" "$work/docs-only.err" ||
+  { failed=$((failed + 1)); echo "FAIL  docs-only doesn't name the path"; }
+
+branch one-line-of-code
+write api/app/x.py "x = 2"
+commit "code"
+expect one-line-of-code e2e=true 0 "1 of 1 changed paths outside the allowlist: $runs" --from-main main HEAD
+grep -qF "outside      api/app/x.py" "$work/one-line-of-code.err" ||
+  { failed=$((failed + 1)); echo "FAIL  one-line-of-code doesn't name the path"; }
+
+branch mixed
+write docs/05-PLAN.md "plan, ticked"
+write web/src/y.ts "const y = 2;"
+commit "docs and code"
+expect mixed e2e=true 0 "1 of 2 changed paths outside the allowlist: $runs" --from-main main HEAD
+
+branch md-anywhere
+write CLAUDE.md "rules, amended"
+write web/README.md "how to run the web"
+write api/app/NOTES.md "notes"
+commit "markdown in three places"
+expect md-anywhere e2e=false 0 "every changed path is on the allowlist (3): $skipped" --from-main main HEAD
+
+branch claude-dir
+write .claude/commands/task.md "task, amended"
+commit "a command"
+expect claude-dir e2e=false 0 "every changed path is on the allowlist (1): $skipped" --from-main main HEAD
+
+# The workflow and the scripts are code: nothing names what counts as code.
+branch the-workflow-itself
+write .github/workflows/ci.yml "name: CI, changed"
+commit "ci"
+expect the-workflow-itself e2e=true 0 "1 of 1 changed paths outside the allowlist: $runs" --from-main main HEAD
+
+branch the-makefile
+write Makefile "all: changed"
+commit "make"
+expect the-makefile e2e=true 0 "$runs" --from-main main HEAD
+
+branch deleted-code
+g rm -q api/app/x.py
+commit "rm code"
+expect deleted-code e2e=true 0 "1 of 1 changed paths outside the allowlist: $runs" --from-main main HEAD
+
+branch deleted-doc
+g rm -q docs/05-PLAN.md
+commit "rm doc"
+expect deleted-doc e2e=false 0 "every changed path is on the allowlist (1): $skipped" --from-main main HEAD
+
+# A directory named like a document isn't one.
+branch a-dir-named-like-a-doc
+write docs.md/foo.py "print(1)"
+commit "docs.md/"
+expect a-dir-named-like-a-doc e2e=true 0 "1 of 1 changed paths outside the allowlist: $runs" --from-main main HEAD
+
+branch empty-diff
+expect empty-diff e2e=false 0 "nothing changed between ${main0:0:7} and ${main0:0:7}: $skipped" --from-main main HEAD
+
+g checkout -q --orphan no-merge-base
+g rm -q -r --cached . >/dev/null
+write api/app/z.py "z = 1"
+commit "unrelated history"
+expect no-merge-base e2e=true 0 "no merge base between main and $(g rev-parse --short=7 HEAD): $runs" --from-main main HEAD
+g clean -qfd # the orphan left main's files untracked
+
+# The cancel hole (why the base is the merge base, never the push's `before`):
+# a code push, then a quick docs push that cancels the first's run. Measured from
+# main the branch tip still changed code; measured from the previous push alone
+# it would read as docs only, and the tip's tree would never see a journey.
+branch code-then-docs
+write api/app/x.py "x = 3"
+commit "code, its run cancelled"
+code="$(g rev-parse HEAD)"
+write docs/05-PLAN.md "plan, after the code"
+commit "docs, the push that cancelled it"
+expect code-then-docs e2e=true 0 "1 of 2 changed paths outside the allowlist: $runs" --from-main main HEAD
+expect code-then-docs-from-before-alone e2e=false 0 "$skipped" --before "$code" HEAD
+
+# --- main: what changed since the previous tip --------------------------------
+
+g checkout -q main
+write docs/05-PLAN.md "plan, landed"
+commit "docs on main"
+main1="$(g rev-parse HEAD)"
+expect main-docs e2e=false 0 "every changed path is on the allowlist (1): $skipped" --before "$main0" HEAD
+grep -qF "on main: the paths changed since the previous tip (${main0:0:7})" "$work/main-docs.err" ||
+  { failed=$((failed + 1)); echo "FAIL  main-docs doesn't say it measured from the previous tip"; }
+write api/app/x.py "x = 4"
+commit "code on main"
+expect main-code e2e=true 0 "1 of 1 changed paths outside the allowlist: $runs" --before "$main1" HEAD
+expect main-first-push e2e=true 0 "main's first push, before is zeros: $runs" --before 0000000000000000000000000000000000000000 HEAD
+expect main-unknown-before e2e=true 0 "before 'abcdef0' isn't a commit this clone has: $runs" --before abcdef0123456789abcdef0123456789abcdef01 HEAD
+expect main-no-before e2e=true 0 "no previous tip given (a dispatch?): $runs" --before "" HEAD
+
+# --- usage --------------------------------------------------------------------
+
+expect usage-no-mode "" 2 "usage: scripts/ci-e2e-needed" HEAD
+expect usage-no-commit "" 2 "usage: scripts/ci-e2e-needed" --from-main main
+expect usage-no-main-ref "" 2 "usage: scripts/ci-e2e-needed" --from-main
+expect usage-both-modes "" 2 "usage: scripts/ci-e2e-needed" --from-main main --before "$main0" HEAD HEAD
+
+echo "ci-e2e-needed-test: $passed passed, $failed failed"
+((failed == 0))

@@ -3,6 +3,16 @@
 # fast-forwards main only when this workflow passed for that exact commit
 # (scripts/ci-gate). T-1.22's deploy checks again.
 #
+# Minutes (P-282, D-410). On main the `vouch` job asks GitHub for a passed run
+# of this exact commit on a branch, and when one exists the other jobs are
+# skipped: landing is a fast-forward to a commit whose branch run the gate read,
+# so main's full run repeated it for nothing. The run still completes green for
+# the SHA, so the deploy fires and the gates read it as today. Nothing vouching
+# means the full CI, here. And the journeys run only when a changed path is
+# outside scripts/ci-e2e-needed's allowlist of what can't reach one (docs/,
+# *.md, .claude/); a docs-only push skips the e2e job, which leaves the run's
+# conclusion `success`, as the gates expect.
+#
 # Third-party actions are pinned to a commit SHA; the comment names the version.
 # GitHub only triggers workflows that exist on the default branch: a new or renamed
 # workflow can't run by workflow_run or by hand from its own branch (06-TESTING).
@@ -14,10 +24,13 @@ on:
   workflow_dispatch:
 
 # A newer push to the same branch supersedes a run still in progress. The /done
-# gate treats a cancelled run as not green.
+# gate treats a cancelled run as not green. Never on main (P-282): a second
+# landing cancelling the first's run would leave the first commit with no green
+# run, so its deploy never fires. Main's runs queue instead, one pending at a
+# time, which GitHub keeps as first in, first out.
 concurrency:
   group: ci-${{ github.ref }}
-  cancel-in-progress: true
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
 
 permissions:
   contents: read
@@ -45,15 +58,77 @@ env:
   CODE_PEPPER: "6363636363636363636363636363636363636363636363636363636363636363"
 
 jobs:
+  # P-282 (D-410): on a push to main, a passed branch run of this exact commit
+  # vouches for it, and the jobs below are skipped (their `if`). The script
+  # answers false to anything it can't be sure of, GitHub not answering
+  # included, and false runs the full CI here. Only a push: a run started by
+  # hand on main is the way to run everything there. Reading runs needs
+  # `actions: read`, for this job alone.
+  vouch:
+    name: vouch — main, a branch run already passed this commit
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      actions: read
+    outputs:
+      vouched: ${{ steps.vouch.outputs.vouched }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      # Only the script's own verdict counts: a crash, or anything that isn't
+      # `vouched=…`, means the full CI runs.
+      - name: A passed branch run for this exact commit?
+        id: vouch
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set +e
+          verdict="$(scripts/ci-vouch "$GITHUB_SHA" "$GITHUB_REF_NAME")"
+          status=$?
+          set -e
+          if [[ "$status" != 0 || "$verdict" != vouched=* ]]; then verdict=vouched=false; fi
+          echo "$verdict" | tee -a "$GITHUB_OUTPUT"
+
   api:
     name: api — secrets, lint, migrate, pytest
+    needs: [vouch]
+    if: ${{ !cancelled() && needs.vouch.outputs.vouched != 'true' }}
     runs-on: ubuntu-24.04
     timeout-minutes: 15
+    outputs:
+      e2e: ${{ steps.e2e.outputs.e2e }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 0 # the secrets scan reads every commit
           persist-credentials: false
+
+      # P-282 (D-410): the journeys run only when a changed path is outside the
+      # allowlist of what can't reach one. On main, the paths since the push's
+      # previous tip; on a branch, everything it changed since it left main,
+      # never the push's `before` (the script says why). Decided here, in a job
+      # e2e needs anyway and the one with the history, so it costs no billed
+      # minute of its own. Only the script's own verdict counts: a crash, or
+      # anything that isn't `e2e=…`, runs the journeys.
+      - name: Do the journeys need to run?
+        id: e2e
+        env:
+          BEFORE: ${{ github.event.before }}
+        run: |
+          set +e
+          if [[ "$GITHUB_REF" == refs/heads/main ]]; then
+            verdict="$(scripts/ci-e2e-needed --before "$BEFORE" HEAD)"
+          else
+            verdict="$(scripts/ci-e2e-needed --from-main origin/main HEAD)"
+          fi
+          status=$?
+          set -e
+          if [[ "$status" != 0 || "$verdict" != e2e=* ]]; then verdict=e2e=true; fi
+          echo "$verdict" | tee -a "$GITHUB_OUTPUT"
 
       # The pre-commit hook only protects clones that ran `make hooks`, and
       # `git commit --no-verify` skips it. This scans the whole history (P-09).
@@ -114,6 +189,8 @@ jobs:
 
   web:
     name: web — lint, vitest, build
+    needs: [vouch]
+    if: ${{ !cancelled() && needs.vouch.outputs.vouched != 'true' }}
     runs-on: ubuntu-24.04
     timeout-minutes: 15
     steps:
@@ -157,9 +234,17 @@ jobs:
   # on purpose (decision 22): a trace records request and response bodies,
   # phone numbers, codes and access tokens among them, and a page snapshot
   # shows the phone screen. Failures speak through their assertions.
+  # Only when a changed path can reach a journey (P-282, the api job's verdict);
+  # skipped otherwise, which leaves the run's conclusion `success`. So a
+  # required status check (P-180) must never name this job. The condition names
+  # its needs' results itself: GitHub carries a skip down the whole needs chain,
+  # so `vouch`, skipped on every branch, would skip this job too, however green
+  # api and web are, unless the condition opts out with a status function (seen
+  # on run 37684502234: e2e=true printed, the job skipped).
   e2e:
     name: e2e — Playwright
     needs: [api, web]
+    if: ${{ !cancelled() && needs.api.result == 'success' && needs.web.result == 'success' && needs.api.outputs.e2e == 'true' }}
     runs-on: ubuntu-24.04
     timeout-minutes: 20
     steps:
@@ -220,6 +305,8 @@ jobs:
 
   image:
     name: image — no .env inside, serves, fails fast
+    needs: [vouch]
+    if: ${{ !cancelled() && needs.vouch.outputs.vouched != 'true' }}
     runs-on: ubuntu-24.04
     timeout-minutes: 15
     env:
@@ -406,6 +493,8 @@ jobs:
 
   repo:
     name: repo — types, hooks, gate
+    needs: [vouch]
+    if: ${{ !cancelled() && needs.vouch.outputs.vouched != 'true' }}
     runs-on: ubuntu-24.04
     timeout-minutes: 15
     steps:
@@ -456,3 +545,8 @@ jobs:
 
       - name: The release gate's own tests (D-075)
         run: scripts/release-gate-test
+
+      - name: The vouch's and the journeys' gate's own tests (P-282)
+        run: |
+          scripts/ci-vouch-test
+          scripts/ci-e2e-needed-test

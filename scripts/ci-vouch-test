@@ -1,0 +1,119 @@
+#!/usr/bin/env bash
+# Tests scripts/ci-vouch (P-282) against a fake `gh`: it vouches only for a
+# completed, passed push run of CI for the exact commit on a branch other than
+# the one it runs for, and answers false, exit 0, to everything else, GitHub
+# not answering included. The fake applies the script's real --jq expression
+# with jq, as gh does, so the exact-SHA filtering is what's under test. Every
+# case checks the verdict, the exit code and the message. Runs locally and in CI.
+set -euo pipefail
+
+here="$(cd "$(dirname "$0")" && pwd)"
+vouch="$here/ci-vouch"
+work="$(mktemp -d)"
+trap 'rm -rf "$work"' EXIT
+
+sha="1111111111111111111111111111111111111111"
+old="0000000000000000000000000000000000000000"
+
+mkdir "$work/bin"
+cat >"$work/bin/gh" <<'FAKE'
+#!/usr/bin/env bash
+set -euo pipefail
+printf '%s\n' "$@" >"$FAKE_DIR/args"
+expr="" prev=""
+for arg in "$@"; do
+  if [[ "$prev" == --jq ]]; then expr="$arg"; fi
+  if [[ "$arg" == --workflow ]]; then
+    echo "HTTP 404: workflow ci.yml not found on the default branch" >&2
+    exit 1
+  fi
+  prev="$arg"
+done
+case "$1 $2" in
+  "run list")
+    if [[ -f "$FAKE_DIR/list-error" ]]; then cat "$FAKE_DIR/list-error" >&2; exit 1; fi
+    json="$(cat "$FAKE_DIR/list.json")"
+    ;;
+  *) echo "fake gh: unexpected call: $*" >&2; exit 64 ;;
+esac
+jq -r "$expr" <<<"$json"
+FAKE
+chmod +x "$work/bin/gh"
+
+# run ID SHA BRANCH STATUS CONCLUSION [WORKFLOW] [EVENT] [CREATED_AT]
+run() {
+  printf '{"databaseId":%s,"headSha":"%s","headBranch":"%s","status":"%s","conclusion":"%s","workflowName":"%s","event":"%s","createdAt":"%s"}' \
+    "$1" "$2" "$3" "$4" "$5" "${6:-CI}" "${7:-push}" "${8:-2026-01-01T00:00:00Z}"
+}
+
+passed=0 failed=0
+# expect NAME LIST_JSON VERDICT EXIT MESSAGE [ARGS...]: the script runs for $sha
+# on main unless ARGS says otherwise. The verdict is stdout, the message stderr.
+expect() {
+  local name="$1" list="$2" verdict="$3" want="$4" message="$5" got=0
+  shift 5
+  mkdir -p "$work/$name"
+  printf '%s' "$list" >"$work/$name/list.json"
+  if (($# == 0)); then set -- "$sha" main; fi
+  (env PATH="$work/bin:$PATH" FAKE_DIR="$work/$name" "$vouch" "$@") \
+    >"$work/$name.out" 2>"$work/$name.err" || got=$?
+  if [[ "$got" == "$want" && "$(cat "$work/$name.out")" == "$verdict" ]] && grep -qF -- "$message" "$work/$name.err"; then
+    passed=$((passed + 1))
+    printf 'ok    %-40s %s, exit %s\n' "$name" "${verdict:-(no verdict)}" "$got"
+  else
+    failed=$((failed + 1))
+    printf 'FAIL  %-40s got "%s" exit %s, want "%s" exit %s saying "%s"\n' "$name" "$(cat "$work/$name.out")" "$got" "$verdict" "$want" "$message"
+    sed 's/^/        /' "$work/$name.err"
+  fi
+}
+
+vouches="run 11 on feature passed 'CI' for ${sha:0:7}: it vouches"
+nothing="No completed, passed push run of 'CI' for ${sha:0:7} on a branch other than main"
+
+expect green-on-a-branch "[$(run 11 "$sha" feature completed success)]" vouched=true 0 "$vouches"
+expect no-run "[]" vouched=false 0 "$nothing"
+expect only-main-itself "[$(run 11 "$sha" main completed success)]" vouched=false 0 "$nothing"
+expect another-commit "[$(run 11 "$old" feature completed success)]" vouched=false 0 "$nothing"
+expect failed "[$(run 11 "$sha" feature completed failure)]" vouched=false 0 "$nothing"
+expect cancelled "[$(run 11 "$sha" feature completed cancelled)]" vouched=false 0 "$nothing"
+expect in-progress "[$(run 11 "$sha" feature in_progress "")]" vouched=false 0 "$nothing"
+# GitHub's own "Dependency Graph" workflow also runs on pushed commits.
+expect another-workflow "[$(run 11 "$sha" feature completed success "Dependency Graph")]" vouched=false 0 "$nothing"
+# A run started by hand is matched by event too, not only by gh's filter.
+expect a-dispatch-run "[$(run 11 "$sha" feature completed success CI workflow_dispatch)]" vouched=false 0 "$nothing"
+# Another session's branch can point at the same commit (P-140): a cancelled
+# run beside a passed one doesn't un-check the tree.
+expect passed-beside-cancelled \
+  "[$(run 12 "$sha" docs-other completed cancelled CI push 2026-01-02T00:00:00Z),$(run 11 "$sha" feature completed success)]" \
+  vouched=true 0 "$vouches"
+expect main-green-branch-cancelled \
+  "[$(run 11 "$sha" main completed success),$(run 12 "$sha" feature completed cancelled)]" \
+  vouched=false 0 "$nothing"
+# The branch it runs for is an argument: on a branch standing in for main, that
+# branch's own runs are the ones that never count.
+expect excludes-the-given-branch "[$(run 11 "$sha" p-282-proof completed success)]" vouched=false 0 \
+  "on a branch other than p-282-proof" "$sha" p-282-proof
+expect vouches-for-the-given-branch "[$(run 11 "$sha" feature completed success)]" vouched=true 0 \
+  "it vouches, and p-282-proof's other jobs are skipped" "$sha" p-282-proof
+
+# GitHub not answering is "can't tell", which is false, not a failed job.
+mkdir -p "$work/github-unreachable"
+echo "error connecting to api.github.com" >"$work/github-unreachable/list-error"
+expect github-unreachable "[]" vouched=false 0 "GitHub didn't answer while listing runs for ${sha:0:7}"
+grep -qF "error connecting to api.github.com" "$work/github-unreachable.err" ||
+  { failed=$((failed + 1)); echo "FAIL  github-unreachable doesn't show GitHub's error"; }
+
+expect usage-no-arguments "[]" "" 2 "usage: scripts/ci-vouch SHA BRANCH" ""
+expect usage-short-sha "[]" "" 2 "SHA must be the full 40-hex commit" 1111111 main
+
+# The server-side filter is part of the mechanism: gh is asked for this commit's
+# push runs, never a branch's newest.
+if grep -qx -- "--commit" "$work/green-on-a-branch/args" && grep -qx -- "$sha" "$work/green-on-a-branch/args" &&
+  grep -qx -- "--event" "$work/green-on-a-branch/args" && grep -qx -- push "$work/green-on-a-branch/args"; then
+  passed=$((passed + 1)); echo "ok    gh is asked for this commit's push runs"
+else
+  failed=$((failed + 1)); echo "FAIL  gh wasn't asked for this commit's push runs:"; sed 's/^/        /' "$work/green-on-a-branch/args"
+fi
+
+echo "ci-vouch-test: $passed passed, $failed failed"
+((failed == 0))

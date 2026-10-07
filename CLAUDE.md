@@ -59,7 +59,8 @@ velora/
   web/                  Next.js app (App Router, TypeScript strict, Tailwind v4)
   infra/                docker-compose.yml, fly.api.toml + fly.worker.toml + STAGING.md (staging's
                         runbook), fly.api.production.toml + PRODUCTION.md (production's: released by tag)
-  scripts/              ci-gate, release-gate, with-tools, staging-smoke, check-image-no-env,
+  scripts/              ci-gate, push-gate, release-gate, ci-vouch + ci-e2e-needed (CI's minutes,
+                        D-410), with-tools, staging-smoke, check-image-no-env,
                         check-image-no-bench-tools, migrate-with-url
   Makefile
 ```
@@ -192,7 +193,10 @@ A push that moves `main` is refused unless `make lint` and `make test` both pass
 commit's tree, in that checkout, and CI passed for it on the branch it ran on, which must be pushed
 first (`scripts/push-gate`, the pre-push hook `make hooks` installs; `make lint` and `make test`
 mark a clean tree when they pass, `scripts/mark-checked`). So a gate whose exit code a pipe
-swallowed can't land anything. **Why (4 October 2026):** two sessions in one night landed past a
+swallowed can't land anything. `main`'s own run then vouches from that branch run (P-282, D-410):
+one short job, still a green run of the SHA for the deploy and the gates; nothing vouching runs
+the full CI there, and e2e runs only when a changed path is outside the docs allowlist.
+**Why (4 October 2026):** two sessions in one night landed past a
 red `make test` hidden by `| grep` and `| tail -1`. Never `git push --no-verify` to `main`; /done's
 manual path skips only the CI half, with `VELORA_PUSH_GATE_MANUAL_PATH=1`.
 
