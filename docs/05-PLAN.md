@@ -2688,7 +2688,7 @@ prices don't depend on the web photos step, and the hold is lifted.
 
 
 ### T-6.5 · Web discover deck
-- [ ] **Needs:** T-6.2, T-6.4, and P-57: the app's screens have no visual design, so this task stops and asks before designing one rather than inventing it from the prototype; and P-82 and P-83: its design pass changes the shell's values, so first the shell is checked where a browser draws it, and its look guard fails anything not on an allowed list; and P-220: its match sheet is the app's first sheet after T-5.5's store sheet, so a sheet left open behind the PIN lock stops being reachable first
+- [ ] **Needs:** T-6.2, T-6.4, and P-57, answered 7 October 2026 (08-DESIGN §8): the app's visual design, which this task builds from, never the prototype; and P-82 and P-83: its design pass changes the shell's values, so first the shell is checked where a browser draws it, and its look guard fails anything not on an allowed list; and P-220: its match sheet is the app's first sheet after T-5.5's store sheet, so a sheet left open behind the PIN lock stops being reachable first
 - [ ] `useDiscover(feed, filters)` infinite query; keep 3 cards rendered; prefetch next page at 5 left.
 - [ ] Card with `@use-gesture/react` + `@react-spring/web`: drag with rotation, LIKE/PASS overlays by drag distance, fling threshold 100 px or velocity, up = super. Tap = open profile. Keyboard ← → ↑ on desktop.
 - [ ] Optimistic swipe: advance immediately, rollback + toast on error.
@@ -3998,13 +3998,17 @@ The number comes from the session's own block, given in its brief, from P-100 up
   trust in a paid product. The client sends the price it showed, and the server refuses with
   `PRICE_CHANGED` if it differs: the value is compared, never used. Deferred from T-5.2, which reads
   prices fresh with no cache. Found planning Sprint 5 (decision 22, with the advisor directing it).
-- [ ] P-57 · The app's screens have no visual design. **Before T-6.5,** on its Needs line. Worst
+- [x] P-57 · The app's screens have no visual design. **Before T-6.5,** on its Needs line. Worst
   case: every screen in Sprints 6 and 7 is framed by a shell and built from a prototype that was
   wrong four times in Sprint 5's plan alone, and a one-way door gets designed by accident: the
   refund button, gift's direction, the price list and "credits" for Velas. T-5.6 builds the shell
   provisionally (08-DESIGN). The first task that needs a screen designed stops and asks, rather
   than inventing it from the prototype. Found planning Sprint 5, at the direction of the advisor
   directing it.
+  **Answered 7 October 2026 (08-DESIGN §8):** the founder approved fifteen screens on Claude's
+  design canvas, "all the frontend are correct"; §8 is the rules made from it, and T-6.5 builds
+  from §8, never the prototype. The screens §8 doesn't cover (You, Settings, Notifications, the
+  store sheet, Checkout, admin) keep this rule: their tasks ask before designing them.
 - [ ] P-58 · Prove the T-3.x race tests' overlap by what the lock decides. **Before the next task
   that leans on one of these locks.** Worst case: a lock removed by mistake and every test still
   green, because the current tests are timing-based. Each waits up to a second for the other to

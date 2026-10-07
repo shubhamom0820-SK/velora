@@ -6,7 +6,8 @@ flows are the reference, not the name. **Only the brand changed.** Where the pro
 app, read Velora (`APP_NAME`). Thread and Knot stay as the product's nouns ("Tie the knot",
 "Knots last", the Knots tab) and are never replaced (CLAUDE.md rule 17). Its "credits" are
 Velas, the unit of paid balance (D-049). This file turns the prototype into rules so the real
-app stays consistent.
+app stays consistent. **From 7 October 2026 the app's screens have a design of their own, §8
+(P-57): for them the prototype says only which screens exist, and §8 is the visual reference.**
 
 **Where this file departs from the prototype on purpose, naming the decision behind it, this file
 is the live spec and the prototype is historical for that screen.** The prototype is never edited
@@ -15,8 +16,9 @@ here" predate D-066's six-digit codes, and `OtpInput` below is the spec.
 
 **Read this before trusting the prototype for any screen.** Planning T-3.10 to T-3.13, the first
 real app screens, found it wrong 13 times on the onboarding and lock screens alone, each overridden
-by a decision or a rule. With Sprint 5's four (§5), it is the evidence for P-57's open question:
-the app has no visual design, only a prototype that shows which screens exist.
+by a decision or a rule. With Sprint 5's four (§5), it is the evidence for P-57's question, open
+until 7 October 2026 (§8): the app has no visual design, only a prototype that shows which screens
+exist.
 1. **Code:** four boxes and "Any four digits work here". Six digits (D-066, `OtpInput`).
 2. **Phone:** "Continue with Google / Apple", which no plan or decision includes. Dropped.
 3. **Birthday:** works out the age in the browser, blocks under 18 before the server sees the date,
@@ -177,7 +179,9 @@ Username · About · Photos · Interests · PIN · Selfie.
 prototype first", made because the plan and D-034 need the question. It is the onboarding frame's
 existing parts and nothing new: a pin icon, the reason, "Share my location", and an area picker of
 radio rows like Gender's. That is a screen assembled, not designed: one more case of P-57's gap
-(the app's screens have no visual design), not a new one.
+(the app's screens have no visual design), not a new one. **§8 closed that gap for the app's
+screens on 7 October 2026; this one is onboarding's, not among §8's fifteen, and stands as
+assembled.**
 
 **App:** Header ✦ · Bottom nav ✦ · Discover (deck, feeds, search, filters sheet) · Match sheet ✦ ·
 Liked you grid · Profile (gallery, gifts row + gift sheet, album, ⋯ menu, report sheet, block sheet, share sheet) ·
@@ -191,6 +195,12 @@ Sprint 5's plan alone (the refund button, gift's direction, the price list, and 
 Velas). T-5.6 builds the header and bottom nav from it provisionally. They frame every screen in
 Sprints 6 and 7, so they're a one-way door. The first task that needs an app screen designed
 (T-6.5) stops and asks, rather than inventing it from the prototype.
+**Amended 7 October 2026 (P-57 answered):** the design exists, in §8 below. The founder approved
+fifteen screens on Claude's design canvas on 7 October 2026 ("all the frontend are correct"). The
+canvas is the founder's; §8 is the rules made from it, as §1 to §5 were made from the prototype.
+From here the prototype says only which screens exist, and the visual reference for the app's
+screens is §8. T-6.5 builds from it and no longer stops to ask. The shell stays as T-5.6 built it:
+§8 changes its values, never its structure.
 
 **The store and the gifts depart from the prototype too** (D-099, D-231; 4 October 2026). The
 packs are ₹1,500 → 30, ₹4,500 → 100, ₹6,000 → 250 and ₹10,000 → 450, not its 30, 100, 150 and
@@ -273,3 +283,141 @@ matches it), when the theme changes (D-014), or when the domain does.
 size, and WhatsApp's own re-encode will likely remove what's left, so the image reads as black
 with type and the accent does no work there. The domain line isn't readable at phone preview
 size. The type and the wordmark carry the image. Weigh both the next time it's made.
+
+## 8. The app's visual design (7 October 2026)
+
+Designed by Claude on its design canvas and approved by the founder on 7 October 2026, fifteen
+screens, in his words: "all the frontend are correct". The canvas is the founder's and isn't in the
+repo; this section is the rules made from it, by token name (§1) and type token (§2), never a
+colour value, as §1 to §5 were made from the prototype. For these screens it is the visual
+reference, and the prototype says only that they exist. Two of the canvas's strings were changed
+on 8 October 2026 to match D-393, noted where they appear; the canvas now says the same.
+
+**What it covers, and what it doesn't.** Discover (the card, the action row, the feed row, the
+match sheet, the empty state), the profile, Liked you, Filters, Search, the chats list, a Thread
+(his, hers, and his expired), Knot tied, a Knot, and the shell. Drawn for a man wherever a price or
+an hour shows; her Thread is drawn on its own (D-097), her chats list isn't. The wallet and the
+balance pill stay as T-5.5 built them (§5), the lock screen and onboarding as T-3.10 to T-3.13 and
+T-4.10 built them. You, Settings, Notifications, the store sheet, Checkout and admin have no
+design yet: the prototype shows they exist, no more, and the task that builds one asks before
+designing it, as T-6.5 was to (P-57).
+
+**One concept, the thread.** A thin red line, `--accent`, 2 to 3 px, is the one thread through the
+whole app: on the card, between the photo and the text; on the match sheet, joining the two
+people, with a small ring at its middle; in a Thread, a bar under the header whose width is the
+part of the hour that is left; at the moment of the knot, the ring fills; in a Knot, the bar is
+full and never shrinks. Red is a thread, never a flood: no red background, no red scrim. Text
+never sits on a photo: no `--photo-scrim` on the card (§1 lists the token for cards; from here no
+card uses it).
+
+**Words.** §6's voice. A price in words is "· 5 Velas", the number first; for a woman, "· Free". A
+price badge on a button is the number alone: Super's "5", "Extend 24h · 10". Nowhere "verified"
+(D-262): the badge says "Selfie matched", and `web/src/i18n/claims.test.ts` holds every string.
+**Every hour on these screens is D-097's** ("41m left", "Threads last an hour", "The hour ran
+out"), decided and not built: `app_config.thread_hours` is 24 until the 1-hour task (P-150) lands.
+A screen built before then says what runs, as the landing does (copy follows the setting, P-14),
+and takes these words when the task lands.
+
+**The card (T-6.5).** `--corner-swipe`. The photo on top, 336 of the card's 560 px, on a
+`--surface-2` placeholder while it loads; the thread; the text below. Name and age in `title-1`.
+Beside the name, the red tick (D-393) where its rule holds: a 20 px `--accent` circle with an
+`--on-accent` check, aria-label "Selfie matched" (D-393's words, held by `claims.test.ts`; the
+canvas said "Selfie matched her photos" until 8 October 2026, which overclaims where a shown photo
+didn't match, D-393's rule 3). "Phagwara · 3 km" in `small` `--mute`. "Online now" is a `micro`
+pill, `--accent` on `--accent-soft`. Intent chips in `ui` on `--surface-2`. The bio in `body`, two
+lines. A "New" pill at the photo's top left, `--chrome-ink` on `--ink`. **Without a photo**
+(D-392): her initial inside a `--line-strong` silhouette, a round head and shoulders, and "Prefers
+not to show photos yet" in `small` `--mute`. No badge there (D-393: no shown face, no badge).
+
+**The action row and the feed row (T-6.5).** Three `IconButton`s (§4): Pass, 46 px, `--ink`;
+Super, 46 px, `--accent`, with its price badge, "5", for a man; Like, 56 px, filled `--accent` with
+`--shadow-1`. Under them, for a man only, the swipes left today ("12 swipes left today") in `small`
+`--mute` (the cap is `swipe_daily_limit_men`, T-6.4). The feed row: For you, New and Online as
+pills, the active one filled `--ink` with `--chrome-ink` text; Search and Filters as 40 px icon
+buttons at the row's end, Filters carrying the count of active filters as an `--accent` badge.
+
+**The match sheet ✦ (T-6.5).** `--chrome` under `--chrome-glow`. Two initials in 96 px
+`--chrome-line` circles; the one whose like was already there (the match forms on the second like,
+T-6.4) has a `--chrome-accent` border. The thread between them, with its 14 px ring. "You and Priya
+liked each other" in `title-1`. "Open thread · 5 Velas" for a man, "Open thread · Free" for a
+woman, filled `--accent` (§1: filled buttons stay `--accent` inside chrome). "Keep swiping" as a
+ghost button with a `--chrome-line` border. The footer in `micro` `--chrome-mute`: "Threads last
+an hour. Knots last."
+
+**The profile (T-6.8).** The gallery on top, 390 px, with dots; the thread; name, tick and "Online
+now"; a pin icon with "Phagwara · 3 km · from Jalandhar" (city, distance, hometown); a small tick
+with "Her selfie matched a photo you see here" in `small` `--mute` (true under D-393 wherever the
+tick shows; the canvas said "the photos you see here" until 8 October 2026). LOOKING FOR, ABOUT and
+INTERESTS as `micro` uppercase labels, their chips 32 px. The kudos row and the album row ("Ask to
+view") as `--surface` cards, `--corner-card`. A sticky bar at the bottom: "Open thread · 5 Velas"
+and Like.
+
+**Liked you (T-6.7).** A two-column grid of 204 px tiles, `--corner-card`. Revealed: the photo, the
+thread, name and distance, and a star badge at the top left for a Super Like. Unrevealed: the
+server's blur (T-6.7, never CSS), and under it a "Reveal · 20 Velas" pill, `--surface` with
+`--shadow-2` and a lock icon. A woman's tiles are all revealed (`/likes` is free for her). The count
+in the header is a `--chrome-accent` badge.
+
+**Filters (T-6.9).** A bottom sheet, `--corner-sheet`, over `--scrim`. Intent chips 38 px; pressed,
+they fill `--accent-soft` with an `--accent` border and `--accent` text. Two toggles, "Selfie
+matched" and "Online now", each with a one-line explanation (the first's words are D-262's and its
+meaning D-393's, as T-6.9 says). "Clear" and "Show people" at the bottom. The count of active
+filters is a pill in the sheet's header.
+
+**Search (T-6.6).** A field inline in the chrome header, filled `--chrome-line`, `input` (16 px). In
+@ mode, a "@ username" badge in `--ink`; an exact username match carries an "Exact" badge on
+`--accent-soft`. Result rows 64 px, their avatars 44 px.
+
+**Empty states.** A dashed `--line-strong` outline, `--corner-swipe`; the icon sitting on the
+thread; a `title-2`; `body` in `--mute`; one `--accent` action (`EmptyState`, §4).
+
+**The chats list (T-7.10).** Tabs, Threads and Knots, underlined, the active one `--accent`, each
+with a count badge. Rows: a 48 px avatar with an `--accent` online dot, the name, the preview, and
+a countdown pill (`Countdown`, §4): `--accent-soft` "41m left"; `--surface-2` "22h left" for an
+Extended Thread; filled `--accent` "8m left" under ten minutes; `--surface-2` with `--mute` text
+"Ran out" (§4's example ends "Expired" and starts at "4h 59m", the 24-hour Thread's; this pill
+reads "Ran out"). The footer in `small` `--mute`: "A Thread lasts an hour from her last message.
+Knots last."
+
+**His Thread (T-7.11).** The header: her name, then "41m left · her reply restarts the hour", the
+time in `--chrome-accent` and the rest in `--chrome-mute`, and an "Extend 24h · 10" pill with a
+`--chrome-accent` border. Under the header, the thread's bar: 3 px `--chrome-accent` over
+`--chrome-line`, its width the part of the hour left. The knot bar, `--surface`: a half-red thread
+glyph, "Tie the knot and this never runs out. Free, if she ties it too.", and "Tie the knot" as an
+`--accent` outline button. Bubbles (`--corner-bubble`, the small corner toward the sender): hers
+`--surface` with a `--line` border, radius 16 / 16 / 16 / 4; his `--ink` with `--chrome-ink` text,
+16 / 16 / 4 / 16. A voice note: a 32 px `--accent` play button, waveform bars (`--ink` played,
+`--line-strong` the rest), the duration in `micro`. Under his last message, "Seen 7:49 PM" with a
+double tick, `micro` `--mute`. Typing: a bubble of three dots and "Priya is typing". The composer:
+the input at 16 px (`input`) with `--corner-input`, a 44 px send button, filled `--accent` with
+`--shadow-1`, and a 44 px outlined mic. **The mic is drawn in his composer; T-7.11 gives it to
+women** (voice notes are hers, and he pays to hear them): the plan decides, not the drawing.
+
+**Her Thread (T-7.11; D-097).** No countdown, no price, no locked state, anywhere. The header: his
+name, "Online now", and the "Free access" pill (T-5.5's, §5). The bar is `--chrome-line` alone:
+there is nothing to count down. The knot bar is the same, with her words: "Tie the knot and this
+stays, always. He has to tie it too." Under her last message, "Not seen yet" with a single tick.
+The composer is the same.
+
+**His expired Thread (T-7.6, T-7.11).** The header: "The hour ran out · 7:52 PM" in
+`--chrome-mute`. The bar `--chrome-line`. The whole history stays readable (D-097). A divider where
+the hour ran out: "The hour ran out". Her new message has an `--accent` border and "New · 9:14 PM"
+in `--accent`. A sheet at the bottom, `--corner-sheet` with `--shadow-2`: `title-2` "She wrote
+back. The hour had run out."; `small` `--mute` "You can read everything. To reply, open the Thread
+again."; "Re-open · 2 Velas", filled `--accent`; "Re-open and keep it for 24h · 10 Velas",
+outlined (D-253: ten in all, never twelve); and in `micro`, "Re-open restarts the hour from her
+message. Extend holds it for a day, as many times as you like." A woman never sees this screen.
+
+**Knot tied ✦ (T-7.7).** The match sheet again, but both initials have the `--chrome-accent`
+border, and the ring is filled: 28 px `--chrome-accent` with `--shadow-1`, a `--chrome` ring inside
+it. "You and Priya tied the knot" in `title-1`. "No hour. No Velas. This one stays, because you
+both chose it." "Keep talking", filled `--accent`. The footer as the match sheet's.
+
+**The Knot (T-7.11).** The header's avatar has a `--chrome-accent` border; the name with a 14 px
+knot glyph; "Knotted 3 days ago · Online now". The bar is full `--chrome-accent`, and never
+shrinks. A divider, "YOU TIED THE KNOT · 4 October", between red lines. No knot bar. His composer
+gains the gift button (T-8.10's sheet; gifts go to a woman).
+
+**The shell (T-5.6).** As built: the `--shell-*` tokens unchanged, nav items icon over label, the
+current place a `--chrome-accent` filled icon (§5). No structural change: the design confirms the
+shell as it stands, and T-6.5's design pass changes values only, as §5 says.
