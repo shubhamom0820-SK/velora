@@ -4589,3 +4589,23 @@ The number comes from the session's own block, given in its brief, from P-100 up
   or every request routed through one method the test wraps; and a `t44-` case that adds a
   `feedback()` method and must go red. Found closing T-4.4's retention box, 7 October 2026; filed
   from that session's block (P-260 to P-269).
+- [ ] P-261 · `/done` describes its own landing guard wrongly: step 1's check can never be the
+  one the push reads. **Before the next `/done` someone follows to the letter.** Worst case: a
+  session does what the document says, the push to `main` is refused, and the refusal is read as
+  the guard misbehaving, or answered with `--no-verify` (which CLAUDE.md "Landing" and the
+  document's own next sentence forbid). `.claude/commands/done.md`, step 9, line 23, word for
+  word, the sentence running onto line 24: "The push itself refuses unless step 1's `make lint
+  test` passed on this exact commit's tree and CI passed for it". Step 1 runs `make lint test`
+  before step 4 commits, so on a tree with the task's changes uncommitted, by design.
+  `scripts/mark-checked`, which writes the mark `push-gate` reads, answers that run, word for
+  word: "mark-checked: make lint passed with changes not committed: not marked for landing.
+  Commit, then run it again." (and the same line for `test`). So the run step 9 names never
+  writes the mark step 9 says it did, and no step of the document runs the checks on the
+  committed tree. The script's own header already says so: "a working tree with any change, or
+  a tree that moved while the check ran, gets none, and says why". The document contradicts its
+  guard. Seen 7 October 2026, landing T-4.4's retention box: step 1's run was answered with
+  that line. Fix: move `make lint test` to after the commit, between step 4 and step 7, its exit
+  code read on its own (CLAUDE.md "Shell traps" 1), and reword line 23 to name that run; step 1
+  may stay as an early stop on a failure, but the document must not say its run is what the push
+  reads. `done.md` is outside T-4.4's scope (rule 3), so filed, not fixed. Found closing T-4.4's
+  retention box, 7 October 2026; filed from that session's block (P-260 to P-269).
