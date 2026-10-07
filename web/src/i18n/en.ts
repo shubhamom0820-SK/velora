@@ -808,26 +808,25 @@ export const en = {
     refunds: {
       title: "Refund policy",
       intro:
-        "This page covers your money and your Velas: when a purchase is final, when we fix a payment, and when Velas come back on their own.",
-      // D-050, all three sections.
+        "This page covers your money and your Velas: when a purchase is final, what happens to the Velas you spend, and when we fix a payment.",
+      // D-050 for the first and third sections; D-230 for the second: there is
+      // no product refund, so nothing comes back on a ban or a declined request
+      // (P-130 replaced "When Velas come back on their own" with it).
       final: {
         title: "Purchases are final",
         body: "When you buy Velas, the purchase is final. We don't refund it if you change your mind, whether or not you've spent them.",
+      },
+      spent: {
+        title: "Velas you spend are spent",
+        // D-230. The ledger reasons that once served these two returns stay
+        // unused (the labels at the top of this file).
+        body: "Once you spend Velas, they're spent. They don't come back if the person you spent them on is later banned from {app}, and they don't come back if someone declines your request to see their private album. The price is always shown before you spend.",
       },
       broken: {
         title: "A broken payment is ours to fix",
         body: "If your payment went through but the Velas never reached your balance, or you were charged twice for one purchase, that isn't a change of mind: something went wrong on our side, and we fix it. We add the missing Velas, or refund the extra charge to the way you paid.",
         write: "Write to us with the payment details.",
         support: "Support email",
-      },
-      automatic: {
-        title: "When Velas come back on their own",
-        // D-004.
-        album:
-          "If someone declines your request to see their private album, the Velas you spent on the request come back to your balance.",
-        // T-9.3: the 7 days is stated there too; change both together.
-        banned:
-          "If someone you spent Velas on is banned from {app}, the Velas you spent on them in the 7 days before the ban come back to your balance.",
       },
     },
     contact: {

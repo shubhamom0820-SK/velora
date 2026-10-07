@@ -4501,7 +4501,7 @@ The number comes from the session's own block, given in its brief, from P-100 up
   sessions follow by hand will slip. Fix: a test that parses `05-PLAN.md`'s Proposed list and
   fails on any number used twice, naming both titles, so the second session to merge finds out
   in CI. Found in T-5.4.
-- [ ] P-130 · Rewrite `/refunds` to D-230: there is no product refund. **Before REL-1 and T-8.1**
+- [x] P-130 · Rewrite `/refunds` to D-230: there is no product refund. **Before REL-1 and T-8.1**
   (on both Needs lines). Worst case: the page goes public, and Velas go on sale, promising Velas
   back on a ban and on a declined album request that the product will never return, a published
   promise to paying men that the code doesn't keep.
@@ -4514,6 +4514,13 @@ The number comes from the session's own block, given in its brief, from P-100 up
   **Files:** `web/src/i18n/en.ts` (`legal.refunds`), `web/src/app/(marketing)/refunds/page.tsx`,
   `web/src/app/(marketing)/legal-pages.test.tsx`. Copy only: nothing else promises a return (read
   4 October 2026). Decided by the founder, 4 October 2026; filed by Claude.
+  **Done, 8 October 2026:** the page's three sections are "Purchases are final", "Velas you spend
+  are spent" (new: nothing comes back on someone later banned or on a declined request) and "A
+  broken payment is ours to fix", unchanged. The test holds the order, the two sentences, and that
+  no word on the page says Velas return by themselves, by a regex it proves against the replaced
+  copy. Read again the same day: the only other return wording in the web is the wallet history's
+  labels for the two unused ledger reasons (`en.ts`, "Returned after a ban", "Returned: request
+  declined"), words for enum values the API still has, not a promise on a page; left as they are.
 
   Found writing D-230.
 - [x] P-140 · Make a deploy's gate read `main`'s own CI run, not whichever ran last for the commit.

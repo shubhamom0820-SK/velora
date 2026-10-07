@@ -151,16 +151,43 @@ describe("/privacy", () => {
   });
 });
 
+/** D-050's promise of Velas returning by themselves, gone since D-230 (P-130). */
+const RETURNS_ON_ITS_OWN = /on their own|come back to your balance|7 days/;
+
 describe("/refunds", () => {
-  it("says the three things D-050 decides, in order", () => {
+  beforeEach(() => {
     vi.stubEnv("APP_ENV", "staging");
+  });
+
+  it("says the three things D-050 and D-230 decide, in order", () => {
     render(<RefundsPage />);
 
     expect(sectionTitles()).toEqual([
       t("legal.refunds.final.title"),
+      t("legal.refunds.spent.title"),
       t("legal.refunds.broken.title"),
-      t("legal.refunds.automatic.title"),
     ]);
+  });
+
+  it("promises no Velas back, on a ban or on a declined request (D-230, P-130)", () => {
+    const { container } = render(<RefundsPage />);
+    const spent = section(t("legal.refunds.spent.title"));
+
+    expect(spent).toHaveTextContent("Once you spend Velas, they're spent.");
+    expect(spent).toHaveTextContent("later banned");
+    expect(spent).toHaveTextContent("declines your request");
+    // D-050's "When Velas come back on their own" and the opening line's
+    // clause are gone: nothing on the page says Velas return by themselves.
+    expect(container.textContent).not.toMatch(RETURNS_ON_ITS_OWN);
+  });
+
+  it("would catch the title and the two sentences it replaced", () => {
+    for (const old of [
+      "When Velas come back on their own",
+      "the Velas you spent on the request come back to your balance.",
+      "the Velas you spent on them in the 7 days before the ban come back to your balance.",
+    ])
+      expect(old).toMatch(RETURNS_ON_ITS_OWN);
   });
 });
 
