@@ -554,7 +554,12 @@ DELETE on it.
 ### referrals
 `referee_id uuid pk fk users, referrer_id uuid fk users, rewarded_at timestamptz null, created_at`.
 Check `referee_id <> referrer_id` — a self-referral would farm Velas on both sides of one account.
-Reward (both get Velas) only after the referee's first paid purchase or selfie verification.
+Rewarded once, when the referee's selfie matches or their first purchase is captured, whichever
+comes first (T-8.6): `referral_reward_velas` to each **man** on it who still stands, never a
+woman (D-076, D-690, D-693), the referrer only up to `referral_rewards_max` paid referrals, ever
+(D-692); `rewarded_at` set either way. One referee per phone number, ever (D-691): apply reads the
+referrals of every account the number had, through `users.phone_hash`, which the erasure keeps, as
+it keeps these rows (D-503). An under-18 refusal deletes them, as referee or referrer (D-078).
 
 ---
 
@@ -605,6 +610,10 @@ And by T-7.1's (D-553): `women_new_men_daily_limit=30` and `women_private_messag
 a woman's two daily limits (D-098), by the IST day: limits, never prices.
 And by T-8.11's: `welcome_velas=5`, every new man's Velas at `done`, once per number, 0 turning
 the grant off; a missing row skips it with a warning, never failing a sign-up (D-470, D-530).
+And by T-8.6's (D-692): `referral_reward_velas=5`, each man's Velas when a referral is rewarded, 0
+rewarding it with nothing and a missing row skipping it with a warning, never failing its trigger;
+and `referral_rewards_max=10`, how many referrals one referrer is paid for, ever, a missing row
+paying no referrer.
 Two settings are also promised in copy, in `web/src/i18n/en.ts`, written out because copy is a
 promise, not a computation. Change the copy with the setting:
 - `thread_hours`: the landing page ("Threads last a day", "24-hour", T-2.1), `/terms` ("lasts

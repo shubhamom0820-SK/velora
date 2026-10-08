@@ -198,20 +198,14 @@ T51: list[Case] = [
         edits=[
             (
                 SERVICE,
-                """    locked = await repository.lock_wallet(session, user_id)
-    if locked is None:
-        raise WalletMisuse("this user has no wallet; signup creates one (T-3.3)")
-    balance, gender = locked
+                """    balance, gender = await _lock(session, user_id)
     if gender is not Gender.MALE:
         raise WalletMisuse("only a man may hold credits (D-076)")
 
     existing = await repository.entry_by_key(session, key)
 """,
                 """    existing = await repository.entry_by_key(session, key)
-    locked = await repository.lock_wallet(session, user_id)
-    if locked is None:
-        raise WalletMisuse("this user has no wallet; signup creates one (T-3.3)")
-    balance, gender = locked
+    balance, gender = await _lock(session, user_id)
     if gender is not Gender.MALE:
         raise WalletMisuse("only a man may hold credits (D-076)")
 
@@ -365,7 +359,13 @@ T51: list[Case] = [
     Case(
         id="t51-S1-transaction",
         what="service: runs outside a transaction",
-        edits=[(SERVICE, "    if not session.in_transaction():\n", "    if False:\n")],
+        edits=[
+            (
+                SERVICE,
+                "    if not session.in_transaction():\n        raise WalletMisuse(\n",
+                "    if False:\n        raise WalletMisuse(\n",
+            )
+        ],
         expect=["test_outside_a_transaction_is_refused"],
     ),
     Case(
@@ -570,12 +570,10 @@ T51: list[Case] = [
         edits=[
             (
                 CONFTEST,
-                """        if credits:
-            await wallet_service.credit(
+                """            await wallet_service.credit(
                 db, user.id, credits, LedgerReason.ADMIN_GRANT, event="make_user"
             )""",
-                """        if credits:
-            await db.execute(
+                """            await db.execute(
                 text("update wallets set balance = :c where user_id = :u"),
                 {"c": credits, "u": user.id},
             )""",
@@ -9333,6 +9331,417 @@ P152: list[Case] = [
 ]
 
 
+# --- T-8.6: referrals, and P-63's lock order ----------------------------------------
+
+WALLET_SERVICE = "app/modules/wallet/service.py"
+REFERRALS_SERVICE = "app/modules/referrals/service.py"
+REFERRALS_RULES = "app/modules/referrals/rules.py"
+REFERRALS_REPO = "app/modules/referrals/repository.py"
+REFERRALS_ROUTER = "app/modules/referrals/router.py"
+REFERRAL_SETTINGS = "alembic/versions/20261008_0e6719809c1b_referral_settings.py"
+WEBHOOKS = "app/modules/payments/webhooks.py"
+VERIFICATION_SERVICE = "app/modules/verification/service.py"
+T86_SELECTION = [
+    "tests/modules/referrals",
+    "tests/modules/wallet",
+    "tests/test_reference_data.py",
+]
+BELOW_REFUSED = "test_a_wallet_below_one_held_is_refused_and_nothing_is_written"
+NO_DEADLOCK = "test_two_transactions_locking_two_men_in_opposite_orders_never_deadlock"
+SELFIE_BOTH = "test_a_mans_selfie_matching_pays_both_men_once"
+PURCHASE_BOTH = "test_a_first_purchase_pays_both_men_inside_the_capture"
+FROZEN_REFEREE = (
+    "test_a_referee_who_no_longer_stands_gets_nothing_and_the_referrer_is_paid"
+)
+REFERRER_GONE = (
+    "test_a_referrer_who_no_longer_stands_gets_nothing_and_the_referee_is_paid"
+)
+NOT_STANDING = "test_a_code_whose_owner_doesnt_stand_is_the_same_not_found"
+
+T86: list[Case] = [
+    Case(
+        id="t86-01-lock-order-unguarded",
+        what="P-63: a wallet below one the transaction holds locked anyway",
+        edits=[
+            (
+                WALLET_SERVICE,
+                "    if user_id not in held and held and user_id < max(held):\n",
+                "    if False:\n",
+            )
+        ],
+        expect=[
+            BELOW_REFUSED,
+            "test_lock_wallets_still_refuses_one_below_a_wallet_held",
+            NO_DEADLOCK,
+        ],
+    ),
+    Case(
+        id="t86-02-held-never-recorded",
+        what="P-63: the wallets a transaction locks never recorded, so nothing is refused",
+        edits=[
+            (
+                WALLET_SERVICE,
+                "    held.add(user_id)\n    return locked\n",
+                "    return locked\n",
+            )
+        ],
+        expect=[BELOW_REFUSED, NO_DEADLOCK],
+    ),
+    Case(
+        id="t86-03-held-never-forgotten",
+        what="P-63: what a transaction held outlives it",
+        edits=[
+            (
+                WALLET_SERVICE,
+                "    if transaction.parent is None:\n        session.info.pop(_HELD, None)\n",
+                "    return\n",
+            )
+        ],
+        expect=["test_what_a_transaction_holds_ends_with_it"],
+    ),
+    Case(
+        id="t86-04-lock-wallets-unsorted",
+        what="P-63: lock_wallets() locks in the order it was given",
+        edits=[
+            (
+                WALLET_SERVICE,
+                "    for user_id in sorted(set(user_ids) - _held(session)):\n",
+                "    for user_id in [u for u in dict.fromkeys(user_ids) if u not in _held(session)]:\n",
+            )
+        ],
+        expect=[
+            "test_lock_wallets_sorts_them_so_any_order_of_credits_applies[descending]",
+            f"{SELFIE_BOTH}[below]",
+            f"{PURCHASE_BOTH}[below]",
+        ],
+    ),
+    Case(
+        id="t86-05-reward-after-the-purchase",
+        what="P-63: the webhook's reward run after the purchase has locked the buyer",
+        edits=[
+            (
+                WEBHOOKS,
+                '    await referrals_service.reward(session, row.user_id, "purchase")\n',
+                "",
+            ),
+            (
+                WEBHOOKS,
+                '    log.info(\n        "payments.captured",\n',
+                (
+                    '    await referrals_service.reward(session, row.user_id, "purchase")\n'
+                    '    log.info(\n        "payments.captured",\n'
+                ),
+            ),
+        ],
+        expect=[f"{PURCHASE_BOTH}[below]", f"{FROZEN_REFEREE}[below]"],
+    ),
+    Case(
+        id="t86-06-only-the-paid-locked",
+        what="P-63: the reward locks only whoever is paid, one at a time",
+        edits=[
+            (
+                REFERRALS_SERVICE,
+                "    await wallet_service.lock_wallets(session, [referee_id, referrer_id])\n",
+                "",
+            )
+        ],
+        expect=[
+            f"{SELFIE_BOTH}[below]",
+            f"{PURCHASE_BOTH}[below]",
+            f"{FROZEN_REFEREE}[below]",
+        ],
+    ),
+    Case(
+        id="t86-07-a-woman-credited",
+        what="D-076, D-690: the reward's allowlist lets a woman through",
+        edits=[
+            (
+                REFERRALS_RULES,
+                "CREDITED_GENDERS: Final = frozenset({Gender.MALE})\n",
+                "CREDITED_GENDERS: Final = frozenset({Gender.MALE, Gender.FEMALE})\n",
+            )
+        ],
+        expect=[
+            "test_a_womans_selfie_pays_her_referrer_and_never_her",
+            "test_two_women_are_rewarded_with_nothing",
+            "test_a_man_referred_by_a_woman_is_paid_and_she_never_is",
+        ],
+    ),
+    Case(
+        id="t86-08-standing-ignored-at-the-reward",
+        what="D-693: a man banned, frozen or deleted since still paid",
+        edits=[
+            (
+                REFERRALS_RULES,
+                "    return gender in CREDITED_GENDERS and status in STANDING\n",
+                "    return gender in CREDITED_GENDERS\n",
+            )
+        ],
+        expect=[
+            f"{REFERRER_GONE}[banned]",
+            f"{REFERRER_GONE}[frozen]",
+            f"{REFERRER_GONE}[deleted]",
+            f"{FROZEN_REFEREE}[below]",
+            f"{FROZEN_REFEREE}[above]",
+        ],
+    ),
+    Case(
+        id="t86-09-no-cap",
+        what="D-692: the referrer paid past referral_rewards_max",
+        edits=[
+            (
+                REFERRALS_SERVICE,
+                "    if await wallet_service.referral_rewards_paid(session, referrer_id) < cap:\n",
+                "    if True:\n",
+            )
+        ],
+        expect=[
+            "test_past_the_cap_the_referrer_gets_nothing_and_the_referee_is_paid",
+            "test_two_rewards_at_once_one_short_of_the_cap_pay_him_once",
+        ],
+    ),
+    Case(
+        id="t86-10-cap-counted-before-the-lock",
+        what="D-692: the cap counted before his wallet is locked",
+        edits=[
+            (
+                WALLET_SERVICE,
+                (
+                    "    if referrer_id not in _held(session):\n"
+                    '        raise WalletMisuse("referral_rewards_paid() reads under the wallet\'s lock")\n'
+                ),
+                "",
+            ),
+            (
+                REFERRALS_SERVICE,
+                "    await wallet_service.lock_wallets(session, [referee_id, referrer_id])\n",
+                "",
+            ),
+            (
+                REFERRALS_SERVICE,
+                "    ref = Ref(RefType.REFERRAL, referee_id)\n",
+                (
+                    "    await wallet_service.lock_wallets(session, [referee_id, referrer_id])\n"
+                    "    ref = Ref(RefType.REFERRAL, referee_id)\n"
+                ),
+            ),
+        ],
+        expect=["test_two_rewards_at_once_one_short_of_the_cap_pay_him_once"],
+    ),
+    Case(
+        id="t86-11-cap-fails-open",
+        what="D-692: a missing referral_rewards_max pays every referrer",
+        edits=[
+            (
+                REFERRALS_SERVICE,
+                (
+                    '        log.warning("referrals.cap_config_missing", key=rules.REWARDS_MAX_KEY, **fields)\n'
+                    "        return False\n"
+                ),
+                (
+                    '        log.warning("referrals.cap_config_missing", key=rules.REWARDS_MAX_KEY, **fields)\n'
+                    "        return True\n"
+                ),
+            )
+        ],
+        expect=["test_a_missing_cap_pays_no_referrer_and_says_so"],
+    ),
+    Case(
+        id="t86-12-own-reward-counted",
+        what="D-692: his own reward as a referee counted toward his cap",
+        edits=[
+            (
+                "app/modules/wallet/repository.py",
+                "            LedgerEntry.ref_id != user_id,\n",
+                "",
+            )
+        ],
+        expect=["test_his_own_reward_as_a_referee_never_counts_toward_his_cap"],
+    ),
+    Case(
+        id="t86-13-never-marked-rewarded",
+        what="T-8.6: rewarded_at never set",
+        edits=[(REFERRALS_SERVICE, "    referral.rewarded_at = clock.now()\n", "")],
+        expect=[
+            "test_a_womans_selfie_pays_her_referrer_and_never_her",
+            "test_two_women_are_rewarded_with_nothing",
+        ],
+    ),
+    Case(
+        id="t86-14-zero-left-unrewarded",
+        what="D-692: a reward of 0 leaves the referral for the next trigger",
+        edits=[
+            (
+                REFERRALS_SERVICE,
+                "        amount = 0\n\n",
+                "        amount = 0\n    if amount == 0:\n        return\n\n",
+            )
+        ],
+        expect=["test_at_zero_or_below_it_is_rewarded_with_nothing[zero]"],
+    ),
+    Case(
+        id="t86-15-missing-setting-fails-the-trigger",
+        what="D-692: a missing referral_reward_velas row fails the webhook and the selfie",
+        edits=[
+            (
+                REFERRALS_SERVICE,
+                (
+                    "    except admin_service.MissingConfig:\n"
+                    '        log.warning("referrals.reward_config_missing"'
+                ),
+                (
+                    "    except LookupError:\n"
+                    '        log.warning("referrals.reward_config_missing"'
+                ),
+            )
+        ],
+        expect=[
+            "test_a_missing_setting_skips_with_a_warning_and_a_later_trigger_pays[no row]",
+            "test_a_missing_setting_skips_with_a_warning_and_a_later_trigger_pays[not a number]",
+        ],
+    ),
+    Case(
+        id="t86-16-no-selfie-trigger",
+        what="T-8.6: a matched selfie rewards nothing",
+        edits=[
+            (
+                VERIFICATION_SERVICE,
+                '            await referrals_service.reward(session, user.id, "selfie")\n',
+                "",
+            )
+        ],
+        expect=[f"{SELFIE_BOTH}[below]", f"{SELFIE_BOTH}[above]"],
+    ),
+    Case(
+        id="t86-17-no-purchase-trigger",
+        what="T-8.6: a first purchase rewards nothing",
+        edits=[
+            (
+                WEBHOOKS,
+                '    await referrals_service.reward(session, row.user_id, "purchase")\n',
+                "",
+            )
+        ],
+        expect=[f"{PURCHASE_BOTH}[below]", f"{PURCHASE_BOTH}[above]"],
+    ),
+    Case(
+        id="t86-18-apply-after-done",
+        what="T-8.6: a code applied once onboarding is done",
+        edits=[
+            (
+                REFERRALS_SERVICE,
+                "        if user.onboarding_step is OnboardingStep.DONE:\n",
+                "        if False:\n",
+            )
+        ],
+        expect=["test_once_onboarding_is_done_it_is_not_allowed"],
+    ),
+    Case(
+        id="t86-19-own-code",
+        what="T-8.6: one's own code taken for someone else's",
+        edits=[
+            (
+                REFERRALS_SERVICE,
+                "        if owner is not None and owner.id == user.id:\n",
+                "        if False:\n",
+            )
+        ],
+        expect=["test_ones_own_code_is_not_allowed"],
+    ),
+    Case(
+        id="t86-20-number-check-gone",
+        what="D-691: no check that the number was ever a referee",
+        edits=[
+            (
+                REFERRALS_SERVICE,
+                "        if await repository.number_was_referred(session, user.phone_hash):\n",
+                "        if False:\n",
+            )
+        ],
+        expect=[
+            "test_a_second_code_is_already_exists_and_the_first_stands",
+            "test_apply_delete_wait_out_the_erasure_sign_up_again_is_already_exists",
+        ],
+    ),
+    Case(
+        id="t86-21-live-accounts-only",
+        what="D-691: the number's check reads live accounts only, so an erasure escapes it",
+        edits=[
+            (
+                REFERRALS_REPO,
+                "            .where(User.phone_hash == phone_hash)\n",
+                (
+                    "            .where(User.phone_hash == phone_hash)\n"
+                    "            .where(User.anonymised_at.is_(None))\n"
+                ),
+            )
+        ],
+        expect=[
+            "test_apply_delete_wait_out_the_erasure_sign_up_again_is_already_exists"
+        ],
+    ),
+    Case(
+        id="t86-22-any-owner-status",
+        what="D-693: a banned, frozen or deleted owner's code works",
+        edits=[
+            (
+                REFERRALS_RULES,
+                "    return step is OnboardingStep.DONE and status in STANDING\n",
+                "    return step is OnboardingStep.DONE\n",
+            )
+        ],
+        expect=[
+            f"{NOT_STANDING}[banned]",
+            f"{NOT_STANDING}[frozen]",
+            f"{NOT_STANDING}[deleted]",
+        ],
+    ),
+    Case(
+        id="t86-23-owner-not-done",
+        what="D-693: the code of someone still signing up works",
+        edits=[
+            (
+                REFERRALS_RULES,
+                "    return step is OnboardingStep.DONE and status in STANDING\n",
+                "    return status in STANDING\n",
+            )
+        ],
+        expect=[f"{NOT_STANDING}[not done]", f"{NOT_STANDING}[at dob]"],
+    ),
+    Case(
+        id="t86-24-apply-unlocked",
+        what="T-8.6: apply reads the user without locking the row",
+        edits=[
+            (
+                REFERRALS_SERVICE,
+                "        user = await users_service.locked_user(session, user.id)\n",
+                "        user = await session.get(User, user.id)  # type: ignore[assignment]\n",
+            )
+        ],
+        expect=["test_two_applies_at_once_take_turns_and_the_second_already_exists"],
+    ),
+    Case(
+        id="t86-25-no-rate-limit",
+        what="T-8.6: apply without its own limit",
+        edits=[
+            (REFERRALS_ROUTER, "APPLIES_PER_HOUR = 10\n", "APPLIES_PER_HOUR = 1000\n")
+        ],
+        expect=["test_the_eleventh_apply_in_an_hour_is_rate_limited"],
+    ),
+    Case(
+        id="t86-26-setting-not-migrated",
+        what="D-692: the migration seeds no referral_reward_velas",
+        edits=[
+            (
+                REFERRAL_SETTINGS,
+                'SETTINGS = (("referral_reward_velas", 5), ("referral_rewards_max", 10))\n',
+                'SETTINGS = (("referral_rewards_max", 10),)\n',
+            )
+        ],
+        expect=["test_app_config_seeds"],
+    ),
+]
+
 CASES: list[tuple[Case, list[str]]] = (
     [(c, T51_SELECTION) for c in T51]
     + [(c, T54_SELECTION) for c in T54]
@@ -9375,6 +9784,7 @@ CASES: list[tuple[Case, list[str]]] = (
     + [(c, T79_SELECTION) for c in T79]
     + [(c, T89_SELECTION) for c in T89]
     + [(c, P152_SELECTION) for c in P152]
+    + [(c, T86_SELECTION) for c in T86]
 )
 
 # The fifty-connection fixture's own message when Postgres refuses a connection.

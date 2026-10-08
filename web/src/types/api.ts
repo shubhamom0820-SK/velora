@@ -693,6 +693,40 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/referrals/apply": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Apply Referral */
+        post: operations["apply_referral_v1_referrals_apply_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/referrals/me": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** My Referrals */
+        get: operations["my_referrals_v1_referrals_me_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/admin/turnover": {
         parameters: {
             query?: never;
@@ -1342,6 +1376,11 @@ export interface components {
             items: components["schemas"]["AdminRefundRequest"][];
             /** Next Cursor */
             next_cursor: string | null;
+        };
+        /** ApplyReferral */
+        ApplyReferral: {
+            /** Code */
+            code: string;
         };
         /**
          * Area
@@ -2237,6 +2276,19 @@ export interface components {
             items: components["schemas"]["ReceivedGift"][];
             /** Next Cursor */
             next_cursor: string | null;
+        };
+        /**
+         * ReferralsMe
+         * @description The user's own code, how many applied it, and how many of those were
+         *     rewarded: counted for a woman too, who is never paid (D-690).
+         */
+        ReferralsMe: {
+            /** Code */
+            code: string;
+            /** Invited */
+            invited: number;
+            /** Rewarded */
+            rewarded: number;
         };
         /**
          * RefundRequestCreate
@@ -3905,6 +3957,57 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    apply_referral_v1_referrals_apply_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ApplyReferral"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    my_referrals_v1_referrals_me_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReferralsMe"];
                 };
             };
         };

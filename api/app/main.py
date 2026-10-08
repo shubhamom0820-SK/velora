@@ -44,6 +44,7 @@ from app.modules.pricing.router import router as pricing_router
 from app.modules.profiles.router import router as profiles_router
 from app.modules.realtime.router import gateway as realtime_gateway
 from app.modules.realtime.router import router as realtime_router
+from app.modules.referrals.router import router as referrals_router
 from app.modules.swipes.router import router as swipes_router
 from app.modules.threads.router import router as threads_router
 from app.modules.users.router import router as users_router
@@ -167,6 +168,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.include_router(verification_router, prefix="/v1")
     app.include_router(wallet_router, prefix="/v1")
     app.include_router(payments_router, prefix="/v1")
+    app.include_router(referrals_router, prefix="/v1")
     app.include_router(admin_router, prefix="/v1")
     app.include_router(discovery_router, prefix="/v1")
     app.include_router(account_router, prefix="/v1")

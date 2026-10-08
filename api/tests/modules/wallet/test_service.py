@@ -456,6 +456,8 @@ async def test_two_people_with_one_event_both_apply(
         service.credit if RULES[reason].direction is Direction.CREDIT else service.debit
     )
 
+    # Two men in one transaction: locked in `user_id` order first (P-63).
+    await service.lock_wallets(db, [first.id, second.id])
     results = [await move(db, man.id, 3, reason, **shared) for man in (first, second)]
 
     assert [r.applied for r in results] == [True, True]

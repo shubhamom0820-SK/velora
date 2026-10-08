@@ -22,7 +22,11 @@ Nothing external runs under the lock; the event is published after the request
 (`core/events.py`). The wallet never checks a user's status: a frozen man's
 captured payment is still credited (D-077).
 
-A transaction locks one wallet, or several in `user_id` order (D-077).
+A transaction locks one wallet, or several in `user_id` order (D-077), and
+the wallet refuses anything else (P-63): it records on the session which
+wallets the transaction holds, and a lock below the highest held is a
+`WalletMisuse`. A caller that will credit several men locks them first with
+`lock_wallets()`, which sorts them; a wallet already held locks again freely.
 
 **`reverse()` (T-8.2, D-520)** takes a payment's Velas back when its money goes
 back: the same steps, but at step 6 it takes what the balance holds, down to 0,
@@ -43,6 +47,7 @@ The owner's two reads, `balance()` and `ledger()`, are at the end (T-5.3).
 from __future__ import annotations
 
 import sys
+from collections.abc import Iterable
 from dataclasses import dataclass
 from datetime import datetime
 from types import FrameType
@@ -51,7 +56,9 @@ from uuid import UUID
 
 import structlog
 from pydantic import AwareDatetime
+from sqlalchemy import event as sa_event
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import Session, SessionTransaction
 
 from app.core import events
 from app.core.enums import Gender, LedgerReason
@@ -59,7 +66,7 @@ from app.core.errors import AppError
 from app.core.pagination import Cursor, PageParams
 from app.modules.wallet import repository, rules, schemas
 from app.modules.wallet.models import LedgerEntry
-from app.modules.wallet.rules import Direction, Ref
+from app.modules.wallet.rules import Direction, Ref, RefType
 
 log = structlog.get_logger(__name__)
 
@@ -91,6 +98,49 @@ class Reversal:
 
 class _NothingToTake(Exception):
     """A reversal found a balance of 0: nothing is written (D-520)."""
+
+
+# The wallets the session's transaction has locked (P-63): read by every lock,
+# forgotten when the transaction ends, since its locks end with it.
+_HELD = "wallet.held"
+
+
+@sa_event.listens_for(Session, "after_transaction_end")
+def _forget_held(session: Session, transaction: SessionTransaction) -> None:
+    if transaction.parent is None:
+        session.info.pop(_HELD, None)
+
+
+def _held(session: AsyncSession) -> set[UUID]:
+    held: set[UUID] = session.info.setdefault(_HELD, set())
+    return held
+
+
+async def _lock(session: AsyncSession, user_id: UUID) -> tuple[int, Gender | None]:
+    """Lock one wallet, in `user_id` order with any this transaction holds:
+    two transactions each holding one man's wallet and waiting for the other's
+    is a deadlock Postgres breaks by failing one (D-077, P-63)."""
+    held = _held(session)
+    if user_id not in held and held and user_id < max(held):
+        raise WalletMisuse(
+            "wallets are locked in user_id order (D-077, P-63): "
+            "lock_wallets() them first"
+        )
+    locked = await repository.lock_wallet(session, user_id)
+    if locked is None:
+        raise WalletMisuse("this user has no wallet; signup creates one (T-3.3)")
+    held.add(user_id)
+    return locked
+
+
+async def lock_wallets(session: AsyncSession, user_ids: Iterable[UUID]) -> None:
+    """Lock several wallets, sorted by `user_id`, before crediting them in
+    whatever order: a referral's two men (T-8.6). Those already held are
+    skipped; one below a wallet already held is still refused."""
+    if not session.in_transaction():
+        raise WalletMisuse("lock_wallets() runs only inside its caller's transaction")
+    for user_id in sorted(set(user_ids) - _held(session)):
+        await _lock(session, user_id)
 
 
 # The only reasons `reverse()` takes: anything else that spends is priced and
@@ -212,10 +262,7 @@ async def _apply(
     ref_type = None if ref is None else str(ref.type)
     ref_id = None if ref is None else ref.id
 
-    locked = await repository.lock_wallet(session, user_id)
-    if locked is None:
-        raise WalletMisuse("this user has no wallet; signup creates one (T-3.3)")
-    balance, gender = locked
+    balance, gender = await _lock(session, user_id)
     if gender is not Gender.MALE:
         raise WalletMisuse("only a man may hold credits (D-076)")
 
@@ -292,6 +339,18 @@ async def reversed_net(session: AsyncSession, user_id: UUID, ref: Ref) -> int:
         ref.id,
     )
     return -total
+
+
+async def referral_rewards_paid(session: AsyncSession, referrer_id: UUID) -> int:
+    """How many referrals this man has been paid for as the referrer: his
+    `referral_reward` entries naming someone else's referral, never his own
+    as a referee (T-8.6, D-692). Read under his wallet's lock, so two rewards
+    at once count each other."""
+    if referrer_id not in _held(session):
+        raise WalletMisuse("referral_rewards_paid() reads under the wallet's lock")
+    return await repository.count_other_refs(
+        session, referrer_id, LedgerReason.REFERRAL_REWARD, str(RefType.REFERRAL)
+    )
 
 
 def _details(

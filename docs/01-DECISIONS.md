@@ -4548,6 +4548,76 @@ springs are each a small library's worth, and the stack already names these two)
 transitions alone (a release can't continue the finger's velocity); Framer Motion (not the
 pinned stack, and larger).
 
+### D-690 · A woman's referral reward is nothing — Locked
+**The decision (T-8.6):** a woman who refers someone, or is referred, is given nothing for it:
+no Velas (D-076: the database refuses her any ledger row), and nothing in their place, no perk,
+no raised limit. Her referrals are counted in `GET /referrals/me` (`invited`, `rewarded`), so a
+share card can say how many friends joined, and that is all. A man on her referral is still paid:
+her referrer when her selfie matches, or her referee at his first purchase.
+
+**Why:** D-076 rules out Velas, and its rejected "promotional Velas for women" holds for a
+stand-in too: anything of value given to her for a referral is a reward that has to be priced,
+tracked and kept from becoming a transfer. Women already use Velora free (D-002), so a free
+product has nothing to discount. A perk such as more new men a day (D-098) is a product change
+to the limits that protect her, which a referral programme shouldn't make on the side.
+
+**Rejected:** promotional Velas (D-076); a non-monetary perk (raised daily limits, a boost), a
+product decision for its own task if ever wanted.
+
+### D-691 · One phone number is a referee once, ever, checked at apply — Locked
+**The decision (T-8.6):** `POST /referrals/apply` refuses, `ALREADY_EXISTS`, when any account the
+caller's number ever had was a referee. Read from `referrals` joined to `users.phone_hash`: the
+erasure keeps the old account's row and its `phone_hash` (D-051) and keeps its referrals (D-503).
+No new table. The only deletion of a `referrals` row is an under-18 refusal (D-078), and that
+number is barred (D-072).
+
+**The worst case:** a fresh number per account is a fresh referee, accepted as D-470 accepts it for
+the welcome; what bounds it here is D-692's cap on the referrer. The number's check closes the
+other path: delete the account, wait out the erasure's 30 days, sign up again, apply again.
+
+**Rejected:** a `welcome_grants`-style table claimed at the reward (D-470's shape): it needs a
+migration and a new kept table for what the kept rows already say, and a claim at apply would put
+an append-only row before `dob`, which would stop an under-18 deletion. Claiming at apply rather
+than at the reward is deliberate: a number that applied once, rewarded or not, never applies again.
+
+### D-692 · Referral rewards: 5 Velas each man, the referrer paid for 10 at most, ever — Locked
+**The decision (T-8.6):** `app_config.referral_reward_velas = 5`, the same for both sides,
+tunable; at 0 the referral is rewarded with nothing, and a missing row skips it with a warning,
+never failing the webhook or the selfie's decision, and leaves it for the next trigger.
+`app_config.referral_rewards_max = 10`: a referrer is paid for 10 referrals, ever, counted from his
+`referral_reward` entries naming others' referrals, under his wallet's lock; past it his referee is
+still paid. A missing cap pays no referrer: a limit that fails open is no limit.
+
+**The worst case, bounded:** unlike the welcome, where each number's Velas stay in its own account,
+a referrer's rewards collect in one. A man with N spare numbers can make N accounts on his own
+code and match each selfie with his own face (a man's selfie is optional, so it is the cheap
+trigger), or make "women" accounts with it. The cap stops that at 50 Velas, ten Threads. A
+purchase that is then charged back keeps its reward (P-591); the same face on many accounts is
+T-9.2's to notice (P-590).
+
+**How two men are paid in one transaction:** both wallets are locked in `user_id` order before
+either is credited, whoever is paid, and the wallet now refuses a lock below one the transaction
+holds (P-63, as D-077 always said). In the webhook the reward runs before the purchase, whose lock
+on the buyer's wallet is then a re-lock.
+
+**Rejected:** no cap (an unbounded farm into one account); rewarding only on a purchase (changes
+T-8.6's "whichever first", and gives a referred woman's referrer nothing, since she never buys).
+
+### D-693 · Whose code works, and who is still paid: done, and active or paused — Locked
+**The decision (T-8.6):** a code works only if its owner has finished onboarding and is `active`
+or `paused`, an allowlist; any other code is the same `NOT_FOUND` as a code nobody has, so a code
+says nothing about its owner's account. At the reward, each side is paid only if a man who is
+`active` or `paused` then: a referrer banned, frozen or deleted since gets nothing, and the other
+side is still paid. The same holds for the referee, so a man frozen since he paid gets his
+purchase (D-077) and not the promotion.
+
+**Why:** a referral is a promotion, never money he paid for, so it can wait on standing where a
+purchase can't. A code of someone mid-sign-up, or at the dob step, is a code of nobody yet.
+
+The four decisions are the founder's, 8 October 2026, on the advisor's recommendation (Claude, in
+a separate chat), relayed by the founder; the options and their worst cases were Claude's, in
+T-8.6's plan. Applying the standing rule to the referee too was Claude's, building it.
+
 ### D-700 · An approved private photo's scored copy at a key of its own: `photos.scored_key` — Locked
 **The decision (P-79 and P-301; the founder, 4 October 2026 for the separate key, 8 October 2026
 for the column, on the advisor's recommendation):** when moderation approves a private photo, the

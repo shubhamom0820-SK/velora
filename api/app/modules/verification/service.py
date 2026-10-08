@@ -44,6 +44,7 @@ from app.core.queue import VERIFY_SELFIE, Queue
 from app.modules.photos import repository as photos_repository
 from app.modules.photos.models import Photo
 from app.modules.photos.service import MAX_UPLOAD_BYTES, queue_match
+from app.modules.referrals import service as referrals_service
 from app.modules.users import service as users_service
 from app.modules.users.models import User
 from app.modules.verification import repository, rules
@@ -386,6 +387,8 @@ async def _record(
             locked.status = ReviewStatus.APPROVED
             photo.status = ReviewStatus.APPROVED
             user.is_verified = True
+            # A referral's reward, if this is its first trigger (T-8.6).
+            await referrals_service.reward(session, user.id, "selfie")
             # D-393: the photos already shown, each with a face, compared with
             # this selfie for the badge, once this decision is committed.
             to_compare = await repository.shown_photos_with_a_face(session, user.id)

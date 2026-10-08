@@ -328,9 +328,18 @@ def make_user(db: AsyncSession) -> MakeUser:
         await db.flush()
         await db.refresh(user)
         if credits:
+            # Each user's grant is its own transaction, as a real one is: the
+            # wallet refuses a man locked below one the transaction already
+            # holds (P-63). Commits here only release savepoints; the test's
+            # transaction still rolls it all back. Then one is open again, as
+            # the caller had it before.
+            await db.commit()
+            await db.connection()
             await wallet_service.credit(
                 db, user.id, credits, LedgerReason.ADMIN_GRANT, event="make_user"
             )
+            await db.commit()
+            await db.connection()
         token = make_access_token(
             user.id, user.role, settings, auth_time=core_clock.now()
         )

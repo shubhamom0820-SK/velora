@@ -3259,15 +3259,26 @@ prices don't depend on the web photos step, and the hold is lifted.
 - [ ] **Commit:** `feat(web): gifts on profile [T-8.10]`
 
 ### T-8.6 · Referrals
-- [ ] **Needs:** T-8.2; and **P-63, if one transaction credits two men** (the referrer and a
+- [x] **Needs:** T-8.2; and **P-63, if one transaction credits two men** (the referrer and a
   referee who is a man, or a reward inside T-8.2's webhook transaction): moved here from T-9.3,
-  dropped by D-230, 4 October 2026
-- [ ] `POST /referrals/apply {code}` only before onboarding `done`, not own code, once. Reward both (Velas from `app_config`) when the referee completes selfie verification or first purchase, whichever first; idempotent. `GET /referrals/me`. Apply looks a code up and never checks its format: the seed's three test accounts carry readable codes outside the generated one (T-3.3).
-- [ ] **A woman's referral reward is never Velas** (D-076): the database refuses any ledger row for her, and "Reward both" would otherwise reach every referred woman, since every woman verifies her selfie (D-008). Decide here what she gets instead, if anything, and write it down.
-- [ ] **D-078 (P-54):** an under-18 refusal deletes `referrals` rows naming the user, as referrer or
+  dropped by D-230, 4 October 2026. **It did, so P-63 was built in this task** (the founder's
+  brief, 8 October 2026; its line says how).
+- [x] `POST /referrals/apply {code}` only before onboarding `done`, not own code, once. Reward both (Velas from `app_config`) when the referee completes selfie verification or first purchase, whichever first; idempotent. `GET /referrals/me`. Apply looks a code up and never checks its format: the seed's three test accounts carry readable codes outside the generated one (T-3.3).
+  **Built:** "once" is once per phone number, ever (D-691); `referral_reward_velas` 5 to each man
+  on it, the referrer paid for `referral_rewards_max` 10 at most (D-692); only a code whose owner
+  is `done` and `active` or `paused` works, and only a man who still stands is paid (D-693). The
+  reward runs in the webhook's capture before the purchase, and in the selfie's decision, both
+  wallets locked in `user_id` order first (P-63).
+- [x] **A woman's referral reward is never Velas** (D-076): the database refuses any ledger row for her, and "Reward both" would otherwise reach every referred woman, since every woman verifies her selfie (D-008). Decide here what she gets instead, if anything, and write it down.
+  **Decided: nothing** (D-690, the founder, 8 October 2026); her referrals are counted in `GET
+  /referrals/me` only.
+- [x] **D-078 (P-54):** an under-18 refusal deletes `referrals` rows naming the user, as referrer or
   referee, once P-54's row half has landed; check it has. A reward already paid is a ledger row,
   which rule 12 keeps, and would stop the deletion: none can exist before dob is set.
-- [ ] **Commit:** `feat(referrals): codes and rewards [T-8.6]`
+  **Checked:** `Attached(Referral, ("referee_id", "referrer_id"))` is in `UNDERAGE_DELETES`, and
+  a test applies a code at the dob step, gives an under-18 date, and finds no referral and the
+  referrer untouched. Both triggers come after `dob`, so no reward can exist before it.
+- [x] **Commit:** `feat(referrals): codes and rewards [T-8.6]`
 
 ### T-8.7 · Web store and checkout
 - [ ] **Needs:** T-8.2, T-5.5, and the founder's answer: **can "Most popular" show when nobody has
@@ -4565,7 +4576,7 @@ The number comes from the session's own block, given in its brief, from P-100 up
   which made every other CHECK test in `test_schema.py` name its constraint.
   **Deadline passed, 8 October 2026** (the audit, P-490): T-4.8 and T-9.6 both migrated `users`, and
   T-9.6 (`15c75a4`) replaced this very function, still naming no constraint.
-- [ ] P-63 · Make the wallet refuse locking several wallets out of `user_id` order. **Before
+- [x] P-63 · Make the wallet refuse locking several wallets out of `user_id` order. **Before
   T-9.3,** on its Needs line, the first task that locks more than one. Worst case: two
   transactions each holding one man's wallet and waiting for the other's, a deadlock Postgres
   breaks by failing one, so a ban's refunds fail at random under load. D-077 says a transaction
@@ -4577,6 +4588,15 @@ The number comes from the session's own block, given in its brief, from P-100 up
   **Its gate moved on 4 October 2026:** T-9.3 is dropped (D-230). The next task that can lock
   two wallets is T-8.6: its referral reward credits both men, and T-8.2's webhook runs that check
   inside the buyer's own transaction. So P-63 is on T-8.6's Needs line now, under that condition.
+  **Done in T-8.6, 8 October 2026** (the founder's brief: inside that task). The wallet records on
+  the session which wallets its transaction holds, forgotten when the transaction ends, and
+  refuses (`WalletMisuse`) a lock below the highest held; `wallet.lock_wallets(ids)` sorts them
+  first. The referral reward locks both wallets that way before either is credited, and before
+  the webhook's purchase. `tests/modules/wallet/test_lock_order.py`: the refusals in the rolled-back
+  session, and two transactions on two connections locking the same two men in opposite orders,
+  each forced to hold one before asking for the other: the reversed one is refused, never a
+  Postgres deadlock (`40P01`, which the breaking run shows with the guard gone). `make_user` now
+  grants each man's Velas in a transaction of its own, as signup's is.
 - [x] P-64 · Let endpoint tests see the events a request publishes. **Before T-7.4,** on its Needs
   line. Worst case: T-7.4 ships with every socket event untested end to end, or a service publishes
   on its own to make one visible, which would publish before commit and under a lock. In tests the
@@ -6096,3 +6116,25 @@ The number comes from the session's own block, given in its brief, from P-100 up
   a `gift` column is added (a migration, and `Prefs` in 04-API), and that a paused woman is sent
   nothing (T-9.6). Filed by Claude building T-8.9, 8 October 2026; its session's block, P-550 to
   P-559.
+- [ ] P-590 · Notice one face verified on many accounts. **In T-9.2** (fraud signals). Worst
+  case: a man with N numbers makes N accounts on his own code, matches each selfie with his own
+  face (a man's selfie is optional, so it is the cheap trigger) and is paid N referral rewards in
+  one account, up to `referral_rewards_max` (10, D-692): 50 Velas, ten Threads, for ten SIMs and
+  an evening. The same face as "women" puts fake profiles into discovery too. The cap bounds the
+  Velas; nothing yet notices the face. T-9.2 could compare a new selfie's embedding with the kept
+  selfies' and raise a fraud event on a match above the threshold, never refusing on it alone.
+  Filed by Claude building T-8.6, 8 October 2026; its session's block, P-590 to P-599.
+- [ ] P-591 · A referral reward kept after its purchase was charged back. **Before beta, or
+  accepted by the founder.** Worst case: a referee buys the smallest pack, the capture rewards
+  both men (T-8.6), and he disputes the charge: D-520 takes back the purchase's Velas, never the
+  referral's, so his referrer keeps 5 Velas for a sale that never happened. Dominated by the
+  selfie route, which costs nothing (P-590), so low in practice. A fix would reverse the reward
+  in `_reverse()` when the reversed payment was the referral's trigger, which needs the trigger
+  recorded on the referral. Filed by Claude building T-8.6, 8 October 2026.
+- [ ] P-592 · Publish what a worker's transactions queue. **Before T-7.12** (the web's socket
+  client). Worst case: a referee's selfie matches in the `verify_selfie` job, the reward credits
+  both men (T-8.6), and neither balance moves on screen until a reload, since `wallet.updated`
+  is queued on the worker's session and only `get_session` publishes (`core/events.py`: "Code
+  outside a request publishes nothing"). The same holds for any credit or event a job writes.
+  Fix: the worker's session factory publishes committed events as `get_session` does. Filed by
+  Claude building T-8.6, 8 October 2026.

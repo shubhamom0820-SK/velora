@@ -62,6 +62,22 @@ async def sum_for_ref(
     return int(total or 0)
 
 
+async def count_other_refs(
+    session: AsyncSession, user_id: UUID, reason: LedgerReason, ref_type: str
+) -> int:
+    """How many of this user's entries for `reason` name a ref other than the
+    user themself."""
+    count = await session.scalar(
+        select(func.count()).where(
+            LedgerEntry.user_id == user_id,
+            LedgerEntry.reason == reason,
+            LedgerEntry.ref_type == ref_type,
+            LedgerEntry.ref_id != user_id,
+        )
+    )
+    return int(count or 0)
+
+
 async def set_balance(session: AsyncSession, user_id: UUID, balance: int) -> None:
     await session.execute(
         update(Wallet).where(Wallet.user_id == user_id).values(balance=balance)

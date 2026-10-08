@@ -225,8 +225,8 @@ turns them into copy.
 | POST | /payments/webhook | 🔓 signature | Razorpay's event, the raw body, `X-Razorpay-Signature` → `{}`. Bad or missing signature, or `RAZORPAY_WEBHOOK_SECRET` unset: `400 VALIDATION_ERROR`, nothing read. Signed but unreadable: `500`, so Razorpay retries. Anything else, applied or not: `200` (below). No rate limit (02-ARCHITECTURE §12) | T-8.2 |
 | GET | /payments/{id} | ✅ | → `PaymentStatusView`: `{status, credits, bonus_credits}`, the caller's own payment; anyone else's, or none, `NOT_FOUND`, the same answer. No GST (D-482). No rate limit of its own | T-8.2 |
 | POST | /refund-requests | ✅ | `{payment_id, reason}` (nothing else) → 201 `RefundRequest`: `{id, payment_id, reason, status, created_at}`. A broken payment's claim (D-580): `reason` is `missing_velas` or `duplicate_charge`, never a change of mind. The caller's own payment; anyone else's, or none, `NOT_FOUND`, the same answer. `missing_velas` on a `paid` or `refunded` payment: `NOT_ALLOWED`, `details.why` `velas_granted`. A second open claim on one payment: `ALREADY_EXISTS`. 10 a day per user | T-8.3 |
-| GET | /referrals/me | ✅ | → `{code, invited, rewarded}` | T-8.6 |
-| POST | /referrals/apply | 🔐 | `{code}` → 204 (only during onboarding) | T-8.6 |
+| GET | /referrals/me | ✅ | → `ReferralsMe`: `{code, invited, rewarded}`, the caller's own code, how many applied it and how many of those were rewarded; a woman's counted the same, though she is never paid (D-690). No rate limit of its own | T-8.6 |
+| POST | /referrals/apply | 🔐 | `{code}` (1 to 32 characters, trimmed, nothing else) → 204. Looked up as typed, case ignored, never checked for format (T-3.3). Before `done` only, the dob step included (D-078 deletes it with a minor's account), else `NOT_ALLOWED`, `details.why` `onboarding_done`; the caller's own code, `NOT_ALLOWED`, `own_code`; this number already a referee, on this account or any it had before, `ALREADY_EXISTS` (D-691); a code nobody has, or whose owner isn't `done` and `active` or `paused`, `NOT_FOUND`, the same answer (D-693). Rewarded later, when the referee's selfie matches or first purchase is captured: `referral_reward_velas` to each man on it, never a woman, the referrer up to `referral_rewards_max` (D-692). 10 an hour per user | T-8.6 |
 
 **No GST in anything a user is shown about a payment while Velora is unregistered** (D-450,
 D-482): not a field, not a word, in any case, in the order's response, `GET /packs`, `GET
@@ -239,7 +239,8 @@ nothing), `payment.failed` (a `created` row becomes `failed`, never anchored), `
 `payment.dispute.created` (the Velas taken back, down to 0), `refund.failed` and
 `payment.dispute.won` (exactly what was taken, given back), and `refund.processed` and
 `payment.dispute.lost` (`refunded`). Every other event, and an order nobody made, is `200` and
-logged. The Velas always come from the `payments` row, never the webhook (rule 6).
+logged. The Velas always come from the `payments` row, never the webhook (rule 6). A capture
+that credits also rewards the payer's referral, if it is due, in the same transaction (T-8.6).
 
 **Claims (T-8.3, D-580 to D-582)** are resolved by an admin, from what the gateway says about the
 order, never the claim's kind or the admin's word: a **grant** is the webhook's own capture

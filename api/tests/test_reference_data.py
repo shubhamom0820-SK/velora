@@ -35,7 +35,7 @@ COUNTS = {
     "action_prices": 9,
     "credit_packs": 8,
     "gifts": 6,
-    "app_config": 12,
+    "app_config": 14,
     "interests": 24,
     "areas": 17,
 }
@@ -211,6 +211,10 @@ async def test_app_config_seeds(db: AsyncSession) -> None:
         # T-8.11, D-470: every new man's welcome. A missing row skips the grant
         # with only a warning (D-530), so this is what notices a lost one.
         "welcome_velas": 5,
+        # T-8.6, D-692: a referral's reward and a referrer's cap. A missing
+        # reward skips it with only a warning; a missing cap pays no referrer.
+        "referral_reward_velas": 5,
+        "referral_rewards_max": 10,
     }
 
 

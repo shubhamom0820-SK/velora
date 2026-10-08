@@ -20,8 +20,9 @@ nothing.
 
 **A capture, in this order:** the row by its order; a repeat or a second
 payment on one order credits nothing; the amount and currency; the owner must be
-a man (D-076); then `paid`, the anchor, `paid_at` by our clock (D-523), and
-`purchase`, which locks the wallet. Only then is the bonus decided: none if any
+a man (D-076); then `paid`, the anchor, `paid_at` by our clock (D-523); a
+referral's reward, if his is due (T-8.6), which locks his referrer's wallet
+and his in `user_id` order (P-63); and `purchase`, which locks the wallet. Only then is the bonus decided: none if any
 other payment of his has moved money, read under the wallet's lock, so two
 captures at once grant it once (D-522, P-380).
 
@@ -58,6 +59,7 @@ from app.core.errors import AppError
 from app.core.providers.payments import PaymentsProvider, ProviderPayment
 from app.modules.payments import repository
 from app.modules.payments.models import Payment
+from app.modules.referrals import service as referrals_service
 from app.modules.safety import service as safety_service
 from app.modules.wallet import service as wallet_service
 from app.modules.wallet.rules import Ref, RefType
@@ -305,6 +307,9 @@ async def _capture(session: AsyncSession, row: Payment, event: Event) -> Outcome
     row.paid_at = clock.now()
     row.raw_webhook = event.raw
     await session.flush()
+    # A referral's reward first (T-8.6), since it may lock two men's wallets,
+    # which it locks in `user_id` order: the purchase below locks his again.
+    await referrals_service.reward(session, row.user_id, "purchase")
     ref = Ref(RefType.PAYMENT, row.id)
     # The wallet's lock is held from here to the commit (D-077).
     await wallet_service.credit(
