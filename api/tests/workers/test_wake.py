@@ -16,6 +16,7 @@ from collections.abc import AsyncIterator, Callable
 from datetime import UTC, datetime, timedelta
 from types import ModuleType
 from typing import Any, Self
+from urllib.parse import urlsplit, urlunsplit
 
 import pytest
 from redis.asyncio import Redis
@@ -51,6 +52,54 @@ async def _listening(listener: WakeListener) -> AsyncIterator[asyncio.Task[None]
             await task
 
 
+@contextlib.asynccontextmanager
+async def _slow_link(delay_s: float) -> AsyncIterator[str]:
+    """A loopback proxy to this run's Redis that holds every byte a client sends
+    for `delay_s` before passing it on, as the road to Upstash does: a SUBSCRIBE
+    leaves the worker well before the server has it. Yields the proxy's URL."""
+    target = urlsplit(TEST_REDIS_URL)
+    tasks: set[asyncio.Task[None]] = set()
+    writers: list[asyncio.StreamWriter] = []
+
+    async def pipe(
+        reader: asyncio.StreamReader, writer: asyncio.StreamWriter, delay: float
+    ) -> None:
+        try:
+            while data := await reader.read(65536):
+                await asyncio.sleep(delay)
+                writer.write(data)
+                await writer.drain()
+        except OSError:
+            pass
+        finally:
+            writer.close()
+
+    async def serve(
+        client_r: asyncio.StreamReader, client_w: asyncio.StreamWriter
+    ) -> None:
+        server_r, server_w = await asyncio.open_connection(target.hostname, target.port)
+        writers.extend((client_w, server_w))
+        for task in (
+            asyncio.create_task(pipe(client_r, server_w, delay_s)),
+            asyncio.create_task(pipe(server_r, client_w, 0)),
+        ):
+            tasks.add(task)
+            task.add_done_callback(tasks.discard)
+
+    server = await asyncio.start_server(serve, "127.0.0.1", 0)
+    port = server.sockets[0].getsockname()[1]
+    try:
+        yield urlunsplit(target._replace(netloc=f"127.0.0.1:{port}"))
+    finally:
+        server.close()
+        for task in list(tasks):
+            task.cancel()
+        await asyncio.gather(*tasks, return_exceptions=True)
+        for writer in writers:
+            writer.close()
+        await server.wait_closed()
+
+
 class Heard:
     def __init__(self) -> None:
         self.ids: list[uuid.UUID] = []
@@ -76,6 +125,39 @@ async def test_it_hears_a_wake_and_hands_on_the_id(test_redis: Redis) -> None:
     async with _listening(listener):
         assert await test_redis.publish(channel, str(verification_id)) == 1
         assert await heard.next() == verification_id
+
+
+async def test_subscribed_means_redis_holds_the_subscription(test_redis: Redis) -> None:
+    """P-330: `subscribed` waits for Redis to confirm the SUBSCRIBE, not for the
+    command to leave, so a wake published the instant it is set is heard, on a
+    link slow enough that the command is still on its way. After a reconnect
+    too. Before the fix this published to 0 subscribers every time."""
+    channel, heard = _channel(), Heard()
+
+    async with _slow_link(0.2) as url:
+        for _ in range(3):
+            name = f"wake-{uuid.uuid4().hex[:12]}"
+
+            def connect(name: str = name) -> Redis:
+                client: Redis = Redis.from_url(url, client_name=name)
+                return client
+
+            listener = WakeListener(connect, heard, channel=channel)
+            async with _listening(listener):
+                verification_id = uuid.uuid4()
+                assert await test_redis.publish(channel, str(verification_id)) == 1
+                assert await heard.next() == verification_id
+
+                [mine] = [
+                    c for c in await test_redis.client_list() if c["name"] == name
+                ]
+                listener.subscribed.clear()
+                assert await test_redis.client_kill_filter(_id=mine["id"]) == 1
+                async with asyncio.timeout(10):
+                    await listener.subscribed.wait()
+                verification_id = uuid.uuid4()
+                assert await test_redis.publish(channel, str(verification_id)) == 1
+                assert await heard.next() == verification_id
 
 
 async def test_the_real_channel_is_the_one_the_api_publishes_on() -> None:
@@ -165,15 +247,20 @@ class Refusing:
 
 
 class HoldsThenDrops(Refusing):
-    """Subscribes, holds while the clock moves on by `held`, then drops."""
+    """Subscribes, Redis confirming it, holds while the clock moves on by
+    `held`, then drops."""
 
     def __init__(self, clock: ModuleType, held: timedelta) -> None:
         self.clock, self.held = clock, held
+        self.confirmed = False
 
     async def subscribe(self, *channels: str) -> None:
         return None
 
-    async def get_message(self, **kwargs: Any) -> None:
+    async def get_message(self, **kwargs: Any) -> dict[str, object]:
+        if not self.confirmed:
+            self.confirmed = True
+            return {"type": "subscribe", "channel": b"wake", "data": 1}
         self.clock.advance(self.held)
         raise ConnectionError("dropped")
 

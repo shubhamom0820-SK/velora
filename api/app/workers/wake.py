@@ -36,6 +36,7 @@ from uuid import UUID
 
 import structlog
 from redis.asyncio import Redis
+from redis.asyncio.client import PubSub
 
 from app.core import clock
 from app.core.queue import VERIFY_SELFIE, wake_channel
@@ -72,7 +73,8 @@ class WakeListener:
         self._max_backoff_s = max_backoff_s
         self._sleep = sleep
         self._since: datetime | None = None
-        # Set once subscribed, for tests and for whoever waits on it.
+        # Set once Redis confirms the subscription, for tests and for whoever
+        # waits on it.
         self.subscribed = asyncio.Event()
 
     async def run(self) -> None:
@@ -103,6 +105,7 @@ class WakeListener:
         try:
             async with client.pubsub() as pubsub:
                 await pubsub.subscribe(self._channel)
+                await self._confirmed(pubsub)
                 self._since = clock.now()
                 self.subscribed.set()
                 log.info("wake.listening", channel=self._channel)
@@ -114,6 +117,18 @@ class WakeListener:
                         await self._heard(message.get("data"))
         finally:
             await client.aclose()
+
+    @staticmethod
+    async def _confirmed(pubsub: PubSub) -> None:
+        """Until Redis confirms the SUBSCRIBE: `subscribe()` only sends it, and
+        a wake published before the server has it finds no one listening
+        (P-330). Redis confirms before it delivers anything on the channel."""
+        while True:
+            message = await pubsub.get_message(
+                ignore_subscribe_messages=False, timeout=HEALTH_CHECK_S
+            )
+            if message is not None and message["type"] == "subscribe":
+                return
 
     async def _heard(self, data: object) -> None:
         try:

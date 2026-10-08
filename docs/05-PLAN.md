@@ -5594,7 +5594,7 @@ The number comes from the session's own block, given in its brief, from P-100 up
   as a decision in its own block. The price a user pays doesn't move (D-099, D-450). Filed by
   Claude at the direction of the advisor (Claude, in a separate chat, relayed by the founder),
   8 October 2026; its session's block, P-350 to P-359.
-- [ ] P-330 · The wake listener says "subscribed" before Redis does, and `test_wake.py`'s first test
+- [x] P-330 · The wake listener says "subscribed" before Redis does, and `test_wake.py`'s first test
   can go red on a commit that never touched it. **Before the next landing that hits it; the fix is
   a line in `app/workers/wake.py` and a test.** Worst case first: a red CI on a docs-only commit,
   and a landing that re-runs until green, which teaches every session to shrug at red (P-140's
@@ -5618,7 +5618,17 @@ The number comes from the session's own block, given in its brief, from P-100 up
   `wake.not_an_id` log, its first PUBLISH lost in the same window. Once in 20 runs of the file
   alone: the reconnect test, after `client_kill_filter`, timed out waiting to hear its id, which
   fits the window reopening when the listener subscribes again (inferred, not observed). So the
-  window hits more than the first test.
+  window hits more than the first test. **Closed (approved by the founder on the advisor's
+  recommendation, 8 October 2026):** `_listen` reads messages until Redis's `subscribe`
+  confirmation arrives, and only then sets `subscribed`, on every connection, a reconnect's
+  included, so all three failures above lose their window. `test_wake.py`'s
+  `test_subscribed_means_redis_holds_the_subscription` subscribes through a loopback proxy that
+  holds the worker's bytes for 0.2 s, as the road to Upstash does, and publishes the instant the
+  event is set, for three listeners, each before and after its connection is killed: the window
+  is made wide on purpose, so the test doesn't wait on a loaded machine to show it. On the old
+  code it published to 0 subscribers (`assert 0 == 1`), and with the confirmation wait removed
+  again, once, the same. `test_wake.py` then ran 30 times on this Mac, its load average 2.8 at
+  the start and 4.9 at the end: 30 green, 9 passed each, 7.76 s to 8.79 s.
 - [ ] P-300 · Retry, or sweep for, a shown photo's badge comparison that failed its last try.
   **Before REL-1's tag, if it includes T-6.2** (the badge on cards). Worst case: a real woman's
   only shown face is approved while storage hiccups three times in a row (`match_photo`'s three
@@ -5851,3 +5861,19 @@ The number comes from the session's own block, given in its brief, from P-100 up
   performance panel, remote-debugging the test phone over USB, a card dragged and flung ten
   times, the frame track's range recorded in the tick. Filed by Claude building T-6.5, 8 October
   2026, at the founder's direction; its session's block, P-500 to P-509.
+- [ ] P-530 · Give the web tests' first look at the screen room to wait when the machine is busy.
+  **Before it costs a landing again; the founder to place it.** Worst case: a landing goes red for
+  no fault of its own, re-runs until green, and every session learns to shrug at red (P-140's
+  silent direction), the same hazard P-330 was. Seen 8 October 2026, in `/done`'s `make lint test`
+  for P-330 (`c3f6b8f`, which touches no web file), with several sessions testing at once:
+  `PhotosStep.test.tsx`'s first test, "with no photos: six empty slots and the face slot; a man may
+  go on with none (D-392)", failed at `findAllByRole("button", { name: "Add a photo" })` (`Unable
+  to find role="button"`), 1 of 1,044 web tests; that file took 9,056 ms. Then run alone five
+  times, load average 14.9: 5 green, 33 passed each, 4.09 s to 4.83 s. So the query's wait ran out
+  under load; nothing in the component was wrong (inferred from those runs, not observed: no
+  timing of the render was taken). Testing Library's `find*` queries wait 1 s by default, and
+  `vitest.config.mts` and `vitest.setup.ts` set no `asyncUtilTimeout`, so every web test's first
+  `find*` has that one second, however many other sessions' runs share the machine. One way: raise
+  `asyncUtilTimeout` once in `vitest.setup.ts`, which costs a passing test nothing, and prove it
+  red at today's 1 s under a forced load. Filed by Claude landing P-330, 8 October 2026; its
+  session's block, P-530 to P-539.
