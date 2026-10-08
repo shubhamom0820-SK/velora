@@ -121,7 +121,7 @@ Unique `(kind, value)`.
 | hide_distance | boolean default false | |
 | show_kudos | boolean default true | |
 | show_gifts | boolean default true | received gifts on profile |
-| completeness | smallint default 0 | 0–100, computed by service: 50, and 10 for each approved public photo after the first, set when onboarding finishes (T-4.8, D-310); kept current after that by P-210 |
+| completeness | smallint default 0 | 0–100, computed by service: 50, and 10 for each approved public photo after the first, set when onboarding finishes (T-4.8, D-310); after that, recomputed by every write that approves or removes a public photo (P-210) |
 
 Indexes: `GIST(location)`, `GIN(username gin_trgm_ops)`, `GIN(first_name gin_trgm_ops)`,
 `(is_hidden)`. Intent lives in `profile_intents` (D-041).

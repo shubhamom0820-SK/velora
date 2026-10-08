@@ -3065,6 +3065,7 @@ number** per account gets its 5 each, one Thread's worth, and is **accepted**, k
 - [ ] API: all `/admin/*` routes in `04-API.md`, `require_role(moderator)`; Vela grants and bans `admin` only; every call writes `audit_log`; viewing messages of a thread logs who looked and why (reason required).
 - [ ] **Vela grants (`/admin/users/{id}/credits`):** a grant can't reach a woman, because the database refuses it (D-076). A negative `delta`, an admin correction, has no ledger reason today, since `admin_grant` is a credit (D-077). Add a debit reason for it here, an enum addition. **Make `admin_grant`'s ref required here:** it is optional (T-5.1) only while its callers are the seed and `make_user`; an admin's grant names the `audit_log` row its call writes, or it is a grant nobody can trace. That is a migration on `ck_ledger_entries_ref_required` and a change to `wallet/rules.py`, which the seed and `make_user` must then follow (at the direction of the advisor directing Sprint 5, 3 October 2026).
 - [ ] Web `/admin`: metrics tiles, report queue with SLA timer (24 h), user search + detail (photos, reports, fraud signals, ledger, threads), moderation queue (approve/reject), actions with confirmation dialogs, audit log.
+- [ ] **A moderator's approve or reject changes a profile's completeness (P-210):** call `onboarding.service.refresh_completeness` in the same transaction, under the user's row lock, as `photos.service._record` and `delete_photo` do, or discovery ranks that profile by a stale number (D-032).
 - [ ] Web `/admin` renders only for `role in (moderator, admin)`, read through `useMe()`; anyone else
   gets the 404 page — replacing T-1.22's `next dev`-only gate (from P-30). **This gate is UX, not
   protection:** anyone can download the page's JavaScript, and the Next.js server never sees a
@@ -4983,7 +4984,7 @@ The number comes from the session's own block, given in its brief, from P-100 up
   on the lock screen. Not seen: any misdrawn pad; all ten digits showed and the PIN unlocked.
   Fix: a key no digit can have (`"blank"`), and a test that the pad renders with no React key
   warning. Found in T-5.5's session; filed from its block (P-220 to P-229).
-- [ ] P-210 · Keep `profiles.completeness` current after onboarding finishes. **Before T-6.2 ranks
+- [x] P-210 · Keep `profiles.completeness` current after onboarding finishes. **Before T-6.2 ranks
   by it** (on T-6.2's Needs line). Worst case: discovery ranks people by a number that no longer
   describes their profile, and the ranking D-030 promises to explain in plain words doesn't do what
   it says. Someone who adds five photos after finishing stays at 50; someone who removes all but
@@ -4995,6 +4996,12 @@ The number comes from the session's own block, given in its brief, from P-100 up
   or have the ranking compute it from the photos as it queries. Found in T-4.8's plan; filed from
   T-4.8's session block (P-210 to P-219), at the direction of the advisor directing T-4.8 (Claude,
   in a separate chat), relayed by the founder, 5 October 2026.
+  **Done, 8 October 2026, on T-6.2's branch:** the founder chose the recompute in each write, from
+  T-6.2's plan. `onboarding.service.refresh_completeness`, under the user's row lock, runs in
+  moderation's approval (`photos.service._record`) and in `delete_photo`, only once onboarding is
+  `done`; turning a shown face photo off is `delete_photo` on its copy. Its weakness, a later write
+  path that forgets, has a pointer line on T-9.5, whose moderation queue rejects approved photos.
+  `tests/modules/photos/test_completeness.py` holds it.
 - [ ] P-260 · Hold the moderation provider to one Sightengine endpoint at the source, not only
   per check. **Before any second call to Sightengine is written** (a moderator's override sent to
   the Feedback API is the likely first). Worst case: `/privacy`'s "deleted there after the check"

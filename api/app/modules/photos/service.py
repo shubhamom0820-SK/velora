@@ -45,6 +45,7 @@ from app.core.providers.moderation import (
 from app.core.providers.storage import ObjectNotFound, StorageProvider
 from app.core.queue import MATCH_PHOTO, MODERATE_PHOTO, Queue
 from app.core.storage_keys import public_photo_key, public_url, raw_key
+from app.modules.onboarding import service as onboarding_service
 from app.modules.photos import moderation as moderation_rules
 from app.modules.photos import repository
 from app.modules.photos.models import Photo
@@ -428,7 +429,8 @@ async def delete_photo(
     is the same as once. The last public photo may go, past the `photos` step
     too: nobody needs one (D-392, T-4.12). The face photo goes the same way,
     unless the selfie matched or is being compared; a shown copy of it is a
-    public photo of its own, and stays."""
+    public photo of its own, and stays. An approved public photo's going
+    lowers a finished profile's completeness at once (P-210)."""
     public_key: str | None = None
     async with session.begin():
         user = await users_service.locked_user(session, user.id)
@@ -444,6 +446,8 @@ async def delete_photo(
         photo.status = ReviewStatus.REJECTED
         photo.reject_reason = USER_DELETED
         public_key = photo.public_key
+        if photo.kind is PhotoKind.PUBLIC:
+            await onboarding_service.refresh_completeness(session, user)
     if public_key:
         await storage.delete(settings.R2_BUCKET_PUBLIC, public_key)
 
@@ -702,6 +706,8 @@ async def _record(
             )
             locked.public_key = key
         locked.status = ReviewStatus.APPROVED
+        if locked.kind is PhotoKind.PUBLIC:
+            await onboarding_service.refresh_completeness(session, user)
         if locked.kind is PhotoKind.PUBLIC and scores.minors and user.is_verified:
             await queue_match(queue, locked)
     return None

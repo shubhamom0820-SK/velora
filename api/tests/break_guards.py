@@ -3802,6 +3802,63 @@ P120: list[tuple[Case, list[str]]] = [
     ),
 ]
 
+# --- P-210: completeness kept current after onboarding finishes ----------------------
+
+PHOTOS210 = "app/modules/photos/service.py"
+ONBOARDING210 = "app/modules/onboarding/service.py"
+COMPLETENESS_TESTS210 = ["tests/modules/photos/test_completeness.py"]
+
+P210: list[tuple[Case, list[str]]] = [
+    (
+        Case(
+            id="p210-01-an-approval-not-counted",
+            what="P-210: moderation's approval leaving completeness as it was",
+            edits=[
+                (
+                    PHOTOS210,
+                    "        if locked.kind is PhotoKind.PUBLIC:\n            await onboarding_service.refresh_completeness(session, user)\n",
+                    "",
+                )
+            ],
+            expect=["test_an_approval_after_finishing_raises_it"],
+        ),
+        COMPLETENESS_TESTS210,
+    ),
+    (
+        Case(
+            id="p210-02-a-removal-not-counted",
+            what="P-210: removing a shown photo leaving completeness as it was",
+            edits=[
+                (
+                    PHOTOS210,
+                    "        if photo.kind is PhotoKind.PUBLIC:\n            await onboarding_service.refresh_completeness(session, user)\n",
+                    "",
+                )
+            ],
+            expect=[
+                "test_removing_an_approved_public_photo_lowers_it[False]",
+                "test_removing_an_approved_public_photo_lowers_it[True]",
+            ],
+        ),
+        COMPLETENESS_TESTS210,
+    ),
+    (
+        Case(
+            id="p210-03-set-before-finishing",
+            what="D-310: completeness set before onboarding is done",
+            edits=[
+                (
+                    ONBOARDING210,
+                    "    if user.onboarding_step is not OnboardingStep.DONE:\n        return\n    profile = await repository.profile_of(session, user.id)\n    approved",
+                    "    profile = await repository.profile_of(session, user.id)\n    approved",
+                )
+            ],
+            expect=["test_before_finishing_an_approval_leaves_it_to_finishing"],
+        ),
+        COMPLETENESS_TESTS210,
+    ),
+]
+
 CASES: list[tuple[Case, list[str]]] = (
     [(c, T51_SELECTION) for c in T51]
     + [(c, T54_SELECTION) for c in T54]
@@ -3818,6 +3875,7 @@ CASES: list[tuple[Case, list[str]]] = (
     + T412
     + [(c, T81_SELECTION) for c in T81]
     + P120
+    + P210
 )
 
 # The fifty-connection fixture's own message when Postgres refuses a connection.

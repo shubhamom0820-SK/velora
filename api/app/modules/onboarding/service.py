@@ -74,6 +74,19 @@ async def leave_photos(session: AsyncSession, user: User) -> Me:
         return await users_service.me(session, user)
 
 
+async def refresh_completeness(session: AsyncSession, user: User) -> None:
+    """A finished profile's completeness, from its approved public photos now
+    (P-210), in the caller's transaction and under the user's row lock, which
+    the caller holds. Every write that approves or removes a public photo
+    calls it, so discovery never ranks by a number the profile has outgrown
+    (D-032). Before `done` it changes nothing: finishing sets it (D-310)."""
+    if user.onboarding_step is not OnboardingStep.DONE:
+        return
+    profile = await repository.profile_of(session, user.id)
+    approved = await repository.approved_public_photo_count(session, user.id)
+    profile.completeness = rules.completeness(approved)
+
+
 async def facts_of(session: AsyncSession, profile: Profile) -> rules.Facts:
     """What the requirements read from `profile`, in the caller's
     transaction. The dev seed reads its finished profiles the same way."""
