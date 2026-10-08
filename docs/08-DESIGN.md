@@ -218,7 +218,8 @@ along the bottom on mobile, in the header's row from 768 px, as in the prototype
 place is `--chrome-accent` with its icon filled: colour alone would fail WCAG 1.4.1, since
 `--chrome-mute` against `--chrome-accent` is about 1.4:1. Its sizes are the `--shell-*` tokens in
 `tokens.css`, and its shape is `src/components/shell/AppShell.tsx` alone (`look.test.ts` holds
-both), so T-6.5's design pass changes values, not structure. Where it departs from the prototype:
+both, as an allowlist from P-83: a class there is a layout class, a token's name or a token, its
+rules' 1 px included, `--shell-line`), so T-6.5's design pass changes values, not structure. Where it departs from the prototype:
 labels are `micro` (its 9.5 px), icons 20 px (its 19), and items stack icon over label at every
 width (its desktop items sit side by side); the wordmark is the landing's plain one, without the
 red letter; the page scrolls, where the prototype scrolls inside a fixed frame. The globe, the

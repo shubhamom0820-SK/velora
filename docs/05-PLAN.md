@@ -4674,7 +4674,7 @@ The number comes from the session's own block, given in its brief, from P-100 up
   since, with under a pixel allowed for the scroll's rounding (788.05 seen locally, 1 of 3
   phone runs; a lost padding misses by the nav's 56). Then 10 of 10 green (`--repeat-each=5`),
   and both breaks red again in their own project only.
-- [ ] P-83 · Make the shell's look guard an allowlist. **Before T-6.5** (on its Needs line). Worst
+- [x] P-83 · Make the shell's look guard an allowlist. **Before T-6.5** (on its Needs line). Worst
   case: a look value from a family nobody listed lands in `AppShell.tsx`, the guard stays green,
   and T-6.5's design pass meets values written into structure: the rework T-5.6's rule exists to
   prevent, the most expensive in the sprint. `look.test.ts` bans the families T-5.6 thought of
@@ -4692,6 +4692,18 @@ The number comes from the session's own block, given in its brief, from P-100 up
   (Claude, in a separate chat), relayed by the founder, 4 October 2026.
 
   Found building T-5.6.
+  **Done, 8 October 2026:** `look.test.ts` reads classes only from class props (`className`, or any
+  `…ClassName`), each a string or `cx()` of strings behind plain names; any other shape fails as
+  classes it can't read, so moving classes into a variable doesn't hide them. A class passes only
+  if it is on `LAYOUT` (display, position, flex and alignment, `z-*`, zero, `auto`/`full`/`dvh`
+  sizes, `fill-current`), is a utility named after a theme name read from `globals.css`, or reads
+  a token in `tokens.css` by `(--name)` or `(type:--name)`. Inverting it failed the shell's three
+  bare `border`s, a 1 px from Tailwind's default: the founder chose a token, `--shell-line`, which
+  `AppShell.tsx` reads as `border-(length:--shell-line)` and its sides (the built CSS has
+  `border-bottom-width:var(--shell-line)` and the rest). `quux-nobody-has-named-2031` stays in
+  its test. Broken once each: `duration-150` in `AppShell.tsx` failed the shell's test; the
+  can't-read rule off failed its five cases; every class allowed failed 20 of its 21 named classes
+  (`text-[13px]` is caught as an arbitrary value first) and the `cx()` case. Restored by file copy, SHA-256 checked, all 43 green.
 - [ ] P-79 · Stop an approved private photo being swapped for an unmoderated one. **Before T-8.4**
   (on its Needs line), which first shows private photos to anyone but their owner. Worst case: a
   private photo passes moderation, its owner PUTs a nude, or a photo carrying their home's

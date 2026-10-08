@@ -92,6 +92,7 @@
   --shell-nav-height: 56px; /* the bottom nav on mobile */
   --shell-nav-icon: 20px;
   --shell-nav-gap: 4px; /* a nav item's icon to its label */
+  --shell-line: 1px; /* the header's and nav's rules, and "Free access"'s outline */
   /* the balance pill (men) and "Free access" (women), at the header's end (T-5.5) */
   --shell-pill-pad-x: 12px;
   --shell-pill-pad-y: 6px;

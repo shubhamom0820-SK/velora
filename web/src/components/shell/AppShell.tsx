@@ -58,7 +58,7 @@ function isCurrent(pathname: string, href: string): boolean {
  * At the header's end (T-5.5): a man's balance pill, which opens the store
  * sheet, or a woman's "Free access". The pill reads the one wallet query; a
  * woman's screen never asks for it. Its look is the `--shell-pill-*` tokens,
- * kept there by hand: `look.test.ts` is a blacklist until P-83.
+ * which `look.test.ts` holds like every other class here.
  */
 export function AppShell({ children }: { children: ReactNode }) {
   const pathname = usePathname();
@@ -68,11 +68,11 @@ export function AppShell({ children }: { children: ReactNode }) {
   const balance = wallet.data?.balance;
   return (
     <div className="bg-bg mx-auto flex min-h-dvh max-w-(--shell-width) flex-col">
-      <header className="bg-chrome border-chrome-line sticky top-0 z-10 flex h-(--shell-header-height) items-center gap-(--shell-gutter) border-b px-(--shell-gutter)">
+      <header className="bg-chrome border-chrome-line sticky top-0 z-10 flex h-(--shell-header-height) items-center gap-(--shell-gutter) border-b-(length:--shell-line) px-(--shell-gutter)">
         <span className="text-title-1 text-chrome-ink">{APP_NAME}</span>
         <nav
           aria-label={t("shell.nav")}
-          className="bg-chrome border-chrome-line fixed inset-x-0 bottom-0 z-10 flex h-(--shell-nav-height) border-t md:static md:h-auto md:self-stretch md:border-t-0"
+          className="bg-chrome border-chrome-line fixed inset-x-0 bottom-0 z-10 flex h-(--shell-nav-height) border-t-(length:--shell-line) md:static md:h-auto md:self-stretch md:border-t-0"
         >
           {NAV.map(({ href, label, icon }) => {
             const current = isCurrent(pathname, href);
@@ -122,7 +122,7 @@ export function AppShell({ children }: { children: ReactNode }) {
           </button>
         )}
         {gender === "female" && (
-          <span className="bg-chrome-accent-soft border-chrome-accent text-chrome-ink text-micro rounded-pill ml-auto border px-(--shell-pill-pad-x) py-(--shell-pill-pad-y)">
+          <span className="bg-chrome-accent-soft border-chrome-accent text-chrome-ink text-micro rounded-pill ml-auto border-(length:--shell-line) px-(--shell-pill-pad-x) py-(--shell-pill-pad-y)">
             {t("wallet.freeAccess")}
           </span>
         )}
