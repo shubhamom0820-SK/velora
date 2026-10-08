@@ -5009,7 +5009,7 @@ The number comes from the session's own block, given in its brief, from P-100 up
   hold; a test that doesn't force the overlap stays green with the guard removed, which is to say
   it isn't a check. Filed by Claude from T-4.11's research (5 October 2026), at the founder's
   direction, 7 October 2026; its session's block, P-280 to P-289.
-- [ ] P-282 · CI minutes: no duplicate run on `main`, e2e only when code changes, and the
+- [x] P-282 · CI minutes: no duplicate run on `main`, e2e only when code changes, and the
   cancel-in-progress that already exists kept off `main`. **Before the next week of several
   sessions landing at once.** Worst case, seen 7 October 2026: GitHub Free's 2,000 Actions
   minutes a month (D-280) ran out mid-week, at 481 runs that week and about 800 billed minutes a
@@ -5060,6 +5060,50 @@ The number comes from the session's own block, given in its brief, from P-100 up
   question with couplings of its own, and the `repo` job, whose pre-commit pass reads every file,
   docs included, runs either way. Filed by Claude at the founder's direction, 7 October 2026,
   from the day's outage; its session's block, P-280 to P-289.
+  **Done, 8 October 2026** (the founder's approval of the plan that morning, on the advisor's
+  recommendation, Claude in a separate chat, relayed), as D-410 records it: `scripts/ci-vouch`
+  and the `vouch` job, `scripts/ci-e2e-needed` and the `api` job's verdict that gates `e2e`,
+  and `cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}`; each script with its test
+  beside it, run by `repo`. `deploy.yml`, `ci-gate`, `release-gate` and `push-gate` are
+  untouched. **The one deviation, confirmed by the founder:** on a branch the journeys' diff
+  is measured from the merge base with `main`, not the push's `before`, because a code push
+  whose run a quick docs push cancelled would leave the branch tip with no e2e run on its
+  tree, since the second push's diff is docs only; on `main`, `before`, with zeros or an
+  unknown SHA running them. **Each cut broken to show it works**, on two scratch branches
+  carrying the landed workflow with `refs/heads/p-282-proof` in place of `main` in its three
+  expressions and nothing else different (the diff was read before each push), both deleted
+  after:
+  - **Cut 1, the vouch (wiring and gate).** `e379c9d`, whose run on the ordinary branch had
+    passed with e2e (run 37686012553), pushed to the main-like branch: run 37687698856, the
+    `vouch` job alone, six seconds of work (`ci-vouch: run 37686012553 on p-282-proof-src
+    passed 'CI' for e379c9d: it vouches`), five jobs skipped, the run `success` ten seconds
+    after it was created, and `scripts/ci-gate --branch p-282-proof e379c9d` read it: "CI is
+    green for e379c9d (run 37687698856)", exit 0. **Fail closed:** `9e65ed0` and `54a15cd`,
+    pushed straight to the main-like branch with no branch run, ran the full CI (runs
+    `37687846099`, `37687894968`: `ci-vouch: No completed, passed push run of 'CI' … on a branch
+    other than p-282-proof`, `vouched=false`). On real `main`: `22aeab7`, this task's code commit, landed through the push gate on its branch run 37691150742 (full CI, e2e run, since code changed); `main`'s run 37732453666 was the `vouch` job alone (`ci-vouch: run 37691150742 on p-282-ci-minutes passed 'CI' for 22aeab7: it vouches`), the run `success` twelve seconds after it was created; the staging deploy 37732473688 fired on it and passed, smoke check included; `scripts/ci-gate --branch main 22aeab7` read it green, exit 0; and `scripts/release-gate 22aeab7`, run by hand, read both: "CI passed for 22aeab7 (run 37732453666)", "staging deployed 22aeab7 and its smoke check passed (run 37732473688)".
+  - **Cut 2, no cancel on `main`.** On the ordinary branch, a push on the heels of another
+    cancelled the first's run three times (37684498515 at 20:45:52, one second after the
+    next run was created; 37685359884 at 20:52:55; 37685363443 about a minute after the
+    third push, GitHub's own lag), so the expression is true off `main`. On the main-like
+    branch, `54a15cd` pushed while `9e65ed0`'s jobs were running: its run 37687894968 sat `pending` for five minutes while 37687846099 ran to the end, then ran, both `success`; nothing cancelled.
+  - **Cut 3, e2e only off the allowlist.** `9e65ed0`, docs only, straight to the main-like
+    branch: run `37687846099`, `api` named `docs/p-282-proof.md` allowlisted, `e2e=false`, the
+    `e2e` job skipped, the run `success`. `54a15cd`, one line in the `Makefile`: run
+    `37687894968`, `Makefile` outside, `e2e=true`, the journeys ran and passed. On a branch,
+    the real case: this tick commit's own branch run skipped e2e on a docs-only diff from `main`.
+  - **A trap the first proof run found (37684502234):** GitHub carries a skip down the whole
+    needs chain, so `vouch`, skipped on every branch, skipped `e2e` too, however green `api`
+    and `web` were and with `e2e=true` printed, because `e2e`'s condition had no status
+    function. Fixed before anything landed: every job below `vouch` opts out with
+    `!cancelled()` and names the results it needs (D-410, 06-TESTING).
+  **What it saved, each job rounded up as GitHub bills:** 7 October's ten CI runs, five
+  landings, all docs-only, cost 189 minutes, 36 to 38 a landing; the same day with the three
+  cuts would have cost 71. This landing's own: 19 minutes, the branch run 18 (repo 2, api 5, image 2, web 3, e2e 6) and `main`'s run 1, against 36 to 38 the day before; a docs-only landing is about 14 (this tick's own run says). The proof cost 97
+  minutes on the scratch branches, against about 50 planned: one run repeated for the
+  needs-chain fix, one cancelled by hand a moment after it started and re-run. Also noted on
+  the way: CLAUDE.md's shell trap 5, zsh's read-only `status`. Built by Claude, 8 October
+  2026; its session's block, P-310 to P-319 and D-410 to D-419, of which D-410 is used.
 - [ ] P-290 · Decide whether discovery's ranking keeps its `is_verified` boost for a profile whose
   badge is hidden. **Before T-6.2 writes `rank_score`.** Worst case: two rules that look like one.
   D-032 (Locked) ranks by `is_verified`, the selfie's match; D-393 shows the badge only with a

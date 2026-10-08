@@ -214,6 +214,10 @@ manual path skips only the CI half, with `VELORA_PUSH_GATE_MANUAL_PATH=1`.
    this is not GitHub misbehaving, and pushing again "to see why" is a landing: diagnose with
    `--dry-run`. T-5.2's first docs push to `main` went up that way, unchained to its ancestor
    check, and ended well only because the commit was the gated one (5 October 2026).
+5. **`status` is read-only in zsh:** a wrapper `make lint test; status=$?; …; exit $status`
+   typed into the tool dies after make has finished, so the checks' exit code is lost and the
+   run reads as failed when it wasn't. Name it `rc`, or run the wrapper under `bash -c`. Repo
+   scripts and GitHub's `run` steps are bash and keep `status` (8 October 2026, P-282).
 
 ## P- and D-numbers: a block per session
 
