@@ -140,6 +140,10 @@ class LedgerReason(StrEnum):
     # D-251, T-5.2: Extend, and each private message after the first.
     THREAD_EXTEND = "thread_extend"
     DM_MESSAGE = "dm_message"
+    # D-521, T-8.2: a refund or chargeback takes a payment's Velas back, and a
+    # refund that fails or a dispute that is won gives them back.
+    PURCHASE_REVERSAL = "purchase_reversal"
+    PURCHASE_RESTORED = "purchase_restored"
 
 
 class PaymentStatus(StrEnum):

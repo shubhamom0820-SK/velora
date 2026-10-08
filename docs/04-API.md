@@ -177,8 +177,8 @@ turns them into copy.
 | GET | /prices | 🔓 | → `{action: credits}`: every active action's price for a man; a woman pays 0 for each (D-098). Never gifts (`GET /gifts`), never an inactive action. No rate limit (02-ARCHITECTURE §12) | T-5.2 |
 | GET | /packs | ✅ | → `Pack[]`: `{id, credits, price_paise, bonus_credits}`, the man's store by his price-test variant, B shown A's packs until T-10.4, in order, never empty (a store with no active pack is a 500, D-480). `bonus_credits` is the first-purchase bonus he would get buying it now, or 0. A woman: `NOT_ALLOWED` (D-076). No rate limit of its own | T-8.1 |
 | POST | /payments/orders | ✅ | `{pack_id}` (nothing else: a body naming an amount or Velas is `VALIDATION_ERROR`, rule 6) + `Idempotency-Key` (8 to 64 of `A-Za-z0-9_-`) → `{payment_id, order_id, key_id, amount_paise}`, priced from the pack's row. A woman: `NOT_ALLOWED`, before any gateway is asked (D-076). A pack not active in his store: `NOT_FOUND`. The same key again: the same order; with another pack, `ALREADY_EXISTS` (D-481). Gateway down or unconfigured: `PROVIDER_UNAVAILABLE`, nothing written. 20 an hour per user | T-8.1 |
-| POST | /payments/webhook | 🔓 signature | Razorpay events → 200 | T-8.2 |
-| GET | /payments/{id} | ✅ | → `{status, credits, bonus_credits}` | T-8.2 |
+| POST | /payments/webhook | 🔓 signature | Razorpay's event, the raw body, `X-Razorpay-Signature` → `{}`. Bad or missing signature, or `RAZORPAY_WEBHOOK_SECRET` unset: `400 VALIDATION_ERROR`, nothing read. Signed but unreadable: `500`, so Razorpay retries. Anything else, applied or not: `200` (below). No rate limit (02-ARCHITECTURE §12) | T-8.2 |
+| GET | /payments/{id} | ✅ | → `PaymentStatusView`: `{status, credits, bonus_credits}`, the caller's own payment; anyone else's, or none, `NOT_FOUND`, the same answer. No GST (D-482). No rate limit of its own | T-8.2 |
 | POST | /refund-requests | ✅ | `{payment_id, reason}` → 201 | T-8.3 |
 | GET | /referrals/me | ✅ | → `{code, invited, rewarded}` | T-8.6 |
 | POST | /referrals/apply | 🔐 | `{code}` → 204 (only during onboarding) | T-8.6 |
@@ -187,7 +187,17 @@ turns them into copy.
 D-482): not a field, not a word, in any case, in the order's response, `GET /packs`, `GET
 /payments/{id}` or anything after them. P-350 adds the GST line, rate and GSTIN on registration.
 
-`LedgerEntry` (T-5.3): `id`, `delta`, `balance_after`, `reason` (`LedgerReason`, every value) and
+**The webhook (T-8.2, D-520 to D-524)** handles `payment.captured` (credits the row's `credits`
+and, if no other payment of his has moved money, its `bonus_credits`, once: a repeat, a second
+payment on one order, an amount or currency not the row's, or an owner who isn't a man credits
+nothing), `payment.failed` (a `created` row becomes `failed`, never anchored), `refund.created` and
+`payment.dispute.created` (the Velas taken back, down to 0), `refund.failed` and
+`payment.dispute.won` (exactly what was taken, given back), and `refund.processed` and
+`payment.dispute.lost` (`refunded`). Every other event, and an order nobody made, is `200` and
+logged. The Velas always come from the `payments` row, never the webhook (rule 6).
+
+`LedgerEntry` (T-5.3): `id`, `delta`, `balance_after`, `reason` (`LedgerReason`, every value, with
+`purchase_reversal` and `purchase_restored` since T-8.2) and
 `created_at`. Never its ref or its key. The web turns `reason` into words from `en.ts` (D-033,
 P-26); the API sends the enum only. Entries from one transaction share `created_at`, so among them
 the order is by `id`: stable, though not the order they were written. Whatever the cursor, the
@@ -232,7 +242,7 @@ Five tries a minute per client IP, invalid ones included → `RATE_LIMITED` (D-0
 | Method | Path | Auth | Body → Response | Task |
 |---|---|---|---|---|
 | POST | /test/sms/last-code | 🔓 | `{phone}` → `{code}`, the code the fake SMS last sent the number, or `null` | T-3.13 |
-| POST | /test/payments/webhook | 🔓 | `{payment_id, outcome: captured\|failed, amount_paise?}` → `{delivered_status}`: the fake gateway's signed webhook for that payment, delivered in process to `POST /v1/payments/webhook`, and the status it answered (404 until T-8.2 builds the route). `amount_paise` fakes a mismatch | T-8.1 |
+| POST | /test/payments/webhook | 🔓 | `{payment_id, outcome: captured\|failed, amount_paise?}` → `{delivered_status}`: the fake gateway's signed webhook for that payment, delivered in process to `POST /v1/payments/webhook`, and the status it answered (200 since T-8.2 built the route). `amount_paise` fakes a mismatch | T-8.1 |
 
 Each is kept out of the OpenAPI schema, so `make types` is the same everywhere and the web can't
 call it, and each is a 404 everywhere but where its allowlists say (rule 16).

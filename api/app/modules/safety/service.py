@@ -40,3 +40,34 @@ def record_possible_minor(
             meta={"what": POSSIBLE_MINOR_NOTE, "model": model, "score": score},
         ),
     )
+
+
+# D-520: a chargeback whose Velas were spent before they could be taken back.
+# What happened to the money, not a judgement of him: a dispute may be his
+# bank's mistake, and freezing is a moderation decision, never automatic.
+CHARGEBACK_SHORTFALL: Final = "chargeback_shortfall"
+CHARGEBACK_SHORTFALL_NOTE: Final = (
+    "A dispute took back money whose Velas were spent: the Velas it couldn't "
+    "take back (D-520)."
+)
+# Counts for nothing until T-9.2 says what it may count for (D-520).
+CHARGEBACK_SHORTFALL_WEIGHT: Final = 0
+
+
+def record_chargeback_shortfall(
+    session: AsyncSession, user_id: UUID, *, payment_id: UUID, shortfall: int
+) -> None:
+    """In the caller's transaction: our payment's id and the Velas short."""
+    repository.add_fraud_event(
+        session,
+        FraudEvent(
+            user_id=user_id,
+            signal=CHARGEBACK_SHORTFALL,
+            weight=CHARGEBACK_SHORTFALL_WEIGHT,
+            meta={
+                "what": CHARGEBACK_SHORTFALL_NOTE,
+                "payment_id": str(payment_id),
+                "shortfall": shortfall,
+            },
+        ),
+    )

@@ -1,5 +1,6 @@
-"""`GET /v1/packs`, `POST /v1/payments/orders` and `GET /v1/admin/turnover`
-(04-API.md, T-8.1).
+"""`GET /v1/packs`, `POST /v1/payments/orders`, `GET /v1/admin/turnover`
+(04-API.md, T-8.1), `POST /v1/payments/webhook` and `GET /v1/payments/{id}`
+(T-8.2).
 
 **No GST, anywhere a user is shown a payment, while Velora is unregistered**
 (D-450, D-482): not a field, not a word. Showing GST without a GSTIN is against
@@ -13,6 +14,8 @@ from datetime import datetime
 from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict
+
+from app.core.enums import PaymentStatus
 
 
 class Pack(BaseModel):
@@ -42,6 +45,20 @@ class Order(BaseModel):
     order_id: str
     key_id: str
     amount_paise: int
+
+
+class PaymentStatusView(BaseModel):
+    """What the browser polls after Checkout: the status, and the Velas the
+    payment grants or granted. `bonus_credits` is 0 once a capture finds an
+    earlier purchase of his (P-380), so the poll tells the truth."""
+
+    status: PaymentStatus
+    credits: int
+    bonus_credits: int
+
+
+class WebhookReceived(BaseModel):
+    """`{}`: Razorpay reads the status alone."""
 
 
 class Turnover(BaseModel):

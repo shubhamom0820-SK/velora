@@ -7,6 +7,11 @@ the same verification code in tests as in production.
 An order the gateway can't create raises `PaymentsUnavailable`, which the API
 answers with `PROVIDER_UNAVAILABLE` (503); its message names what failed, never
 a key.
+
+**A webhook's signature** (T-8.2, Razorpay's webhook docs, read 8 October 2026):
+`X-Razorpay-Signature` is the hex HMAC-SHA256 of the raw request body, keyed by
+the webhook secret, compared in constant time. Without the secret every
+signature is refused, with an error naming the setting (P-382).
 """
 
 from __future__ import annotations
@@ -18,6 +23,9 @@ from dataclasses import dataclass
 from typing import Final, Literal, Protocol
 
 import httpx
+import structlog
+
+log = structlog.get_logger(__name__)
 
 
 @dataclass(frozen=True)
@@ -64,6 +72,14 @@ def _sign(secret: bytes, body: bytes) -> str:
     return hmac.new(secret, body, hashlib.sha256).hexdigest()
 
 
+def _signed_by(secret: bytes, body: bytes, signature: str) -> bool:
+    """In constant time, and as bytes: a header of any characters is a refusal,
+    never a `TypeError`."""
+    return hmac.compare_digest(
+        _sign(secret, body).encode(), signature.encode("utf-8", "surrogateescape")
+    )
+
+
 Outcome = Literal["captured", "failed"]
 
 
@@ -92,7 +108,7 @@ class FakePayments:
         return order
 
     def verify_webhook(self, body: bytes, signature: str) -> bool:
-        return hmac.compare_digest(_sign(self._secret, body), signature)
+        return _signed_by(self._secret, body, signature)
 
     def capture(
         self, order_id: str, *, amount_paise: int | None = None
@@ -103,6 +119,16 @@ class FakePayments:
     def fail(self, order_id: str) -> SignedWebhook:
         """A signed `payment.failed` webhook."""
         return self._webhook("payment.failed", "failed", order_id, None)
+
+    def sign(self, event: dict[str, object] | bytes) -> SignedWebhook:
+        """Any event, or any body, signed as the gateway would sign it: for a
+        test that needs a refund, a dispute, or a payload of its own (T-8.2)."""
+        body = (
+            event
+            if isinstance(event, bytes)
+            else json.dumps(event, separators=(",", ":")).encode()
+        )
+        return SignedWebhook(body=body, signature=_sign(self._secret, body))
 
     def _webhook(
         self, event: str, status: str, order_id: str, amount_paise: int | None
@@ -171,10 +197,12 @@ class RazorpayPayments:
         key_id: str = "",
         key_secret: str = "",
         *,
+        webhook_secret: str = "",
         transport: httpx.AsyncBaseTransport | None = None,
     ) -> None:
         self._key_id = key_id
         self._key_secret = key_secret
+        self._webhook_secret = webhook_secret
         self._transport = transport
         self._client: httpx.AsyncClient | None = None
 
@@ -210,7 +238,13 @@ class RazorpayPayments:
         return _order_from(response, amount_paise)
 
     def verify_webhook(self, body: bytes, signature: str) -> bool:
-        raise NotImplementedError("Razorpay webhook verification arrives with T-8.2.")
+        if not self._webhook_secret:
+            log.error(
+                "payments.webhook_secret_missing",
+                note="RAZORPAY_WEBHOOK_SECRET isn't set: every webhook is refused (P-382).",
+            )
+            return False
+        return _signed_by(self._webhook_secret.encode(), body, signature)
 
     async def aclose(self) -> None:
         client, self._client = self._client, None

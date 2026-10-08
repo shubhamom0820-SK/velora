@@ -27,6 +27,11 @@ const ledgerReasons = {
   liked_you_reveal: "Revealed who liked you",
   thread_extend: "Thread extended",
   dm_message: "Private message",
+  // T-8.2 (D-521): a refund or chargeback takes a purchase's Velas back, and a
+  // refund that fails or a dispute that is won gives them back. The founder's
+  // words, 8 October 2026.
+  purchase_reversal: "Purchase reversed",
+  purchase_restored: "Purchase restored",
 } as const satisfies Record<LedgerReason, string>;
 
 /**

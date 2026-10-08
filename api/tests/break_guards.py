@@ -1711,7 +1711,7 @@ T52: list[Case] = [
         edits=[
             (
                 CALLERS,
-                '    if isinstance(node, ast.Attribute) and node.attr == "debit":\n        return True\n',
+                "    if isinstance(node, ast.Attribute) and node.attr == target:\n        return True\n",
                 "    if False:\n        return True\n",
             )
         ],
@@ -5021,6 +5021,269 @@ T64: list[tuple[Case, list[str]]] = [
     ),
 ]
 
+# --- T-8.2: the webhook, reversals, the bonus at capture, the poll -------------
+
+WEBHOOKS = "app/modules/payments/webhooks.py"
+REVERSAL_SHAPE = (
+    "alembic/versions/20261008_fb0a7ce8dd16_ledger_shape_names_the_reversals.py"
+)
+SAFETY_SERVICE = "app/modules/safety/service.py"
+T82_SELECTION = [
+    "tests/modules/payments",
+    "tests/modules/wallet/test_guards.py",
+    "tests/modules/wallet/test_service.py",
+    "tests/modules/wallet/test_reversal_reason_migration.py",
+    "tests/modules/pricing/test_debit_callers.py",
+    "tests/core/test_razorpay.py",
+    "tests/modules/e2e/test_payments_simulator.py",
+]
+MISMATCH = "test_an_amount_or_currency_not_the_rows_credits_nothing"
+
+T82: list[Case] = [
+    Case(
+        id="t82-01-signature-skipped",
+        what="the webhook applied without its signature checked",
+        edits=[
+            (
+                WEBHOOKS,
+                "    if signature is None or not payments.verify_webhook(body, signature):\n",
+                "    if False:\n",
+            )
+        ],
+        expect=[
+            "test_a_bad_or_missing_signature_credits_nothing[bad]",
+            "test_a_bad_or_missing_signature_credits_nothing[missing]",
+        ],
+    ),
+    Case(
+        id="t82-02-repeat-not-checked",
+        what="D-026: a capture applied again when the anchor is already its own",
+        edits=[
+            (
+                WEBHOOKS,
+                "    if row.provider_payment_id is not None:\n        if row.provider_payment_id == payment.id:\n",
+                "    if row.provider_payment_id not in (None, payment.id):\n        if False:\n",
+            )
+        ],
+        expect=[
+            "test_one_webhook_delivered_five_times_at_once_is_credited_once",
+            "test_the_same_capture_again_is_a_repeat",
+        ],
+    ),
+    Case(
+        id="t82-03-row-lock-dropped",
+        what="D-026: the payment row read without FOR UPDATE",
+        edits=[
+            (
+                PAY_REPO,
+                "select(Payment).with_for_update().execution_options(",
+                "select(Payment).execution_options(",
+            )
+        ],
+        expect=["test_one_webhook_delivered_five_times_at_once_is_credited_once"],
+    ),
+    Case(
+        id="t82-04-bonus-decided-before-the-wallet-lock",
+        what="P-380: the bonus decided before the wallet is locked",
+        edits=[
+            (
+                WEBHOOKS,
+                "    ref = Ref(RefType.PAYMENT, row.id)\n    # The wallet's lock is held from here to the commit (D-077).\n",
+                "    ref = Ref(RefType.PAYMENT, row.id)\n    bought = await repository.bought_other_than(session, row.user_id, row.id)\n",
+            ),
+            (
+                WEBHOOKS,
+                "        if await repository.bought_other_than(session, row.user_id, row.id):\n",
+                "        if bought:\n",
+            ),
+        ],
+        expect=["test_two_orders_captured_at_once_grant_the_bonus_once"],
+    ),
+    Case(
+        id="t82-05-the-webhooks-amount-trusted",
+        what="rule 6: the webhook's amount taken for the row's",
+        edits=[
+            (
+                WEBHOOKS,
+                "    if payment.amount != row.amount_paise or payment.currency != CURRENCY:\n",
+                "    row.amount_paise = payment.amount\n    if payment.amount != row.amount_paise or payment.currency != CURRENCY:\n",
+            )
+        ],
+        expect=[f"{MISMATCH}[change0]", f"{MISMATCH}[change1]"],
+    ),
+    Case(
+        id="t82-06-the-amount-not-checked",
+        what="rule 6: a capture credited whatever its amount",
+        edits=[
+            (
+                WEBHOOKS,
+                "    if payment.amount != row.amount_paise or payment.currency != CURRENCY:\n",
+                "    if payment.currency != CURRENCY:\n",
+            )
+        ],
+        expect=[f"{MISMATCH}[change0]", f"{MISMATCH}[change1]"],
+    ),
+    Case(
+        id="t82-07-a-womans-capture-not-refused",
+        what="D-076: the service's own check that the owner is a man removed",
+        edits=[
+            (
+                WEBHOOKS,
+                "    if await repository.owner_gender(session, row.user_id) is not Gender.MALE:\n",
+                "    if False:\n",
+            )
+        ],
+        expect=["test_a_womans_payment_is_never_credited"],
+    ),
+    Case(
+        id="t82-08-a-failed-attempt-sets-the-anchor",
+        what="D-523: payment.failed sets provider_payment_id",
+        edits=[
+            (
+                WEBHOOKS,
+                '        row.status = PaymentStatus.FAILED\n        row.raw_webhook = event.raw\n        log.info("payments.failed"',
+                '        row.status = PaymentStatus.FAILED\n        row.provider_payment_id = event.payment.id\n        row.raw_webhook = event.raw\n        log.info("payments.failed"',
+            )
+        ],
+        expect=["test_a_failed_attempt_then_a_capture_is_paid_and_credited"],
+    ),
+    Case(
+        id="t82-09-raw-webhook-by-strip-list",
+        what="D-524: raw_webhook built by stripping payer fields, not by an allowlist",
+        edits=[
+            (
+                WEBHOOKS,
+                "            kept[name] = {key: entity[key] for key in keys if key in entity}\n",
+                '            kept[name] = {key: value for key, value in entity.items() if key not in ("email", "contact", "vpa", "card_id", "card", "bank", "wallet", "acquirer_data", "notes", "description", "fee", "tax")}\n',
+            )
+        ],
+        expect=["test_raw_webhook_keeps_exactly_the_allowlisted_fields"],
+    ),
+    Case(
+        id="t82-10-reversed-only-when-processed",
+        what="D-520: the Velas taken back at refund.processed, not refund.created",
+        edits=[
+            (
+                WEBHOOKS,
+                "    if event.name in REVERSE:\n        return await _reverse(session, row, event)\n",
+                '    if event.name == "refund.created":\n        return Outcome.NOTHING_TO_DO\n    if event.name in REVERSE:\n        return await _reverse(session, row, event)\n',
+            )
+        ],
+        expect=["test_a_refund_created_takes_the_velas_back_and_the_status_stays_paid"],
+    ),
+    Case(
+        id="t82-11-a-restore-gives-back-the-whole-payment",
+        what="D-520: a restore gives back the payment's Velas, not what its reversal took",
+        edits=[
+            (
+                WEBHOOKS,
+                "        -reversal.delta,\n        LedgerReason.PURCHASE_RESTORED,\n",
+                "        row.credits + row.bonus_credits,\n        LedgerReason.PURCHASE_RESTORED,\n",
+            )
+        ],
+        expect=[
+            "test_a_restore_after_a_partial_reversal_gives_back_only_what_was_taken"
+        ],
+    ),
+    Case(
+        id="t82-12-a-reversal-refused-on-a-low-balance",
+        what="D-520: reverse() refuses a low balance, as debit() does",
+        edits=[
+            (
+                SERVICE,
+                "    if at_most:\n        amount = min(balance, amount)\n",
+                "    if False:\n        amount = min(balance, amount)\n",
+            )
+        ],
+        expect=[
+            "test_a_reversal_takes_at_most_the_balance_and_never_refuses",
+            "test_velas_partly_spent_take_what_is_left_and_record_the_rest[refund]",
+            "test_velas_partly_spent_take_what_is_left_and_record_the_rest[dispute]",
+        ],
+    ),
+    Case(
+        id="t82-13-a-refund-before-its-capture-ignored",
+        what="D-523: a refund reaching an uncaptured order not captured first",
+        edits=[
+            (
+                WEBHOOKS,
+                "    if row.provider_payment_id is None:\n        await _capture(session, row, event)\n",
+                "",
+            )
+        ],
+        expect=[
+            "test_a_refund_before_its_capture_captures_then_reverses[refund.created]",
+            "test_a_refund_before_its_capture_captures_then_reverses[refund.processed]",
+        ],
+    ),
+    Case(
+        id="t82-14-a-dispute-refunded-at-creation",
+        what="D-520, D-483: a dispute marks the payment refunded before it is lost",
+        edits=[
+            (
+                WEBHOOKS,
+                "    outcome = await _reverse_once(session, row, event)\n",
+                '    outcome = await _reverse_once(session, row, event)\n    if event.kind == "dispute":\n        row.status = PaymentStatus.REFUNDED\n',
+            )
+        ],
+        expect=[
+            "test_turnover_drops_a_refund_and_keeps_a_dispute_not_yet_lost",
+            "test_a_dispute_reverses_then_a_win_restores",
+        ],
+    ),
+    Case(
+        id="t82-15-the-poll-serves-anyones-payment",
+        what="GET /payments/{id} answers for a payment that isn't the caller's",
+        edits=[
+            (
+                PAY_SERVICE,
+                "        if payment is None or payment.user_id != user.id:\n",
+                "        if payment is None:\n",
+            )
+        ],
+        expect=["test_someone_elses_payment_is_not_found_as_none_is"],
+    ),
+    Case(
+        id="t82-16-the-direction-check-widened",
+        what="D-521: purchase_restored allowed as a debit too",
+        edits=[
+            (
+                REVERSAL_SHAPE,
+                'DEBITS = (*DEBITS_BEFORE, "purchase_reversal")\n',
+                'DEBITS = (*DEBITS_BEFORE, "purchase_reversal", "purchase_restored")\n',
+            )
+        ],
+        expect=["test_each_reason_has_one_direction_in_the_database"],
+    ),
+    Case(
+        id="t82-17-reverse-called-elsewhere",
+        what="D-520: something but the webhook's reversal reaches reverse()",
+        edits=[
+            (
+                SAFETY_SERVICE,
+                "CHARGEBACK_SHORTFALL_WEIGHT: Final = 0\n",
+                'CHARGEBACK_SHORTFALL_WEIGHT: Final = 0\n\n\nasync def _take(session, user_id):\n    from app.modules.wallet import service as wallet_service\n\n    await wallet_service.reverse(session, user_id, 5, "purchase_reversal", ref=None, event="x")\n',
+            )
+        ],
+        expect=["test_only_the_webhooks_reversal_reaches_reverse"],
+    ),
+    Case(
+        id="t82-18-verified-without-a-secret",
+        what="P-382: verify_webhook says yes when RAZORPAY_WEBHOOK_SECRET isn't set",
+        edits=[
+            (
+                RAZORPAY,
+                "            return False\n        return _signed_by(self._webhook_secret.encode(), body, signature)\n",
+                "            return True\n        return _signed_by(self._webhook_secret.encode(), body, signature)\n",
+            )
+        ],
+        expect=[
+            "test_without_the_secret_every_signature_is_refused_naming_the_setting",
+            "test_with_razorpay_and_no_secret_every_webhook_is_refused",
+        ],
+    ),
+]
+
 CASES: list[tuple[Case, list[str]]] = (
     [(c, T51_SELECTION) for c in T51]
     + [(c, T54_SELECTION) for c in T54]
@@ -5043,6 +5306,7 @@ CASES: list[tuple[Case, list[str]]] = (
     + [(c, T96_SELECTION) for c in T96]
     + P47
     + T64
+    + [(c, T82_SELECTION) for c in T82]
 )
 
 # The fifty-connection fixture's own message when Postgres refuses a connection.

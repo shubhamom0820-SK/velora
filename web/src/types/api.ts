@@ -642,6 +642,40 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/payments/webhook": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Payments Webhook */
+        post: operations["payments_webhook_v1_payments_webhook_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/payments/{payment_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Payment Status */
+        get: operations["payment_status_v1_payments__payment_id__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/admin/turnover": {
         parameters: {
             query?: never;
@@ -1066,7 +1100,7 @@ export interface components {
          * LedgerReason
          * @enum {string}
          */
-        LedgerReason: "purchase" | "purchase_bonus" | "referral_reward" | "admin_grant" | "refund" | "gift" | "refund_banned_partner" | "refund_album_declined" | "thread_open" | "dm_open" | "thread_reopen" | "voice_unlock" | "album_request" | "super_like" | "liked_you_reveal" | "thread_extend" | "dm_message";
+        LedgerReason: "purchase" | "purchase_bonus" | "referral_reward" | "admin_grant" | "refund" | "gift" | "refund_banned_partner" | "refund_album_declined" | "thread_open" | "dm_open" | "thread_reopen" | "voice_unlock" | "album_request" | "super_like" | "liked_you_reveal" | "thread_extend" | "dm_message" | "purchase_reversal" | "purchase_restored";
         /**
          * Me
          * @description The age, never the date of birth, and no phone number: no screen shows
@@ -1192,6 +1226,24 @@ export interface components {
             credits: number;
             /** Price Paise */
             price_paise: number;
+            /** Bonus Credits */
+            bonus_credits: number;
+        };
+        /**
+         * PaymentStatus
+         * @enum {string}
+         */
+        PaymentStatus: "created" | "paid" | "failed" | "refunded";
+        /**
+         * PaymentStatusView
+         * @description What the browser polls after Checkout: the status, and the Velas the
+         *     payment grants or granted. `bonus_credits` is 0 once a capture finds an
+         *     earlier purchase of his (P-380), so the poll tells the truth.
+         */
+        PaymentStatusView: {
+            status: components["schemas"]["PaymentStatus"];
+            /** Credits */
+            credits: number;
             /** Bonus Credits */
             bonus_credits: number;
         };
@@ -1579,6 +1631,11 @@ export interface components {
             /** Balance */
             balance: number;
         };
+        /**
+         * WebhookReceived
+         * @description `{}`: Razorpay reads the status alone.
+         */
+        WebhookReceived: Record<string, never>;
     };
     responses: never;
     parameters: never;
@@ -2598,6 +2655,68 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["Order"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    payments_webhook_v1_payments_webhook_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                "X-Razorpay-Signature"?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WebhookReceived"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    payment_status_v1_payments__payment_id__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                payment_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PaymentStatusView"];
                 };
             };
             /** @description Validation Error */

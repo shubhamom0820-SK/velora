@@ -486,3 +486,110 @@ async def test_a_debit_beyond_the_balance_is_refused_and_writes_nothing(
     assert await _balance(db, man.id) == 5
     assert len(await _entries(db, man.id)) == 1
     assert events.take_committed(db) == []
+
+
+# --- reverse(): a payment's Velas taken back (T-8.2, D-520) ----------------------
+
+REVERSAL = LedgerReason.PURCHASE_REVERSAL
+
+
+async def test_a_reversal_takes_the_amount_when_the_balance_holds_it(
+    db: AsyncSession, make_user: MakeUser
+) -> None:
+    man, _ = await make_user(credits=40)
+    payment = _ref(RefType.PAYMENT)
+
+    reversal = await service.reverse(
+        db, man.id, 36, REVERSAL, ref=payment, event="rfnd_1"
+    )
+
+    assert (reversal.taken, reversal.shortfall, reversal.applied) == (36, 0, True)
+    assert reversal.entry is not None
+    assert reversal.entry.idempotency_key == f"{man.id}:purchase_reversal:rfnd_1"
+    assert await _balance(db, man.id) == 4
+    assert (REVERSAL, -36, 4, "payment", payment.id) in await _entries(db, man.id)
+
+
+@pytest.mark.critical
+async def test_a_reversal_takes_at_most_the_balance_and_never_refuses(
+    db: AsyncSession, make_user: MakeUser
+) -> None:
+    """He spent some: what is left is taken, down to 0, and the rest is the
+    shortfall. Never INSUFFICIENT_CREDITS, never below 0 (D-520)."""
+    man, _ = await make_user(credits=10)
+
+    reversal = await service.reverse(
+        db, man.id, 36, REVERSAL, ref=_ref(RefType.PAYMENT), event="rfnd_1"
+    )
+
+    assert (reversal.taken, reversal.shortfall, reversal.applied) == (10, 26, True)
+    assert await _balance(db, man.id) == 0
+
+
+async def test_at_a_balance_of_zero_a_reversal_writes_nothing(
+    db: AsyncSession, make_user: MakeUser
+) -> None:
+    man, _ = await make_user()
+
+    reversal = await service.reverse(
+        db, man.id, 36, REVERSAL, ref=_ref(RefType.PAYMENT), event="rfnd_1"
+    )
+
+    assert reversal == service.Reversal(
+        entry=None, taken=0, shortfall=36, applied=False
+    )
+    assert await _entries(db, man.id) == set()
+    assert await _committed_events(db) == []
+
+
+async def test_the_same_reversal_twice_takes_once(
+    db: AsyncSession, make_user: MakeUser
+) -> None:
+    """Partly taken, then asked again for the same event: the first entry,
+    whatever the balance holds now."""
+    man, _ = await make_user(credits=10)
+    payment = _ref(RefType.PAYMENT)
+    first = await service.reverse(db, man.id, 36, REVERSAL, ref=payment, event="rfnd_1")
+    await service.credit(db, man.id, 50, ADMIN_GRANT, event="later")
+
+    again = await service.reverse(db, man.id, 36, REVERSAL, ref=payment, event="rfnd_1")
+
+    assert again == service.Reversal(first.entry, 10, 26, applied=False)
+    assert await _balance(db, man.id) == 50
+
+
+async def test_reverse_refuses_outside_a_transaction(
+    test_engine: AsyncEngine, make_user: MakeUser
+) -> None:
+    man, _ = await make_user()
+    async with AsyncSession(test_engine) as session:
+        with pytest.raises(
+            WalletMisuse, match=r"runs only inside its caller's transaction"
+        ):
+            await service.reverse(
+                session, man.id, 5, REVERSAL, ref=_ref(RefType.PAYMENT), event="r"
+            )
+
+
+async def test_reverse_refuses_a_woman(db: AsyncSession, make_user: MakeUser) -> None:
+    woman, _ = await make_user(Gender.FEMALE)
+
+    with pytest.raises(WalletMisuse, match=r"^only a man may hold credits \(D-076\)$"):
+        await service.reverse(
+            db, woman.id, 5, REVERSAL, ref=_ref(RefType.PAYMENT), event="r"
+        )
+
+
+@pytest.mark.parametrize(
+    "reason", [r for r in LedgerReason if r is not REVERSAL], ids=str
+)
+async def test_reverse_takes_only_a_purchase_reversal(
+    db: AsyncSession, make_user: MakeUser, reason: LedgerReason
+) -> None:
+    """Anything else that spends is priced, and refused on a low balance."""
+    man, _ = await make_user(credits=10)
+
+    with pytest.raises(WalletMisuse, match=r"is never taken by reverse\(\)"):
+        await service.reverse(db, man.id, 5, reason, **_valid(reason))
+
+    assert await _balance(db, man.id) == 10

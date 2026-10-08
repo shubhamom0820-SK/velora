@@ -14,6 +14,10 @@ The scan reads source, so code that builds the name at run time
 finds `debit` however it is imported or renamed, any attribute called `debit`
 on anything, `getattr(..., "debit")`, and a star import of the wallet service.
 Tests aren't scanned: they prove the wallet by calling it.
+
+**`reverse()` the same way (T-8.2, D-520):** it takes what the balance holds
+and never refuses, so a priced action reaching it would take Velas for free.
+Only payments' webhook, taking back a payment whose money went back, calls it.
 """
 
 from __future__ import annotations
@@ -26,13 +30,14 @@ import pytest
 from tests.infra import API_DIR
 
 ALLOWED = {("app/modules/pricing/service.py", "charge")}
+REVERSE_ALLOWED = {("app/modules/payments/webhooks.py", "_reverse_once")}
 
 WALLET_SERVICE = "app.modules.wallet.service"
 
 
-def _debit_names(tree: ast.Module, rel: str) -> set[str]:
-    """Names in this module bound to the wallet's `debit` function."""
-    names = {"debit"} if rel == "app/modules/wallet/service.py" else set()
+def _debit_names(tree: ast.Module, rel: str, target: str = "debit") -> set[str]:
+    """Names in this module bound to the wallet's `target` function."""
+    names = {target} if rel == "app/modules/wallet/service.py" else set()
     for node in ast.walk(tree):
         if not isinstance(node, ast.ImportFrom):
             continue
@@ -41,14 +46,14 @@ def _debit_names(tree: ast.Module, rel: str) -> set[str]:
         if module == WALLET_SERVICE or (local and module == "service"):
             for alias in node.names:
                 if alias.name == "*":
-                    names.add("debit")
-                elif alias.name == "debit":
+                    names.add(target)
+                elif alias.name == target:
                     names.add(alias.asname or alias.name)
     return names
 
 
-def _reaches_debit(node: ast.AST, names: set[str]) -> bool:
-    if isinstance(node, ast.Attribute) and node.attr == "debit":
+def _reaches_debit(node: ast.AST, names: set[str], target: str = "debit") -> bool:
+    if isinstance(node, ast.Attribute) and node.attr == target:
         return True
     if isinstance(node, ast.Name) and isinstance(node.ctx, ast.Load):
         return node.id in names
@@ -58,7 +63,7 @@ def _reaches_debit(node: ast.AST, names: set[str]) -> bool:
         and node.func.id == "getattr"
         and len(node.args) >= 2
         and isinstance(node.args[1], ast.Constant)
-        and node.args[1].value == "debit"
+        and node.args[1].value == target
     )
 
 
@@ -74,24 +79,30 @@ def _walk(node: ast.AST, scope: str) -> list[tuple[ast.AST, str]]:
     return found
 
 
-def debit_callers(base: Path, *roots: str) -> set[tuple[str, str]]:
-    """(file, function) for everything under `roots` that reaches `debit`."""
+def debit_callers(
+    base: Path, *roots: str, target: str = "debit"
+) -> set[tuple[str, str]]:
+    """(file, function) for everything under `roots` that reaches `target`."""
     callers: set[tuple[str, str]] = set()
     for root in roots:
         for path in sorted((base / root).rglob("*.py")):
             rel = path.relative_to(base).as_posix()
             tree = ast.parse(path.read_text(), filename=rel)
-            names = _debit_names(tree, rel)
+            names = _debit_names(tree, rel, target)
             callers |= {
                 (rel, scope)
                 for node, scope in _walk(tree, "<module>")
-                if _reaches_debit(node, names)
+                if _reaches_debit(node, names, target)
             }
     return callers
 
 
 def test_only_charge_reaches_the_debit() -> None:
     assert debit_callers(API_DIR, "app", "seed") == ALLOWED
+
+
+def test_only_the_webhooks_reversal_reaches_reverse() -> None:
+    assert debit_callers(API_DIR, "app", "seed", target="reverse") == REVERSE_ALLOWED
 
 
 SOMEWHERE = "app/modules/never_named_2031/service.py"
@@ -190,3 +201,15 @@ PAY = {"thread_open": debit}
     )
 
     assert debit_callers(tmp_path, "app") == {(SOMEWHERE, "<module>")}
+
+
+@pytest.mark.parametrize("way", WAYS)
+def test_a_reverse_caller_nobody_has_named_is_found(tmp_path: Path, way: str) -> None:
+    """Every way a caller could reach `debit`, aimed at `reverse` instead."""
+    (tmp_path / SOMEWHERE).parent.mkdir(parents=True)
+    (tmp_path / SOMEWHERE).write_text(WAYS[way].replace("debit", "reverse"))
+
+    found = debit_callers(tmp_path, "app", target="reverse")
+
+    assert found == {(SOMEWHERE, SCOPES.get(way, "buy"))}
+    assert not found <= REVERSE_ALLOWED

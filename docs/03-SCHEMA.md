@@ -42,7 +42,8 @@ ledger_reason_t   ('purchase','purchase_bonus','referral_reward','admin_grant','
                    'refund_banned_partner','refund_album_declined',
                    'thread_open','dm_open','thread_reopen','voice_unlock','album_request',
                    'super_like','liked_you_reveal',
-                   'thread_extend','dm_message')   -- the last two T-5.2's (D-251)
+                   'thread_extend','dm_message',   -- T-5.2's (D-251)
+                   'purchase_reversal','purchase_restored')   -- T-8.2's (D-521)
 payment_status_t  ('created','paid','failed','refunded')
 fraud_band_t      ('normal','monitor','shadow','freeze')
 ban_kind_t        ('phone_hash','device_id')
@@ -360,7 +361,9 @@ Check `score between 0 and 100` (D-031). Bands are policy, so no check ties them
 Index `(user_id, created_at desc)`.
 A signal, never a verdict. `possible_minor_photo_score` (T-4.4, D-093): a model's score that one
 photo may show a minor, weight 0 until T-9.2 says what it may count for; `meta` is `{what, model,
-score}`, and never the image or which photo.
+score}`, and never the image or which photo. `chargeback_shortfall` (T-8.2, D-520): a dispute took
+back money whose Velas were already spent; weight 0 until T-9.2, `meta` `{what, payment_id,
+shortfall}`, our payment's id and the Velas the reversal couldn't take.
 
 ---
 
@@ -415,16 +418,18 @@ wipe the money record. Both raise `restrict_violation` (23001) (T-1.12).
 | `voice_unlock` | debit | `message` | the message's id |
 | `album_request` | debit | `album_request` | the request's id |
 | `super_like`, `liked_you_reveal` | debit | `user` | the other person: once per pair, ever, as a swipe is (the founder, 3 October 2026) |
+| `purchase_reversal` | debit | `payment` | named by the caller: the refund's or dispute's own Razorpay id, one per refund or dispute (T-8.2, D-521) |
+| `purchase_restored` | credit | `payment` | named by the caller: the same id as the reversal it gives back (D-520) |
 
 - `ck_ledger_entries_reason_direction`: credits positive, debits negative. Both lists are
   allowlists, so a reason added to `ledger_reason_t` can't be written until a migration names it.
 - `ck_ledger_entries_ref_required`: every reason but `admin_grant` names its ref.
 - `ck_ledger_entries_reason_ref_type`: the pinned `ref_type` or none, so a credit naming a payment
-  can only be `purchase` or `purchase_bonus`.
+  can only be `purchase`, `purchase_bonus` or `purchase_restored`.
 - `uq_ledger_entries_one_per_event`: partial unique index on `(user_id, reason, ref_type, ref_id)`
-  where the reason is not `admin_grant`, `thread_reopen` or `thread_extend`, the three that repeat
-  for one ref (the third since T-5.2's a1d7de534ef7): one
-  entry per event, even if a key is built wrong.
+  where the reason is not `admin_grant`, `thread_reopen`, `thread_extend`, `purchase_reversal` or
+  `purchase_restored`, the five that repeat for one ref (the third since T-5.2's a1d7de534ef7, the
+  last two since T-8.2's fb0a7ce8dd16): one entry per event, even if a key is built wrong.
 - `idempotency_key` is `{user_id}:{reason}:{event}`, built by the wallet module, never by a caller;
   a client's `Idempotency-Key` only ever fills the event part.
 - Trigger `ledger_entries_only_men` (D-076): before every insert, refuses unless the user's gender
@@ -481,10 +486,15 @@ in `payments/rules.py` (`SHOWN_AS`) maps B to A. No man is ever shown an empty s
 | provider_payment_id | text unique null | **idempotency anchor** |
 | status | payment_status_t not null default 'created' | |
 | paid_at | timestamptz null | |
-| raw_webhook | jsonb null | the last verified payload's allowlisted fields only: ids, amount, currency, status, method, error code, timestamps; never the payer's email, phone, UPI ID, card or bank details (T-8.2) |
+| raw_webhook | jsonb null | the last verified event applied to the row (a repeated capture or a failure after payment leaves it), its allowlisted fields only, flattened (T-8.2, D-524): `{event, created_at, payment: {id, order_id, amount, currency, status, method, error_code, created_at}, refund: {id, payment_id, amount, currency, status, created_at}, dispute: {…the refund's keys}}`, each entity present only if the event carries it. Never the payer's email, phone (`contact`), UPI ID (`vpa`), card, bank, wallet, `acquirer_data`, `notes` or `description`, nor any field Razorpay adds later |
 
 Check `status NOT IN ('paid','refunded') OR (provider_payment_id IS NOT NULL AND paid_at IS NOT NULL)` —
 once money has moved the idempotency anchor exists, or a payment could be credited twice.
+**Set by the webhook (T-8.2, D-523):** `paid`, the anchor and `paid_at` (our clock) only by a
+capture; a failed attempt makes a `created` row `failed` and never sets the anchor, so a later
+capture on the same order still credits; `refunded` only once the money has gone
+(`refund.processed`, `payment.dispute.lost`, D-520). `bonus_credits` becomes 0 when the capture
+finds an earlier purchase of his (D-522).
 Triggers `payments_no_delete` and `payments_no_truncate`: payments are never hard-deleted
 (rule 12); status updates are allowed. Both raise `restrict_violation` (23001) (T-1.12).
 

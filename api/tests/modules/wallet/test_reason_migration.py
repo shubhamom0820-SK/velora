@@ -157,7 +157,8 @@ async def test_the_reasons_refuse_to_go_down_once_the_ledger_holds_one(
         "1 ledger entries use thread_extend or dm_message, and the ledger keeps "
         "every row (T-1.12), so they can't leave ledger_reason_t (D-251)"
     )
-    assert (await _labels(await db.connection()))[-2:] == [
+    # Right after the fifteen, whatever later migrations added after them.
+    assert (await _labels(await db.connection()))[15:17] == [
         "thread_extend",
         "dm_message",
     ]

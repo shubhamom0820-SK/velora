@@ -370,11 +370,6 @@ async def test_fake_storage_presigns_links_that_go_nowhere() -> None:
 
 _STUB_CALLS: list[tuple[str, Callable[[], Awaitable[object] | object], str]] = [
     ("sms", lambda: Msg91Sms().send_otp(PHONE, "123456"), "P-46"),
-    (
-        "payments.verify_webhook",
-        lambda: RazorpayPayments().verify_webhook(b"{}", "sig"),
-        "T-8.2",
-    ),
     ("push", lambda: WebPush().send(PushSubscription("e", "k", "a"), {}), "T-9.4"),
 ]
 

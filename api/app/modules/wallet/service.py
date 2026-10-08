@@ -24,6 +24,11 @@ captured payment is still credited (D-077).
 
 A transaction locks one wallet, or several in `user_id` order (D-077).
 
+**`reverse()` (T-8.2, D-520)** takes a payment's Velas back when its money goes
+back: the same steps, but at step 6 it takes what the balance holds, down to 0,
+never refusing, and writes nothing when that is 0. Only `purchase_reversal`,
+and only `payments` calls it (`tests/modules/pricing/test_debit_callers.py`).
+
 The owner's two reads, `balance()` and `ledger()`, are at the end (T-5.3).
 """
 
@@ -61,6 +66,27 @@ class LedgerResult:
     applied: bool
 
 
+@dataclass(frozen=True)
+class Reversal:
+    """What `reverse()` took and what it couldn't: `taken + shortfall` is the
+    amount asked. `entry` is None when nothing was taken."""
+
+    entry: LedgerEntry | None
+    taken: int
+    shortfall: int
+    # False when the key was already in the ledger, or nothing was taken.
+    applied: bool
+
+
+class _NothingToTake(Exception):
+    """A reversal found a balance of 0: nothing is written (D-520)."""
+
+
+# The only reasons `reverse()` takes: anything else that spends is priced and
+# refused on a low balance (`debit`).
+REVERSIBLE = frozenset({LedgerReason.PURCHASE_REVERSAL})
+
+
 async def credit(
     session: AsyncSession,
     user_id: UUID,
@@ -93,6 +119,32 @@ async def debit(
     return await _apply(session, user_id, amount, reason, Direction.DEBIT, ref, event)
 
 
+async def reverse(
+    session: AsyncSession,
+    user_id: UUID,
+    amount: int,
+    reason: LedgerReason,
+    *,
+    ref: Ref,
+    event: str,
+) -> Reversal:
+    """Take back up to `amount` from a man's balance for `reason`: what he
+    still holds, down to 0. Never `INSUFFICIENT_CREDITS`: money that went back
+    takes its Velas back whether or not he spent them (D-520). The rest is the
+    shortfall, the caller's to record. At 0 nothing is written."""
+    if reason not in REVERSIBLE:
+        raise WalletMisuse(f"{reason} is never taken by reverse(): debit() it (D-520)")
+    try:
+        result = await _apply(
+            session, user_id, amount, reason, Direction.DEBIT, ref, event, at_most=True
+        )
+    except _NothingToTake:
+        log.info("wallet.nothing_to_reverse", user_id=str(user_id), reason=str(reason))
+        return Reversal(entry=None, taken=0, shortfall=amount, applied=False)
+    taken = -result.entry.delta
+    return Reversal(result.entry, taken, amount - taken, result.applied)
+
+
 async def _apply(
     session: AsyncSession,
     user_id: UUID,
@@ -101,6 +153,8 @@ async def _apply(
     direction: Direction,
     ref: Ref | None,
     event: str | None,
+    *,
+    at_most: bool = False,
 ) -> LedgerResult:
     if not session.in_transaction():
         raise WalletMisuse(
@@ -125,6 +179,9 @@ async def _apply(
     existing = await repository.entry_by_key(session, key)
     if existing is not None:
         details = (user_id, reason, delta, ref_type, ref_id)
+        if at_most and -amount <= existing.delta < 0:
+            # A reversal took what the balance held then, at most the amount.
+            details = (user_id, reason, existing.delta, ref_type, ref_id)
         if _details(existing) != details:
             raise WalletMisuse(
                 f"{reason}: this event is in the ledger already, with other "
@@ -133,6 +190,11 @@ async def _apply(
         log.info("wallet.repeated", user_id=str(user_id), reason=str(reason))
         return LedgerResult(existing, applied=False)
 
+    if at_most:
+        amount = min(balance, amount)
+        if amount == 0:
+            raise _NothingToTake
+        delta = -amount
     if direction is Direction.DEBIT and balance < amount:
         raise AppError(
             "INSUFFICIENT_CREDITS",
@@ -162,6 +224,31 @@ async def _apply(
         balance_after=balance_after,
     )
     return LedgerResult(entry, applied=True)
+
+
+async def entry_for(
+    session: AsyncSession, user_id: UUID, reason: LedgerReason, event: str
+) -> LedgerEntry | None:
+    """The entry a reason that repeats wrote for `event`, if any: a restore
+    reads the reversal it undoes this way (D-520)."""
+    if not rules.RULES[reason].caller_names_event:
+        raise WalletMisuse(
+            f"{reason} takes no event: the event is the ref's id (D-077)"
+        )
+    return await repository.entry_by_key(session, rules.key_for(user_id, reason, event))
+
+
+async def reversed_net(session: AsyncSession, user_id: UUID, ref: Ref) -> int:
+    """What reversals took for this ref, less what restores gave back: never
+    below 0, since a restore gives back at most its own reversal (D-520)."""
+    total = await repository.sum_for_ref(
+        session,
+        user_id,
+        (LedgerReason.PURCHASE_REVERSAL, LedgerReason.PURCHASE_RESTORED),
+        str(ref.type),
+        ref.id,
+    )
+    return -total
 
 
 def _details(

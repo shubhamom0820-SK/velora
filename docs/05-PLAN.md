@@ -2907,21 +2907,21 @@ prices don't depend on the web photos step, and the hold is lifted.
 - [x] **Commit:** `feat(payments): packs and order creation [T-8.1]`
 
 ### T-8.2 · Webhook
-- [ ] **Needs:** T-8.1
-- [ ] `POST /payments/webhook`: verify `X-Razorpay-Signature` (HMAC SHA-256 of raw body with webhook secret) → else 400 and log. Handle `payment.captured` and `payment.failed` only; others → 200 ignore.
-- [ ] Captured: find by order id; if `provider_payment_id` already set → 200 no-op. Else one transaction: set paid + ids + `raw_webhook`, `wallet.credit(purchase)`, `wallet.credit(purchase_bonus)` if any, referral reward check (T-8.6). Always return 200 quickly.
-- [ ] Amount mismatch vs row → mark `failed`, alert, no credit.
-- [ ] **`raw_webhook` keeps no payer details, whatever city the database is in** (directed 3 October
+- [x] **Needs:** T-8.1
+- [x] `POST /payments/webhook`: verify `X-Razorpay-Signature` (HMAC SHA-256 of raw body with webhook secret) → else 400 and log. Handle `payment.captured` and `payment.failed` only; others → 200 ignore.
+- [x] Captured: find by order id; if `provider_payment_id` already set → 200 no-op. Else one transaction: set paid + ids + `raw_webhook`, `wallet.credit(purchase)`, `wallet.credit(purchase_bonus)` if any, referral reward check (T-8.6). Always return 200 quickly.
+- [x] Amount mismatch vs row → mark `failed`, alert, no credit.
+- [x] **`raw_webhook` keeps no payer details, whatever city the database is in** (directed 3 October
   2026, from P-49's residency read): it stores an allowlist of the verified payload's fields and
   nothing else, Razorpay's payment and order ids, amount, currency, status, method, error code and
   timestamps. Never the payer's email, phone (`contact`), UPI ID (`vpa`), card or bank details:
   RBI's own list of payment data, and not ours to keep. An allowlist, never a list of fields to
   strip, so a field Razorpay adds later stays out. Test: a payload with every payer field set is
   stored with exactly the allowlisted keys.
-- [ ] `GET /payments/{id}` for the client poll.
-- [ ] **Refunds and disputes made outside us** (D-076, rule 3): a refund done in Razorpay's dashboard, or a chargeback, must not leave the payment's Velas standing. Handle Razorpay's refund and dispute events by reversing those Velas in the ledger, in the same step. That needs a debit reason for the reversal, an enum addition decided here. If the Velas were spent, decide here what happens, and write it down.
-- [ ] Tests: same webhook delivered 5 times concurrently → credited once; bad signature → no credit; amount mismatch → no credit.
-- [ ] **Commit:** `feat(payments): verified idempotent webhook [T-8.2]`
+- [x] `GET /payments/{id}` for the client poll.
+- [x] **Refunds and disputes made outside us** (D-076, rule 3): a refund done in Razorpay's dashboard, or a chargeback, must not leave the payment's Velas standing. Handle Razorpay's refund and dispute events by reversing those Velas in the ledger, in the same step. That needs a debit reason for the reversal, an enum addition decided here. If the Velas were spent, decide here what happens, and write it down.
+- [x] Tests: same webhook delivered 5 times concurrently → credited once; bad signature → no credit; amount mismatch → no credit.
+- [x] **Commit:** `feat(payments): verified idempotent webhook [T-8.2]`
 
 ### T-8.3 · Refund requests
 - [ ] **Needs:** T-8.2
@@ -5374,14 +5374,16 @@ The number comes from the session's own block, given in its brief, from P-100 up
      pointer.
   Filed and answered the same day, so T-8.11 isn't blocked on it. Filed by Claude; its session's
   block, P-370 to P-379.
-- [ ] P-380 · Grant the first-purchase bonus only to a man's first paid payment, decided at
+- [x] P-380 · Grant the first-purchase bonus only to a man's first paid payment, decided at
   capture, not only at order. **In T-8.2, which credits it.** Worst case: a man opens two
   checkouts before paying either; T-8.1 computes the bonus at order time, when neither is paid, so
   both rows carry it, and if he pays both he is credited it twice, up to 90 + 90 Velas on two
   ₹10,000 packs, with nothing in the ledger saying it shouldn't be. The fix belongs where Velas
   are granted: T-8.2's capture grants `purchase_bonus` only if no other payment of his is paid or
   refunded, in the same transaction, the wallet row locked (D-077). Found building T-8.1; filed
-  by Claude, 8 October 2026; its session's block, P-380 to P-389.
+  by Claude, 8 October 2026; its session's block, P-380 to P-389. **Closed by T-8.2 (D-522):** the
+  capture decides it under the wallet's lock, and a race test forces two captures of one man into
+  overlap and asserts one bonus.
 - [ ] P-381 · Route the daily turnover line to the alert channel. **In T-9.12.** Worst case:
   turnover passes ₹20 lakh, `log_turnover` logs an error every morning to Fly's logs, which nobody
   reads and which rotate out in about 25 minutes, and registration is late, with penalty and
@@ -5389,15 +5391,18 @@ The number comes from the session's own block, given in its brief, from P-100 up
   same gap as D-066's OTP warning. The founder can read the figure meanwhile at
   `GET /v1/admin/turnover`. Filed by Claude building T-8.1, 8 October 2026; its session's block,
   P-380 to P-389.
-- [ ] P-382 · Require `RAZORPAY_KEY_ID` and `RAZORPAY_KEY_SECRET` at startup where
-  `PAYMENTS_PROVIDER` is `razorpay`. **When P-0.8 gives Velora a Razorpay account, before the
+- [ ] P-382 · Require `RAZORPAY_KEY_ID`, `RAZORPAY_KEY_SECRET` and, since T-8.2,
+  `RAZORPAY_WEBHOOK_SECRET` at startup where `PAYMENTS_PROVIDER` is `razorpay`. **When P-0.8 gives Velora a Razorpay account, before the
   keys go into Fly.** Worst case: a deploy with a key missing or mistyped starts cleanly, every
   checkout fails with `PROVIDER_UNAVAILABLE`, and the first anyone hears of it is a man who
   couldn't pay. Today the API can't require them: staging and production run Razorpay, and with
   no account there are no keys to set, so T-8.1 refuses each order instead of refusing to start
   (02-ARCHITECTURE §11). The check names each missing key, never a value,
   as the storage check does. Filed by Claude building T-8.1, 8 October 2026; its session's block,
-  P-380 to P-389.
+  P-380 to P-389. **Extended by T-8.2 (the founder, 8 October 2026, approving its plan):** without
+  the webhook secret every webhook is refused, `400`, with an error log naming the setting, so a
+  deploy missing it takes men's money and credits nothing until someone reads that line; the
+  startup check names it too.
 - [ ] P-390 · Check Supabase's `jit` setting and the feed's real time on staging. **Before REL-1;
   not blocking T-6.2.** Worst case first: production's feed takes several times what the bench
   measured, because the bench ran on the local Postgres 16, not Supabase's 17, and JIT alone moved
@@ -5439,3 +5444,13 @@ The number comes from the session's own block, given in its brief, from P-100 up
   accounts, so a ban today keeps everything (`deleted_requested_at` stays set as the record of
   the request). Filed by Claude building T-9.6, 8 October 2026; its session's block, P-400 to
   P-409.
+- [ ] P-420 · Make a reversal that found nothing to take a repeat too. **In T-8.3, or a task of
+  its own: the founder's call.** Worst case: a refund or dispute reaches a man who has spent every
+  Vela of that payment, so `wallet.reverse()` takes 0 and, by design, writes nothing (a ledger
+  entry can't be 0, `ck_ledger_entries_delta_non_zero`); the shortfall is logged, and on a dispute
+  signalled. If Razorpay redelivers that same event after he has bought Velas again, nothing marks
+  it as handled, so the redelivery takes from the new Velas, up to the shortfall, and a dispute
+  records its signal a second time. Razorpay retries for about a day, so it needs a redelivery
+  and a new purchase inside that window. One way: record each refund or dispute id handled, on the
+  payment or in a small table, and treat a known id as a repeat. Found building T-8.2 (D-520);
+  filed by Claude, 8 October 2026; its session's block, P-420 to P-429.

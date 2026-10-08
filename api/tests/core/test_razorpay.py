@@ -1,10 +1,13 @@
 """Razorpay's orders over httpx (T-8.1), against a mock transport: no keys, no
 network. Built to Razorpay's Orders API as documented (read 8 October 2026);
-no call has reached Razorpay itself yet (P-0.8)."""
+no call has reached Razorpay itself yet (P-0.8). And its webhook signature
+(T-8.2): the hex HMAC-SHA256 of the raw body, keyed by the webhook secret."""
 
 from __future__ import annotations
 
 import base64
+import hashlib
+import hmac
 import json
 
 import httpx
@@ -156,3 +159,68 @@ def test_the_public_key_is_the_settings() -> None:
     )
 
     assert build_providers(settings).payments.key_id == KEY_ID
+
+
+# --- The webhook's signature (T-8.2) ------------------------------------------------
+
+WEBHOOK_SECRET = "not-a-real-webhook-secret-velora-test"
+BODY = b'{"event":"payment.captured","payload":{"payment":{"entity":{"id":"pay_1"}}}}'
+
+
+def _signature(secret: str, body: bytes) -> str:
+    """Computed here, as Razorpay documents it, not by the code under test."""
+    return hmac.new(secret.encode(), body, hashlib.sha256).hexdigest()
+
+
+def _verifier(secret: str = WEBHOOK_SECRET) -> RazorpayPayments:
+    return RazorpayPayments(KEY_ID, KEY_SECRET, webhook_secret=secret)
+
+
+def test_a_webhook_signed_with_the_secret_is_verified() -> None:
+    assert _verifier().verify_webhook(BODY, _signature(WEBHOOK_SECRET, BODY)) is True
+
+
+@pytest.mark.parametrize(
+    "signature",
+    [
+        _signature("another-secret", BODY),
+        _signature(WEBHOOK_SECRET, BODY + b" "),
+        _signature(WEBHOOK_SECRET, BODY).upper(),
+        "",
+        "not hex at all",
+        "\u00e9\u00e9",
+    ],
+    ids=["other-secret", "other-body", "upper-case", "empty", "not-hex", "not-ascii"],
+)
+def test_any_other_signature_is_refused(signature: str) -> None:
+    """The raw body, byte for byte: re-serialised JSON would be another body."""
+    assert _verifier().verify_webhook(BODY, signature) is False
+
+
+@pytest.mark.critical
+def test_without_the_secret_every_signature_is_refused_naming_the_setting(
+    captured_logs: CapturedLogs,
+) -> None:
+    """Even one made with an empty key, which is what an unset secret would
+    verify if it were used (P-382)."""
+    verifier = _verifier(secret="")
+
+    assert verifier.verify_webhook(BODY, _signature("", BODY)) is False
+    [line] = [e for e in captured_logs.events if e.get("event") != "rule15_probe"]
+    assert line["event"] == "payments.webhook_secret_missing"
+    assert line["log_level"] == "error"
+    assert "RAZORPAY_WEBHOOK_SECRET" in line["note"]
+    assert WEBHOOK_SECRET not in captured_logs.text
+    captured_logs.assert_listening()
+
+
+def test_the_webhook_secret_is_the_settings() -> None:
+    settings: Settings = make_test_settings().model_copy(
+        update={
+            "PAYMENTS_PROVIDER": "razorpay",
+            "RAZORPAY_WEBHOOK_SECRET": WEBHOOK_SECRET,
+        }
+    )
+    payments = build_providers(settings).payments
+
+    assert payments.verify_webhook(BODY, _signature(WEBHOOK_SECRET, BODY)) is True

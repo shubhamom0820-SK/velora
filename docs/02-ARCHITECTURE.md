@@ -300,10 +300,29 @@ on a shared CI runner fails at random), its numbers in T-6.2's tick.
    `order_id` + public key. The same key again is the same order (D-481); a woman is refused
    first (D-076).
 2. Browser opens Razorpay Checkout.
-3. Razorpay → `POST /v1/payments/webhook` (`payment.captured`). Verify signature. Look up by
-   `razorpay_order_id`. If `razorpay_payment_id` already recorded → return 200, do nothing.
-   Else in one transaction: mark `paid`, credit pack + bonus via `wallet.credit()`.
+3. Razorpay → `POST /v1/payments/webhook` (`payment.captured`), T-8.2 (D-520 to D-524). Verify
+   the signature over the raw body, or `400`. In one transaction: lock the row by its order
+   (`FOR UPDATE`); none → `200`, logged. Anchor (`provider_payment_id`) already this payment's →
+   `200`, a repeat; another payment's → nothing credited, an error for T-8.3. Amount or currency
+   not the row's → `failed`, nothing credited. Owner not a man → `failed`, an error: refund it by
+   hand (D-076). Else `paid`, the anchor, `paid_at` by our clock, the allowlisted `raw_webhook`;
+   `wallet.credit(purchase, row.credits)`, which locks the wallet; **then**, under that lock, the
+   bonus only if no other payment of his is `paid` or `refunded`, else `bonus_credits` 0 (D-522).
+   A `payment.failed` makes a `created` row `failed` and never sets the anchor, so a later capture
+   on the order still credits (D-523).
 4. Browser polls `GET /v1/payments/{id}` until `paid`, then refreshes wallet.
+
+**Money back (D-076 rule 3, D-520):** a refund or chargeback made in Razorpay's dashboard reaches
+the same webhook, one transaction per event, the row locked by the payment (or its order):
+- `refund.created`, `payment.dispute.created`: not yet captured → captured first from the signed
+  payment in the event (order isn't guaranteed). Then `wallet.reverse(purchase_reversal)` takes
+  what the payment granted, less what was already taken back for it, down to a balance of 0; the
+  rest is a shortfall, logged, and on a dispute a `chargeback_shortfall` signal. Status stays
+  `paid`.
+- `refund.failed`, `payment.dispute.won`: `wallet.credit(purchase_restored)` of exactly what that
+  refund's or dispute's reversal took (keyed by its id), or nothing.
+- `refund.processed`, `payment.dispute.lost`: reversed first if `.created` hasn't come, then
+  `refunded`: turnover (D-483) stops counting it.
 
 **Nothing is returned on a ban** (D-230, 4 October 2026): there is no product refund, so T-9.3 is
 dropped and `refund_banned_partner` stays unused. Money goes back only for a chargeback (D-076
@@ -359,7 +378,7 @@ rule 3, T-8.2) or a duplicate charge (T-8.3).
 | `SMS_LOCAL_ALLOWED_TO` | api | locally, the only numbers a real SMS provider is called for: comma-separated, each passing `normalize_phone` at startup, empty by default. Any other number gets `503 PROVIDER_UNAVAILABLE` and its code is discarded, because the seed's numbers may be real people's (D-064). Refused outside local, where it would look like protection it isn't (D-066) |
 | `MSG91_AUTH_KEY`, `MSG91_TEMPLATE_ID`, `MSG91_SENDER_ID` | api | Path B only |
 | `PAYMENTS_PROVIDER` | api | `razorpay` \| `fake` (`fake` locally) |
-| `RAZORPAY_KEY_ID`, `RAZORPAY_KEY_SECRET`, `RAZORPAY_WEBHOOK_SECRET` | api | not checked at startup: without the first two each order is `503 PROVIDER_UNAVAILABLE`, since staging and production run Razorpay and, until the account exists (P-0.8), can have no keys (P-382). `RAZORPAY_KEY_ID` is public, sent to Checkout |
+| `RAZORPAY_KEY_ID`, `RAZORPAY_KEY_SECRET`, `RAZORPAY_WEBHOOK_SECRET` | api | not checked at startup: without the first two each order is `503 PROVIDER_UNAVAILABLE`, and without the third every webhook is refused, `400`, with an error naming it (T-8.2), since staging and production run Razorpay and, until the account exists (P-0.8), can have no keys (P-382). `RAZORPAY_KEY_ID` is public, sent to Checkout |
 | `GST_REGISTERED` | api | `false`, Velora unregistered (D-450). `true` refuses to start until P-350's task builds the split and the receipt's GST line (D-482) |
 | `WORKER_POLL_DELAY_S` | worker | seconds between the worker's looks at the queue, default 10 (D-091): 260,640 Redis commands a month idle on Upstash Free, 52% of its 500K. Redo that sum before changing it |
 | `MODERATION_PROVIDER` | worker | `sightengine` \| `fake` |
@@ -429,6 +448,7 @@ secret is left empty. Real secret values are never committed.
 | Reports | 10 / day / user |
 | Username check | 30 / min / user |
 | `POST /payments/orders` | 20 / hour / user (T-8.1): each asks the gateway for an order; every retry a real checkout needs fits |
+| `POST /payments/webhook` | None (T-8.2): its auth is the signature, checked before the body is read, so an unsigned request costs one HMAC; a limit would slow Razorpay's own retries of real payments, which arrive from its few addresses. Flooding is the edge's to stop |
 | `PUT /me/location` | 10 / hour / user (T-4.10). Onboarding's tries and a refresh each time the app opens fit easily; it slows someone moving themselves about to measure distances, and can't stop them; the grid (D-490) is what makes their readings tell nothing finer than a 1 km cell |
 | Waitlist | 5 / min / IP, invalid tries included (D-056) |
 | `GET /prices` | None (T-5.2): public and read-only, one read of a table of about ten rows, as `/readyz` with none; a per-IP limit would mostly catch men behind one carrier's shared address. Flooding is the edge's to stop |

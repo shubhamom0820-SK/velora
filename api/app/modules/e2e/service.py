@@ -45,8 +45,8 @@ async def simulate_webhook(
     """Deliver the fake gateway's signed webhook for a payment to this app's own
     webhook route, in process, as Razorpay would over the network, and return
     the status it answered. Built from the `payments` row, so it works for an
-    order made before the API last restarted. Until T-8.2 builds the route, the
-    answer is 404.
+    order made before the API last restarted. T-8.2's route answers it as it
+    answers Razorpay.
     """
     if not isinstance(payments, FakePayments):
         # create_app() mounts this only beside the fake; anything else is a bug.

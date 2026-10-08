@@ -10,8 +10,9 @@ from sqlalchemy import func, select
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.enums import PaymentStatus
+from app.core.enums import Gender, PaymentStatus
 from app.modules.payments.models import CreditPack, Payment
+from app.modules.users.models import User
 
 
 async def active_packs(session: AsyncSession, variant: str) -> Sequence[CreditPack]:
@@ -65,6 +66,53 @@ async def payment_by_key(
 
 async def payment_by_id(session: AsyncSession, payment_id: UUID) -> Payment | None:
     return await session.get(Payment, payment_id)
+
+
+MONEY_MOVED = (PaymentStatus.PAID, PaymentStatus.REFUNDED)
+
+
+async def lock_payment(
+    session: AsyncSession,
+    *,
+    order_id: str | None = None,
+    provider_payment_id: str | None = None,
+) -> Payment | None:
+    """The payment with this gateway order, or this gateway payment, its row
+    locked until the transaction ends; None if there is none. Read afresh, so
+    a copy already in the session never stands in for the locked row."""
+    query = select(Payment).with_for_update().execution_options(populate_existing=True)
+    if order_id is not None:
+        query = query.where(Payment.provider_order_id == order_id)
+    elif provider_payment_id is not None:
+        query = query.where(Payment.provider_payment_id == provider_payment_id)
+    else:
+        raise ValueError("lock_payment needs an order id or a payment id")
+    payment: Payment | None = await session.scalar(query)
+    return payment
+
+
+async def owner_gender(session: AsyncSession, user_id: UUID) -> Gender | None:
+    gender: Gender | None = await session.scalar(
+        select(User.gender).where(User.id == user_id)
+    )
+    return gender
+
+
+async def bought_other_than(
+    session: AsyncSession, user_id: UUID, payment_id: UUID
+) -> bool:
+    """Whether money has moved for this user on any payment but this one: paid,
+    or paid and later refunded."""
+    found = await session.scalar(
+        select(Payment.id)
+        .where(
+            Payment.user_id == user_id,
+            Payment.id != payment_id,
+            Payment.status.in_(MONEY_MOVED),
+        )
+        .limit(1)
+    )
+    return found is not None
 
 
 async def add_payment(

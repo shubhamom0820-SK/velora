@@ -67,6 +67,14 @@ empty (P-55), but other tests in the same run commit too. So a test that commits
 - **Takes the server's turn before opening many connections.** Every checkout shares one Postgres
   of 100 connections, so T-5.4's fifty-connection tests first take a server-wide advisory lock
   (`fifty_turn`, P-142) and a second run waits rather than failing for want of connections.
+- **Takes back the payments it commits (T-8.2, the one exception to the bypass).** A committed
+  `payments` row names its pack by a RESTRICT key, and the seed's and T-5.2's downgrades delete
+  packs, so one left behind turns every later downgrade test red. A race test that must commit
+  payments (T-8.2's captures at once) deletes them at the end with `take_back_payments(engine,
+  ids)` in `tests/committed.py`: `payments_no_delete` switched off, the rows deleted, switched on
+  again, in one transaction as the owner, so no other connection ever sees the trigger off. The
+  ledger rows they credited stay; they name no pack. Any other test proves payments inside the
+  rolled-back transaction, as T-8.1's same-key race does.
 - **Never commits a wallet that disagrees with its ledger.** T-9.9's reconciliation is global by
   design, so a test proving it catches a mismatch runs inside the rolled-back transaction.
 - **Breaks constraints only on a database of its own.** Every run's is (P-55), so a guard broken to

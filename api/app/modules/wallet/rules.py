@@ -7,12 +7,13 @@ are the seed and `make_user`.
 
 The key is `{user_id}:{reason}:{event}`, built here and never by a caller. The
 event is the ref's id, so a webhook's retry, a concurrent delivery and a manual
-repair all compute the same key. Three reasons legitimately repeat for one ref
-(`admin_grant`, `thread_reopen`, `thread_extend`), so for them the caller names
-the event: a client's `Idempotency-Key` only ever fills that part.
+repair all compute the same key. Five reasons legitimately repeat for one ref
+(`admin_grant`, `thread_reopen`, `thread_extend`, and T-8.2's `purchase_reversal`
+and `purchase_restored`), so for them the caller names the event: a client's
+`Idempotency-Key` only ever fills that part.
 
-The database pins the same directions and ref types (migrations 97ddae55f597
-and a1d7de534ef7, `ck_ledger_entries_*`), and
+The database pins the same directions and ref types (migrations 97ddae55f597,
+a1d7de534ef7 and fb0a7ce8dd16, `ck_ledger_entries_*`), and
 `tests/modules/wallet/test_guards.py` proves the two agree, reason by reason.
 Change one, change both.
 """
@@ -84,6 +85,15 @@ RULES: dict[LedgerReason, Rule] = {
     # private message after the first is charged once, by its own id.
     LedgerReason.THREAD_EXTEND: Rule(DEBIT, RefType.THREAD, caller_names_event=True),
     LedgerReason.DM_MESSAGE: Rule(DEBIT, RefType.MESSAGE),
+    # D-521: a payment may be refunded in parts, or refunded and disputed, so
+    # each repeats for one payment, the event the refund's or dispute's own id.
+    # Only `payments` writes them, through `reverse()` and `credit()`.
+    LedgerReason.PURCHASE_REVERSAL: Rule(
+        DEBIT, RefType.PAYMENT, caller_names_event=True
+    ),
+    LedgerReason.PURCHASE_RESTORED: Rule(
+        CREDIT, RefType.PAYMENT, caller_names_event=True
+    ),
 }
 
 # Nothing writes it until a task gives it a meaning, and its name reads as

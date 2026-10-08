@@ -41,7 +41,7 @@ from app.modules.admin import service as admin_service
 from app.modules.payments import repository, rules
 from app.modules.payments.models import Payment
 from app.modules.payments.rules import FinancialYear, TurnoverLevel
-from app.modules.payments.schemas import Order, Pack, Turnover
+from app.modules.payments.schemas import Order, Pack, PaymentStatusView, Turnover
 from app.modules.users.models import User
 
 log = structlog.get_logger(__name__)
@@ -167,6 +167,22 @@ def _order(payment: Payment, key_id: str) -> Order:
         key_id=key_id,
         amount_paise=payment.amount_paise,
     )
+
+
+async def status_of(
+    session: AsyncSession, user: User, payment_id: UUID
+) -> PaymentStatusView:
+    """`GET /payments/{id}`: the owner's own payment, or `NOT_FOUND`, the same
+    for someone else's as for none, so an id says nothing about another man."""
+    async with session.begin():
+        payment = await repository.payment_by_id(session, payment_id)
+        if payment is None or payment.user_id != user.id:
+            raise AppError("NOT_FOUND", "No such payment.", status=404)
+        return PaymentStatusView(
+            status=payment.status,
+            credits=payment.credits,
+            bonus_credits=payment.bonus_credits,
+        )
 
 
 async def order_of(session: AsyncSession, payment_id: UUID) -> tuple[str, int] | None:

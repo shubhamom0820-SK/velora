@@ -1,7 +1,7 @@
 """The fake gateway's webhook simulator (T-8.1): served only where ENV is local
 and the payments provider is the fake (rule 16), never in OpenAPI. It delivers
 the webhook Razorpay would send for a payment to the API's own webhook route,
-signed by the fake, as T-8.2's route will read it."""
+signed by the fake, as T-8.2's route reads it."""
 
 from __future__ import annotations
 
@@ -39,7 +39,8 @@ async def _order(client: AsyncClient, make_user: MakeUser) -> dict[str, Any]:
 
 
 def _recording(app: FastAPI) -> list[tuple[bytes, str | None]]:
-    """A stand-in for T-8.2's webhook route that keeps what arrives."""
+    """A stand-in for T-8.2's webhook route that keeps what arrives, put in
+    front of it, so it answers in its place."""
     received: list[tuple[bytes, str | None]] = []
 
     async def webhook(request: Request) -> dict[str, str]:
@@ -49,6 +50,7 @@ def _recording(app: FastAPI) -> list[tuple[bytes, str | None]]:
         return {}
 
     app.add_api_route(WEBHOOK, webhook, methods=["POST"])
+    app.router.routes.insert(0, app.router.routes.pop())
     return received
 
 
@@ -134,16 +136,29 @@ async def test_it_works_after_the_api_restarts(
     assert len(received) == 1
 
 
-async def test_until_t82_builds_the_webhook_route_the_delivery_finds_nothing(
+async def test_a_simulated_capture_pays_the_order_end_to_end(
     db: AsyncSession, client: AsyncClient, make_user: MakeUser
 ) -> None:
-    order = await _order(client, make_user)
-
+    """T-8.2's route, reached the way T-8.7's local checkout will reach it:
+    the order, the simulator, then the poll and the wallet (T-8.1's test of
+    the 404 before the route existed, replaced)."""
+    _, token = await make_user()
     response = await client.post(
+        "/v1/payments/orders",
+        json={"pack_id": "pack-30"},
+        headers=auth(token, new_key()),
+    )
+    order = response.json()
+
+    delivered = await client.post(
         SIMULATE, json={"payment_id": order["payment_id"], "outcome": "captured"}
     )
 
-    assert response.json() == {"delivered_status": 404}
+    assert delivered.json() == {"delivered_status": 200}
+    poll = await client.get(f"/v1/payments/{order['payment_id']}", headers=auth(token))
+    assert poll.json() == {"status": "paid", "credits": 30, "bonus_credits": 6}
+    wallet = await client.get("/v1/wallet", headers=auth(token))
+    assert wallet.json() == {"balance": 36}
 
 
 async def test_an_unknown_payment_isnt_found(

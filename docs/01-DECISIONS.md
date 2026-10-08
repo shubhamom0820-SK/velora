@@ -4019,6 +4019,127 @@ swipes at once on different people could both take the last place).
 The founder's approval, 8 October 2026, of Claude's Q5 in T-6.2's plan, a Super Like not counting,
 on the advisor's recommendation (Claude, in a separate chat), relayed by the founder.
 
+### D-520 · Refunds and chargebacks take a payment's Velas back at once; spent Velas are a shortfall — Locked
+**The decision (T-8.2; the founder, 8 October 2026, on the advisor's recommendation (Claude, in a
+separate chat), relayed; the shape Claude's, in T-8.2's plan), D-076's rule 3 built:**
+- **When they go back:** at `refund.created`, the moment the money is committed to go back, never
+  days later at `refund.processed`; and at `payment.dispute.created`, though Razorpay deducts the
+  money only if the dispute is lost. A refund that fails (`refund.failed`) or a dispute that is won
+  (`payment.dispute.won`) gives back **exactly what its reversal took**, read from that reversal's
+  own entry, and nothing if it took nothing.
+- **The status follows the money:** `refunded` at `refund.processed` or `payment.dispute.lost`. A
+  disputed payment stays `paid` until it is lost, so turnover (D-483) counts it while the money is
+  still ours.
+- **If he has spent them:** whatever balance is left is taken, down to 0, through
+  `wallet.service.reverse()`, which never refuses with `INSUFFICIENT_CREDITS` and writes nothing at
+  0 (`CHECK (balance >= 0)` holds). The rest is a shortfall: an error log line, and on a dispute a
+  `fraud_events` signal, `chargeback_shortfall`, weight 0 until T-9.2 says what it counts for,
+  `meta` `{what, payment_id, shortfall}`. **No automatic freeze:** freezing is a moderation
+  decision.
+- **Only payments calls `reverse()`,** and only for `purchase_reversal`: a test holds it as an
+  allowlist, as `debit()`'s callers are held (T-5.2).
+
+**Added by Claude while building, beyond the approved plan; kept by the founder, 8 October 2026:**
+- **A reversal never takes more than its payment granted, less what was already taken back for
+  it** (reversals less restores). One payment refunded in two parts, or refunded and then
+  disputed, would otherwise take the whole amount twice, the second time from Velas he bought
+  another time.
+- **A refund of a payment that wasn't the one credited** (a second payment on one order, T-8.3's
+  duplicate charge) takes nothing: no Velas were granted for it.
+- **A gap left open, P-420:** at a balance of 0 nothing is written, so a redelivery of the same
+  refund or dispute after he has bought more takes from the new Velas, up to the shortfall.
+
+**Why:** D-076's rule 3: money never goes back while its Velas stand. Reversing only when the
+money leaves (`processed`, `lost`) lets him spend the Velas through a dispute that lasts weeks.
+
+**Rejected:** reversing at `.processed` and `.lost` only; a negative balance; freezing on a
+shortfall; refusing the reversal when the balance is short (`debit()`), which would leave every
+Vela standing.
+
+### D-521 · `purchase_reversal` and `purchase_restored`: two ledger reasons, one per refund or dispute — Locked
+**The decision (T-8.2; approved with D-520):** `ledger_reason_t` gains `purchase_reversal`, a
+debit, and `purchase_restored`, a credit, each with `ref_type` `payment`. Both **repeat for one
+payment, the event named by the caller**, as `thread_extend` does: the event is the refund's or
+dispute's own Razorpay id (`rfnd_…`, `disp_…`), so the key is
+`{user_id}:purchase_reversal:{rfnd_…}`, one entry per refund or dispute, and the one-per-event
+index leaves both out. Two migrations in T-5.2's pattern: `e9a09934aeb7` rebuilds the type (never
+`ALTER TYPE ... ADD VALUE`, `4a7e20790605`'s reasons), its downgrade refused while any ledger row
+uses either; `fb0a7ce8dd16` names them in `ck_ledger_entries_reason_direction`,
+`ck_ledger_entries_reason_ref_type` and `uq_ledger_entries_one_per_event`. `wallet/rules.py` and
+`test_guards.py` change with them. The history shows "Purchase reversed" and "Purchase restored"
+(the founder's words, 8 October 2026).
+
+**Why:** a reversal is no purchase and no priced action: it needs its own reason, in the right
+direction, so the ledger says what happened. A payment may be refunded in parts, or refunded and
+disputed, so the reason can't be one per payment.
+
+**Rejected:** reusing `refund` (refused until a task gives it a meaning, D-077, and its name says
+money, not Velas); one reversal per payment; `admin_grant` for the restore.
+
+### D-522 · The first-purchase bonus is decided at capture, under the wallet's lock — Locked
+**The decision (T-8.2, closing P-380; approved with D-520):** T-8.1 sets `bonus_credits` at order
+time, when a man may have two orders open, neither paid. So the capture decides: inside its
+transaction, `purchase` is credited first, which locks the wallet row until the commit; **then**
+the capture asks whether any other payment of his is `paid` or `refunded`. Under READ COMMITTED
+that read runs after the lock is granted, so a concurrent capture that committed while this one
+waited is seen. If none is, `purchase_bonus` is credited with the row's `bonus_credits`; if one
+is, none, the row's `bonus_credits` becomes 0 so the poll tells the truth, and
+`payments.bonus_withheld` is logged. A race test forces two captures of one man into overlap at
+the wallet's lock and asserts one bonus.
+
+**Why:** P-380's worst case, a bonus on each of two packs bought at once, up to 90 + 90 Velas. The
+fix belongs where Velas are granted, under the lock that serialises them (D-077).
+
+**Rejected:** deciding at order time only; a lock of its own for the bonus; reading before the
+wallet's lock, which two captures at once both pass.
+
+### D-523 · The webhook: verified, one transaction per event, the anchor set only by a capture — Locked
+**The decision (T-8.2; approved with D-520):**
+- **Signature:** `X-Razorpay-Signature`, hex HMAC-SHA256 of the raw body with
+  `RAZORPAY_WEBHOOK_SECRET`, compared in constant time. Bad or missing: `400 VALIDATION_ERROR` and
+  a warning, the body never logged. No secret: every signature refused, with an error naming the
+  setting (P-382 now covers it too).
+- **One order, several attempts:** a failed attempt never sets `provider_payment_id`, the anchor,
+  and a capture still goes through on a `failed` row: Razorpay's own example is a `payment.failed`
+  then a `payment.captured` for one order (a UPI retry). A second, different payment captured on
+  a paid order credits nothing and logs an error for T-8.3.
+- **Order isn't guaranteed:** a refund or dispute event that reaches an order not yet captured
+  applies the capture first, from the signed payment inside that same event, then reverses it.
+  **Added by Claude while building; kept by the founder, 8 October 2026:** `refund.processed` and
+  `payment.dispute.lost` do the same and take the Velas back themselves if their `.created`
+  hasn't arrived (once per refund or dispute, by its key): marking a payment `refunded` without
+  its anchor is impossible (`ck_payments_paid_has_anchor`), and without its reversal would leave
+  Velas standing until `.created` came.
+- **`paid_at` is our clock at capture** (`core.clock.now()`), never Razorpay's timestamp: a
+  webhook takes seconds, and the turnover year (D-483) turns at midnight IST.
+- **Its answers:** signed but unreadable, `500`, so Razorpay retries while we fix the reader; an
+  unknown order or an event we don't handle, `200`, logged. **No rate limit:** every request is
+  verified, and a flood is the edge's to stop (02-ARCHITECTURE §12).
+- **Concurrency:** the row is locked by its order (`SELECT ... FOR UPDATE`) for the event's whole
+  transaction, and the wallet's key (D-077) catches anything past it. Five deliveries of one
+  webhook at once are credited once, the overlap forced and asserted.
+- **Logs** name the event, our payment's id and the order's: never payer data, never the body.
+
+**Why:** Razorpay redelivers by design and doesn't promise order (its docs, read 8 October 2026).
+
+**Rejected:** the anchor on any attempt (a real capture after a failure would be skipped);
+Razorpay's `x-razorpay-event-id` as the guard (the row's state and the wallet's key already are);
+a `400` for an unreadable signed body (Razorpay would stop retrying a real payment).
+
+### D-524 · `raw_webhook` is an allowlist of the event's fields — Locked
+**The decision (T-8.2, the direction of 3 October 2026 built):** `payments.raw_webhook` keeps the
+last verified event's fields, exactly these and nothing else, flattened: `event`, `created_at`;
+`payment`: `id`, `order_id`, `amount`, `currency`, `status`, `method`, `error_code`,
+`created_at`; `refund` and `dispute`: `id`, `payment_id`, `amount`, `currency`, `status`,
+`created_at`. Never `email`, `contact`, `vpa`, `card*`, `bank`, `wallet`, `acquirer_data`,
+`notes`, `description`, nor any field Razorpay adds later. A test stores a payload with every
+payer field set, and one nobody has listed, and reads back exactly these keys.
+
+**Why:** the payer's details are RBI's own list of payment data, and not ours to keep (P-49's
+residency read); an allowlist keeps out what a strip list can't know about.
+
+**Rejected:** storing the payload whole; a list of fields to strip.
+
 ---
 
 ## Adding a decision

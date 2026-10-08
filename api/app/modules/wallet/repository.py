@@ -7,7 +7,7 @@ from collections.abc import Sequence
 from datetime import datetime
 from uuid import UUID
 
-from sqlalchemy import Row, insert, select, tuple_, update
+from sqlalchemy import Row, func, insert, select, tuple_, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.enums import Gender, LedgerReason
@@ -41,6 +41,25 @@ async def entry_by_key(session: AsyncSession, key: str) -> LedgerEntry | None:
         select(LedgerEntry).where(LedgerEntry.idempotency_key == key)
     )
     return entry
+
+
+async def sum_for_ref(
+    session: AsyncSession,
+    user_id: UUID,
+    reasons: Sequence[LedgerReason],
+    ref_type: str,
+    ref_id: UUID,
+) -> int:
+    """The sum of this user's deltas for `reasons` naming this ref."""
+    total = await session.scalar(
+        select(func.coalesce(func.sum(LedgerEntry.delta), 0)).where(
+            LedgerEntry.user_id == user_id,
+            LedgerEntry.reason.in_(reasons),
+            LedgerEntry.ref_type == ref_type,
+            LedgerEntry.ref_id == ref_id,
+        )
+    )
+    return int(total or 0)
 
 
 async def set_balance(session: AsyncSession, user_id: UUID, balance: int) -> None:

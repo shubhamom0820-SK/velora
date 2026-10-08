@@ -19,14 +19,16 @@ never be flaky.
 
 from __future__ import annotations
 
+from collections.abc import Sequence
 from uuid import UUID
 
-from sqlalchemy import select, text
+from sqlalchemy import delete, select, text
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession
 
 from app.core.config import Settings
 from app.core.enums import Gender, LedgerReason
 from app.core.security import E164, decrypt_phone, normalize_phone
+from app.modules.payments.models import Payment
 from app.modules.users import service as users_service
 from app.modules.users.models import User
 from app.modules.wallet import service as wallet_service
@@ -98,3 +100,26 @@ async def next_fresh_number(session: AsyncSession, settings: Settings) -> E164:
             "TEST_DATABASE_URL at a new database, or unset it to take a run slot (P-55)."
         )
     return normalize_phone(f"{FRESH_PREFIX}{serial:08d}")
+
+
+async def take_back_payments(engine: AsyncEngine, payment_ids: Sequence[UUID]) -> None:
+    """Delete the payments a race test committed (T-8.2), test code only.
+
+    Payments are never deleted (rule 12: `payments_no_delete`), but a committed
+    one would outlive its test and break every downgrade test after it: it
+    names its pack by a RESTRICT key, and the seed's and T-5.2's downgrades
+    delete packs. So the trigger is switched off, as the owner the tests
+    connect as, the rows deleted, and switched on again, in one transaction in
+    this run's own database (P-55): a failure rolls all three back. The ledger
+    rows those payments credited stay; they name no pack.
+    """
+    if not payment_ids:
+        return
+    async with AsyncSession(engine) as session, session.begin():
+        await session.execute(
+            text("alter table payments disable trigger payments_no_delete")
+        )
+        await session.execute(delete(Payment).where(Payment.id.in_(payment_ids)))
+        await session.execute(
+            text("alter table payments enable trigger payments_no_delete")
+        )
