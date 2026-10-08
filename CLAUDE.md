@@ -54,7 +54,7 @@ velora/
     seed/               make seed: dev data, local stack only, never in the image (D-064)
     bench/              benchmarks run by hand, never in the image nor `make test`: liveness/,
                         T-4.11's probe and weights check, its torch and onnxruntime only in its
-                        own Dockerfile (D-381)
+                        own Dockerfile (D-381); discovery/, T-6.2's feed timed at 50k profiles
     tests/              mirrors app/ (and seed/, bench/)
   web/                  Next.js app (App Router, TypeScript strict, Tailwind v4)
   infra/                docker-compose.yml, fly.api.toml + fly.worker.toml + STAGING.md (staging's

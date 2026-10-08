@@ -211,28 +211,47 @@ same database role, its own Fly app (`infra/fly.worker.toml`, D-095). It polls e
 ARQ logs each job's arguments as it starts it; the worker writes the job's name instead, since
 `delete_files`' arguments are storage keys (rule 15).
 
-## 8. Discovery query (sketch)
+## 8. Discovery query
+
+`discovery.repository.feed_query` (T-6.2) builds it. Every position in it is a point of D-490's
+0.01° grid, the viewer's too, so the radius, the distance and the ranking are all measured
+between grid points: nothing tells anyone more than which cell, about 1 km², a person is in.
 
 ```sql
-SELECT p.user_id, ST_Distance(p.location, :me) AS dist_m
-FROM profiles p
-JOIN users u ON u.id = p.user_id
-WHERE ST_DWithin(p.location, :me, :radius_m)
-  AND u.status = 'active' AND u.onboarding_step = 'done'
-  AND p.is_hidden = false
-  AND u.gender = ANY(:wanted_genders)
-  AND :my_gender = ANY(p.seeking_genders)
-  AND NOT EXISTS (SELECT 1 FROM swipes s WHERE s.swiper_id = :me_id AND s.target_id = p.user_id)
-  AND NOT EXISTS (SELECT 1 FROM blocks b WHERE (b.blocker_id = :me_id AND b.blocked_id = p.user_id)
-                                              OR (b.blocker_id = p.user_id AND b.blocked_id = :me_id))
-  -- optional: intents (any overlap: EXISTS on profile_intents, D-041), verified, online filters
-ORDER BY rank_score(dist_m, u.last_active_at, u.is_verified, p.completeness) DESC, p.user_id
-LIMIT :limit;
+SET LOCAL jit = off;                                    -- D-495: compiling cost more than the query
+SELECT user_id, score, distance_m FROM (
+  SELECT u.id AS user_id, ST_Distance(p.location, :me) AS distance_m,
+         rank_score(distance_m, u.last_active_at, u.is_verified, p.completeness, :as_of) AS score
+  FROM users u JOIN profiles p ON p.user_id = u.id
+  WHERE ST_DWithin(p.location, :me, :radius_m)          -- app_config's discovery_radius_km
+    AND u.id <> :me_id AND u.status = 'active' AND u.onboarding_step = 'done'
+    AND p.is_hidden = false
+    AND u.gender = ANY(:wanted_genders) AND p.seeking = ANY(:seekings_wanting_my_gender)
+    AND NOT EXISTS (fraud_scores band 'freeze')          -- D-031
+    AND NOT EXISTS (fraud_scores band 'shadow')          -- unless the viewer is shadowed
+    AND NOT EXISTS (SELECT 1 FROM swipes s WHERE s.swiper_id = :me_id AND s.target_id = u.id)
+    AND NOT EXISTS (a block either way)
+    -- optional: intents (any overlap: EXISTS on profile_intents, D-041), the badge, online
+) ranked
+WHERE (score, user_id) after the cursor's               -- score < :s OR (score = :s AND id > :id)
+ORDER BY score DESC, user_id
+LIMIT :limit + 1;
 ```
+
+`rank_score` is D-491's, in `discovery/rules.py`: `0.40·D + 0.30·R + 0.15·V + 0.15·C`, with D =
+1/(1 + km/5), R = 1/(1 + hours since active/24) (0 if never), V = `is_verified` (D-032, P-290:
+the ranking keeps it whether or not the badge shows), C = completeness/100; the `new` feed adds 1
+for anyone who joined within 7 days. Every candidate is scored: a window of the nearest 2,000 was
+built and measured, and saved nothing (D-495). Every term is measured at `as_of`, the instant the scroll's
+first page was ranked, which each cursor carries, `(as_of, score, user_id)`: a scroll is one
+ranking. The page's cards (age, main photo, badge, intents) are read for its rows alone. Who may
+be seen, without the radius and swipes, is `visible_to`, which the public profile (T-6.3) and
+swipes (T-6.4) share.
 
 **The `Card`'s badge (D-393, T-4.12)** is never raw `is_verified`. It is `is_verified` (the selfie
 matched the face photo, D-391) **and** at least one shown face that matched that selfie, an EXISTS
-on `photos`, which `verification.repository.shows_badge` holds and T-6.2's query carries:
+on `photos`, `verification.repository.badge_of`, which `shows_badge` reads and T-6.2's `Card`
+(`shows_badge`) and filter carry:
 
 ```sql
 u.is_verified AND EXISTS (
@@ -243,10 +262,17 @@ u.is_verified AND EXISTS (
 ) AS badge
 ```
 
-The `Card`'s main photo URL is null when there is no approved public photo (D-392); the web shows
-a grey silhouette with the name. The "verified" filter (T-6.9) filters on this badge.
+The `Card`'s main photo is the approved public photo at the lowest place, 0 or not: the server
+never closes a gap (P-75, D-494). Its URL is null when there is no approved public photo (D-392);
+the web shows a grey silhouette with the name. The "verified" filter (`verified=true`, and T-6.9's
+chip) filters on this badge.
 
-Indexes that make this fast are listed in `03-SCHEMA.md`. Target: p95 < 80 ms at 50k users.
+Indexes that make this fast are listed in `03-SCHEMA.md`. Target: p95 < 80 ms at 50k users, for
+the spread shape, what beta looks like; the launch shape (50k inside one city's 25 km) is accepted
+above it, about 200 ms, until P-391's cell-first ranking (D-495).
+`tests/modules/discovery/test_plan.py` holds that a spread crowd is searched through the GIST
+index; the timing is `api/bench/discovery`'s, run by hand (the founder, 8 October 2026: a timing
+on a shared CI runner fails at random), its numbers in T-6.2's tick.
 
 ## 9. Money flows
 

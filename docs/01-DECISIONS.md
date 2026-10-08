@@ -3728,6 +3728,114 @@ migration are gone, on purpose: its downgrade can't restore them, and says so.
 The founder's choice, 8 October 2026, of the option Claude recommended in T-6.2's plan (P-120),
 on the advisor's recommendation (Claude, in a separate chat), relayed by the founder.
 
+### D-491 · Discovery's ranking: D-032's four terms, weighted, measured at the scroll's start — Locked (values tunable)
+**Decision.** T-6.2 ranks a feed by
+
+    score = 0.40 · D + 0.30 · R + 0.15 · V + 0.15 · C
+
+- **D, distance:** 1 / (1 + km / 5), between grid points (D-490): 1 at one point, 0.5 at 5 km,
+  about 0.17 at the radius's 25 km.
+- **R, recency:** 1 / (1 + hours since last active / 24): 0.5 a day ago, 0 for someone never
+  active.
+- **V, `is_verified`:** the selfie matched (D-032 unchanged). It stays whether or not the badge
+  shows (P-290, answered by the founder 8 October 2026): ranking is not a claim, and D-262 is about
+  copy.
+- **C, completeness / 100:** 0.5 to 1.0 (D-310), kept current since P-210.
+
+Each term is 0 to 1, so a score is too. The `new` feed adds 1 for anyone who joined within 7
+days, which puts every new face first and ranks them among themselves as the rest are. `online`
+keeps only those active within 5 minutes. Ties go by user id. The weights are constants in
+`api/app/modules/discovery/rules.py`, tuned by a change there, not by data: a tuning is a
+decision to record beside this one.
+
+**The cursor carries the scroll's first instant: `(as_of, score, user_id)`.** R and `new` depend
+on the time, so every unswiped card's score drifts down as minutes pass. Ranked again at each
+page's own time, the card that ended page 1 would score lower when page 2 is asked for, and come
+back. Measured at `as_of`, the instant the first page was ranked, a scroll is one ranking: each
+card comes once. 02-ARCHITECTURE §3 says "the cursor is the last item's sort key", and the sort
+key is the score at `as_of`, so `as_of` belongs in it. It is still a position, never a permission
+(D-270): an edited `as_of` only ranks the caller's own feed at another instant.
+
+**Why these weights:** distance first because Velora is "people nearby" and D-490's cells make
+anything under a kilometre one point; recency next, since a match nobody answers is the thinnest
+feed of all; verified and completeness as tie-breakers of real worth, at equal weight. A worked
+case: someone at your own point, never active, scores 0.40 + 0.15 + 0.075 = 0.625 (a woman,
+verified, at 50); someone 24 km away and active now, 0.068 + 0.30 + 0.15 + 0.075 = 0.593. Distance
+wins, narrowly, as intended.
+
+**Rejected:** ranking at each page's own time (the drift above); a stored score (it would be stale
+the moment someone moves or is active).
+
+The founder's approval, 8 October 2026, of the formula Claude proposed in T-6.2's plan, the weights
+as constants in `rules.py`, on the advisor's recommendation (Claude, in a separate chat), relayed by
+the founder.
+
+### D-494 · The `Card`: its badge is `shows_badge`, its photo the lowest place — Locked
+**Decision.** T-6.2's `Card` names D-393's badge `shows_badge`, the same name as the rule's query
+(`verification.repository.shows_badge`, now read through `badge_of`), and never carries raw
+`is_verified`, which stays the owner's, in `Me`. Its photo, `main_photo_url`, is the owner's
+approved public photo at the lowest place (P-75, the founder's answer of 8 October 2026): the
+server moves no photo, so with a gap in the places the lowest is still the main one, and with no
+approved public photo it is null (D-392). Its other fields are T-6.2's list in the plan:
+`distance_km` is whole kilometres between grid points, half rounded up, never under 1 (D-034,
+D-490); `bio_line` is the first 90 characters of `about`, cut at a character, not a word, with
+nothing added (the web shows an ellipsis if it wants one).
+
+**Why `shows_badge`:** the plan left the field's name to T-6.2 (D-393); one name for one rule, so
+nobody reads a field called `is_verified` on a card as the thing it isn't.
+
+The founder's answers to P-75 and the badge (8 October 2026, relayed), written up by Claude in
+T-6.2.
+
+### D-495 · The feed scores every candidate; a nearest-N window was tried and saves nothing; the launch shape is accepted above 80 ms; JIT off — Locked
+**What was tried, so nobody tries it again.** T-6.2's bench at 50,000 profiles missed 02-ARCHITECTURE
+§8's p95 < 80 ms in the launch shape (everyone within Phagwara's 25 km): 191.0 to 246.1 ms across
+10 rounds, because every one of 23,000 eligible candidates is scored on every request. The
+founder chose a window (8 October 2026, the advisor's recommendation, relayed): rank only the
+nearest 2,000 the viewer could see, every exclusion and filter before the limit, ties by id, by
+the GIST index's distance order. **It was built and measured, and saved nothing:** 173.0 to 274.7
+ms launch p95 over the 5 rounds run. Postgres never read the index nearest-first; it still read all
+23,000 and sorted them. Three reasons, each read from the plan on the bench's own database:
+
+1. **The radius is estimated at 5 rows**, in both shapes, where it holds 50,001 (launch) and 2,815
+   (spread). PostGIS estimates `ST_DWithin`'s bounding box well (50,001 and 2,671) and then
+   multiplies in a near-zero selectivity for its distance test, so every join is planned for a
+   handful of rows.
+2. **The tie-break by id stops the index ordering the window.** The index gives distance order,
+   never distance-then-id, so Postgres sorts whatever it reads, even forced.
+3. **The points are few:** 50,000 people on 1,793 distinct grid points (D-490). Forced to read the
+   index nearest-first, without the tie-break (`enable_sort` and `enable_seqscan` off), the scan
+   alone took 52 ms to its first row, the window 82 to 101 ms in the launch shape and 71 to 82 in
+   the spread one, three times slower than today's spread (psql, 5 runs each, while other sessions'
+   tests loaded the machine). And with no tie-break, who sits at the window's edge changes between
+   requests.
+
+**Decision.** No window: the feed scores every candidate, as D-491 says. **The 80 ms target holds
+for the spread shape, what beta looks like.** **The launch shape is accepted above 80 ms**, its
+p95 on record as a range (T-6.2's tick, the bench of 8 October 2026: 197.1 to 209.0 ms over 10
+rounds, under other sessions' load), far beyond beta scale: it needs 50,000 people inside one
+city's 25 km. Its fix, ranking by grid cell first, is P-391, before any city passes 10,000
+eligible profiles or when P-390's staging numbers say so. `api/bench/discovery` judges the spread
+shape and reports the launch one.
+
+**JIT off, for the feed's transaction only:** `SET LOCAL jit = off`, never for the database.
+Postgres's JIT compiled the statement on every request and the compiling cost more than the
+query (psql, 3 runs each: 112 to 113 ms without it, 399 to 575 ms with it). Whether Supabase's
+setting and pooler leave it so is P-390's. `test_the_feed_runs_with_jit_off_for_its_own_transaction_only`
+holds it.
+
+**The worst case, accepted:** a city crowded far past beta scale gets a slow deck, about 200 ms a
+page at 50,000 people within 25 km, until P-391.
+
+**Rejected:** the window (above); forcing the planner with `enable_sort` or `enable_seqscan` (slower
+for beta's shape, nondeterministic at the edge); copying gender, status and the fraud band onto
+`profiles` (a schema change that leaves the per-candidate scoring in place).
+
+The founder's decision, 8 October 2026, on the advisor's recommendation (Claude, in a separate
+chat), relayed by the founder, after Claude built and measured the window and reported its
+numbers; written up by Claude in T-6.2. The advisor's own words on its recommendation: "option 1
+was wrong".
+
 ---
 
 ## Adding a decision

@@ -158,7 +158,7 @@ enforced in the service. Index `(intent_id)`: discovery filters on intent, match
 | id | uuid pk | |
 | user_id | uuid fk users | |
 | kind | photo_kind_t | `verification` is the face photo (D-391, T-4.12): one live per person, private unless a public copy is made from it by `POST /photos/{id}/show`; it can't change once the selfie matched or while one is compared |
-| position | smallint | 0–5 for public; 0 = main |
+| position | smallint | 0–5 for public; the lowest approved place is the main one, 0 or not: the server never closes a gap (P-75, D-494) |
 | raw_key | text | private bucket key |
 | public_key | text null | set when approved (public kind only) |
 | status | review_status_t default 'pending' | |

@@ -4,9 +4,10 @@ from __future__ import annotations
 
 from collections.abc import Sequence
 from datetime import datetime
+from typing import Any
 from uuid import UUID
 
-from sqlalchemy import select
+from sqlalchemy import ColumnElement, and_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.enums import Gender, PhotoKind, ReviewStatus
@@ -181,14 +182,16 @@ async def kept_selfie(
     return verification, selfie
 
 
-async def shows_badge(session: AsyncSession, user_id: UUID) -> bool:
-    """D-393's badge, the query T-6.2's `Card` carries: `is_verified` (the
-    selfie matched the face photo) and at least one approved public photo whose
-    record says its face matched that selfie. Never `is_verified` alone."""
+def badge_of(user_id: Any, is_verified: Any) -> ColumnElement[bool]:
+    """D-393's badge for the user whose id and `is_verified` are these columns
+    of the caller's query: `is_verified` (the selfie matched the face photo)
+    and at least one approved public photo whose record says its face matched
+    that selfie. Never `is_verified` alone. One rule for `shows_badge` and
+    discovery's `Card` and filter (T-6.2)."""
     matched = (
         select(Photo.id)
         .where(
-            Photo.user_id == User.id,
+            Photo.user_id == user_id,
             Photo.kind == PhotoKind.PUBLIC,
             Photo.status == ReviewStatus.APPROVED,
             Photo.public_key.is_not(None),
@@ -196,8 +199,13 @@ async def shows_badge(session: AsyncSession, user_id: UUID) -> bool:
         )
         .exists()
     )
+    return and_(is_verified.is_(True), matched)
+
+
+async def shows_badge(session: AsyncSession, user_id: UUID) -> bool:
+    """D-393's badge for one user, by `badge_of`."""
     found = await session.scalar(
-        select(User.id).where(User.id == user_id, User.is_verified.is_(True), matched)
+        select(User.id).where(User.id == user_id, badge_of(User.id, User.is_verified))
     )
     return found is not None
 

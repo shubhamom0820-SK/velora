@@ -92,13 +92,22 @@ further rule, computed from the shown photos' records, never `is_verified` alone
 ## Discovery
 | Method | Path | Auth | Body → Response | Task |
 |---|---|---|---|---|
-| GET | /discover | ✅ | `?feed=foryou|new|online&intent_ids=&verified=&cursor=&limit=` → `Page<Card>` (`intent_ids`: any overlap, D-041) | T-6.2 |
+| GET | /discover | ✅ | `?feed=foryou|new|online&intent_ids=&verified=&cursor=&limit=` → `Page<Card>` (`intent_ids`: any overlap, D-041, 1 to 10 known ids, repeated as `intent_ids=1&intent_ids=2`; `verified=true`: the badge, D-393) | T-6.2 |
 | POST | /swipes | ✅ | `{target_id, dir}` → `{matched, match_id?, swipes_left}` | T-6.4 |
 | GET | /users/{id} | ✅ | → `PublicProfile` | T-6.3 |
 | GET | /users/by-username/{u} | ✅ | → `PublicProfile` | T-6.6 |
 | GET | /search | ✅ | `?q=&cursor=&limit=` → `Page<CardLite>` (`@` prefix = username lookup) | T-6.6 |
 | GET | /likes | ✅ | `?cursor=&limit=` → `Page<LikeCard>` (blurred unless revealed; free for women) | T-6.7 |
 | POST | /likes/{user_id}/reveal | ✅ | → `PublicProfile` (`liked_you_reveal`'s price: 1 Vela from 8 October 2026, the founder; 20 before; P-370 moves the row) | T-6.7 |
+
+`Card` (T-6.2, D-494): `id`, `first_name`, `age` (null if hidden), `username`, `city`, `hometown`,
+`distance_km` (whole km between grid points, at least 1, D-034 and D-490; null if hidden),
+`intent_ids`, `bio_line` (the first 90 characters of `about`), `main_photo_url` (the approved
+public photo at the lowest place, P-75, or null, D-392), `shows_badge` (D-393's rule, never raw
+`is_verified`), `is_online` (active within 5 minutes), `is_new` (joined within 7 days). Never a
+date of birth, a position, a phone number or `is_verified`. The feed: everyone 02-ARCHITECTURE §8
+leaves out stays out, ranked by D-491's score, best first, then by id; its cursor carries the
+instant the scroll began, so time passing between pages can't repeat or skip a card (D-491).
 
 ## Threads & messages
 | Method | Path | Auth | Body → Response | Task |

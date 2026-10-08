@@ -33,8 +33,8 @@ router = APIRouter(tags=["profiles"])
 # the list of who is on the app isn't.
 USERNAME_CHECKS_PER_MINUTE = 30
 # 02-ARCHITECTURE §12: onboarding's tries and a refresh each time the app opens
-# fit easily. It slows someone moving themselves about to measure distances; it
-# can't stop them, since three readings are enough (P-120).
+# fit easily. It slows someone moving themselves about to measure distances; the
+# grid (D-490) is what makes their readings tell nothing finer than a cell.
 LOCATION_SETS_PER_HOUR = 10
 
 

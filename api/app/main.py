@@ -25,6 +25,7 @@ from app.core.redis import build_redis
 from app.modules.admin.router import router as admin_router
 from app.modules.auth.router import firebase_router, otp_router
 from app.modules.auth.router import router as auth_router
+from app.modules.discovery.router import router as discovery_router
 from app.modules.e2e.router import payments_router as e2e_payments_router
 from app.modules.e2e.router import router as e2e_router
 from app.modules.health.router import router as health_router
@@ -150,6 +151,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.include_router(wallet_router, prefix="/v1")
     app.include_router(payments_router, prefix="/v1")
     app.include_router(admin_router, prefix="/v1")
+    app.include_router(discovery_router, prefix="/v1")
     for sign_in_router, served_for in SIGN_IN_PATHS:
         if settings.AUTH_PHONE_PROVIDER in served_for:
             app.include_router(sign_in_router, prefix="/v1")

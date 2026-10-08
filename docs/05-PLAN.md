@@ -2670,7 +2670,7 @@ prices don't depend on the web photos step, and the hold is lifted.
 > Location lives in Sprint 4 as T-4.10, because onboarding needs it first. Discovery starts at T-6.2.
 
 ### T-6.2 · Discovery query
-- [ ] **Needs:** T-4.10, T-4.8; **P-75**: public photo places kept 0 onwards by the server, or
+- [x] **Needs:** T-4.10, T-4.8; **P-75**: public photo places kept 0 onwards by the server, or
   "main" defined as the lowest place, before a `Card` carries a main photo (found building T-4.6)
   **P-161**: a public photo added after a verification compared with the selfie, or the badge
   cleared, before a `Card` carries `is_verified` to anyone (found building T-4.5): **resolved in
@@ -2681,18 +2681,31 @@ prices don't depend on the web photos step, and the hold is lifted.
   `distance_km` to anyone (found building T-4.10)
   **P-210**: `profiles.completeness` kept current after onboarding finishes, before the ranking
   reads it (found building T-4.8)
-- [ ] Repository implements the query in `02-ARCHITECTURE.md §8` with feeds: `foryou` (ranked), `new` (joined ≤ 7 days first), `online` (active ≤ 5 min). Filters: `intent_ids` (any overlap, D-041), verified.
-- [ ] Excludes: self, swiped, blocked either way, hidden, not `done`, status ≠ active, fraud band `freeze`; `shadow` band users only shown to others in `shadow`.
-- [ ] Response `Card`: id, first_name, age (null if hide_age), username, city, hometown, distance_km (null if hide_distance, else ≥ 1), intent_ids, bio line (first 90 chars of about), main photo URL, is_verified, is_online, is_new.
+- [x] Repository implements the query in `02-ARCHITECTURE.md §8` with feeds: `foryou` (ranked), `new` (joined ≤ 7 days first), `online` (active ≤ 5 min). Filters: `intent_ids` (any overlap, D-041), verified.
+- [x] Excludes: self, swiped, blocked either way, hidden, not `done`, status ≠ active, fraud band `freeze`; `shadow` band users only shown to others in `shadow`.
+- [x] Response `Card`: id, first_name, age (null if hide_age), username, city, hometown, distance_km (null if hide_distance, else ≥ 1), intent_ids, bio line (first 90 chars of about), main photo URL, is_verified, is_online, is_new.
   **From 7 October 2026 (D-392, D-393, T-4.12):** the main photo URL is null when there is no
   approved public photo, and the web shows a grey silhouette with the name; the badge field is
   D-393's rule (a selfie matched the face photo **and** at least one approved public photo's face
   matched the selfie), computed by the query, never raw `is_verified`, and its name is this task's
   (`is_verified` stays in `Me`, for the owner). Whether the ranking's `is_verified` term stays is
   P-290.
-- [ ] Cursor = (score, user_id).
-- [ ] Performance test: seed 50k profiles, assert p95 < 80 ms with `EXPLAIN ANALYZE` showing the GIST index.
-- [ ] **Commit:** `feat(discovery): ranked nearby feed [T-6.2]`
+- [x] Cursor = (score, user_id). **Built as `(as_of, score, user_id)` (D-491):** the score at the
+  scroll's first instant, so time passing between pages can't repeat or skip a card.
+- [x] Performance test: seed 50k profiles, assert p95 < 80 ms with `EXPLAIN ANALYZE` showing the GIST index.
+  **Split by the founder (8 October 2026, Q7):** `make test` holds the deterministic half,
+  `tests/modules/discovery/test_plan.py` (a 6,000-profile crowd spread across India, EXPLAIN shows
+  `ix_profiles_location`); the timing is `api/bench/discovery`, run by hand. **Measured 8 October
+  2026, 50,000 profiles, 10 interleaved rounds of 100 timed requests each (the feed and its cards,
+  first pages and a page 200 deep), on the founder's Mac against the local Postgres 16:**
+  spread across India, **p95 24.2 to 34.8 ms** (p50 20.6 to 21.9): the target met. The launch
+  shape, all 50,000 inside Phagwara's 25 km, **p95 197.1 to 209.0 ms** (p50 165.8 to 188.9):
+  accepted above 80 ms, far beyond beta scale (D-495), its fix P-391. **Caveat: not an idle
+  machine.** Other sessions' tests ran through the whole run (5 of their test processes in every
+  one of 45 samples, load average 2.79 mean), so these may read high. Before it: without JIT off and
+  with the viewer's point behind a subquery, launch 191.0 to 246.1 ms; a nearest-2,000 window
+  (D-495, removed) 173.0 to 274.7 ms over 5 rounds. Staging's own numbers are P-390's.
+- [x] **Commit:** `feat(discovery): ranked nearby feed [T-6.2]`
 
 ### T-6.3 · Public profile
 - [ ] **Needs:** T-6.2
@@ -4425,7 +4438,7 @@ The number comes from the session's own block, given in its brief, from P-100 up
   nothing tells her why her photo was refused. The fix is the same.
 
   Found building T-4.6.
-- [ ] P-75 · Keep public photo places 0 onwards on the server. **Before T-6.2 serves `Card`s with a main photo URL.**
+- [x] P-75 · Keep public photo places 0 onwards on the server. **Before T-6.2 serves `Card`s with a main photo URL.**
   Worst case: a profile shown in discovery with no main photo, because its place 0 was rejected by
   moderation or removed by a client other than ours, and nothing moved the next one up. 03-SCHEMA
   says 0 is the main one; the API allows gaps (upload to any free place, delete without closing
@@ -4434,6 +4447,11 @@ The number comes from the session's own block, given in its brief, from P-100 up
   **7 October 2026 (D-392, T-4.12):** "main" must also cover there being no public photo at all:
   the `Card`'s main photo URL is null then, and the web shows a grey silhouette with the name.
   Whichever way this is settled, T-6.2 handles none.
+  **Answered 8 October 2026** (the founder, on the advisor's recommendation, Claude in a separate
+  chat, relayed by the founder): the card's photo is the profile's photo, the owner's approved
+  public photo at the lowest place; the server moves no photo, so with a gap the lowest is still
+  the main one; with none, null. Built by T-6.2 (`discovery.repository.main_photo_key`, D-494),
+  held by `tests/modules/discovery/test_card.py`.
 
   Found building T-4.6.
 - [ ] P-76 · Free an upload that never arrived when the owner's photos are listed, not only at the
@@ -5198,7 +5216,7 @@ The number comes from the session's own block, given in its brief, from P-100 up
   needs-chain fix, one cancelled by hand a moment after it started and re-run. Also noted on
   the way: CLAUDE.md's shell trap 5, zsh's read-only `status`. Built by Claude, 8 October
   2026; its session's block, P-310 to P-319 and D-410 to D-419, of which D-410 is used.
-- [ ] P-290 · Decide whether discovery's ranking keeps its `is_verified` boost for a profile whose
+- [x] P-290 · Decide whether discovery's ranking keeps its `is_verified` boost for a profile whose
   badge is hidden. **Before T-6.2 writes `rank_score`.** Worst case: two rules that look like one.
   D-032 (Locked) ranks by `is_verified`, the selfie's match; D-393 shows the badge only with a
   shown face that matched the selfie. So a woman with a matched selfie and no shown face is
@@ -5210,6 +5228,10 @@ The number comes from the session's own block, given in its brief, from P-100 up
   no photo sits at the bottom anyway, at completeness 50 (D-310, D-392). The founder decides;
   D-032 is Locked, so a change supersedes it with a new entry. Filed by Claude while filing
   T-4.12, 7 October 2026; its session's block, P-290 to P-299.
+  **Answered 8 October 2026** (the founder, on the advisor's recommendation, relayed by the
+  founder): D-032 stands as it is. The `is_verified` boost stays whether or not the badge shows;
+  ranking is not a claim, and D-262 is about copy. T-6.2's score carries it (D-491), and
+  `test_is_verified_ranks_whether_or_not_the_badge_shows` holds it.
 - [ ] P-350 · Register for GST within 30 days of aggregate turnover crossing ₹20 lakh in a
   financial year; at that moment, the CA answers the voucher-timing question (GST at sale or at
   spend), and a task flips `GST_REGISTERED`, adds the GST line to receipts, and files the timing
@@ -5331,3 +5353,25 @@ The number comes from the session's own block, given in its brief, from P-100 up
   (02-ARCHITECTURE §11). The check names each missing key, never a value,
   as the storage check does. Filed by Claude building T-8.1, 8 October 2026; its session's block,
   P-380 to P-389.
+- [ ] P-390 · Check Supabase's `jit` setting and the feed's real time on staging. **Before REL-1;
+  not blocking T-6.2.** Worst case first: production's feed takes several times what the bench
+  measured, because the bench ran on the local Postgres 16, not Supabase's 17, and JIT alone moved
+  T-6.2's query from about 112 ms to 399 to 575 ms there (psql, 8 October 2026). The feed turns JIT
+  off for its own transaction (`SET LOCAL jit = off`, D-495), so this checks that the setting
+  takes on Supabase as it does locally (a role or pooler setting can override it), and reads the
+  feed's time where it runs: `EXPLAIN (ANALYZE)` of the feed's statement on staging with a
+  crowd in a scratch schema or database of its own, never `velora`'s rows, and the API's request
+  time for `GET /v1/discover` in its logs. Records the numbers, ranges across runs, beside T-6.2's.
+  Filed by Claude at the founder's direction (8 October 2026, on the advisor's recommendation,
+  relayed), building T-6.2; its session's block, P-390 to P-399.
+- [ ] P-391 · Rank the feed by grid cell first. **Before any city passes 10,000 eligible profiles,
+  or when P-390's staging numbers say so, whichever comes first.** Worst case first: one city
+  nearing tens of thousands of people makes the deck slow, about 200 ms a page at 50,000 within
+  25 km (T-6.2's bench, D-495), and slower as it grows, because the feed scores every eligible
+  candidate on every request. The fix: positions are grid points (D-490), about 1,800 distinct in
+  a crowded city, so rank cells first, nearest outward, and score only the people in enough of
+  them to fill a page and its cursor, keeping D-491's ranking and every exclusion. D-495 records
+  what doesn't work, a nearest-N window by the GIST index's order, and why: read it first. The
+  trigger needs a count: how many eligible profiles a city has, from a query T-9.5's metrics or
+  a check by hand can run. Filed by Claude at the founder's direction (8 October 2026, on the
+  advisor's recommendation, relayed), building T-6.2; its session's block, P-390 to P-399.

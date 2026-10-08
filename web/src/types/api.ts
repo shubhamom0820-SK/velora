@@ -658,6 +658,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/discover": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Discover */
+        get: operations["discover_v1_discover_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/auth/otp/send": {
         parameters: {
             query?: never;
@@ -749,6 +766,53 @@ export interface components {
              */
             area_id: string;
         };
+        /**
+         * Card
+         * @description One person in a feed. Never a date of birth, a position, a phone number
+         *     or raw `is_verified`: an age, a distance in whole kilometres between grid
+         *     points (D-034, D-490), and the badge as D-393 has it.
+         */
+        Card: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** First Name */
+            first_name: string;
+            /** Age */
+            age: number | null;
+            /** Username */
+            username: string;
+            /** City */
+            city: string | null;
+            /** Hometown */
+            hometown: string | null;
+            /** Distance Km */
+            distance_km: number | null;
+            /** Intent Ids */
+            intent_ids: number[];
+            /** Bio Line */
+            bio_line: string;
+            /** Main Photo Url */
+            main_photo_url: string | null;
+            /** Shows Badge */
+            shows_badge: boolean;
+            /** Is Online */
+            is_online: boolean;
+            /** Is New */
+            is_new: boolean;
+        };
+        /**
+         * CardPage
+         * @description `Page<Card>`: by score, best first, then by id (D-491).
+         */
+        CardPage: {
+            /** Items */
+            items: components["schemas"]["Card"][];
+            /** Next Cursor */
+            next_cursor: string | null;
+        };
         /** DobSet */
         DobSet: {
             /**
@@ -757,6 +821,11 @@ export interface components {
              */
             dob: string;
         };
+        /**
+         * Feed
+         * @enum {string}
+         */
+        Feed: "foryou" | "new" | "online";
         /**
          * FirebaseSignIn
          * @description Path A (D-035): the ID token Firebase gave the browser once the code was
@@ -2285,6 +2354,41 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["Turnover"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    discover_v1_discover_get: {
+        parameters: {
+            query?: {
+                feed?: components["schemas"]["Feed"];
+                intent_ids?: number[];
+                verified?: boolean;
+                cursor?: string | null;
+                limit?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CardPage"];
                 };
             };
             /** @description Validation Error */

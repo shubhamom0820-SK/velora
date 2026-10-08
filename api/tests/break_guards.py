@@ -3216,9 +3216,10 @@ T412: list[tuple[Case, list[str]]] = [
             what="D-393 rule 4: the badge with no shown face that matched",
             edits=[
                 (
+                    # `badge_of` since T-6.2, which `shows_badge` reads.
                     REPO45,
-                    "        select(User.id).where(User.id == user_id, User.is_verified.is_(True), matched)\n",
-                    "        select(User.id).where(User.id == user_id, User.is_verified.is_(True))\n",
+                    "    return and_(is_verified.is_(True), matched)\n",
+                    "    return is_verified.is_(True)\n",
                 )
             ],
             expect=["test_the_query_needs_is_verified_and_a_shown_face_that_matched"],
@@ -3859,6 +3860,362 @@ P210: list[tuple[Case, list[str]]] = [
     ),
 ]
 
+# --- T-6.2: the discovery feed --------------------------------------------------------
+
+DISCOVERY_TESTS62 = ["tests/modules/discovery"]
+
+T62: list[tuple[Case, list[str]]] = [
+    (
+        Case(
+            id="t62-01-self-in-the-feed",
+            what="the viewer shown to themselves",
+            edits=[
+                (
+                    "app/modules/discovery/repository.py",
+                    "        User.id != viewer.id,\n",
+                    "",
+                )
+            ],
+            expect=[
+                "test_someone_seeking_everyone_sees_both_who_want_them_and_never_themselves"
+            ],
+        ),
+        DISCOVERY_TESTS62,
+    ),
+    (
+        Case(
+            id="t62-02-swiped-still-shown",
+            what="someone already swiped shown again",
+            edits=[
+                (
+                    "app/modules/discovery/repository.py",
+                    "        ~exists().where(Swipe.swiper_id == viewer.id, Swipe.target_id == User.id),\n",
+                    "",
+                )
+            ],
+            expect=[
+                "test_someone_i_swiped_is_gone_whichever_way[like]",
+                "test_someone_i_swiped_is_gone_whichever_way[pass]",
+                "test_someone_i_swiped_is_gone_whichever_way[super]",
+            ],
+        ),
+        DISCOVERY_TESTS62,
+    ),
+    (
+        Case(
+            id="t62-03-a-block-one-way",
+            what="critical 9: a block hides only the blocked from the blocker",
+            edits=[
+                (
+                    "app/modules/discovery/repository.py",
+                    "            and_(Block.blocker_id == b, Block.blocked_id == a),\n",
+                    "",
+                )
+            ],
+            expect=["test_a_block_either_way_hides_each_from_the_other[her]"],
+        ),
+        DISCOVERY_TESTS62,
+    ),
+    (
+        Case(
+            id="t62-04-hidden-shown",
+            what="a hidden profile in the feed",
+            edits=[
+                (
+                    "app/modules/discovery/repository.py",
+                    "        hidden if hidden_ok is None else or_(hidden, hidden_ok),\n",
+                    "",
+                )
+            ],
+            expect=["test_a_hidden_profile_is_left_out"],
+        ),
+        DISCOVERY_TESTS62,
+    ),
+    (
+        Case(
+            id="t62-05-not-done-shown",
+            what="someone mid-onboarding in the feed",
+            edits=[
+                (
+                    "app/modules/discovery/repository.py",
+                    "        User.onboarding_step == OnboardingStep.DONE,\n",
+                    "",
+                )
+            ],
+            expect=["test_someone_not_done_is_left_out[selfie]"],
+        ),
+        DISCOVERY_TESTS62,
+    ),
+    (
+        Case(
+            id="t62-06-not-active-shown",
+            what="a frozen or deleted account in the feed",
+            edits=[
+                (
+                    "app/modules/discovery/repository.py",
+                    "        User.status == UserStatus.ACTIVE,\n",
+                    "",
+                )
+            ],
+            expect=[
+                "test_anyone_not_active_is_left_out[frozen]",
+                "test_anyone_not_active_is_left_out[deleted]",
+            ],
+        ),
+        DISCOVERY_TESTS62,
+    ),
+    (
+        Case(
+            id="t62-07-freeze-band-shown",
+            what="D-031: the freeze band in the feed",
+            edits=[
+                (
+                    "app/modules/discovery/repository.py",
+                    "        ~_in_band(User.id, FraudBand.FREEZE),\n",
+                    "",
+                )
+            ],
+            expect=["test_a_frozen_band_is_left_out_for_everyone[None]"],
+        ),
+        DISCOVERY_TESTS62,
+    ),
+    (
+        Case(
+            id="t62-08-shadow-shown-to-all",
+            what="D-031: the shadowed shown to everyone",
+            edits=[
+                (
+                    "app/modules/discovery/repository.py",
+                    "    if not viewer.shadowed:\n        conditions.append(~_in_band(User.id, FraudBand.SHADOW))\n",
+                    "",
+                )
+            ],
+            expect=["test_the_shadowed_are_shown_only_to_the_shadowed[None-False]"],
+        ),
+        DISCOVERY_TESTS62,
+    ),
+    (
+        Case(
+            id="t62-09-shadow-hidden-from-shadow",
+            what="D-031: the shadowed hidden from each other too",
+            edits=[
+                (
+                    "app/modules/discovery/repository.py",
+                    "    if not viewer.shadowed:\n        conditions.append(~_in_band(User.id, FraudBand.SHADOW))\n",
+                    "    conditions.append(~_in_band(User.id, FraudBand.SHADOW))\n",
+                )
+            ],
+            expect=["test_the_shadowed_are_shown_only_to_the_shadowed[shadow-True]"],
+        ),
+        DISCOVERY_TESTS62,
+    ),
+    (
+        Case(
+            id="t62-10-one-sided-seeking",
+            what="discovery not mutual: her seeking ignored",
+            edits=[
+                (
+                    "app/modules/discovery/repository.py",
+                    "            Profile.seeking.in_(rules.seekings_wanting(viewer.gender)),\n",
+                    "",
+                )
+            ],
+            expect=["test_a_man_sees_the_women_nearby_who_want_men"],
+        ),
+        DISCOVERY_TESTS62,
+    ),
+    (
+        Case(
+            id="t62-11-badge-is-is-verified",
+            what="D-393: the badge reduced to is_verified",
+            edits=[
+                (
+                    "app/modules/verification/repository.py",
+                    "    return and_(is_verified.is_(True), matched)\n",
+                    "    return is_verified.is_(True)\n",
+                )
+            ],
+            expect=[
+                "test_the_badge_is_d393s_never_is_verified_alone[True-False-False]",
+                "test_the_verified_filter_is_the_badge_never_is_verified_alone",
+            ],
+        ),
+        DISCOVERY_TESTS62,
+    ),
+    (
+        Case(
+            id="t62-12-hidden-age-shown",
+            what="a hidden age on the card",
+            edits=[
+                (
+                    "app/modules/discovery/service.py",
+                    "        if row.hide_age or row.dob is None\n",
+                    "        if row.dob is None\n",
+                )
+            ],
+            expect=["test_hidden_age_and_distance_are_null"],
+        ),
+        DISCOVERY_TESTS62,
+    ),
+    (
+        Case(
+            id="t62-13-under-a-kilometre",
+            what="D-034: 0 km on a card",
+            edits=[
+                (
+                    "app/modules/discovery/rules.py",
+                    "    return max(1, math.floor(metres / 1000 + 0.5))\n",
+                    "    return math.floor(metres / 1000 + 0.5)\n",
+                )
+            ],
+            expect=[
+                "test_the_distance_is_whole_kilometres_between_grid_points_never_under_1[0-1]"
+            ],
+        ),
+        DISCOVERY_TESTS62,
+    ),
+    (
+        Case(
+            id="t62-14-as-of-not-pinned",
+            what="D-491: each page ranked at its own time",
+            edits=[
+                (
+                    "app/modules/discovery/service.py",
+                    "        as_of, score, last = FEED_CURSOR.decode(params.cursor)\n",
+                    "        _, score, last = FEED_CURSOR.decode(params.cursor)\n",
+                )
+            ],
+            expect=[
+                "test_time_passing_between_pages_never_repeats_or_skips_a_card",
+                "test_each_cursor_carries_the_scrolls_first_instant",
+            ],
+        ),
+        DISCOVERY_TESTS62,
+    ),
+    (
+        Case(
+            id="t62-15-radius-not-app-configs",
+            what="the radius fixed at 25 km, app_config ignored",
+            edits=[
+                (
+                    "app/modules/discovery/service.py",
+                    "            radius_m=radius_km * 1000.0,\n",
+                    "            radius_m=25_000.0,\n",
+                )
+            ],
+            expect=["test_the_radius_is_read_from_app_config"],
+        ),
+        DISCOVERY_TESTS62,
+    ),
+    (
+        Case(
+            id="t62-16-main-photo-any-status",
+            what="P-75: a pending or rejected photo as the main one",
+            edits=[
+                (
+                    "app/modules/discovery/repository.py",
+                    "            Photo.status == ReviewStatus.APPROVED,\n            Photo.public_key.is_not(None),\n        )\n        .order_by(Photo.position, Photo.id)\n",
+                    "            Photo.public_key.is_not(None) | Photo.public_key.is_(None),\n        )\n        .order_by(Photo.position, Photo.id)\n",
+                )
+            ],
+            expect=[
+                "test_the_main_photo_is_the_lowest_approved_public_place_gap_or_not"
+            ],
+        ),
+        DISCOVERY_TESTS62,
+    ),
+    (
+        Case(
+            id="t62-17-jit-left-on",
+            what="D-495: the feed compiled by JIT on every request",
+            edits=[
+                (
+                    "app/modules/discovery/repository.py",
+                    "    await session.execute(JIT_OFF)\n",
+                    "",
+                )
+            ],
+            expect=["test_the_feed_runs_with_jit_off_for_its_own_transaction_only"],
+        ),
+        DISCOVERY_TESTS62,
+    ),
+    (
+        Case(
+            id="t62-18-radius-past-the-index",
+            what="the radius written so the GIST index can't serve it",
+            edits=[
+                (
+                    "app/modules/discovery/repository.py",
+                    "        func.ST_DWithin(Profile.location, here, radius_m),\n",
+                    "        func.ST_Distance(Profile.location, here) <= radius_m,\n",
+                )
+            ],
+            expect=["test_a_spread_crowd_is_searched_through_the_gist_index"],
+        ),
+        DISCOVERY_TESTS62,
+    ),
+    (
+        Case(
+            id="t62-19-intents-ignored",
+            what="D-041: the intent filter not applied",
+            edits=[
+                (
+                    "app/modules/discovery/repository.py",
+                    "    if intent_ids:\n        conditions.append(\n",
+                    "    if False:\n        conditions.append(\n",
+                )
+            ],
+            expect=["test_intents_match_on_any_overlap"],
+        ),
+        DISCOVERY_TESTS62,
+    ),
+    (
+        Case(
+            id="t62-20-online-feed-unfiltered",
+            what="the online feed showing anyone",
+            edits=[
+                (
+                    "app/modules/discovery/service.py",
+                    "            online_since=as_of - rules.ONLINE_FOR if feed is Feed.ONLINE else None,\n",
+                    "            online_since=None,\n",
+                )
+            ],
+            expect=["test_the_online_feed_is_the_last_five_minutes_only"],
+        ),
+        DISCOVERY_TESTS62,
+    ),
+    (
+        Case(
+            id="t62-21-new-not-lifted",
+            what="the new feed ranked like for-you",
+            edits=[
+                (
+                    "app/modules/discovery/repository.py",
+                    "            (User.created_at >= literal(as_of - rules.NEW_FOR), rules.NEW_LIFT),\n",
+                    "            (User.created_at >= literal(as_of - rules.NEW_FOR), 0.0),\n",
+                )
+            ],
+            expect=["test_the_new_feed_puts_the_new_first_then_ranks_each"],
+        ),
+        DISCOVERY_TESTS62,
+    ),
+    (
+        Case(
+            id="t62-22-weights-moved",
+            what="D-491's weights changed quietly",
+            edits=[
+                (
+                    "app/modules/discovery/rules.py",
+                    "WEIGHT_DISTANCE: Final = 0.40\n",
+                    "WEIGHT_DISTANCE: Final = 0.45\n",
+                )
+            ],
+            expect=["test_the_score_is_d491s_formula_exactly"],
+        ),
+        DISCOVERY_TESTS62,
+    ),
+]
+
 CASES: list[tuple[Case, list[str]]] = (
     [(c, T51_SELECTION) for c in T51]
     + [(c, T54_SELECTION) for c in T54]
@@ -3876,6 +4233,7 @@ CASES: list[tuple[Case, list[str]]] = (
     + [(c, T81_SELECTION) for c in T81]
     + P120
     + P210
+    + T62
 )
 
 # The fifty-connection fixture's own message when Postgres refuses a connection.
