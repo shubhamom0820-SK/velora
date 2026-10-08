@@ -421,12 +421,14 @@ One migration per task, each with a working `downgrade()`. Build exactly `03-SCH
   before any worker starts, so a configuration error stops the container instead of crash-looping.
   `infra/fly.api.toml`, region `sin` (D-048: Fly retired `bom`), health check `/readyz`. No release command: migrations run
   from CI as the owner (D-046). The worker's Fly app moved to T-4.4, which builds the worker.
-- [ ] Supabase staging project (enable PostGIS, pg_trgm, citext); Upstash staging DB; R2 staging buckets.
+- [x] Supabase staging project (enable PostGIS, pg_trgm, citext); Upstash staging DB; R2 staging buckets.
   All by hand, from `infra/STAGING.md`. **Open, for R2 alone (1 October 2026):** Supabase (Mumbai,
   migrated to head) and Upstash (Mumbai) are serving staging (deploy run 36845884410). R2 isn't
   enabled on the Cloudflare account yet, which only its dashboard can do, so there are no buckets.
   **Moved:** R2 is now on T-4.1's Needs line, the first task that uses the buckets — tick this with
   T-4.1.
+  **Ticked 8 October 2026 (the audit, P-490):** T-4.1 landed (`6814f46`, 4 October 2026) with its
+  Needs line's R2 box ticked: the four buckets, set up by the founder that day.
 - [x] Supabase's Data API off, and the app-role migration strips `anon` and `authenticated` of every
   privilege on our tables. Left on, it serves every table in `public` over REST to anyone with the
   project's anon key. The runbook ends with a SQL check that those roles hold nothing.
@@ -2728,7 +2730,7 @@ prices don't depend on the web photos step, and the hold is lifted.
 
 
 ### T-6.5 · Web discover deck
-- [ ] **Needs:** T-6.2, T-6.4, and P-57, answered 7 October 2026 (08-DESIGN §8): the app's visual design, which this task builds from, never the prototype; and P-82 and P-83: its design pass changes the shell's values, so first the shell is checked where a browser draws it, and its look guard fails anything not on an allowed list; and P-220: its match sheet is the app's first sheet after T-5.5's store sheet, so a sheet left open behind the PIN lock stops being reachable first
+- [ ] **Needs:** T-6.2, T-6.4, and P-57, answered 7 October 2026 (08-DESIGN §8): the app's visual design, which this task builds from, never the prototype; and P-82 and P-83: its design pass changes the shell's values, so first the shell is checked where a browser draws it, and its look guard fails anything not on an allowed list; and P-220: its match sheet is the app's first sheet after T-5.5's store sheet, so a sheet left open behind the PIN lock stops being reachable first; and **P-56, built by T-6.5 as its first commit** (the founder, 8 October 2026): the API refuses a charge whose price changed after it was shown, on every paid endpoint on `main`, and then this task's web sends the price it showed
 - [ ] `useDiscover(feed, filters)` infinite query; keep 3 cards rendered; prefetch next page at 5 left.
 - [ ] Card with `@use-gesture/react` + `@react-spring/web`: drag with rotation, LIKE/PASS overlays by drag distance, fling threshold 100 px or velocity, up = super. Tap = open profile. Keyboard ← → ↑ on desktop.
 - [ ] Optimistic swipe: advance immediately, rollback + toast on error.
@@ -2813,6 +2815,8 @@ prices don't depend on the web photos step, and the hold is lifted.
   matches; a sentence with the bare word was added and the case went red. T-6.3's `t63-04`
   anchored on `mutual=False`, which this task made a parameter; it now weakens the parameter's
   default, and went red.
+- [x] **Commit:** `feat(threads): open thread [T-7.1]`
+  Added 8 October 2026 (the audit, P-490): T-7.1 landed as `8b6c542` without this line.
 
 ### T-7.2 · Thread list
 - [x] **Needs:** T-7.1
@@ -2978,12 +2982,13 @@ prices don't depend on the web photos step, and the hold is lifted.
 - [ ] **Commit:** `feat(messages): voice notes and unlocks [T-7.9]`
 
 ### T-7.10 · Web chat list
-- [ ] **Needs:** T-7.2, T-7.8
+- [ ] **Needs:** T-7.2, T-7.8, and **P-460**: her rows draw no countdown and no expired state
 - [ ] Threads / Knots tabs with counts; live countdown per row (one shared 1 s ticker, not one per row); Knots filters; search; select mode + bulk clear; "Clear expired (n)"; trash per row with 5 s undo toast; unread dots; empty states.
 - [ ] **Commit:** `feat(web): chats list [T-7.10]`
 
 ### T-7.11 · Web conversation
-- [ ] **Needs:** T-7.3, T-7.7, T-7.9
+- [ ] **Needs:** T-7.3, T-7.7, T-7.9, and **P-56**: its paid buttons send the price they showed
+  (before the web's paid buttons, the founder, 8 October 2026)
 - [ ] Bubbles, day separators, "Sent/Read" on my last message, typing dots, voice player (locked card with price for men), icebreakers when empty, knot bar (tie / waiting), expired panel (re-open · 2 / tie), header with countdown or "Knotted · permanent", ⋯ → profile menu.
 - [ ] Composer: text (Enter sends, Shift+Enter newline), mic for women (MediaRecorder, hold or tap-to-record, 60 s cap, preview before send). Optimistic send with `client_msg_id`; failed → retry.
 - [ ] Rejected message → inline explanation, text kept in composer.
@@ -2992,7 +2997,7 @@ prices don't depend on the web photos step, and the hold is lifted.
 - [ ] **Commit:** `feat(web): conversation screen [T-7.11]`
 
 ### T-7.12 · Web real-time client
-- [ ] **Needs:** T-7.4, T-7.11
+- [ ] **Needs:** T-7.4, T-7.11, and **P-460**: the client reads nothing from her null `expires_at`
 - [ ] `src/lib/ws.ts`: ticket → connect; exponential backoff 1→30 s with jitter; pause when tab hidden > 5 min; on reconnect refetch open thread + list. Events update TanStack Query caches (append message, bump row, update wallet, knot state).
 - [ ] **Widen the CSP here (D-059):** `connect-src` for `wss://` on the API host. The socket fails with a CSP error until then.
 - [ ] **Commit:** `feat(web): realtime client [T-7.12]`
@@ -3059,7 +3064,7 @@ prices don't depend on the web photos step, and the hold is lifted.
 - [x] **Commit:** `feat(payments): refund requests [T-8.3]`
 
 ### T-8.4 · Private album
-- [ ] **Needs:** T-4.4, T-5.1; **P-79**: an approved private photo can't be swapped for an unmoderated one through its upload URL
+- [ ] **Needs:** T-4.4, T-5.1; **P-79**: an approved private photo can't be swapped for an unmoderated one through its upload URL; and **P-301**: a private photo's served copy is the bytes moderation scored
 - [ ] Requests (debit 1 for men, D-231: viewing private pictures; `credits_charged` stored), incoming list for owner, decide (grant → enqueue `watermark_album`; decline → nothing is returned, D-230), revoke (delete watermarked copies, status `revoked`).
 - [ ] **A decline returns nothing** (D-230, superseding D-050's refund on a decline). `refund_album_declined` stays unused, never repurposed.
 - [ ] `watermark_album`: for each private photo render a copy with the viewer's `@username` tiled diagonally at ~20% opacity.
@@ -3195,7 +3200,8 @@ number** per account gets its 5 each, one Thread's worth, and is **accepted**, k
 
 ### T-9.1 · Reports and blocks
 - [ ] **Needs:** T-7.2, and **P-400**: a blocked person deletes and signs up again on the same
-  number to reach the one who blocked them
+  number to reach the one who blocked them; and **P-16**: whether unblocking keeps history (a
+  migration, if it does)
 - [ ] `POST /reports` (≤ 10/day, details ≤ 500, optional `also_block`), `POST /blocks`, `DELETE /blocks/{id}`, `GET /blocks`.
 - [ ] Block effects, each with a test: removed from both discovery feeds, search, likes; profile → 404 both ways; threads hidden for both and sending → `BLOCKED`; realtime events stop; existing album grants revoked.
 - [ ] Reported person is never told who reported.
@@ -3312,7 +3318,7 @@ number** per account gets its 5 each, one Thread's worth, and is **accepted**, k
 - [ ] **Commit:** `a11y(web): accessibility pass [T-9.11]`
 
 ### T-9.12 · Observability
-- [ ] **Needs:** T-1.22, and a **Sentry account** — not created yet (P-0.6)
+- [ ] **Needs:** T-1.22, and a **Sentry account** — not created yet: P-0.6 was ticked with it left to this task
 - [ ] Sentry in api, worker, web (release = git sha). Alerts: 5xx > 1% for 5 min, webhook signature failures, any job failing 3×, ledger reconciliation mismatch, queue depth > 1,000. Uptime check on `/readyz`.
 - [ ] Route D-066's OTP warning, logged at half of `otp_sms_daily_cap`, to the alert channel: until this task it lands only in Fly's logs, which nobody reads.
 - [ ] Route D-090's final failure to the alert channel: a minor's files that couldn't be deleted after three tries, logged at error level with the `banned_identities` id. Until this task that log line is all there is, which D-078 says is not enough.
@@ -3436,6 +3442,7 @@ The number comes from the session's own block, given in its brief, from P-100 up
   can hold connections up to 2 s each and starve real requests. It also tells anyone which
   dependency is down. Rate-limit it with the rate-limit work, and decide whether production should
   hide per-dependency details before T-1.22 exposes `api.velora.app`. Found in review of T-1.4.
+  **Deadline passed, 8 October 2026** (the audit, P-490): T-1.22 deployed staging on 1 October 2026.
 - [x] P-07 · Harness mode for concurrency tests — the `db` fixture is one session inside one
   rolled-back transaction, so concurrent requests through it fail (measured: 5 concurrent requests →
   `[200, 500, 500, 500, 500]`, `InvalidRequestError`), and row locks inside a single transaction never
@@ -3457,17 +3464,22 @@ The number comes from the session's own block, given in its brief, from P-100 up
   of T-1.5.
   **Narrower since P-55:** each run's Redis database is its slot's, 2 to 15, so runs no longer share
   one; the host is still fixed at `127.0.0.1:6379`, which is where CI runs Redis.
-- [ ] P-09 · Run gitleaks in CI — the pre-commit hook only protects clones that ran `make hooks`,
+- [x] P-09 · Run gitleaks in CI — the pre-commit hook only protects clones that ran `make hooks`,
   and `git commit --no-verify` skips it. T-1.20's CI steps list ruff, mypy and pytest but not
   gitleaks, so nothing server-side enforces checklist E's "no secrets in repo". Add a
   `gitleaks git` step to T-1.20's `api` job. Found in review of T-1.6.
   **Moved:** now a step in T-1.20 — tick this with T-1.20.
-- [ ] P-10 · Hooks must work from GUI git clients — the ruff and mypy hooks call `uv` by name. VS
+  **Ticked 8 October 2026 (the audit, P-490):** T-1.20's step from it is ticked, and T-1.20 landed
+  (`2d65eba`); `ci.yml`'s `api` job runs gitleaks over the full history.
+- [x] P-10 · Hooks must work from GUI git clients — the ruff and mypy hooks call `uv` by name. VS
   Code's Source Control panel (which the user commits from) and other GUI clients run hooks
   without the shell profile, so `uv` may not be on `PATH` and every commit fails. Resolve `uv`
   robustly (absolute path or a wrapper that locates it) and test a commit from VS Code. Found in
   review of T-1.6.
   **Moved:** now a step in T-1.20 — tick this with T-1.20.
+  **Ticked 8 October 2026 (the audit, P-490):** T-1.20's step from it is ticked, and T-1.20 landed
+  (`2d65eba`); every hook that needs `uv` or `pnpm` starts through `scripts/with-tools`
+  (`.pre-commit-config.yaml`).
 - [x] P-11 · Test DB stamped at a revision the checkout doesn't have — every task works on its own
   branch, and from T-1.8 each adds migrations. Run the tests on a branch with a new migration, switch
   to one without it, and `velora_test` still records that revision: every database test then errors
@@ -3510,6 +3522,7 @@ The number comes from the session's own block, given in its brief, from P-100 up
   that moderation may need"), and "blocked by many people" is a fraud and moderation signal. Options:
   soft-unblock (`unblocked_at`, primary key replaced by a partial unique index) or accept the loss.
   Needs a new migration (T-1.11 is merged). **Before T-9.1.** Found in review of T-1.11.
+  **Placed 8 October 2026 (the audit, P-490):** on T-9.1's Needs line.
 - [ ] P-17 · Refuse DELETE and TRUNCATE on `messages` and `reports` — rule 12 names messages,
   reports, ledger and payments as never hard-deleted. T-1.12 enforces it in the database for the
   ledger and payments (`refuse_change()`, `restrict_violation` 23001); `messages` and `reports`
@@ -3694,6 +3707,7 @@ The number comes from the session's own block, given in its brief, from P-100 up
   extensions in an `extensions` schema rather than `public` — since that difference hid the bug
   `67e81c6c203d` fixed. Best done before discovery leans on PostGIS (T-6.2). Found setting up
   staging in T-1.22.
+  **Deadline passed, 8 October 2026** (the audit, P-490): T-6.2 landed on Postgres 16.
 - [x] P-36 · Decide where the API and worker run, now that Fly won't provision in Mumbai. **Blocks
   T-1.22's Done-when. The decision is open, and the founder makes it fresh, not against a deadline.**
   - **What Fly said** (deploy run 36793830288, 2026-10-01 00:01 UTC, request ID
@@ -4093,6 +4107,9 @@ The number comes from the session's own block, given in its brief, from P-100 up
 
   Found reviewing T-3.2 to T-3.5, at the direction of the advisor directing them (Claude, in a
   separate chat), who added option B and the residency question.
+  **Deadline missed, 8 October 2026 (the audit, P-490):** Sprint 6 is landing with the split in
+  place (T-6.2, T-6.3, T-6.4). **Now before REL-1, measured on staging** (the advisor's
+  recommendation; the founder to confirm). Nothing above changes.
 - [ ] P-50 · Cut the round trips every request pays. **Before Sprint 6 adds routes on
   `current_user`; worth doing wherever the API runs.** Worst case without it: the fixed cost in P-49
   multiplies with every route that inherits it. Measured on 3 October 2026 (P-49's method):
@@ -4120,6 +4137,9 @@ The number comes from the session's own block, given in its brief, from P-100 up
   11 round trips after P-52 and P-53. So the rest waits for the move, and after it is done only where
   a route proves slow, measured with `tests/roundtrips.py`. If the founder keeps the split instead,
   it is worth doing at once: at 165 ms a round trip it is most of `/me`'s remaining 1.8 s.
+  **Deadline missed, 8 October 2026 (the audit, P-490):** Sprint 6 added routes on `current_user`
+  (T-6.2, T-6.3, T-6.4). **Now before REL-1, measured on staging** (the advisor's recommendation;
+  the founder to confirm). Nothing above changes.
 - [ ] P-51 · Decide what a banned number is told. **In T-9.5, where bans are written, or T-9.6.**
   Worst case: a person barred by mistake, or a minor's family, has no way to learn why sign-in stopped
   working, or that grievance@ exists, which the IT Rules' grievance obligations (D-052) assume.
@@ -4279,6 +4299,11 @@ The number comes from the session's own block, given in its brief, from P-100 up
   trust in a paid product. The client sends the price it showed, and the server refuses with
   `PRICE_CHANGED` if it differs: the value is compared, never used. Deferred from T-5.2, which reads
   prices fresh with no cache. Found planning Sprint 5 (decision 22, with the advisor directing it).
+  **Missed, 8 October 2026 (the audit, P-490):** T-6.4's Super Like, T-7.1's Thread and T-7.3's
+  private messages (`8a03628`) landed without it. **T-6.5 builds it as its first commit** (the
+  founder, 8 October 2026): the API side, for every paid endpoint on `main`, then T-6.5's web sends
+  the shown price. T-6.7's reveal adopts it if it lands after. It comes before the web's paid
+  buttons: on T-6.5's and T-7.11's Needs lines.
 - [x] P-57 · The app's screens have no visual design. **Before T-6.5,** on its Needs line. Worst
   case: every screen in Sprints 6 and 7 is framed by a shell and built from a prototype that was
   wrong four times in Sprint 5's plan alone, and a one-way door gets designed by accident: the
@@ -4348,6 +4373,7 @@ The number comes from the session's own block, given in its brief, from P-100 up
   **Partly closed by P-140:** a stopped rebase leaves HEAD detached, and `ci-gate` with no argument
   now exits 6 there, naming no branch. A HEAD already on `main` while on a branch still passes,
   which is this item's own fix, still open.
+  **Deadline passed, 8 October 2026** (the audit, P-490): many `/done`s have run since.
 - [ ] P-61 · Give the API's 500s their CORS headers. **Before T-9.12,** or sooner if a screen needs to
   tell a crash from no signal. Worst case: a browser can't read the API's `INTERNAL` envelope at all,
   so every 500 looks to the web exactly like a lost connection ("Failed to fetch"), and a bug in
@@ -4367,6 +4393,8 @@ The number comes from the session's own block, given in its brief, from P-100 up
   the function to raise `using constraint = tg_name`, T-3.6 mapping by that name, and the
   `test_schema.py` tests asserting it. Not in T-5.1, at the advisor's direction. Found in T-5.1,
   which made every other CHECK test in `test_schema.py` name its constraint.
+  **Deadline passed, 8 October 2026** (the audit, P-490): T-4.8 and T-9.6 both migrated `users`, and
+  T-9.6 (`15c75a4`) replaced this very function, still naming no constraint.
 - [ ] P-63 · Make the wallet refuse locking several wallets out of `user_id` order. **Before
   T-9.3,** on its Needs line, the first task that locks more than one. Worst case: two
   transactions each holding one man's wallet and waiting for the other's, a deadlock Postgres
@@ -4540,6 +4568,8 @@ The number comes from the session's own block, given in its brief, from P-100 up
   3,000-a-day ceiling, the only "how many" bound there is (P-0.18), and trading a known ceiling
   for an unproven guard would leave us worse off than today. That decision has a cost on both
   sides, so it is the founder's. At the founder's direction, 4 October 2026.
+  **Deadline missed, 8 October 2026 (the audit, P-490):** other tasks have landed since T-3.14.
+  **Now next after the current wave, the founder's console steps first.** Nothing above changes.
 - [ ] P-69 · Restrict `velora-ic`'s browser API key. **After T-3.14's staging check, beside P-68,
   and before REL-1** (on its Needs line), by the founder in the Google Cloud console. Worst case without it: the key, which every page of
   staging and production ships, works from any website and any script. One call from this machine
@@ -5004,6 +5034,9 @@ The number comes from the session's own block, given in its brief, from P-100 up
 
   Found building T-4.4's follow-ups. The first number of Claude's block for this session (P-200
   to P-209, D-300 to D-309, given by the founder).
+  **Deadline missed, 8 October 2026 (the audit, P-490):** "Now" was 5 October 2026. **Now when no
+  session is running tests** (raising `max_connections` restarts the Docker Postgres every worktree
+  shares). Nothing above changes.
 - [ ] P-152 · Make the debit's allowlist hold against a caller it can't see named. **Not tonight**
   (the advisor, 5 October 2026); worth doing where it is next touched, T-8.9, which names gift
   sending in it. Worst case: a caller reaches `wallet.service.debit` through a name built at run
@@ -5172,6 +5205,8 @@ The number comes from the session's own block, given in its brief, from P-100 up
   fails 2, reproduced on a clean `e0f1245`, so not T-4.10's. The full suite's order passes, which
   is why `make test` and CI are green. Found building T-4.10; filed from its session block (P-120
   to P-129).
+  **Deadline passed, 8 October 2026** (the audit, P-490): T-4.12 and T-6.2 have touched
+  verifications since.
 - [ ] P-123 · See the location prompt work in Safari on an iPhone, and on staging over HTTPS. **No
   deadline.** Worst case: on an iPhone the prompt behaves differently, and every woman on one
   lands silently on the area picker, with nobody knowing. T-4.10's prompt, the browser's permission
@@ -5276,7 +5311,7 @@ The number comes from the session's own block, given in its brief, from P-100 up
   or every request routed through one method the test wraps; and a `t44-` case that adds a
   `feedback()` method and must go red. Found closing T-4.4's retention box, 7 October 2026; filed
   from that session's block (P-260 to P-269).
-- [ ] P-261 · `/done` describes its own landing guard wrongly: step 1's check can never be the
+- [x] P-261 · `/done` describes its own landing guard wrongly: step 1's check can never be the
   one the push reads. **Before the next `/done` someone follows to the letter.** Worst case: a
   session does what the document says, the push to `main` is refused, and the refusal is read as
   the guard misbehaving, or answered with `--no-verify` (which CLAUDE.md "Landing" and the
@@ -5296,6 +5331,11 @@ The number comes from the session's own block, given in its brief, from P-100 up
   may stay as an early stop on a failure, but the document must not say its run is what the push
   reads. `done.md` is outside T-4.4's scope (rule 3), so filed, not fixed. Found closing T-4.4's
   retention box, 7 October 2026; filed from that session's block (P-260 to P-269).
+  **Done 8 October 2026 (P-490):** the checks run once, after the commit, as `/done`'s step 4, its
+  exit code read on its own; step 1's run is gone, steps 2 to 4 moved up one, and step 9 names step
+  4's run. Steps 5 to 10 kept their numbers, so the manual path's "steps 9 and 10" holds. Once, not
+  twice, by the founder's choice (8 October 2026): `make test` is the longest step, and two runs
+  double every landing's wait.
 - [ ] P-280 · The liveness measurement set: 30 consenting people, 1,350 captures, on the real
   capture path. **After launch** (the founder, 7 October 2026, D-380's third decision; it was
   T-4.11's accuracy half, and T-4.11 can't tick that half without it). Worst case while it is
@@ -5511,6 +5551,13 @@ The number comes from the session's own block, given in its brief, from P-100 up
   (`get_message(ignore_subscribe_messages=False)` until a `subscribe` message arrives), and a test
   that publishes the instant the event is set, many times over, and never sees 0. Filed by Claude
   landing P-57, P-150 and D-253, 8 October 2026; its session's block, P-330 to P-339.
+  **Seen again, 8 October 2026 (P-490):** 2 failures in 21 runs of `test_wake.py` on `447a045`, a
+  docs-only commit, with three other sessions' pytest runs going and the machine at about 330% CPU.
+  Once in a full `make test`: `test_what_isnt_an_id_is_ignored_and_it_listens_on` got no
+  `wake.not_an_id` log, its first PUBLISH lost in the same window. Once in 20 runs of the file
+  alone: the reconnect test, after `client_kill_filter`, timed out waiting to hear its id, which
+  fits the window reopening when the listener subscribes again (inferred, not observed). So the
+  window hits more than the first test.
 - [ ] P-300 · Retry, or sweep for, a shown photo's badge comparison that failed its last try.
   **Before REL-1's tag, if it includes T-6.2** (the badge on cards). Worst case: a real woman's
   only shown face is approved while storage hiccups three times in a row (`match_photo`'s three
@@ -5532,6 +5579,7 @@ The number comes from the session's own block, given in its brief, from P-100 up
   URL ever covered and the row points there; or `complete` revokes the window by moving the
   object. Found building T-4.12; filed by Claude, 8 October 2026; its session's block, P-300 to
   P-309.
+  **Placed 8 October 2026 (the audit, P-490):** on T-8.4's Needs line.
 - [x] P-370 · Move the `liked_you_reveal` row from 20 to 1 Vela, by a data migration. **Before
   T-6.7, on its Needs line.** Worst case first: the founder set the reveal at 1 Vela (8 October
   2026, D-004's note), but the price is a row, and every database holds 20, written by T-1.14's
@@ -5668,6 +5716,7 @@ The number comes from the session's own block, given in its brief, from P-100 up
   `thread.expired` to him only. What is left is the web: her rows draw no countdown pill and no
   expired state, and the client reads nothing from a null. Found writing T-7.6; filed by Claude,
   8 October 2026; its session's block, P-460 to P-469.
+  **Placed 8 October 2026 (the audit, P-490):** on T-7.10's and T-7.12's Needs lines.
 - [ ] P-450 · Add Hindi and Hinglish words to the message filters. **Before REL-1,** the first
   time strangers message each other. Worst case: a man writes "paytm kar do", "number do" or a
   Hindi slur, in the language most of our users write in, and it reaches her unmasked and
@@ -5718,3 +5767,11 @@ The number comes from the session's own block, given in its brief, from P-100 up
   which neither task touches while T-6.5 is unbuilt. Liked you's entry, with its count (`GET
   /likes/count`, T-6.7), is T-6.5's to place. Filed by Claude building T-6.6, 8 October 2026; its
   session's block, P-440 to P-449.
+- [x] P-490 · File the 8 October 2026 audit's findings. The audit was run by the advisor (Claude, in
+  a separate chat) at the founder's request, and approved by the founder on the advisor's
+  recommendation. Docs only. It ticked boxes whose work had landed (T-1.22's Supabase, Upstash and
+  R2 box; P-09; P-10), added T-7.1's missing Commit line, corrected T-9.12's pointer to P-0.6
+  (Sentry is still not created), put P-460, P-301, P-16 and P-56 on the Needs lines of the tasks
+  they gate, and dated every missed deadline: P-49, P-50, P-68 and P-200 with a new one, P-06, P-34,
+  P-60, P-62 and P-122 as passed. It also fixed `/done` as P-261 asked. Filed from this session's
+  block (P-490 to P-499, D-590 to D-599).

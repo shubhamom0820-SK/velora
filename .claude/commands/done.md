@@ -1,10 +1,14 @@
 Finish task $ARGUMENTS.
 
-1. Run `make lint test`. If anything fails, stop and report — do not continue.
-2. If the API changed, confirm `make types` was run and `web/src/types/api.ts` is in the diff.
-3. In `docs/05-PLAN.md`, tick every checkbox belonging to task $ARGUMENTS only. Touch nothing else
+1. If the API changed, confirm `make types` was run and `web/src/types/api.ts` is in the diff.
+2. In `docs/05-PLAN.md`, tick every checkbox belonging to task $ARGUMENTS only. Touch nothing else
    in that file except the "Proposed tasks" section.
-4. Stage the changes and commit using the task's **Commit** line from the plan as the message.
+3. Stage the changes and commit using the task's **Commit** line from the plan as the message.
+4. Run `make lint test` on the committed tree, as a command of its own, and read its own exit code
+   (CLAUDE.md "Shell traps" 1). If anything fails, stop and report — do not continue. This run, and
+   only this one, marks the commit for landing (`scripts/mark-checked`): a tree with anything
+   uncommitted gets no mark, and says so. The checks run once, after the commit, never before it
+   (P-261): `make test` is the longest step, and a second run doubles every landing's wait.
 5. Show `git log -1 --stat`.
 6. Tell me the next task: the first unticked task in `docs/05-PLAN.md` whose Needs are all ticked.
    Say its ID and title only. Suggest I start a fresh session for it.
@@ -20,7 +24,7 @@ Finish task $ARGUMENTS.
      an error from GitHub.
 9. Fast-forward `main`: `git checkout main`, `git merge --ff-only origin/main`, then
    `git merge --ff-only <branch>`, then `git push origin main`. If a fast-forward isn't possible,
-   stop and tell me. The push itself refuses unless step 1's `make lint test` passed on this exact
+   stop and tell me. The push itself refuses unless step 4's `make lint test` passed on this exact
    commit's tree and CI passed for it (`scripts/push-gate`, CLAUDE.md "Landing"): if it refuses,
    stop and show what it printed. Never `--no-verify`.
 10. Delete the branch, locally and on origin.
