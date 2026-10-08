@@ -531,7 +531,7 @@ Triggers `audit_log_no_update_delete` and `audit_log_no_truncate` (statement-lev
 `refuse_change()` and raise `restrict_violation` (23001): the person with a reason to erase the
 trace is exactly the person with admin access (T-1.13).
 
-### app_config  (key/value, cached 60 s)
+### app_config  (key/value, cached 60 s per app, P-47; OTP send's daily cap reads it fresh)
 `key text pk, value jsonb not null, updated_at`. Seeds: `swipe_daily_limit_men=50`,
 `discovery_radius_km=25`, `thread_hours=24`, `mask_first_n_messages=20`, `kudos_min_messages=6`,
 `gift_free_daily_limit=3` (replaced by T-5.2's data migration with `gift_free_weekly_limit=15`,

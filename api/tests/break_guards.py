@@ -4103,7 +4103,7 @@ T62: list[tuple[Case, list[str]]] = [
                     "            radius_m=25_000.0,\n",
                 )
             ],
-            expect=["test_the_radius_is_read_from_app_config"],
+            expect=["test_the_radius_is_read_from_app_config_within_a_minute"],
         ),
         DISCOVERY_TESTS62,
     ),
@@ -4720,6 +4720,79 @@ T96: list[Case] = [
     ),
 ]
 
+
+# --- P-47: app_config cached 60 s per app -------------------------------------------
+
+P47: list[tuple[Case, list[str]]] = [
+    (
+        Case(
+            id="p47-01-never-expires",
+            what="P-47: a cached setting kept past its minute",
+            edits=[
+                (
+                    "app/modules/admin/service.py",
+                    "        if held is not None and now - held[1] < CACHED_FOR:\n",
+                    "        if held is not None:\n",
+                )
+            ],
+            expect=["test_the_cache_holds_a_value_for_a_minute_then_reads_again"],
+        ),
+        ["tests/modules/admin/test_config_cache.py"],
+    ),
+    (
+        Case(
+            id="p47-02-never-held",
+            what="P-47: the cache read through every time",
+            edits=[
+                (
+                    "app/modules/admin/service.py",
+                    "            return held[0]\n",
+                    "            pass\n",
+                )
+            ],
+            expect=["test_the_cache_holds_a_value_for_a_minute_then_reads_again"],
+        ),
+        ["tests/modules/admin/test_config_cache.py"],
+    ),
+    (
+        Case(
+            id="p47-03-one-per-process",
+            what="P-47: one cache for every app in the process",
+            edits=[
+                (
+                    "app/modules/admin/service.py",
+                    "async def config_int(\n",
+                    "PROCESS_CACHE = ConfigCache()\n\n\nasync def config_int(\n",
+                ),
+                (
+                    "app/main.py",
+                    "    app.state.config_cache = ConfigCache()\n",
+                    "    from app.modules.admin.service import PROCESS_CACHE\n\n    app.state.config_cache = PROCESS_CACHE\n",
+                ),
+            ],
+            expect=["test_each_app_has_a_cache_of_its_own"],
+        ),
+        ["tests/modules/admin/test_config_cache.py"],
+    ),
+    (
+        Case(
+            id="p47-04-a-bad-row-cached",
+            what="P-47: a mistyped row cached before it is refused",
+            edits=[
+                (
+                    "app/modules/admin/service.py",
+                    "    value = await repository.config_value(session, key)\n    if type(value) is not int:",
+                    "    value = await repository.config_value(session, key)\n    if cache is not None:\n        cache.values[key] = (value, now)\n    if type(value) is not int:",
+                )
+            ],
+            expect=[
+                "test_a_row_that_isnt_an_integer_is_refused_and_never_cached[true]"
+            ],
+        ),
+        ["tests/modules/admin/test_config_cache.py"],
+    ),
+]
+
 CASES: list[tuple[Case, list[str]]] = (
     [(c, T51_SELECTION) for c in T51]
     + [(c, T54_SELECTION) for c in T54]
@@ -4740,6 +4813,7 @@ CASES: list[tuple[Case, list[str]]] = (
     + T62
     + T63
     + [(c, T96_SELECTION) for c in T96]
+    + P47
 )
 
 # The fifty-connection fixture's own message when Postgres refuses a connection.

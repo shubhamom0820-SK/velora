@@ -16,8 +16,9 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import Settings
 from app.core.db import get_session
-from app.core.deps import app_settings, onboarded_user
+from app.core.deps import app_config_cache, app_settings, onboarded_user
 from app.core.pagination import PageParams, page_params
+from app.modules.admin.service import ConfigCache
 from app.modules.discovery import service
 from app.modules.discovery.schemas import CardPage, Feed, PublicProfile
 from app.modules.users.models import User
@@ -33,6 +34,7 @@ async def discover(
     user: Annotated[User, Depends(onboarded_user)],
     session: Annotated[AsyncSession, Depends(get_session)],
     settings: Annotated[Settings, Depends(app_settings)],
+    config: Annotated[ConfigCache, Depends(app_config_cache)],
     params: Annotated[PageParams, Depends(page_params)],
     feed: Feed = Feed.FORYOU,
     intent_ids: Annotated[
@@ -49,6 +51,7 @@ async def discover(
         verified=verified,
         params=params,
         settings=settings,
+        config=config,
     )
 
 

@@ -24,6 +24,7 @@ from app.core.queue import ArqQueue
 from app.core.redis import build_redis
 from app.modules.account.router import router as account_router
 from app.modules.admin.router import router as admin_router
+from app.modules.admin.service import ConfigCache
 from app.modules.auth.router import firebase_router, otp_router
 from app.modules.auth.router import router as auth_router
 from app.modules.discovery.router import router as discovery_router
@@ -127,6 +128,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     # built for tests cannot reach the dev database (P-05). Nothing connects
     # yet: startup succeeds with a dependency down, and /readyz reports it.
     app.state.settings = settings
+    app.state.config_cache = ConfigCache()
     app.state.engine = build_engine(
         settings.DATABASE_URL,
         pool_size=settings.DB_POOL_SIZE,

@@ -21,6 +21,7 @@ from app.core.db import get_session
 from app.core.enums import OnboardingStep, Role
 from app.core.errors import AppError
 from app.core.security import AccessClaims, decode_access_token
+from app.modules.admin.service import ConfigCache
 from app.modules.users import service as users_service
 from app.modules.users.models import User
 
@@ -35,6 +36,12 @@ def app_settings(request: Request) -> Settings:
     """The settings this app was built with, never the global ones (P-05)."""
     settings: Settings = request.app.state.settings
     return settings
+
+
+def app_config_cache(request: Request) -> ConfigCache:
+    """This app's `app_config` cache (P-47), never a process-wide one."""
+    cache: ConfigCache = request.app.state.config_cache
+    return cache
 
 
 def app_redis(request: Request) -> Redis:

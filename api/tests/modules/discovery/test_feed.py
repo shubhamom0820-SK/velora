@@ -220,9 +220,11 @@ async def test_the_radius_is_25_km_between_grid_points(
     assert await ids(client, token) == [str(inside.id)]
 
 
-async def test_the_radius_is_read_from_app_config(
-    db: AsyncSession, client: AsyncClient, make_user: MakeUser
+async def test_the_radius_is_read_from_app_config_within_a_minute(
+    db: AsyncSession, client: AsyncClient, make_user: MakeUser, clock: ModuleType
 ) -> None:
+    """Cached 60 s per app (P-47): a change reaches the feed once that runs out."""
+    clock.freeze(NOON)
     _, token = await person(db, make_user, Gender.MALE)
     near, _ = await person(db, make_user, at=north(4))
     far, _ = await person(db, make_user, at=north(6))
@@ -231,6 +233,9 @@ async def test_the_radius_is_read_from_app_config(
     await db.execute(
         text("UPDATE app_config SET value = '5' WHERE key = 'discovery_radius_km'")
     )
+    clock.advance(timedelta(seconds=59))
+    assert await ids(client, token) == [str(near.id), str(far.id)]
+    clock.advance(timedelta(seconds=1))
 
     assert await ids(client, token) == [str(near.id)]
 

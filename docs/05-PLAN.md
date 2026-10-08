@@ -3743,13 +3743,18 @@ The number comes from the session's own block, given in its brief, from P-100 up
   logger, and test it with `captured_logs`.
 
   Found while planning T-3.2 to T-3.10.
-- [ ] P-47 · Give `app_config` its 60-second cache. **With T-6.4**, the first hot path to read a
+- [x] P-47 · Give `app_config` its 60-second cache. **With T-6.4**, the first hot path to read a
   setting (the men's daily swipe limit, on every swipe). Worst case without it: a database read
   per request for a value that changes a few times a year. T-3.2's reader
   (`admin.service.config_int`) reads fresh, on purpose for now: its one caller, OTP send's daily
   cap, is rate-limited, and fresh means a lowered cap applies at once. A cache must be per app
   (`app.state`), not per process, or tests that tune a setting would read another test's value.
   Found in T-3.2.
+  **Done, 8 October 2026, on T-6.4's branch:** `admin.service.ConfigCache`, one per app
+  (`app.state.config_cache`), read through `config_int(..., cache=)`: the men's daily swipe cap and
+  discovery's radius use it; OTP send's daily cap still reads fresh, on purpose. A missing or
+  mistyped row is never cached. `tests/modules/admin/test_config_cache.py` holds it; breaking runs
+  `p47-01` to `p47-04` each red.
 - [x] P-48 · Make `structlog.testing.capture_logs` see every log line in tests. Worst case: a test
   that nothing secret is logged (rule 15) passes having captured nothing. structlog caches a
   logger at first use against the processor list configured then, and every `create_app()` calls

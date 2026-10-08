@@ -67,6 +67,7 @@ async def discover(
     verified: bool,
     params: PageParams,
     settings: Settings,
+    config: admin_service.ConfigCache | None = None,
 ) -> CardPage:
     """One page of `feed` for `user`. `intent_ids` keeps those sharing any of
     them (D-041); `verified`, those showing the badge (D-393)."""
@@ -77,7 +78,7 @@ async def discover(
     async with session.begin():
         await _refuse_unknown_intents(session, intent_ids)
         viewer = await viewer_of(session, user)
-        radius_km = await admin_service.config_int(session, RADIUS_KEY)
+        radius_km = await admin_service.config_int(session, RADIUS_KEY, cache=config)
         if viewer.position is None:
             # Finishing needs a location (D-310), so only an account changed
             # by hand has none: nobody is near nowhere.
