@@ -489,6 +489,7 @@ secret is left empty. Real secret values are never committed.
 | Send message | 30 / min / user |
 | `POST /threads/{id}/read` | `current_user`'s 300 / min (T-7.5): a read that marks nothing tells nobody, and what one can tell is bounded by the other person's messages |
 | `typing` on the socket | 1 a Thread every 3 s and 40 / min / user, dropped quietly past either (T-7.5, D-670): both before the database is read |
+| `POST /kudos` | 10 / min / user (T-8.5): one per person ever, so someone giving them never needs more; a script trying ids does |
 | Reports | 10 / day / user |
 | Username check | 30 / min / user |
 | `GET /search` | 60 / min / user (T-6.6): `@` search walks usernames by their start; a person typing fits, a script listing them doesn't (D-540) |

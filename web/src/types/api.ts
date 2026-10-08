@@ -1058,6 +1058,40 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/kudos": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Give Kudos */
+        post: operations["give_kudos_v1_kudos_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/me/kudos": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** My Kudos */
+        get: operations["my_kudos_v1_me_kudos_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/ws/ticket": {
         parameters: {
             query?: never;
@@ -1400,6 +1434,18 @@ export interface components {
         GenderSet: {
             gender: components["schemas"]["Gender"];
         };
+        /**
+         * GiveKudosRequest
+         * @description `{to_id, kind}`: one of the four fixed kinds, nothing else (D-007).
+         */
+        GiveKudosRequest: {
+            /**
+             * To Id
+             * Format: uuid
+             */
+            to_id: string;
+            kind: components["schemas"]["Kudos-Input"];
+        };
         /** HTTPValidationError */
         HTTPValidationError: {
             /** Detail */
@@ -1446,6 +1492,11 @@ export interface components {
             interest_ids: number[];
         };
         /**
+         * Kudos
+         * @enum {string}
+         */
+        "Kudos-Input": "great_conversation" | "genuinely_funny" | "easy_to_talk_to" | "really_thoughtful";
+        /**
          * KudosCounts
          * @description How many people gave each of the four kudos (T-8.x builds the giving).
          */
@@ -1458,6 +1509,23 @@ export interface components {
             easy_to_talk_to: number;
             /** Really Thoughtful */
             really_thoughtful: number;
+        };
+        /**
+         * KudosGiven
+         * @description The kudos you just gave.
+         */
+        KudosGiven: {
+            /**
+             * To Id
+             * Format: uuid
+             */
+            to_id: string;
+            kind: components["schemas"]["app__core__enums__Kudos"];
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
         };
         /**
          * LastMessage
@@ -2405,6 +2473,21 @@ export interface components {
         WsTicket: {
             /** Ticket */
             ticket: string;
+        };
+        /**
+         * Kudos
+         * @enum {string}
+         */
+        app__core__enums__Kudos: "great_conversation" | "genuinely_funny" | "easy_to_talk_to" | "really_thoughtful";
+        /**
+         * Kudos
+         * @description One kind you were given, and how many people gave it. Never who, nor
+         *     when (D-680).
+         */
+        app__modules__kudos__schemas__Kudos: {
+            kind: components["schemas"]["app__core__enums__Kudos"];
+            /** Count */
+            count: number;
         };
     };
     responses: never;
@@ -4312,6 +4395,59 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    give_kudos_v1_kudos_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["GiveKudosRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["KudosGiven"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    my_kudos_v1_me_kudos_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["app__modules__kudos__schemas__Kudos"][];
                 };
             };
         };

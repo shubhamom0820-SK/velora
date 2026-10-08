@@ -8197,6 +8197,139 @@ T75: list[Case] = [
     ),
 ]
 
+# --- T-8.5: kudos, once ever, only after talking (D-007, D-680) -----------------------
+
+T85_SELECTION = ["tests/modules/kudos"]
+KUDOS_SERVICE = "app/modules/kudos/service.py"
+KUDOS_REPOSITORY = "app/modules/kudos/repository.py"
+
+T85: list[Case] = [
+    Case(
+        id="t85-01-a-block-ignored",
+        what="kudos given across a block, either way",
+        edits=[(KUDOS_REPOSITORY, "            ~blocked_either_way(a, b),\n", "")],
+        expect=[
+            "test_a_block_either_way_is_not_found[giver]",
+            "test_a_block_either_way_is_not_found[recipient]",
+        ],
+    ),
+    Case(
+        id="t85-02-a-deleted-account-reached",
+        what="D-555: kudos reaching someone who deleted their account",
+        edits=[
+            (
+                KUDOS_SERVICE,
+                "        if await repository.status_of(session, request.to_id) is UserStatus.DELETED:\n",
+                "        if False:\n",
+            )
+        ],
+        expect=["test_nothing_reaches_a_deleted_account"],
+    ),
+    Case(
+        id="t85-03-the-least-a-literal",
+        what="kudos_min_messages written into the code, never read from app_config",
+        edits=[
+            (
+                KUDOS_SERVICE,
+                "        least = await admin_service.config_int(session, MIN_MESSAGES_KEY, cache=config)\n",
+                "        least = 6\n",
+            )
+        ],
+        expect=["test_the_least_is_read_from_app_config"],
+    ),
+    Case(
+        id="t85-04-too-early-allowed",
+        what="kudos given before the Thread has its six messages",
+        edits=[
+            (
+                KUDOS_SERVICE,
+                "        if thread.message_count < least:\n",
+                "        if thread.message_count < 0:\n",
+            )
+        ],
+        expect=["test_six_messages_are_enough_and_five_too_few"],
+    ),
+    Case(
+        id="t85-05-only-the-giver-has-written",
+        what="D-680: kudos from someone the other never answered",
+        edits=[
+            (
+                KUDOS_SERVICE,
+                "        for writer in (user_id, request.to_id):\n",
+                "        for writer in (user_id,):\n",
+            )
+        ],
+        expect=["test_a_one_sided_thread_is_too_early_for_either"],
+    ),
+    Case(
+        id="t85-06-only-the-recipient-has-written",
+        what="D-680: kudos from someone who never wrote a word",
+        edits=[
+            (
+                KUDOS_SERVICE,
+                "        for writer in (user_id, request.to_id):\n",
+                "        for writer in (request.to_id,):\n",
+            )
+        ],
+        expect=["test_a_one_sided_thread_is_too_early_for_either"],
+    ),
+    Case(
+        id="t85-07-a-second-kudos-a-500",
+        what="a second kudos to the same person failing on the key, not refused",
+        edits=[
+            (
+                KUDOS_REPOSITORY,
+                "        .on_conflict_do_nothing(index_elements=[Kudos.from_id, Kudos.to_id])\n",
+                "",
+            )
+        ],
+        expect=[
+            "test_a_second_kudos_to_them_already_exists[great_conversation]",
+            "test_a_second_kudos_to_them_already_exists[really_thoughtful]",
+            "test_two_kudos_at_once_are_one",
+        ],
+    ),
+    Case(
+        id="t85-08-mine-are-those-given",
+        what="GET /me/kudos counting the kudos I gave, not those I was given",
+        edits=[
+            (
+                KUDOS_REPOSITORY,
+                "        .where(Kudos.to_id == user_id)\n",
+                "        .where(Kudos.from_id == user_id)\n",
+            )
+        ],
+        expect=["test_mine_are_counts_by_kind_of_those_received_only"],
+    ),
+    Case(
+        id="t85-09-mine-list-kinds-never-given",
+        what="GET /me/kudos listing kinds nobody gave, at zero",
+        edits=[
+            (
+                KUDOS_SERVICE,
+                "        Kudos(kind=kind, count=counts[kind]) for kind in KudosKind if kind in counts\n",
+                "        Kudos(kind=kind, count=counts.get(kind, 0)) for kind in KudosKind\n",
+            )
+        ],
+        expect=[
+            "test_mine_are_counts_by_kind_of_those_received_only",
+            "test_none_yet_is_an_empty_list",
+        ],
+    ),
+    Case(
+        id="t85-10-no-rate-limit",
+        what="POST /kudos with only the 300 a minute every route has",
+        edits=[
+            (
+                "app/modules/kudos/router.py",
+                '    dependencies=[\n        Depends(user_rate_limit("kudos_give", limit=GIVES_PER_MINUTE, window_s=60))\n    ],\n',
+                "",
+            )
+        ],
+        expect=["test_giving_is_rate_limited_at_ten_a_minute"],
+    ),
+]
+
 CASES: list[tuple[Case, list[str]]] = (
     [(c, T51_SELECTION) for c in T51]
     + [(c, T54_SELECTION) for c in T54]
@@ -8235,6 +8368,7 @@ CASES: list[tuple[Case, list[str]]] = (
     + [(c, T78_SELECTION) for c in T78]
     + T68
     + [(c, T75_SELECTION) for c in T75]
+    + [(c, T85_SELECTION) for c in T85]
 )
 
 # The fifty-connection fixture's own message when Postgres refuses a connection.

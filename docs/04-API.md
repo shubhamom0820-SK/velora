@@ -203,8 +203,8 @@ to be; never the original, D-030), `masked`, `duration_s`, `mine`, `from_deleted
 | POST | /gifts/send | ✅ | `{recipient_id, gift_id}` + Idempotency-Key → `GiftSend` | T-8.9 |
 | GET | /me/gifts | ✅ | `?cursor=&limit=` → `Page<GiftSend>` received, with sender card | T-8.9 |
 | GET | /users/{id}/gifts | ✅ | → `{counts:[{gift_id,count}]}` if `show_gifts` | T-8.9 |
-| POST | /kudos | ✅ | `{to_id, kind}` → 201 | T-8.5 |
-| GET | /me/kudos | ✅ | → `Kudos[]` | T-8.5 |
+| POST | /kudos | ✅ | `{to_id, kind}` → 201 `{to_id, kind, created_at}`: once ever to each person, only after both have written in your Thread and it has `kudos_min_messages` messages (D-680). 10 a minute | T-8.5 |
+| GET | /me/kudos | ✅ | → `Kudos[]`: `[{kind, count}]`, the kinds you were given, each with how many gave it, in the kinds' order, none at 0; never who nor when, and shown to you whatever `show_kudos` says (D-680) | T-8.5 |
 | POST | /reports | ✅ | `{reported_id, reason, details?, thread_id?, also_block}` → 201 | T-9.1 |
 | POST | /blocks | ✅ | `{user_id}` → 201 | T-9.1 |
 | DELETE | /blocks/{user_id} | ✅ | → 204 | T-9.1 |
@@ -334,13 +334,13 @@ fake order is paid by calling it, for T-8.2's tests and T-8.7's local checkout.
 | `VERIFICATION_REQUIRED` | 403 | anyone but a man without a matched selfie: a woman, or someone with no gender (D-310) |
 | `NOT_FOUND` | 404 | also used when a blocked user is looked up |
 | `USERNAME_TAKEN` | 409 | |
-| `ALREADY_EXISTS` | 409 | duplicate swipe/report/etc.; an order's `Idempotency-Key` sent again for another pack (D-481); a second open claim on one payment (D-580) |
+| `ALREADY_EXISTS` | 409 | duplicate swipe/report/etc.; a second kudos to the same person, whatever its kind (D-680); an order's `Idempotency-Key` sent again for another pack (D-481); a second open claim on one payment (D-580) |
 | `THREAD_EXPIRED` | 410 | his send on an expired Thread; hers is delivered (D-097). Expired by the clock, though the cron hasn't caught its status up (D-560) |
-| `ACCOUNT_DELETED` | 410 | a message to someone who deleted their account (D-500, D-555) |
+| `ACCOUNT_DELETED` | 410 | a message or kudos to someone who deleted their account (D-500, D-555, D-680) |
 | `UNDERAGE` | 422 | the account is deleted, only the number's hash kept (D-072) |
 | `IMMUTABLE_FIELD` | 422 | gender/dob change; a username after onboarding (D-068) |
 | `MESSAGE_REJECTED` | 422 | abuse or payment-solicitation filter; `details.rule` |
-| `NOT_ALLOWED` | 422 | man sending voice note, kudos too early, woman sending a gift, verifying a PIN when none is set (D-069), a woman's store or order (D-076); a claim's `missing_velas` on a payment that granted them, or a resolution the gateway's record doesn't allow, `details.why` (D-580) |
+| `NOT_ALLOWED` | 422 | man sending voice note, kudos too early (`details.why` `too_early`: fewer than `kudos_min_messages`, or one of the two hasn't written, D-680), woman sending a gift, verifying a PIN when none is set (D-069), a woman's store or order (D-076); a claim's `missing_velas` on a payment that granted them, or a resolution the gateway's record doesn't allow, `details.why` (D-580) |
 | `GIFT_LIMIT_REACHED` | 429 | free gifts used up today; `details.resets_at`. D-231 charges the sixteenth send a week rather than refusing it, so T-8.9 says whether this keeps a case |
 | `GIFT_COOLDOWN` | 429 | same gift to same person too soon; `details.retry_after_s` |
 | `SWIPE_LIMIT_REACHED` | 429 | a man's daily cap (D-492); `details.limit`, `details.resets_at` (the next IST midnight) |

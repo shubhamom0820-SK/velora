@@ -324,7 +324,7 @@ Unique `(requester_id, owner_id) where status in ('pending','granted')`. Check `
 
 ### kudos
 `id uuid pk, from_id uuid fk users, to_id uuid fk users, kind kudos_t, thread_id uuid fk threads, created_at`.
-Unique `(from_id, to_id)`. Check `from_id <> to_id` — self-kudos would manufacture social proof. Only allowed after the thread has ≥ 6 messages.
+Unique `(from_id, to_id)`. Check `from_id <> to_id` — self-kudos would manufacture social proof. Only allowed once the thread has `kudos_min_messages` (6) messages and both people have written one (D-680, enforced in the service).
 
 ### gifts  (catalogue, seeded)
 | column | type | notes |

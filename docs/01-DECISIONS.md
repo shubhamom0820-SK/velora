@@ -4779,6 +4779,31 @@ keystroke is heavier than a frame); caching who may hear whom in Redis (a block 
 until the entry expired); a session held for the socket's life (P-52, D-557); `message.read` to
 the reader's own sockets too (§6 names the other person).
 
+### D-680 · Kudos: given only after both have talked, and seen only as counts by kind — Locked
+**The decision (T-8.5; the founder, 8 October 2026, on the advisor's recommendation):** what
+D-007 left open, settled for `POST /kudos` and `GET /me/kudos`.
+- **"After a few messages" means a conversation, both ways:** the pair's one Thread has
+  `kudos_min_messages` messages (6 as seeded, read from `app_config`, never a literal) **and each of
+  the two has written at least one**. `message_count` counts both sides, so six from him alone
+  would otherwise let either give kudos to someone who never answered, or never wrote. The
+  Thread's status doesn't matter: an expired or knotted Thread was still a conversation.
+- **Refusals:** no Thread between them, a block either way, an id nobody holds, or yourself are one
+  `NOT_FOUND`, the same body as on profiles and messages; a deleted account gets nothing more,
+  `ACCOUNT_DELETED` (D-555); too few messages or a one-sided Thread is `NOT_ALLOWED` with
+  `details.why` `too_early`; a second kudos to the same person, whatever its kind, is
+  `ALREADY_EXISTS`. The pair's unique key decides that inside the insert (`ON CONFLICT DO
+  NOTHING`), so two at once are one, never a 500. Kudos the other way is the other person's own.
+  10 a minute per user.
+- **`GET /me/kudos` is `[{kind, count}]`:** the kinds you were given, each with how many people
+  gave it, in the kinds' own order, kinds nobody gave left out. Never who gave one, nor when: a time
+  beside a single kudos would say who, to anyone who remembers their week. Shown to you whether
+  `show_kudos` is on or not, since they're yours; it decides only what your profile shows. The
+  public profile keeps T-6.3's count per kind (04-API), unchanged.
+
+**Rejected:** the count alone (kudos from someone the other never answered); one row per kudos with
+its time (`{kind, created_at}`: it names the sender by when, and would need paging under D-270); a
+check for an existing kudos before the insert (two at once both pass it).
+
 ## Adding a decision
 
 Append `D-0NN · Title — Locked|Open`, with Decision, Why, Rejected. Never edit a Locked entry —

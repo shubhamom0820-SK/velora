@@ -3170,9 +3170,9 @@ prices don't depend on the web photos step, and the hold is lifted.
 - [ ] **Commit:** `feat(album): requests, grants, watermarking [T-8.4]`
 
 ### T-8.5 · Kudos
-- [ ] **Needs:** T-7.3
-- [ ] `POST /kudos` (thread with ≥ `kudos_min_messages`, one per pair ever, fixed kinds only), `GET /me/kudos`, visibility via `show_kudos` setting. Public profile shows distinct kinds received, never who sent them.
-- [ ] **Commit:** `feat(kudos): positive-only notes [T-8.5]`
+- [x] **Needs:** T-7.3
+- [x] `POST /kudos` (thread with ≥ `kudos_min_messages`, one per pair ever, fixed kinds only), `GET /me/kudos`, visibility via `show_kudos` setting. Public profile shows distinct kinds received, never who sent them.
+- [x] **Commit:** `feat(kudos): positive-only notes [T-8.5]`
 
 ### T-8.9 · Gifts
 - [ ] **Needs:** T-5.1, T-6.3
@@ -6004,3 +6004,10 @@ The number comes from the session's own block, given in its brief, from P-100 up
   nobody can turn on their `/@username` page, and every shared link reads "isn't public" to people
   not signed in. T-6.8 built the setting (D-544) and no screen, as the founder's addition asked.
   Filed by Claude building T-6.8, 8 October 2026; its session's block.
+- [ ] P-580 · Tell T-8.8's kudos prompt whether it can be shown. Worst case: the prompt in chat
+  keeps coming back after kudos was given, and each tap on it is an `ALREADY_EXISTS`, so a
+  positive note reads as an error; or it shows before D-680 allows it, and each tap is
+  `NOT_ALLOWED`. `GET /me/kudos` says only what you were given (D-680), and nothing yet says, for a
+  Thread, whether you have given its other person kudos or whether both have written. T-8.8 decides
+  where that lives (a field on the Thread as you see it is one way) and builds it with the prompt.
+  Filed by Claude building T-8.5, 8 October 2026; its session's block, P-580 to P-589.
