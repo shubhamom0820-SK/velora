@@ -37,7 +37,7 @@ named `<T>Page` (`LedgerEntryPage`). `limit` is 1 to 50, 20 when absent; outside
 | POST | /me/pin/skip | 🔐 | → `Me`, moving `pin` → `selfie` (D-069) | T-3.9 |
 | POST | /me/onboarding/complete | 🔐 | → `Me`, moving `selfie` → `done` (D-310). Every requirement met, or `PROFILE_INCOMPLETE` naming each one missing; a matched selfie for anyone but a man, or `VERIFICATION_REQUIRED`. Before `selfie`, `ONBOARDING_INCOMPLETE`; once `done`, `Me` unchanged. Sets `completeness`. As a man reaches `done`, `app_config.welcome_velas` (5) credited as `welcome`, once per phone number, ever, so `Me.balance` says it; never a woman, and nothing about it ever refuses the request (D-470, D-530) | T-4.8, T-8.11 |
 | PUT | /me/location | 🔐 | `{lat, lng}`, inside India's box, or `{area_id}`, stored at its centroid → `Me` (D-220). Either is stored as its point of the 0.01° grid, never exactly (D-490). A position takes the nearest area within 2 km of the exact position, or none. From the `username` step on, never moving it; before, `ONBOARDING_INCOMPLETE`. Outside the box, or an area that isn't one: `VALIDATION_ERROR`. 10 an hour per user | T-4.10 |
-| PATCH | /me/settings | ✅ | `{is_hidden?, hide_age?, hide_distance?, show_kudos?, show_gifts?}`, each `true` or `false` only → `Me`. A field it doesn't know, or nothing to set, is `VALIDATION_ERROR`: a typo in a privacy switch never looks like it worked | T-9.6 |
+| PATCH | /me/settings | ✅ | `{is_hidden?, hide_age?, hide_distance?, show_kudos?, show_gifts?, public_link?}` (`public_link`: T-6.8, D-544), each `true` or `false` only → `Me`. A field it doesn't know, or nothing to set, is `VALIDATION_ERROR`: a typo in a privacy switch never looks like it worked | T-9.6 |
 | POST | /me/pause | ✅ | → 204: `paused`, hidden from everyone and sent no notifications (T-9.4) until resumed. Twice is once | T-9.6 |
 | DELETE | /me/pause | ✅ | → 204: back to `active`. Twice is once | T-9.6 |
 | POST | /me/export | ✅ | → 202 `DataExport` (below): a new one queued for the worker, or the one being made, or a ready one, rather than a second (D-502). 5 a day per user | T-9.6 |
@@ -58,7 +58,7 @@ user's own data and nobody else's (D-502 lists it).
 `Me` (T-3.5): `id`, `role`, `status`, `onboarding_step`, `gender`, `age`, `is_verified`,
 `has_pin`, `referral_code`, `balance`, and `profile`: `first_name`, `username`, `about`,
 `hometown`, `city`, `seeking`, `intent_ids`, `interest_ids`, `is_hidden`, `hide_age`,
-`hide_distance`, `show_kudos`, `show_gifts`, and `location` (T-4.10): `none`, `fresh`, or `stale`
+`hide_distance`, `show_kudos`, `show_gifts`, `public_link` (T-6.8, D-544: whether `/@username` shows anything to someone not signed in; off until they turn it on), and `location` (T-4.10): `none`, `fresh`, or `stale`
 once over 6 hours old by the server's clock (D-220), never where it is. The age, never the date of
 birth, and no phone number: no screen shows either, so neither leaves the server (D-067's
 discipline).
@@ -105,6 +105,7 @@ further rule, computed from the shown photos' records, never `is_verified` alone
 | GET | /users/{id} | ✅ | → `PublicProfile`; `NOT_FOUND` for nobody and every refusal alike (D-493) | T-6.3 |
 | GET | /users/by-username/{u} | ✅ | → `PublicProfile`, in any case, by exactly `GET /users/{id}`'s rule (D-493); a name nobody holds, an erased one's included (D-505), the same `NOT_FOUND` | T-6.6 |
 | GET | /search | ✅ | `?q=&cursor=&limit=` → `Page<SearchResult>` (D-540). `@` and 1 to 20 of `[A-Za-z0-9._]`: usernames starting with it, the exact one first, across India and past seeking, never a hidden profile. Otherwise 2 to 50 characters: within the radius, mutual, by name or username (trigram or prefix), city (prefix), or an intent or interest label. Swiped or not; active accounts only. Anything else `VALIDATION_ERROR` on `q`. 60 a minute | T-6.6 |
+| GET | /public-profiles/{username} | 🔓 | → `SharedProfile` (T-6.8, D-544): what `/@username` shows someone not signed in, in any case, only when its owner turned `public_link` on and it is active, done, not hidden, in neither the `freeze` nor the `shadow` band; every other case, a name nobody holds among them, the one `NOT_FOUND`. No view recorded. 60 a minute per address | T-6.8 |
 | GET | /likes | ✅ | `?cursor=&limit=` → `Page<LikeCard>` (D-542): everyone whose like or Super Like of you waits on your swipe, from someone you could swipe back, newest first; a man's unrevealed ones blurred, never named; a woman's all shown | T-6.7 |
 | GET | /likes/count | ✅ | → `{count}`: how many `/likes` lists (D-542) | T-6.7 |
 | POST | /likes/{handle}/reveal | ✅ | `{shown_price}` (P-56, D-600: the price the screen showed, compared, never charged; absent is 0) → `PublicProfile` (D-542): `liked_you_reveal`'s price (1 Vela from 8 October 2026, P-370) for a man, nothing for a woman, once per pair; a second is free. 402 / `NOT_ALLOWED` / `PRICE_CHANGED` (409, `details.price`) write nothing; a handle naming no like still waiting on you, `NOT_FOUND`. Was `/likes/{user_id}/reveal` until T-6.7 | T-6.7 |
@@ -131,6 +132,9 @@ search only: the username is exactly what was asked). No distance, date of birth
 id), `is_super`, `card` (the person's `Card`: a woman's always, a man's once revealed, else null),
 and `blurred_photo_url` (unrevealed only: the server's blur of their main photo, D-543, or null
 with none yet). Nothing in an unrevealed one, nor in the list's cursor, names the person.
+
+`SharedProfile` (T-6.8, D-544): `username`, `first_name`, `age` (null if hidden), `city`, `main_photo_url`
+(the `Card`'s, or null). Never an id, a badge, a distance, the about or another photo.
 
 `PublicProfile` (T-6.3, D-493): a `Card`, and `about` (whole), `photo_urls` (every approved public
 photo in place order; the first is `main_photo_url`), `interest_ids`, `kudos` (`{great_conversation,

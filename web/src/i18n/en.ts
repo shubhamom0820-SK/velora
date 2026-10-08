@@ -57,7 +57,6 @@ export const en = {
     chats: "Chats",
     you: "You",
     admin: "Admin",
-    profile: "Profile",
   },
   // Restoring and ending a session (T-3.10).
   session: {
@@ -164,6 +163,55 @@ export const en = {
       failed: "That didn't go through. Try again.",
       openFailed: "We couldn't open the thread. Try again.",
     },
+  },
+  // A person's profile in the app (T-6.8, 08-DESIGN §8) and their public page,
+  // `/@username` (D-544). Never "verified" (D-262): the tick says what was
+  // matched. Drafted by Claude, for the founder's review.
+  profile: {
+    title: "Profile",
+    photo: "Photo {n} of {total}",
+    noPhoto: "Prefers not to show photos yet",
+    nameAge: "{name}, {age}",
+    online: "Online now",
+    km: "{km} km",
+    from: "from {hometown}",
+    selfieNote: "Their selfie matched a photo you see here",
+    lookingFor: "Looking for",
+    about: "About",
+    interests: "Interests",
+    kudos: "Kudos",
+    kudosKind: {
+      great_conversation: "Great conversation",
+      // Not "Genuinely": D-262's list refuses the word anywhere (claims.test.ts).
+      genuinely_funny: "Truly funny",
+      easy_to_talk_to: "Easy to talk to",
+      really_thoughtful: "Really thoughtful",
+    },
+    album: "Private album",
+    albumOne: "1 private photo",
+    albumOther: "{count} private photos",
+    yours: "This is how others see your profile.",
+    more: "More",
+    share: "Share profile",
+    shareText: "{name} on {app}",
+    copied: "Link copied",
+    copyFailed: "We couldn't copy the link. Try again.",
+    like: "Like",
+    liked: "Liked",
+    matched: "You liked each other.",
+    likeRefused: "You can't like this profile.",
+    likeLimit: "That's today's swipes. More tomorrow.",
+    likeFailed: "We couldn't send that like. Try again.",
+    notFound: "This profile isn't available",
+    notFoundBody: "It may be hidden, or no longer here.",
+    failed: "We couldn't load this profile",
+  },
+  // `/@username` for someone not signed in (T-6.8, D-544).
+  share: {
+    title: "{name} on {app}",
+    join: "Join {app} to message",
+    unavailable: "This profile isn't public",
+    unavailableBody: "Join {app} to meet people near you.",
   },
   // Liked you (T-6.7, D-542): who liked you and is waiting on your swipe. A
   // man reveals each for the price `/prices` gives, never written here; a

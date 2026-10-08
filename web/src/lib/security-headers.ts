@@ -154,17 +154,31 @@ export const NONCE_ROUTES = [
   "you",
   // A person's profile (T-6.5's tap, T-6.8's screen): their text.
   "people",
+  // `/@username`'s page (T-6.8), behind next.config's rewrite: their text.
+  "share",
 ] as const;
+
+/**
+ * What may follow `/@` (T-6.8, D-544): a username, in any case (P-59's
+ * alphabet). next.config's rewrite, the proxy's matcher and the static
+ * policy's exclusion all read this one pattern, so a path that isn't a
+ * username's page, a 404, keeps the static policy its page was built for.
+ */
+export const USERNAME_IN_PATH = "[A-Za-z0-9._]{4,20}";
+
+/** The proxy's matcher for `/@username`: the address as the visitor asked it, before the rewrite. */
+export const AT_USERNAME = `/@:username(${USERNAME_IN_PATH})`;
 
 /** Where a build's nonce goes in `policyWithNonceSlot()`'s policy. */
 export const NONCE_SLOT = "__CSP_NONCE__";
 
 /**
- * Every path but the nonce routes and what is under them, as a `source` in
- * next.config's `headers()`: the pages that get the static policy.
+ * Every path but the nonce routes and what is under them, and `/@username`, as
+ * a `source` in next.config's `headers()`: the pages that get the static
+ * policy.
  */
 export function staticPolicySource(): string {
-  return `/((?!(?:${NONCE_ROUTES.join("|")})(?:/|$)).*)`;
+  return `/((?!(?:${NONCE_ROUTES.join("|")})(?:/|$)|@${USERNAME_IN_PATH}$).*)`;
 }
 
 /** A fresh nonce, 128 random bits in base64, for one response. */

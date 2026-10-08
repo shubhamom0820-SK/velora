@@ -35,4 +35,7 @@ export const queryKeys = {
   // `likes()` is the prefix of the count's key too (T-6.7).
   likes: () => ["likes"] as const,
   likesCount: () => ["likes", "count"] as const,
+  profile: (id: string) => ["profiles", id] as const,
+  profileByUsername: (username: string) =>
+    ["profiles", "by-username", username] as const,
 };

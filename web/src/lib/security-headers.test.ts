@@ -11,6 +11,7 @@ import {
   apiOrigin,
   contentSecurityPolicy,
   headerRules,
+  AT_USERNAME,
   NONCE_ROUTES,
   NONCE_SLOT,
   newNonce,
@@ -285,6 +286,10 @@ describe("the nonce routes' CSP (T-6.6, D-541)", () => {
     "/onboarding/birthday",
     "/discover",
     "/discover/search",
+    "/people/3f0c",
+    "/share/priya",
+    "/@priya",
+    "/@Simran.K",
     "/chats",
     "/wallet",
     "/you",
@@ -297,6 +302,10 @@ describe("the nonce routes' CSP (T-6.6, D-541)", () => {
     "/dev/ui",
     "/admin",
     "/discoverx",
+    "/peoples",
+    "/shared",
+    "/@a!b",
+    "/@ab",
     "/youth",
     "/peoples",
     "/logins",
@@ -317,9 +326,10 @@ describe("the nonce routes' CSP (T-6.6, D-541)", () => {
   );
 
   it("has the proxy match exactly NONCE_ROUTES and all beneath each", () => {
-    expect(proxyConfig.matcher).toEqual(
-      NONCE_ROUTES.map((route) => `/${route}/:path*`),
-    );
+    expect(proxyConfig.matcher).toEqual([
+      ...NONCE_ROUTES.map((route) => `/${route}/:path*`),
+      AT_USERNAME,
+    ]);
   });
 
   it.each([

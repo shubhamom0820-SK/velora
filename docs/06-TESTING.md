@@ -221,6 +221,9 @@ the API's one process.
   response and no `'unsafe-inline'` on `/login`, and an injected inline handler that runs on `/`
   and is refused on `/login`. It uses plain `@playwright/test`, since it causes a violation on
   purpose.
+- **`/@username`** (`web/e2e/share.spec.ts`, D-544): served through the rewrite, with a nonce,
+  never indexed, its canonical address the `@` one; and what follows an `@` but isn't a username
+  is a 404.
 - **Firefox** is Playwright's own build, run by hand (`E2E_FIREFOX=1 make e2e`), never in CI.
 - **Against staging, nightly,** is P-67, whose Needs line carries P-66, a Firebase project for
   staging alone. Staging signs in by Firebase, where Path B and the fake don't exist, so a run

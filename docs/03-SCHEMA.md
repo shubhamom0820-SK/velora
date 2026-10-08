@@ -156,6 +156,7 @@ under-18 refusal (D-078) and the erasure (D-503) delete its rows, files first.
 | hide_distance | boolean default false | |
 | show_kudos | boolean default true | |
 | show_gifts | boolean default true | received gifts on profile |
+| public_link | boolean default false | `/@username` shows first name, age, city and main photo to someone not signed in only when on; off for everyone, those already here included, until they turn it on (T-6.8, D-544). The in-app profile doesn't read it |
 | completeness | smallint default 0 | 0–100, computed by service: 50, and 10 for each approved public photo after the first, set when onboarding finishes (T-4.8, D-310); after that, recomputed by every write that approves or removes a public photo (P-210) |
 
 Indexes: `GIST(location)`, `GIN(username gin_trgm_ops)`, `GIN(first_name gin_trgm_ops)`,

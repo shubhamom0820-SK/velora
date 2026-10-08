@@ -812,6 +812,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/public-profiles/{username}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Shared Profile
+         * @description Public: the `/@username` page asks it as its visitor, signed in or not.
+         */
+        get: operations["shared_profile_v1_public_profiles__username__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/me/settings": {
         parameters: {
             query?: never;
@@ -1566,6 +1586,8 @@ export interface components {
             show_kudos: boolean;
             /** Show Gifts */
             show_gifts: boolean;
+            /** Public Link */
+            public_link: boolean;
             /**
              * Location
              * @enum {string}
@@ -2038,7 +2060,7 @@ export interface components {
         };
         /**
          * SettingsPatch
-         * @description Any of the five privacy switches, each only if sent. A field nobody
+         * @description Any of the six privacy switches, each only if sent. A field nobody
          *     knows is refused rather than ignored, and so is a body that changes
          *     nothing: a typo in a privacy switch must never look like it worked.
          */
@@ -2053,6 +2075,26 @@ export interface components {
             show_kudos?: boolean | null;
             /** Show Gifts */
             show_gifts?: boolean | null;
+            /** Public Link */
+            public_link?: boolean | null;
+        };
+        /**
+         * SharedProfile
+         * @description `/@username` for someone not signed in (T-6.8, D-544): only what the
+         *     page shows, and only when its owner turned their public link on. Never an
+         *     id, a badge, a distance, the about, or any other photo.
+         */
+        SharedProfile: {
+            /** Username */
+            username: string;
+            /** First Name */
+            first_name: string;
+            /** Age */
+            age: number | null;
+            /** City */
+            city: string | null;
+            /** Main Photo Url */
+            main_photo_url: string | null;
         };
         /**
          * SignedIn
@@ -3680,6 +3722,37 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["SearchResultPage"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    shared_profile_v1_public_profiles__username__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                username: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SharedProfile"];
                 };
             };
             /** @description Validation Error */

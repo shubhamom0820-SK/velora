@@ -89,6 +89,7 @@ async def test_me_is_exactly_the_contracts_fields(
             "hide_distance": False,
             "show_kudos": True,
             "show_gifts": True,
+            "public_link": False,
             "location": "none",
         },
     }

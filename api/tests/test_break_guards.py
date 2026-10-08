@@ -76,6 +76,7 @@ def test_case_ids_are_unique_and_name_their_task() -> None:
         "p79",
         "t67",
         "t78",
+        "t68",
     }
     assert len([i for i in ids if i.startswith("t51-")]) == 35
     assert len([i for i in ids if i.startswith("t54-")]) == 6
@@ -107,6 +108,7 @@ def test_case_ids_are_unique_and_name_their_task() -> None:
     assert len([i for i in ids if i.startswith("t74-")]) == 18
     assert len([i for i in ids if i.startswith("p79-")]) == 8
     assert len([i for i in ids if i.startswith("t67-")]) == 13
+    assert len([i for i in ids if i.startswith("t68-")]) == 6
 
 
 def test_failed_tests_reads_ids_whole() -> None:

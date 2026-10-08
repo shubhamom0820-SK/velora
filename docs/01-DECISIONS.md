@@ -4692,6 +4692,57 @@ whole bulk request on one id (`NOT_FOUND`).
 Approved by the founder on the advisor's recommendation (Claude, in a separate chat), relayed, 8
 October 2026, as Claude's plan for T-7.8 proposed it; written up by Claude.
 
+### D-544 · `/@username`: a public link, off until its owner turns it on — Locked
+**The decision (T-6.8):** `profiles.public_link`, a sixth privacy switch in `PATCH /me/settings`,
+**false for everyone, those already here included**. `GET /v1/public-profiles/{username}` (public,
+60 a minute per address) answers only when it is on and the profile is active, done, not hidden,
+and in neither the `freeze` nor the `shadow` band (a shadowed person's page would invite strangers
+to message someone they can't reach); every other case is the one `NOT_FOUND`. It says
+`username`, `first_name`, `age` (null if hidden), `city` and `main_photo_url`, never an id, a
+badge, a distance or the about, and records no view. The in-app profile doesn't read the switch.
+
+**The page:** `/@username` is served by next.config's rewrite to `/share/[username]`, since an
+`@` never begins a route segment (D-068); only a username follows the `@` (`USERNAME_IN_PATH`,
+one pattern for the rewrite, the proxy's matcher and the static policy). It renders per request,
+is a nonce route (D-541), is never indexed in any environment, and names `/@username` as its
+canonical address. Someone signed in and onboarded is sent to the in-app profile, by the id
+`GET /users/by-username` gives, whatever the switch says; anyone else sees the four facts and
+"Join to message", or that the profile isn't public. Its group, `(share)`, restores a session,
+which a marketing page never does (T-3.10).
+
+**Why:** the founder's choice (8 October 2026): the worst case it closes is a woman's photo, first
+name, age and city on the open internet without her choosing it.
+
+**Rejected:** on by default; showing it with a profile hidden or shadowed; a public page for
+anything past those four facts.
+**Known, not closed here:** the page's server render asks the API from the web's server, so the
+per-address limit counts that server, not each visitor (P-446). No screen sets the switch yet
+(P-447).
+
+The founder's addition to Claude's plan for T-6.8, 8 October 2026, on the advisor's recommendation
+(Claude, in a separate chat), relayed; written up by Claude.
+
+### D-545 · A profile has one route in the app, `/people/[id]` — Locked
+**The decision (T-6.8):** a person's profile in the app is `/people/[id]`, the one route a
+profile has: the deck's tap (T-6.5), search's rows (T-6.6), Liked you's revealed tiles (T-6.7) and
+`/@username`'s redirect all lead there. It replaces the plan's `/u/[username]`, agreed with
+T-6.5's session (8 October 2026, the founder's rule: never two routes for one profile). The screen
+is 08-DESIGN §8's: the gallery with its dots, the thread, name, age, the badge (D-393, never
+`is_verified`) and its note, "Online now", city, distance and hometown, the intents and interests
+as chips from `en.ts` by id (P-26), the about, the kudos when shown, the private album's count,
+the ⋯ menu, and Like. **Waiting for their tasks:** "Open thread" (P-440), "Ask to view" (P-441),
+and Report and Block in the ⋯ menu (P-442); until then the ⋯ menu shares the `/@username` link.
+Your own profile has no action bar.
+
+**Why:** one route means one place a profile's rules are applied, and no link that one screen
+makes and another doesn't know.
+
+**Rejected:** `/u/[username]` (the profile is opened by id everywhere but the share page, and an
+id reaches a hidden profile its matches may open, D-493).
+
+Agreed between T-6.5's and T-6.8's sessions, 8 October 2026, under the founder's rule; written up
+by Claude.
+
 ## Adding a decision
 
 Append `D-0NN · Title — Locked|Open`, with Decision, Why, Rejected. Never edit a Locked entry —

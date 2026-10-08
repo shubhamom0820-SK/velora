@@ -22,7 +22,10 @@ export function proxy(request: NextRequest) {
   return response;
 }
 
-/** `NONCE_ROUTES` (security-headers.ts), each and all beneath it; a test holds the two equal. */
+/**
+ * `NONCE_ROUTES` (security-headers.ts), each and all beneath it, and
+ * `AT_USERNAME`; a test holds the two equal.
+ */
 export const config = {
   matcher: [
     "/login/:path*",
@@ -32,5 +35,7 @@ export const config = {
     "/wallet/:path*",
     "/you/:path*",
     "/people/:path*",
+    "/share/:path*",
+    "/@:username([A-Za-z0-9._]{4,20})",
   ],
 };

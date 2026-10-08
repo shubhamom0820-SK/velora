@@ -42,6 +42,8 @@ class MeProfile(BaseModel):
     hide_distance: bool
     show_kudos: bool
     show_gifts: bool
+    # Whether `/@username` shows anything to someone not signed in (D-544).
+    public_link: bool
     # Whether a location is set and current, never where it is (T-4.10,
     # D-220): the web asks for one when it's `none`, and refreshes a `stale`
     # one when the app opens.

@@ -2824,11 +2824,24 @@ prices don't depend on the web photos step, and the hold is lifted.
 - [x] **Commit:** `feat(discovery): liked you with paid reveal [T-6.7]`
 
 ### T-6.8 · Profile pages
-- [ ] **Needs:** T-6.3
-- [ ] In-app profile screen from the prototype (gallery, chips, kudos, message button, album section, ⋯ menu).
-- [ ] Public shareable page `veloraapp.co.in/@username` (SSR): logged-out visitors see first name, age, city, main photo, and "Join Velora to message"; logged-in users are redirected to the in-app profile.
-- [ ] `/@username` is D-001's link, and the `@` keeps usernames out of the routes' namespace: no route segment may begin with `@` (D-068). Next.js reads an `@folder` as a parallel-route slot, so serve `/@username` through a rewrite to an internal route.
-- [ ] **Commit:** `feat(web): profile screens and share page [T-6.8]`
+- [x] **Needs:** T-6.3
+- [x] In-app profile screen from the prototype (gallery, chips, kudos, message button, album section, ⋯ menu).
+  **Built as D-545,** at `/people/[id]`, the one route a profile has (agreed with T-6.5's session;
+  the plan's `/u/[username]` dropped): 08-DESIGN §8's screen, from `GET /users/{id}`. Like is
+  there; "Open thread" (P-440), "Ask to view" (P-441) and Report and Block (P-442) wait for their
+  tasks, and the ⋯ menu shares the `/@username` link. Search's rows link to it.
+- [x] Public shareable page `veloraapp.co.in/@username` (SSR): logged-out visitors see first name, age, city, main photo, and "Join Velora to message"; logged-in users are redirected to the in-app profile.
+  **Built as D-544:** only when its owner turned `public_link` on, a sixth privacy switch, false
+  for everyone (the founder's addition, 8 October 2026); `GET /public-profiles/{username}`, public,
+  60 a minute per address. Never indexed; a nonce route (D-541); someone signed in goes to
+  `/people/[id]` by `GET /users/by-username`. `test_a_fresh_account_is_not_found_until_she_turns_the_link_on`
+  holds the founder's rule.
+- [x] `/@username` is D-001's link, and the `@` keeps usernames out of the routes' namespace: no route segment may begin with `@` (D-068). Next.js reads an `@folder` as a parallel-route slot, so serve `/@username` through a rewrite to an internal route.
+  **Built as** next.config's rewrite to `/share/[username]`, a username only after the `@`
+  (`USERNAME_IN_PATH`); `src/app/routes.test.ts` holds that no segment begins with `@`, and
+  `web/e2e/share.spec.ts` the page in a browser. Breaking runs `t68-01` to `t68-06` (API) and
+  `t68-*` (web) each red.
+- [x] **Commit:** `feat(web): profile screens and share page [T-6.8]`
 
 ### T-6.9 · Filters
 - [ ] **Needs:** T-6.5
@@ -5943,3 +5956,37 @@ The number comes from the session's own block, given in its brief, from P-100 up
   `thread_clears` through T-7.8's `repository.clear` (D-610's stamp), a clearing of each person's
   own (D-006), never a Knot, and a restore (D-611) undoes it. Filed by Claude building T-7.8, 8
   October 2026; its session's block, P-510 to P-519.
+- [ ] P-440 · "Open thread" on the profile. **In T-7.10 or T-7.11** (the chats' screens; the
+  founder to place it). Worst case: a man reads a profile, wants to write, and finds no button,
+  only Like; he has to find the person again in a match or the deck. T-7.1 built `POST /threads`
+  (from a match, or a private message with its first message); 08-DESIGN §8's sticky bar carries
+  "Open thread · 5 Velas", which T-6.8 left out until a screen can take a first message and its
+  price (P-56's `shown_price`). Filed by Claude building T-6.8, 8 October 2026; its session's
+  block, P-440 to P-449.
+- [ ] P-441 · "Ask to view" on the profile's private album. **In T-8.4.** Worst case: the album row
+  says how many private photos there are and offers no way to ask, so the count reads as a tease.
+  T-6.8 shows the count alone. Filed by Claude building T-6.8, 8 October 2026; its session's block.
+- [ ] P-442 · Report and Block in the profile's ⋯ menu. **In T-9.1.** Worst case: someone being
+  harassed opens the profile to block or report and finds only Share. T-6.8's menu holds Share
+  alone until T-9.1 builds both. Filed by Claude building T-6.8, 8 October 2026; its session's block.
+- [ ] P-445 · Next's own 404 page breaks the CSP on every build. **Before REL-1.** Worst case: every
+  404 a person reaches renders with its styles refused (five `style-src` violations, read in
+  Playwright's Chromium on 8 October 2026 at `/no-such-page` under the static policy), and once
+  T-9.12 reports violations to Sentry, every mistyped link is noise there. Next's built-in
+  not-found page sets inline styles, which neither policy allows (`style-src` falls back to
+  `default-src 'self'`). Ours, a `not-found.tsx` styled by classes, would fix it; its proof, the
+  E2E watch passing on a 404. Found building T-6.8, whose share E2E had to visit one with plain
+  `@playwright/test`; filed by Claude, 8 October 2026; its session's block.
+- [ ] P-446 · `/@username`'s limit counts the web's server, not each visitor. **Before
+  `/@username` is shared at scale.** Worst case: one link shared widely, read more than 60 times a
+  minute in all, and every reader after the 60th sees "isn't public" until the minute passes, and
+  a script walking usernames is held to the same 60 as everyone together. The page's server render
+  asks `GET /public-profiles/{u}` from the web's server, so the API's per-address limit (D-544)
+  sees that server's address. Options: send the visitor's address in a header the API trusts only
+  from the web (a shared secret), or let the browser ask the API itself. Found building T-6.8;
+  filed by Claude, 8 October 2026; its session's block.
+- [ ] P-447 · A switch for `public_link` on a screen. **With the settings screens** (You and
+  Settings have no design yet, 08-DESIGN §8). Worst case: the switch exists only in the API, so
+  nobody can turn on their `/@username` page, and every shared link reads "isn't public" to people
+  not signed in. T-6.8 built the setting (D-544) and no screen, as the founder's addition asked.
+  Filed by Claude building T-6.8, 8 October 2026; its session's block.

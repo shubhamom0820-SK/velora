@@ -8,7 +8,11 @@ import { authCookieSuffix } from "./src/lib/auth-cookies";
 import { assertKnownAppEnv } from "./src/lib/build-env";
 import { firebaseConfigFor } from "./src/lib/firebase-config";
 import { signInPathFor } from "./src/lib/sign-in-path";
-import { headerRules, policyWithNonceSlot } from "./src/lib/security-headers";
+import {
+  AT_USERNAME,
+  headerRules,
+  policyWithNonceSlot,
+} from "./src/lib/security-headers";
 
 export const nextConfig: NextConfig = {
   // `next dev` otherwise writes AGENTS.md and CLAUDE.md into web/ on every run.
@@ -23,6 +27,18 @@ export const nextConfig: NextConfig = {
   // CSP is src/proxy.ts's (D-541).
   async headers() {
     return headerRules();
+  },
+  // `/@username` (D-001, T-6.8): an `@` never begins a route segment, since
+  // Next reads `@folder` as a parallel route's slot (D-068), so the address
+  // is served by the internal `/share/[username]`. A username only: anything
+  // else after the `@` is a 404 as before.
+  async rewrites() {
+    return [
+      {
+        source: AT_USERNAME,
+        destination: "/share/:username",
+      },
+    ];
   },
 };
 

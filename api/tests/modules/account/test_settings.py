@@ -12,13 +12,22 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.enums import UserStatus
 from tests.conftest import MakeUser
 
-SWITCHES = ("is_hidden", "hide_age", "hide_distance", "show_kudos", "show_gifts")
+SWITCHES = (
+    "is_hidden",
+    "hide_age",
+    "hide_distance",
+    "show_kudos",
+    "show_gifts",
+    "public_link",
+)
 DEFAULTS = {
     "is_hidden": False,
     "hide_age": False,
     "hide_distance": False,
     "show_kudos": True,
     "show_gifts": True,
+    # Off for everyone until they turn it on (D-544).
+    "public_link": False,
 }
 
 

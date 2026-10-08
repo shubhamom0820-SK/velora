@@ -10,7 +10,7 @@ from pydantic import BaseModel, ConfigDict, StrictBool, model_validator
 
 
 class SettingsPatch(BaseModel):
-    """Any of the five privacy switches, each only if sent. A field nobody
+    """Any of the six privacy switches, each only if sent. A field nobody
     knows is refused rather than ignored, and so is a body that changes
     nothing: a typo in a privacy switch must never look like it worked."""
 
@@ -21,6 +21,8 @@ class SettingsPatch(BaseModel):
     hide_distance: StrictBool | None = None
     show_kudos: StrictBool | None = None
     show_gifts: StrictBool | None = None
+    # `/@username` for people not signed in (T-6.8, D-544); off by default.
+    public_link: StrictBool | None = None
 
     @model_validator(mode="after")
     def _something_to_change(self) -> Self:

@@ -68,7 +68,7 @@ velora/
 ```
 
 `web/` is Next.js 16, scaffolded in T-1.17: `src/app/` (route groups `(marketing)` `(auth)`
-`(app)` `admin`), `src/styles/tokens.css` (design tokens — the only place colours live; a pre-commit
+`(app)` `(share)` `admin`; `(share)` is `/@username`'s page through a rewrite, D-068, D-544), `src/styles/tokens.css` (design tokens — the only place colours live; a pre-commit
 hook enforces it, with one exception, `src/styles/theme-color.ts`) and `src/i18n/en.ts` (every
 user-facing string, read through `t()`, with one exception, `src/app/opengraph-image.alt.txt`, which
 Next reads as a file; a test holds it to `en.ts`); `src/i18n/claims.test.ts` holds every one to D-262:
@@ -76,8 +76,8 @@ none says a person is verified, real, live or who they say (T-4.5). `src/lib/sit
 that only production is indexed (T-2.4), from `APP_ENV`, which `next build` refuses unless it is
 local, ci, staging or production (`src/lib/build-env.ts`, T-2.6). `src/lib/security-headers.ts` is
 the CSP and the other security headers, exactly as strict as today's pages: a task that needs more
-widens it there (D-059); HSTS covers every subdomain (D-074). The sign-in and app routes
-(`NONCE_ROUTES` there) get a nonce per response in place of `'unsafe-inline'`, from `src/proxy.ts`,
+widens it there (D-059); HSTS covers every subdomain (D-074). The sign-in and app routes, and
+`/@username` (`NONCE_ROUTES` there) get a nonce per response in place of `'unsafe-inline'`, from `src/proxy.ts`,
 and render per request; a new signed-in place joins that list (D-541). `src/lib/storage-origins.ts` says
 where photos live by `APP_ENV`, each bucket by its path, for the CSP (T-4.6).
 `src/lib/firebase.ts` is the only code that touches the Firebase SDK (ESLint enforces it), loaded

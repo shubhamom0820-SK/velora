@@ -387,6 +387,7 @@ async def export_document(
                 "hide_distance": profile.hide_distance,
                 "show_kudos": profile.show_kudos,
                 "show_gifts": profile.show_gifts,
+                "public_link": profile.public_link,
             },
         },
         "photos": photos,

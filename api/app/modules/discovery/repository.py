@@ -641,3 +641,35 @@ async def text_search(
 ) -> Sequence[Row[tuple[UUID, float]]]:
     await session.execute(SIMILARITY)
     return (await session.execute(text_search_query(viewer, term, **page))).all()
+
+
+# --- The public link (T-6.8) --------------------------------------------------------
+
+
+async def shared(session: AsyncSession, username: str) -> Row[Any] | None:
+    """The profile `/@username` shows someone not signed in, in any case, or
+    None (D-544): its owner turned the public link on, and it is active, done,
+    not hidden, and in neither the `freeze` nor the `shadow` band. No viewer,
+    so no block: anyone on the internet may ask."""
+    return (
+        await session.execute(
+            select(
+                User.dob,
+                Profile.username,
+                Profile.first_name,
+                Profile.city,
+                Profile.hide_age,
+                main_photo_key(User.id).label("main_photo_key"),
+            )
+            .join(Profile, Profile.user_id == User.id)
+            .where(
+                Profile.username == username,
+                Profile.public_link.is_(True),
+                Profile.is_hidden.is_(False),
+                User.status == UserStatus.ACTIVE,
+                User.onboarding_step == OnboardingStep.DONE,
+                ~_in_band(User.id, FraudBand.FREEZE),
+                ~_in_band(User.id, FraudBand.SHADOW),
+            )
+        )
+    ).first()

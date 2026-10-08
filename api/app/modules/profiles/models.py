@@ -83,6 +83,11 @@ class Profile(Timestamps, Base):
     show_gifts: Mapped[bool] = mapped_column(
         Boolean, nullable=False, server_default=true()
     )
+    # `/@username` shows anything to someone not signed in only when this is
+    # on; off for everyone until they turn it on (T-6.8, D-544).
+    public_link: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, server_default=false()
+    )
     completeness: Mapped[int] = mapped_column(
         SmallInteger, nullable=False, server_default=text("0")
     )

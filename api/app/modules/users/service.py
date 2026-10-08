@@ -412,6 +412,7 @@ async def me(session: AsyncSession, user: User) -> Me:
             hide_distance=profile.hide_distance,
             show_kudos=profile.show_kudos,
             show_gifts=profile.show_gifts,
+            public_link=profile.public_link,
             location=location_state(profile.location_updated_at, clock.now()),
         ),
     )

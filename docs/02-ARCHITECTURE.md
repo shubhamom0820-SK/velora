@@ -467,7 +467,7 @@ secret is left empty. Real secret values are never committed.
   policy of the document first loaded. Its captured frame shows as a `blob:` image, which T-4.6's
   `img-src` already allows on every build with photo storage. **The sign-in and app routes
   (T-6.6, D-541)**, `NONCE_ROUTES` (`/login`, `/onboarding`, `/discover`, `/chats`, `/wallet`,
-  `/you` and all beneath each), are served the same policy but for `script-src`: `'self'
+  `/you`, `/people` and `/share`, and all beneath each, with `/@username` itself, T-6.8), are served the same policy but for `script-src`: `'self'
   'nonce-<a fresh 128-bit nonce per response>' 'strict-dynamic'`, never `'unsafe-inline'`, set by
   `web/src/proxy.ts`, and their pages render per request (`force-dynamic` in the `(auth)` and
   `(app)` layouts). Every other page, the marketing pages among them, keeps the static policy above
@@ -490,6 +490,7 @@ secret is left empty. Real secret values are never committed.
 | Reports | 10 / day / user |
 | Username check | 30 / min / user |
 | `GET /search` | 60 / min / user (T-6.6): `@` search walks usernames by their start; a person typing fits, a script listing them doesn't (D-540) |
+| `GET /public-profiles/{u}` | 60 / min / IP (T-6.8, D-544): public; a script walking usernames is held to it. The page's server render asks it, so today it counts the web's server, not each visitor (P-446) |
 | `POST /payments/orders` | 20 / hour / user (T-8.1): each asks the gateway for an order; every retry a real checkout needs fits |
 | `POST /payments/webhook` | None (T-8.2): its auth is the signature, checked before the body is read, so an unsigned request costs one HMAC; a limit would slow Razorpay's own retries of real payments, which arrive from its few addresses. Flooding is the edge's to stop |
 | `PUT /me/location` | 10 / hour / user (T-4.10). Onboarding's tries and a refresh each time the app opens fit easily; it slows someone moving themselves about to measure distances, and can't stop them; the grid (D-490) is what makes their readings tell nothing finer than a 1 km cell |

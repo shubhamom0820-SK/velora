@@ -24,6 +24,7 @@ from app.core.deps import (
     app_redis,
     app_settings,
     onboarded_user,
+    rate_limit,
     user_rate_limit,
 )
 from app.core.pagination import PageParams, page_params
@@ -34,6 +35,7 @@ from app.modules.discovery.schemas import (
     Feed,
     PublicProfile,
     SearchResultPage,
+    SharedProfile,
 )
 from app.modules.users.models import User
 
@@ -43,6 +45,9 @@ router = APIRouter(tags=["discovery"])
 MAX_INTENT_FILTER = 10
 # Search walks usernames by their start (D-540): a person typing, never a script.
 SEARCHES_PER_MINUTE = 60
+# `/@username` for anyone, signed in or not (D-544): a page someone shares, read
+# a few times; a script walking usernames is held to this, per address.
+SHARED_PER_MINUTE = 60
 
 
 @router.get("/discover")
@@ -110,3 +115,18 @@ async def search(
     return await service.search(
         session, user, q, params=params, settings=settings, config=config
     )
+
+
+@router.get(
+    "/public-profiles/{username}",
+    dependencies=[
+        Depends(rate_limit("public_profiles", limit=SHARED_PER_MINUTE, window_s=60))
+    ],
+)
+async def shared_profile(
+    username: str,
+    session: Annotated[AsyncSession, Depends(get_session)],
+    settings: Annotated[Settings, Depends(app_settings)],
+) -> SharedProfile:
+    """Public: the `/@username` page asks it as its visitor, signed in or not."""
+    return await service.shared_profile(session, username, settings=settings)

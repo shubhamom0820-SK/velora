@@ -112,6 +112,10 @@ describe("search (T-6.6)", () => {
     expect(rows).toHaveLength(2);
     const [exact, prefix] = rows as [HTMLElement, HTMLElement];
     expect(within(exact).getByText(t("search.exact"))).toBeInTheDocument();
+    expect(within(exact).getByRole("link")).toHaveAttribute(
+      "href",
+      "/people/a",
+    );
     expect(within(prefix).queryByText(t("search.exact"))).toBeNull();
     expect(
       within(prefix).getByText(

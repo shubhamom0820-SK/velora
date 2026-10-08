@@ -36,6 +36,7 @@ from app.modules.discovery.schemas import (
     PublicProfile,
     SearchResult,
     SearchResultPage,
+    SharedProfile,
     ThreadWithMe,
 )
 from app.modules.profiles import repository as profiles_repository
@@ -383,4 +384,32 @@ def search_result_of(
     return SearchResult(
         **card.model_dump(include=set(SearchResult.model_fields) - {"exact"}),
         exact=exact,
+    )
+
+
+# --- The public link (T-6.8) --------------------------------------------------------
+
+
+async def shared_profile(
+    session: AsyncSession, username: str, *, settings: Settings
+) -> SharedProfile:
+    """`GET /public-profiles/{username}` (D-544): what `/@username` shows
+    someone not signed in, or the one `NOT_FOUND` for every other case, a
+    public link left off among them. Records no view: nobody is signed in."""
+    if not profiles_rules.USERNAME.fullmatch(username.lower()):
+        raise _not_found()
+    async with session.begin():
+        row = await repository.shared(session, username)
+    if row is None:
+        raise _not_found()
+    return SharedProfile(
+        username=row.username,
+        first_name=row.first_name,
+        age=None
+        if row.hide_age or row.dob is None
+        else users_service.age_on(row.dob, clock.today_ist()),
+        city=row.city,
+        main_photo_url=None
+        if row.main_photo_key is None
+        else public_url(settings, row.main_photo_key),
     )

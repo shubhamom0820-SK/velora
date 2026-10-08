@@ -118,3 +118,17 @@ class SearchResult(BaseModel):
 class SearchResultPage(Page[SearchResult]):
     """`Page<SearchResult>`: `@` search's exact match first, then usernames in
     order; text search's best name match first, then by id (D-540)."""
+
+
+class SharedProfile(BaseModel):
+    """`/@username` for someone not signed in (T-6.8, D-544): only what the
+    page shows, and only when its owner turned their public link on. Never an
+    id, a badge, a distance, the about, or any other photo."""
+
+    username: str
+    first_name: str
+    # Null when they hide it.
+    age: int | None
+    city: str | None
+    # As the `Card`'s (D-494), or null.
+    main_photo_url: str | None

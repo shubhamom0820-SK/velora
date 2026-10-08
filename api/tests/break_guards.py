@@ -3938,8 +3938,8 @@ T62: list[tuple[Case, list[str]]] = [
             edits=[
                 (
                     "app/modules/discovery/repository.py",
-                    "        User.onboarding_step == OnboardingStep.DONE,\n",
-                    "",
+                    "        User.onboarding_step == OnboardingStep.DONE,\n        hidden if hidden_ok is None else or_(hidden, hidden_ok),\n",
+                    "        hidden if hidden_ok is None else or_(hidden, hidden_ok),\n",
                 )
             ],
             expect=["test_someone_not_done_is_left_out[selfie]"],
@@ -3953,8 +3953,8 @@ T62: list[tuple[Case, list[str]]] = [
             edits=[
                 (
                     "app/modules/discovery/repository.py",
-                    "        User.status == UserStatus.ACTIVE,\n",
-                    "",
+                    "        User.id != viewer.id,\n        User.status == UserStatus.ACTIVE,\n",
+                    "        User.id != viewer.id,\n",
                 )
             ],
             expect=[
@@ -3971,8 +3971,8 @@ T62: list[tuple[Case, list[str]]] = [
             edits=[
                 (
                     "app/modules/discovery/repository.py",
-                    "        ~_in_band(User.id, FraudBand.FREEZE),\n",
-                    "",
+                    "        hidden if hidden_ok is None else or_(hidden, hidden_ok),\n        ~_in_band(User.id, FraudBand.FREEZE),\n",
+                    "        hidden if hidden_ok is None else or_(hidden, hidden_ok),\n",
                 )
             ],
             expect=["test_a_frozen_band_is_left_out_for_everyone[None]"],
@@ -4049,8 +4049,8 @@ T62: list[tuple[Case, list[str]]] = [
             edits=[
                 (
                     "app/modules/discovery/service.py",
-                    "        if row.hide_age or row.dob is None\n",
-                    "        if row.dob is None\n",
+                    "        if row.hide_age or row.dob is None\n        else users_service.age_on(row.dob, clock.today_ist()),\n        username=row.username,\n",
+                    "        if row.dob is None\n        else users_service.age_on(row.dob, clock.today_ist()),\n        username=row.username,\n",
                 )
             ],
             expect=["test_hidden_age_and_distance_are_null"],
@@ -7807,6 +7807,114 @@ T78: list[Case] = [
     ),
 ]
 
+# --- T-6.8: the public link and its page --------------------------------------------
+
+T68_SELECTION = [
+    "tests/modules/discovery/test_shared_profile.py",
+    "tests/modules/account/test_settings.py",
+]
+
+T68: list[tuple[Case, list[str]]] = [
+    (
+        Case(
+            id="t68-01-public-without-asking",
+            what="D-544: /@username shown without its owner turning the link on",
+            edits=[
+                (
+                    DISCOVERY_REPO,
+                    "                Profile.public_link.is_(True),\n",
+                    "",
+                ),
+            ],
+            expect=["test_a_fresh_account_is_not_found_until_she_turns_the_link_on"],
+        ),
+        T68_SELECTION,
+    ),
+    (
+        Case(
+            id="t68-02-on-by-default",
+            what="D-544: the public link on for everyone, those already here included",
+            edits=[
+                (
+                    "app/modules/profiles/models.py",
+                    "    public_link: Mapped[bool] = mapped_column(\n        Boolean, nullable=False, server_default=false()\n",
+                    "    public_link: Mapped[bool] = mapped_column(\n        Boolean, nullable=False, server_default=true()\n",
+                ),
+                (
+                    "alembic/versions/20261008_959e7af5110e_a_public_link_off_by_default.py",
+                    'server_default=sa.text("false")',
+                    'server_default=sa.text("true")',
+                ),
+            ],
+            expect=[
+                "test_a_fresh_account_is_not_found_until_she_turns_the_link_on",
+                "test_each_switch_sets_itself_and_nothing_else",
+            ],
+        ),
+        T68_SELECTION,
+    ),
+    (
+        Case(
+            id="t68-03-hidden-shown",
+            what="a hidden profile on its public page",
+            edits=[
+                (
+                    DISCOVERY_REPO,
+                    "                Profile.is_hidden.is_(False),\n",
+                    "",
+                ),
+            ],
+            expect=["test_every_refusal_is_the_same_not_found"],
+        ),
+        T68_SELECTION,
+    ),
+    (
+        Case(
+            id="t68-04-shadowed-shown",
+            what="D-031: a shadowed profile's page shown to the internet",
+            edits=[
+                (
+                    DISCOVERY_REPO,
+                    "                ~_in_band(User.id, FraudBand.SHADOW),\n",
+                    "",
+                ),
+            ],
+            expect=["test_every_refusal_is_the_same_not_found"],
+        ),
+        T68_SELECTION,
+    ),
+    (
+        Case(
+            id="t68-05-a-hidden-age-shown",
+            what="her age on the public page though she hides it",
+            edits=[
+                (
+                    "app/modules/discovery/service.py",
+                    "        if row.hide_age or row.dob is None\n        else users_service.age_on(row.dob, clock.today_ist()),\n        city=row.city,\n",
+                    "        if row.dob is None\n        else users_service.age_on(row.dob, clock.today_ist()),\n        city=row.city,\n",
+                ),
+            ],
+            expect=["test_a_hidden_age_and_no_photo"],
+        ),
+        T68_SELECTION,
+    ),
+    (
+        Case(
+            id="t68-06-unlimited",
+            what="the public page's API with no limit per address",
+            edits=[
+                (
+                    "app/modules/discovery/router.py",
+                    "SHARED_PER_MINUTE = 60\n",
+                    "SHARED_PER_MINUTE = 10**6\n",
+                ),
+            ],
+            expect=["test_it_is_limited_to_60_a_minute_per_address"],
+        ),
+        T68_SELECTION,
+    ),
+]
+
 CASES: list[tuple[Case, list[str]]] = (
     [(c, T51_SELECTION) for c in T51]
     + [(c, T54_SELECTION) for c in T54]
@@ -7843,6 +7951,7 @@ CASES: list[tuple[Case, list[str]]] = (
     + [(c, P79_SELECTION) for c in P79]
     + T67
     + [(c, T78_SELECTION) for c in T78]
+    + T68
 )
 
 # The fifty-connection fixture's own message when Postgres refuses a connection.

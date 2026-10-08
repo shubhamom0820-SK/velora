@@ -53,6 +53,10 @@ const HIS_THREAD =
   "offers him the Thread at /prices' price and sends exactly it";
 const HER_THREAD = "offers her the Thread free, sending 0";
 const LIKES_TEST = "src/components/likes/LikedYouScreen.test.tsx";
+const PROFILE_TEST = "src/components/profile/ProfileScreen.test.tsx";
+const REDIRECT_TEST = "src/components/share/SignedInProfileRedirect.test.tsx";
+const SHARE_LAYOUT_TEST = "src/app/(share)/layout.test.ts";
+const ROUTES_TEST = "src/app/routes.test.ts";
 
 const HEADERS = "src/lib/security-headers.ts";
 const CONNECT = "connect: ` ${storage.privateBucket}`,";
@@ -699,7 +703,7 @@ export const CASES: BreakCase[] = [
   {
     id: "t66-csp-03-two-policies-on-a-nonce-route",
     file: HEADERS,
-    old: '  return `/((?!(?:${NONCE_ROUTES.join("|")})(?:/|$)).*)`;',
+    old: '  return `/((?!(?:${NONCE_ROUTES.join("|")})(?:/|$)|@${USERNAME_IN_PATH}$).*)`;',
     new: '  return "/(.*)";',
     run: [CSP_TEST],
     expect: [
@@ -907,6 +911,47 @@ export const CASES: BreakCase[] = [
     new: "{ handle, shownPrice: 0 }",
     run: [LIKES_TEST],
     expect: ["reveals one, and the tile shows who it was"],
+  },
+  // --- T-6.8: the profile and /@username (D-544) ---
+  {
+    id: "t68-profile-01-a-badge-for-everyone",
+    file: "src/components/profile/ProfileScreen.tsx",
+    old: '{person.shows_badge && (\n              <span className="bg-accent text-on-accent',
+    new: '{true && (\n              <span className="bg-accent text-on-accent',
+    run: [PROFILE_TEST],
+    expect: ["shows no badge or note where D-393's rule doesn't hold"],
+  },
+  {
+    id: "t68-share-01-onboarding-redirected",
+    file: "src/components/share/SignedInProfileRedirect.tsx",
+    old: 'gate.kind === "ready" && gate.me.onboarding_step === "done"',
+    new: 'gate.kind === "ready"',
+    run: [REDIRECT_TEST],
+    expect: ["asks nothing for someone still onboarding"],
+  },
+  {
+    id: "t68-share-02-indexed",
+    file: "src/app/(share)/layout.tsx",
+    old: "robots: { index: false, follow: false },",
+    new: "robots: { index: true, follow: true },",
+    run: [SHARE_LAYOUT_TEST],
+    expect: ["is never indexed, in any environment"],
+  },
+  {
+    id: "t68-share-03-any-at-path",
+    file: "src/lib/security-headers.ts",
+    old: "export const AT_USERNAME = `/@:username(${USERNAME_IN_PATH})`;",
+    new: 'export const AT_USERNAME = "/@:username";',
+    run: [ROUTES_TEST, CSP_TEST],
+    expect: ["serves /@username through the internal /share route"],
+  },
+  {
+    id: "t68-share-04-the-page-under-the-static-policy",
+    file: "src/proxy.ts",
+    old: '    "/share/:path*",\n',
+    new: "",
+    run: [CSP_TEST],
+    expect: ["leaves /share/priya to the proxy"],
   },
 ];
 
