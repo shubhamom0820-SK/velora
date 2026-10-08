@@ -30,7 +30,10 @@ Velas the payment granted are taken back, what the balance holds, down to 0
 (`wallet.reverse()`); the rest is a shortfall, logged, and on a dispute a
 `chargeback_shortfall` signal. A failed refund or a dispute won gives back
 exactly what its reversal took. The status follows the money: `refunded` on
-`refund.processed` and `payment.dispute.lost` only.
+`refund.processed` and `payment.dispute.lost` only. **Each refund or dispute
+is handled once, by its own id** (`payment_reversals`, P-420, D-581), whatever
+it took: one that found nothing to take, redelivered after he has bought Velas
+again, takes none of them.
 
 **`raw_webhook` keeps an allowlist** of the event's fields (D-524), never the
 payer's details, and never a field Razorpay adds later. Logs name the event,
@@ -52,7 +55,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core import clock
 from app.core.enums import Gender, LedgerReason, PaymentStatus
 from app.core.errors import AppError
-from app.core.providers.payments import PaymentsProvider
+from app.core.providers.payments import PaymentsProvider, ProviderPayment
 from app.modules.payments import repository
 from app.modules.payments.models import Payment
 from app.modules.safety import service as safety_service
@@ -330,6 +333,36 @@ async def _capture(session: AsyncSession, row: Payment, event: Event) -> Outcome
     return Outcome.CAPTURED
 
 
+# The event a claim's grant is recorded as in `raw_webhook` (T-8.3).
+GRANTED_ON_CLAIM: Final = "refund_request.granted"
+
+
+async def capture_from_gateway(
+    session: AsyncSession, row: Payment, payment: ProviderPayment
+) -> Outcome:
+    """A claim's grant (T-8.3, D-580): the capture the webhook never brought,
+    from what the gateway says it holds, through the webhook's own `_capture`,
+    so the same reasons, the same key and the same bonus rule (D-077, D-522).
+    A webhook that arrives later finds the anchor set: a repeat. The row must
+    be locked by the caller. `raw_webhook` keeps the allowlisted fields of the
+    gateway's payment, which carries none of the payer's."""
+    entity = {
+        "id": payment.id,
+        "order_id": payment.order_id,
+        "amount": payment.amount_paise,
+        "currency": payment.currency,
+        "status": payment.status,
+    }
+    event = Event(
+        name=CAPTURED,
+        payment=PaymentEntity.model_validate(entity),
+        raw=raw_webhook(
+            {"event": GRANTED_ON_CLAIM, "payload": {"payment": {"entity": entity}}}
+        ),
+    )
+    return await _capture(session, row, event)
+
+
 def _fail(row: Payment, event: Event) -> Outcome:
     """A failed attempt: never the anchor, so a later capture still credits."""
     if row.status in (PaymentStatus.CREATED, PaymentStatus.FAILED):
@@ -371,9 +404,14 @@ async def _reverse(session: AsyncSession, row: Payment, event: Event) -> Outcome
 
 async def _reverse_once(session: AsyncSession, row: Payment, event: Event) -> Outcome:
     other = event.other
-    assert other is not None
+    assert other is not None and event.kind is not None
     ref = Ref(RefType.PAYMENT, row.id)
-    if await wallet_service.entry_for(
+    # Handled already, whatever it took (P-420, D-581): a reversal that took 0
+    # wrote no ledger entry, so the record is the check. The ledger's entry
+    # still counts for a reversal made before the record existed.
+    if await repository.reversal_recorded(
+        session, other.id
+    ) or await wallet_service.entry_for(
         session, row.user_id, LedgerReason.PURCHASE_REVERSAL, other.id
     ):
         log.info("payments.webhook_repeat", **_fields(row, event))
@@ -383,6 +421,14 @@ async def _reverse_once(session: AsyncSession, row: Payment, event: Event) -> Ou
     granted = row.credits + row.bonus_credits
     outstanding = granted - await wallet_service.reversed_net(session, row.user_id, ref)
     if outstanding <= 0:
+        await repository.record_reversal(
+            session,
+            payment_id=row.id,
+            provider_ref=other.id,
+            kind=event.kind,
+            taken=0,
+            shortfall=0,
+        )
         log.info("payments.nothing_to_reverse", **_fields(row, event))
         return Outcome.NOTHING_TO_DO
     reversal = await wallet_service.reverse(
@@ -392,6 +438,14 @@ async def _reverse_once(session: AsyncSession, row: Payment, event: Event) -> Ou
         LedgerReason.PURCHASE_REVERSAL,
         ref=ref,
         event=other.id,
+    )
+    await repository.record_reversal(
+        session,
+        payment_id=row.id,
+        provider_ref=other.id,
+        kind=event.kind,
+        taken=reversal.taken,
+        shortfall=reversal.shortfall,
     )
     log.info(
         "payments.reversed",

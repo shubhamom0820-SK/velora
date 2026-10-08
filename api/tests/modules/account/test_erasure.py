@@ -242,7 +242,10 @@ async def _everywhere(
             "provider_order_id, idempotency_key) "
             "values (:pay, :m, 'pack-30', 150000, 30, :order, :order)"
         ),
-        "insert into refund_requests (user_id, payment_id) values (:m, :pay)",
+        (
+            "insert into refund_requests (user_id, payment_id, reason) "
+            "values (:m, :pay, 'missing_velas')"
+        ),
         (
             "insert into welcome_grants (phone_hash, user_id) "
             "select phone_hash, id from users where id = :m"

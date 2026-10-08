@@ -6,12 +6,17 @@ from collections.abc import Sequence
 from datetime import datetime
 from uuid import UUID
 
-from sqlalchemy import func, select
+from sqlalchemy import Row, Select, func, select, text, tuple_
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.enums import Gender, PaymentStatus
-from app.modules.payments.models import CreditPack, Payment
+from app.modules.payments.models import (
+    CreditPack,
+    Payment,
+    PaymentReversal,
+    RefundRequest,
+)
 from app.modules.users.models import User
 
 
@@ -168,3 +173,110 @@ async def turnover(
         )
     ).one()
     return int(row[0]), int(row[1])
+
+
+# --- Reversals handled (P-420, D-581) -------------------------------------------------
+
+
+async def reversal_recorded(session: AsyncSession, provider_ref: str) -> bool:
+    """Whether this refund or dispute (`rfnd_…`, `disp_…`) was handled already,
+    whatever its reversal took."""
+    found = await session.scalar(
+        select(PaymentReversal.id).where(PaymentReversal.provider_ref == provider_ref)
+    )
+    return found is not None
+
+
+async def record_reversal(
+    session: AsyncSession,
+    *,
+    payment_id: UUID,
+    provider_ref: str,
+    kind: str,
+    taken: int,
+    shortfall: int,
+) -> None:
+    """Once per refund or dispute: a second raises on
+    `uq_payment_reversals_provider_ref`, never carries on."""
+    await session.execute(
+        insert(PaymentReversal).values(
+            payment_id=payment_id,
+            provider_ref=provider_ref,
+            kind=kind,
+            taken=taken,
+            shortfall=shortfall,
+        )
+    )
+
+
+# --- Claims (T-8.3, D-580) -----------------------------------------------------------
+
+
+async def add_claim(
+    session: AsyncSession, *, user_id: UUID, payment_id: UUID, reason: str
+) -> RefundRequest | None:
+    """The new open claim, or None if the payment has one open already: the
+    partial unique index is the arbiter, so two at once write one."""
+    claim: RefundRequest | None = await session.scalar(
+        insert(RefundRequest)
+        .values(user_id=user_id, payment_id=payment_id, reason=reason)
+        .on_conflict_do_nothing(
+            index_elements=[RefundRequest.payment_id],
+            # Literal, as the index's own predicate: a bound value can't be
+            # matched to it.
+            index_where=text("status = 'open'"),
+        )
+        .returning(RefundRequest)
+    )
+    return claim
+
+
+async def lock_claim(session: AsyncSession, claim_id: UUID) -> RefundRequest | None:
+    """The claim, its row locked until the transaction ends: one resolution
+    at a time. Read afresh, as `lock_payment` is."""
+    claim: RefundRequest | None = await session.scalar(
+        select(RefundRequest)
+        .where(RefundRequest.id == claim_id)
+        .with_for_update()
+        .execution_options(populate_existing=True)
+    )
+    return claim
+
+
+ClaimRow = Row[tuple[RefundRequest, str, PaymentStatus]]
+
+
+async def claim_with_payment(session: AsyncSession, claim_id: UUID) -> ClaimRow | None:
+    """The claim, with its payment's gateway order and status."""
+    row: ClaimRow | None = (
+        await session.execute(
+            _claims_with_payments().where(RefundRequest.id == claim_id)
+        )
+    ).one_or_none()
+    return row
+
+
+async def claims_page(
+    session: AsyncSession,
+    *,
+    status: str,
+    after: tuple[datetime, UUID] | None,
+    limit: int,
+) -> Sequence[ClaimRow]:
+    """Up to `limit` claims in `status`, oldest first by `(created_at, id)`,
+    from just after `after`: a queue, the longest waiting at the top."""
+    query = (
+        _claims_with_payments()
+        .where(RefundRequest.status == status)
+        .order_by(RefundRequest.created_at, RefundRequest.id)
+        .limit(limit)
+    )
+    if after is not None:
+        query = query.where(tuple_(RefundRequest.created_at, RefundRequest.id) > after)
+    return (await session.execute(query)).all()
+
+
+def _claims_with_payments() -> Select[tuple[RefundRequest, str, PaymentStatus]]:
+    return select(RefundRequest, Payment.provider_order_id, Payment.status).join(
+        Payment, Payment.id == RefundRequest.payment_id
+    )

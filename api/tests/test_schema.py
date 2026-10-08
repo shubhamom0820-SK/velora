@@ -28,7 +28,7 @@ from __future__ import annotations
 
 import uuid
 from dataclasses import dataclass
-from datetime import date
+from datetime import date, datetime
 
 import pytest
 from sqlalchemy import select, text
@@ -1259,6 +1259,195 @@ async def test_provider_ids_are_unique(db: AsyncSession, column: str) -> None:
     assert state == UNIQUE_VIOLATION
 
 
+# Refund requests: a broken payment's claim (T-8.3, D-580).
+
+
+async def _claim(
+    db: AsyncSession, payment_id: uuid.UUID, user_id: uuid.UUID, **fields: object
+) -> uuid.UUID:
+    values: dict[str, object] = {
+        "u": user_id,
+        "p": payment_id,
+        "reason": "missing_velas",
+        "status": "open",
+        "note": None,
+        "pay": None,
+        "rfnd": None,
+        "resolved": None,
+        **fields,
+    }
+    claim_id = await db.scalar(
+        text(
+            "insert into refund_requests (user_id, payment_id, reason, status, note, "
+            "provider_payment_id, provider_refund_id, resolved_at) values "
+            "(:u, :p, :reason, :status, :note, :pay, :rfnd, :resolved) returning id"
+        ),
+        values,
+    )
+    assert isinstance(claim_id, uuid.UUID)
+    return claim_id
+
+
+@pytest.mark.parametrize(
+    ("fields", "refused_by"),
+    [
+        ({"reason": "changed_my_mind"}, "ck_refund_requests_reason_known"),
+        ({"reason": None}, None),
+        (
+            {"status": "closed", "resolved": "2026-10-08T06:00:00Z"},
+            "ck_refund_requests_status_known",
+        ),
+        ({"status": "granted"}, "ck_refund_requests_resolved_when_closed"),
+        (
+            {"status": "refunded", "resolved": "2026-10-08T06:00:00Z", "pay": "pay_x"},
+            "ck_refund_requests_refund_names_its_ids",
+        ),
+        (
+            {"status": "rejected", "resolved": "2026-10-08T06:00:00Z"},
+            "ck_refund_requests_rejection_has_note",
+        ),
+        (
+            {"resolved": "2026-10-08T06:00:00Z"},
+            "ck_refund_requests_resolved_when_closed",
+        ),
+    ],
+    ids=[
+        "unknown reason",
+        "no reason",
+        "unknown status",
+        "granted, never resolved",
+        "refunded without its refund id",
+        "rejected without a note",
+        "open, yet resolved",
+    ],
+)
+async def test_a_claim_holds_its_shape(
+    db: AsyncSession, fields: dict[str, object], refused_by: str | None
+) -> None:
+    user = await _man(db)
+    payment_id = await _payment(db, user.id)
+    if "resolved" in fields and isinstance(fields["resolved"], str):
+        fields = {**fields, "resolved": datetime.fromisoformat(fields["resolved"])}
+
+    with pytest.raises(IntegrityError) as excinfo:
+        async with db.begin_nested():
+            await _claim(db, payment_id, user.id, **fields)
+
+    if refused_by is None:
+        assert _sqlstate(excinfo.value) == NOT_NULL_VIOLATION
+    else:
+        assert _check_refusal(excinfo.value).constraint == refused_by
+
+
+async def test_a_payment_has_one_open_claim_at_a_time(db: AsyncSession) -> None:
+    """A second open claim is refused; once the first is resolved, another
+    may be filed."""
+    user = await _man(db)
+    payment_id = await _payment(db, user.id)
+    first = await _claim(db, payment_id, user.id)
+
+    with pytest.raises(IntegrityError) as excinfo:
+        async with db.begin_nested():
+            await _claim(db, payment_id, user.id, reason="duplicate_charge")
+    await db.execute(
+        text(
+            "update refund_requests set status = 'rejected', note = 'n', "
+            "resolved_at = now() where id = :c"
+        ),
+        {"c": first},
+    )
+    await _claim(db, payment_id, user.id, reason="duplicate_charge")
+
+    assert _sqlstate(excinfo.value) == UNIQUE_VIOLATION
+    assert _constraint(excinfo.value) == "uq_refund_requests_open_per_payment"
+
+
+# Payment reversals: every refund or dispute handled, once (P-420, D-581).
+
+
+async def _reversal(
+    db: AsyncSession, payment_id: uuid.UUID, **fields: object
+) -> uuid.UUID:
+    values: dict[str, object] = {
+        "p": payment_id,
+        "ref": f"rfnd_{uuid.uuid4().hex[:14]}",
+        "kind": "refund",
+        "taken": 0,
+        "shortfall": 30,
+        **fields,
+    }
+    reversal_id = await db.scalar(
+        text(
+            "insert into payment_reversals (payment_id, provider_ref, kind, taken, "
+            "shortfall) values (:p, :ref, :kind, :taken, :shortfall) returning id"
+        ),
+        values,
+    )
+    assert isinstance(reversal_id, uuid.UUID)
+    return reversal_id
+
+
+@pytest.mark.parametrize(
+    "statement",
+    [
+        "update payment_reversals set taken = 30 where id = :id",
+        "delete from payment_reversals where id = :id",
+    ],
+)
+async def test_a_reversal_record_cannot_change_or_disappear(
+    db: AsyncSession, statement: str
+) -> None:
+    user = await _man(db)
+    reversal_id = await _reversal(db, await _payment(db, user.id))
+
+    state = await _rejected(db, statement, {"id": reversal_id})
+
+    assert state == RESTRICT_VIOLATION
+
+
+async def test_reversal_records_cannot_be_truncated(db: AsyncSession) -> None:
+    user = await _man(db)
+    await _reversal(db, await _payment(db, user.id))
+
+    state = await _rejected(db, "truncate payment_reversals")
+
+    assert state == RESTRICT_VIOLATION
+
+
+@pytest.mark.parametrize(
+    ("fields", "refused_by"),
+    [
+        ({"kind": "chargeback"}, "ck_payment_reversals_kind_known"),
+        ({"taken": -1}, "ck_payment_reversals_taken_non_negative"),
+        ({"shortfall": -1}, "ck_payment_reversals_shortfall_non_negative"),
+    ],
+    ids=["unknown kind", "negative taken", "negative shortfall"],
+)
+async def test_a_reversal_record_holds_its_shape(
+    db: AsyncSession, fields: dict[str, object], refused_by: str
+) -> None:
+    user = await _man(db)
+    payment_id = await _payment(db, user.id)
+
+    with pytest.raises(IntegrityError) as excinfo:
+        async with db.begin_nested():
+            await _reversal(db, payment_id, **fields)
+
+    assert _check_refusal(excinfo.value).constraint == refused_by
+
+
+async def test_a_refund_or_dispute_is_recorded_once(db: AsyncSession) -> None:
+    user = await _man(db)
+    payment_id = await _payment(db, user.id)
+    await _reversal(db, payment_id, ref="rfnd_once")
+
+    with pytest.raises(IntegrityError) as excinfo:
+        async with db.begin_nested():
+            await _reversal(db, payment_id, ref="rfnd_once")
+
+    assert _constraint(excinfo.value) == "uq_payment_reversals_provider_ref"
+
+
 @pytest.mark.parametrize(
     ("assignment", "constraint"),
     [
@@ -1333,7 +1522,10 @@ async def test_action_price_never_negative(db: AsyncSession) -> None:
     ("table", "columns"),
     [
         ("wallets", "(user_id) values (:x)"),
-        ("refund_requests", "(user_id, payment_id) values (:u, :x)"),
+        (
+            "refund_requests",
+            "(user_id, payment_id, reason) values (:u, :x, 'missing_velas')",
+        ),
         ("referrals", "(referee_id, referrer_id) values (:u, :x)"),
     ],
 )
@@ -1355,8 +1547,8 @@ async def test_refund_request_starts_open(db: AsyncSession) -> None:
 
     status = await db.scalar(
         text(
-            "insert into refund_requests (user_id, payment_id) values (:u, :p) "
-            "returning status"
+            "insert into refund_requests (user_id, payment_id, reason) "
+            "values (:u, :p, 'missing_velas') returning status"
         ),
         {"u": user.id, "p": payment_id},
     )

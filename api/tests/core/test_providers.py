@@ -15,7 +15,11 @@ from app.core.config import Settings
 from app.core.providers import FakeProviders, Providers, build_providers, get_providers
 from app.core.providers.facematch import FaceMatch, FakeFaceMatch, SFaceFaceMatch
 from app.core.providers.moderation import FakeModeration, SightengineModeration
-from app.core.providers.payments import FakePayments, RazorpayPayments
+from app.core.providers.payments import (
+    FakePayments,
+    PaymentsUnavailable,
+    RazorpayPayments,
+)
 from app.core.providers.push import FakePush, PushSubscription, WebPush
 from app.core.providers.sms import (
     FakeSms,
@@ -290,6 +294,57 @@ async def test_fake_can_fake_an_amount_mismatch_and_a_failure() -> None:
 
     assert mismatch["payload"]["payment"]["entity"]["amount"] == 100
     assert failed["event"] == "payment.failed"
+
+
+async def test_the_fake_reports_each_orders_payments_and_refunds_like_razorpay() -> (
+    None
+):
+    """What `order_payments` says is every payment a webhook was built for,
+    delivered or not; a refund takes a receipt once, a captured payment only,
+    never more than is left (T-8.3)."""
+    payments = FakePayments()
+    order = await payments.create_order(amount_paise=150_000, receipt="r")
+    payments.capture(order.id)
+    payments.fail(order.id)
+    [captured, failed] = await payments.order_payments(order.id)
+
+    refund = await payments.refund(
+        payment_id=captured.id, amount_paise=150_000, receipt="claim-1"
+    )
+    [after, _] = await payments.order_payments(order.id)
+    refusals = []
+    for payment_id, receipt in [
+        (captured.id, "claim-2"),  # nothing left of it
+        (failed.id, "claim-3"),  # never captured
+        ("pay_nobody", "claim-4"),
+    ]:
+        with pytest.raises(PaymentsUnavailable) as refused:
+            await payments.refund(
+                payment_id=payment_id, amount_paise=150_000, receipt=receipt
+            )
+        refusals.append(str(refused.value))
+
+    assert (captured.status, failed.status) == ("captured", "failed")
+    assert refund.payment_id == captured.id and refund.id.startswith("rfnd_")
+    assert (after.status, after.amount_refunded_paise) == ("refunded", 150_000)
+    assert refusals == ["Razorpay refused the refund: HTTP 400"] * 3
+    assert await payments.order_payments("order_nobody") == []
+
+
+async def test_the_fake_takes_a_refunds_receipt_once() -> None:
+    payments = FakePayments()
+    order = await payments.create_order(amount_paise=150_000, receipt="r")
+    payments.capture(order.id)
+    payments.capture(order.id)
+    [first, second] = await payments.order_payments(order.id)
+    await payments.refund(payment_id=first.id, amount_paise=150_000, receipt="claim-1")
+
+    with pytest.raises(PaymentsUnavailable):
+        await payments.refund(
+            payment_id=second.id, amount_paise=150_000, receipt="claim-1"
+        )
+
+    assert len(payments.refunds) == 1
 
 
 async def test_a_webhook_for_an_unknown_order_is_a_test_mistake() -> None:

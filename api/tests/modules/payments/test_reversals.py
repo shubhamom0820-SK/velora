@@ -17,7 +17,7 @@ from app.core import clock
 from app.core.enums import LedgerReason, PaymentStatus
 from app.core.providers import FakeProviders
 from app.modules.payments import rules, service
-from app.modules.payments.models import Payment
+from app.modules.payments.models import Payment, PaymentReversal
 from app.modules.safety.models import FraudEvent
 from app.modules.users.models import User
 from app.modules.wallet import service as wallet_service
@@ -391,6 +391,97 @@ async def test_velas_spent_entirely_take_nothing_and_record_the_shortfall(
         for e in captured_logs.events
         if e.get("event") == "payments.reversal_shortfall"
     ] == [36]
+
+
+# --- Each refund or dispute is handled once, whatever it took (P-420, D-581) ------------
+
+
+async def _records(db: AsyncSession, payment_id: uuid.UUID) -> list[tuple[Any, ...]]:
+    rows = await db.execute(
+        select(
+            PaymentReversal.provider_ref,
+            PaymentReversal.kind,
+            PaymentReversal.taken,
+            PaymentReversal.shortfall,
+        )
+        .where(PaymentReversal.payment_id == payment_id)
+        .order_by(PaymentReversal.provider_ref)
+    )
+    return [tuple(row) for row in rows]
+
+
+@pytest.mark.critical
+@pytest.mark.parametrize("kind", ["refund", "dispute"])
+async def test_a_reversal_that_took_nothing_never_takes_velas_bought_since(
+    db: AsyncSession,
+    client: AsyncClient,
+    make_user: MakeUser,
+    fake_providers: FakeProviders,
+    kind: str,
+) -> None:
+    """P-420's worst case. He spends all 36, so the refund or dispute takes 0
+    and writes no ledger entry. He buys 30 more. Razorpay redelivers that same
+    event: it is a repeat, by its record, and his 30 stay; a dispute's signal
+    is recorded once."""
+    man, token = await make_user()
+    payment_id, order_id = await order(client, token)
+    await deliver(client, fake_providers.payments, captured(order_id))
+    await _spend(db, man, 36)
+    created = (
+        refund("refund.created", order_id)
+        if kind == "refund"
+        else dispute("payment.dispute.created", order_id)
+    )
+    await deliver(client, fake_providers.payments, created)
+    assert await _balance(db, man.id) == 0
+    _, second_order = await order(client, token, "pack-30")
+    await deliver(client, fake_providers.payments, captured(second_order))
+    assert await _balance(db, man.id) == 30
+
+    response = await deliver(client, fake_providers.payments, created)
+
+    assert response.status_code == 200
+    assert await _balance(db, man.id) == 30
+    assert REVERSAL not in {m[0] for m in await _moves(db, man.id)}
+    ref = "rfnd_test_1" if kind == "refund" else "disp_test_1"
+    assert await _records(db, payment_id) == [(ref, kind, 0, 36)]
+    assert len(await _signals(db, man.id)) == (1 if kind == "dispute" else 0)
+
+
+async def test_every_refund_handled_is_recorded_with_what_it_took(
+    db: AsyncSession,
+    client: AsyncClient,
+    make_user: MakeUser,
+    fake_providers: FakeProviders,
+) -> None:
+    """26 of 36 spent: the refund takes 10, short 26. A dispute of the payment
+    reversed in full finds nothing outstanding and is recorded too, 0 and 0."""
+    man, payment_id, order_id = await _paid(
+        db, client, make_user, fake_providers.payments
+    )
+    await _spend(db, man, 26)
+    await deliver(client, fake_providers.payments, refund("refund.created", order_id))
+    other, other_payment, other_order = await _paid(
+        db, client, make_user, fake_providers.payments
+    )
+    await deliver(
+        client,
+        fake_providers.payments,
+        refund("refund.created", other_order, refund_id="rfnd_other_1"),
+    )
+    await _grant(db, other, 50)
+
+    await deliver(
+        client, fake_providers.payments, dispute("payment.dispute.created", other_order)
+    )
+
+    assert await _records(db, payment_id) == [("rfnd_test_1", "refund", 10, 26)]
+    # One test transaction: every row shares `created_at`, so by Razorpay id.
+    assert sorted(await _records(db, other_payment)) == [
+        ("disp_test_1", "dispute", 0, 0),
+        ("rfnd_other_1", "refund", 36, 0),
+    ]
+    assert await _balance(db, other.id) == 50
 
 
 # --- Out of order -------------------------------------------------------------------------

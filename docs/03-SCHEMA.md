@@ -11,7 +11,7 @@ The Alembic migrations in Sprint 1 create **everything below in this order**.
 
 **Roles (T-1.22):** migrations run as the owner; the app connects as a login role in `velora_app`,
 which reads and writes rows and nothing more — no TRUNCATE, no DDL, no UPDATE or DELETE on
-`ledger_entries` and `audit_log`, no DELETE on `payments`, `messages` or `reports` (rule 12). New
+`ledger_entries`, `audit_log` and `payment_reversals` (T-8.3), no DELETE on `payments`, `messages` or `reports` (rule 12). New
 tables get SELECT, INSERT, UPDATE and DELETE by default, so **a new append-only or never-deleted
 table's migration revokes what the app shouldn't have**; `tests/test_app_role.py` fails for any
 table whose `refuse_change()` trigger the app role could reach. Where the extensions live in an
@@ -519,8 +519,30 @@ Triggers `payments_no_delete` and `payments_no_truncate`: payments are never har
 (rule 12); status updates are allowed. Both raise `restrict_violation` (23001) (T-1.12).
 
 ### refund_requests
-`id uuid pk, user_id uuid fk users, payment_id uuid fk payments, reason text, status text not null default 'open', created_at`.
-`status` is free text on purpose: T-8.3 owns the refund workflow and defines its values.
+A broken payment's claim (T-8.3, D-580): never a change of mind (D-050, D-230).
+`id uuid pk, user_id uuid fk users, payment_id uuid fk payments, reason text not null, status text not null default 'open', note text null, provider_payment_id text null, provider_refund_id text unique null, resolved_at timestamptz null, created_at, updated_at`.
+- `reason`: `missing_velas` (the money went through, no Velas came) or `duplicate_charge`
+  (charged twice for one purchase), `ck_refund_requests_reason_known`.
+- `status`: `open`, `granted`, `refunded` or `rejected`, `ck_refund_requests_status_known`.
+  Checks: `(status = 'open') = (resolved_at IS NULL)`; `refunded` names the gateway's payment and
+  refund (`ck_refund_requests_refund_names_its_ids`); `rejected` has a `note`, the admin's
+  (`ck_refund_requests_rejection_has_note`). `provider_payment_id` is also set on a grant: the
+  gateway's payment credited.
+- One open claim per payment: `uq_refund_requests_open_per_payment`, unique on `payment_id`
+  where `status = 'open'`.
+- **A refund is recorded here, never on `payments`:** the payment refunded has no row of its own,
+  and the credited payment's row is never touched, so turnover (D-483) stays right (D-580).
+
+### payment_reversals  (append-only)
+Every refund and dispute the webhook handled, once, whatever it took (T-8.3, P-420, D-581).
+`id uuid pk, payment_id uuid fk payments, provider_ref text unique not null, kind text not null, taken int not null, shortfall int not null, created_at`.
+`provider_ref` is the refund's or dispute's own Razorpay id (`rfnd_…`, `disp_…`); `kind` is
+`refund` or `dispute`; `taken` and `shortfall` are what its reversal took and couldn't, each
+`>= 0`, both 0 when nothing was outstanding. The webhook's repeat check: a reversal that took 0
+wrote no ledger entry, so without it a redelivery took from Velas bought since. Keyed to
+`payments` only, never `users`. Triggers `payment_reversals_no_update_delete` and
+`payment_reversals_no_truncate` reuse T-1.12's `refuse_change()`; the app role has no UPDATE or
+DELETE on it.
 
 ### referrals
 `referee_id uuid pk fk users, referrer_id uuid fk users, rewarded_at timestamptz null, created_at`.

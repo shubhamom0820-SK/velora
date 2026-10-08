@@ -199,7 +199,7 @@ turns them into copy.
 | POST | /payments/orders | ✅ | `{pack_id}` (nothing else: a body naming an amount or Velas is `VALIDATION_ERROR`, rule 6) + `Idempotency-Key` (8 to 64 of `A-Za-z0-9_-`) → `{payment_id, order_id, key_id, amount_paise}`, priced from the pack's row. A woman: `NOT_ALLOWED`, before any gateway is asked (D-076). A pack not active in his store: `NOT_FOUND`. The same key again: the same order; with another pack, `ALREADY_EXISTS` (D-481). Gateway down or unconfigured: `PROVIDER_UNAVAILABLE`, nothing written. 20 an hour per user | T-8.1 |
 | POST | /payments/webhook | 🔓 signature | Razorpay's event, the raw body, `X-Razorpay-Signature` → `{}`. Bad or missing signature, or `RAZORPAY_WEBHOOK_SECRET` unset: `400 VALIDATION_ERROR`, nothing read. Signed but unreadable: `500`, so Razorpay retries. Anything else, applied or not: `200` (below). No rate limit (02-ARCHITECTURE §12) | T-8.2 |
 | GET | /payments/{id} | ✅ | → `PaymentStatusView`: `{status, credits, bonus_credits}`, the caller's own payment; anyone else's, or none, `NOT_FOUND`, the same answer. No GST (D-482). No rate limit of its own | T-8.2 |
-| POST | /refund-requests | ✅ | `{payment_id, reason}` → 201 | T-8.3 |
+| POST | /refund-requests | ✅ | `{payment_id, reason}` (nothing else) → 201 `RefundRequest`: `{id, payment_id, reason, status, created_at}`. A broken payment's claim (D-580): `reason` is `missing_velas` or `duplicate_charge`, never a change of mind. The caller's own payment; anyone else's, or none, `NOT_FOUND`, the same answer. `missing_velas` on a `paid` or `refunded` payment: `NOT_ALLOWED`, `details.why` `velas_granted`. A second open claim on one payment: `ALREADY_EXISTS`. 10 a day per user | T-8.3 |
 | GET | /referrals/me | ✅ | → `{code, invited, rewarded}` | T-8.6 |
 | POST | /referrals/apply | 🔐 | `{code}` → 204 (only during onboarding) | T-8.6 |
 
@@ -215,6 +215,14 @@ nothing), `payment.failed` (a `created` row becomes `failed`, never anchored), `
 `payment.dispute.won` (exactly what was taken, given back), and `refund.processed` and
 `payment.dispute.lost` (`refunded`). Every other event, and an order nobody made, is `200` and
 logged. The Velas always come from the `payments` row, never the webhook (rule 6).
+
+**Claims (T-8.3, D-580 to D-582)** are resolved by an admin, from what the gateway says about the
+order, never the claim's kind or the admin's word: a **grant** is the webhook's own capture
+(`purchase` and `purchase_bonus` under its key, never `admin_grant`), a **refund** returns a
+captured payment no Velas can ever stand against, recorded on the claim (the credited payment's
+row is never touched), and a **reject** says why. The webhook records each refund and dispute it
+handles once, by its Razorpay id, whatever it took (`payment_reversals`, D-581), so a
+redelivery never takes Velas bought since.
 
 `LedgerEntry` (T-5.3): `id`, `delta`, `balance_after`, `reason` (`LedgerReason`, every value, with
 `purchase_reversal` and `purchase_restored` since T-8.2, `welcome` since T-8.11) and
@@ -238,6 +246,8 @@ list is the caller's own (D-270).
 |---|---|---|---|
 | GET | /admin/metrics | → counts, revenue, reports open | T-9.5 |
 | GET | /admin/turnover | `?year=` (the financial year's first, 2026 for 2026-27; this one if absent) → `Turnover`: `{financial_year, starts_at, ends_at, turnover_paise, paid_payments, alert_at_paise, threshold_paise}`, paid payments in the year, 1 April to 31 March in IST. **Admin only**, never a moderator; each call writes `audit_log` (D-483) | T-8.1 |
+| GET | /admin/refund-requests | `?status=&cursor=&limit=` → `Page<AdminRefundRequest>`: the claims in `status` (`open` if absent), oldest first by `(created_at, id)`, each `{id, user_id, payment_id, order_id, payment_status, reason, status, note, provider_payment_id, provider_refund_id, created_at, resolved_at}`. **Admin only**, never a moderator; each call writes `audit_log` (D-582) | T-8.3 |
+| POST | /admin/refund-requests/{id}/resolve | `{action, note?}` → `AdminRefundRequest`. `action`: `grant`, `refund` or `reject` (`note` required, `VALIDATION_ERROR` otherwise). The gateway's payments on the order decide (D-580): a grant needs no credit yet and a captured payment for the order's amount, else `NOT_ALLOWED`, `details.why` `credited` or `nothing_to_grant`; a refund needs a captured, untouched payment that isn't the credited one nor one a grant could credit, else `nothing_to_refund`; a claim not `open`, `resolved`. Gateway down: `PROVIDER_UNAVAILABLE`, nothing changed. None: `NOT_FOUND`. **Admin only**; each resolution writes `audit_log` | T-8.3 |
 | GET | /admin/users | `?q=&cursor=&limit=` → `Page<AdminUser>` | T-9.5 |
 | GET | /admin/users/{id} | → full detail incl. fraud, reports, ledger | T-9.5 |
 | POST | /admin/users/{id}/status | `{status, reason}` → 204 (freeze/ban/unban) | T-9.5 |
@@ -298,13 +308,13 @@ fake order is paid by calling it, for T-8.2's tests and T-8.7's local checkout.
 | `VERIFICATION_REQUIRED` | 403 | anyone but a man without a matched selfie: a woman, or someone with no gender (D-310) |
 | `NOT_FOUND` | 404 | also used when a blocked user is looked up |
 | `USERNAME_TAKEN` | 409 | |
-| `ALREADY_EXISTS` | 409 | duplicate swipe/report/etc.; an order's `Idempotency-Key` sent again for another pack (D-481) |
+| `ALREADY_EXISTS` | 409 | duplicate swipe/report/etc.; an order's `Idempotency-Key` sent again for another pack (D-481); a second open claim on one payment (D-580) |
 | `THREAD_EXPIRED` | 410 | his send on an expired Thread; hers is delivered (D-097). Expired by the clock, though the cron hasn't caught its status up (D-560) |
 | `ACCOUNT_DELETED` | 410 | a message to someone who deleted their account (D-500, D-555) |
 | `UNDERAGE` | 422 | the account is deleted, only the number's hash kept (D-072) |
 | `IMMUTABLE_FIELD` | 422 | gender/dob change; a username after onboarding (D-068) |
 | `MESSAGE_REJECTED` | 422 | abuse or payment-solicitation filter; `details.rule` |
-| `NOT_ALLOWED` | 422 | man sending voice note, kudos too early, woman sending a gift, verifying a PIN when none is set (D-069), a woman's store or order (D-076) |
+| `NOT_ALLOWED` | 422 | man sending voice note, kudos too early, woman sending a gift, verifying a PIN when none is set (D-069), a woman's store or order (D-076); a claim's `missing_velas` on a payment that granted them, or a resolution the gateway's record doesn't allow, `details.why` (D-580) |
 | `GIFT_LIMIT_REACHED` | 429 | free gifts used up today; `details.resets_at`. D-231 charges the sixteenth send a week rather than refusing it, so T-8.9 says whether this keeps a case |
 | `GIFT_COOLDOWN` | 429 | same gift to same person too soon; `details.retry_after_s` |
 | `SWIPE_LIMIT_REACHED` | 429 | a man's daily cap (D-492); `details.limit`, `details.resets_at` (the next IST midnight) |

@@ -3027,10 +3027,10 @@ prices don't depend on the web photos step, and the hold is lifted.
 - [x] **Commit:** `feat(payments): verified idempotent webhook [T-8.2]`
 
 ### T-8.3 · Refund requests
-- [ ] **Needs:** T-8.2
-- [ ] `POST /refund-requests` for **broken transactions only** (D-050): a payment that went through without granting Velas, or a duplicate charge for one purchase. A change of mind isn't a claim — purchases are final. In MVP an admin resolves each claim: missing Velas are granted through `wallet.credit()` (idempotent on the payment), and a duplicate charge is refunded to the original payment method in the gateway and recorded (`payments.status = refunded`). This task defines the claim kinds and the `status` values.
-- [ ] **Missing Velas are granted with reason `purchase` (and `purchase_bonus`) and the webhook's own key** (D-077), never `admin_grant`: so a webhook arriving after the repair can't credit them a second time. Money goes back only under D-076's rule 3.
-- [ ] **Commit:** `feat(payments): refund requests [T-8.3]`
+- [x] **Needs:** T-8.2
+- [x] `POST /refund-requests` for **broken transactions only** (D-050): a payment that went through without granting Velas, or a duplicate charge for one purchase. A change of mind isn't a claim — purchases are final. In MVP an admin resolves each claim: missing Velas are granted through `wallet.credit()` (idempotent on the payment), and a duplicate charge is refunded to the original payment method in the gateway and recorded **on the claim** (`refunded`, with the gateway's payment and refund ids). **Corrected by D-580 (the founder, 8 October 2026):** this line first said "`payments.status = refunded`", but the payment refunded has no row of its own, so marking the row would call the purchase that stands refunded and drop it from turnover (D-483); the credited payment's row is never touched. This task defines the claim kinds and the `status` values.
+- [x] **Missing Velas are granted with reason `purchase` (and `purchase_bonus`) and the webhook's own key** (D-077), never `admin_grant`: so a webhook arriving after the repair can't credit them a second time. Money goes back only under D-076's rule 3.
+- [x] **Commit:** `feat(payments): refund requests [T-8.3]`
 
 ### T-8.4 · Private album
 - [ ] **Needs:** T-4.4, T-5.1; **P-79**: an approved private photo can't be swapped for an unmoderated one through its upload URL
@@ -3098,6 +3098,8 @@ prices don't depend on the web photos step, and the hold is lifted.
   `credit_packs` has no column for it. Separate from the value question, which is settled (D-231).
 - [ ] Store sheet from the prototype (packs, per-Vela and per-thread price, first-purchase banner), with D-099's packs, not the prototype's (08-DESIGN §5). **"Most popular" stays on the ₹4,500 pack, the dominated one, chosen knowingly (D-231); whether the words can be shown when nobody has bought anything yet is the founder's to settle (on this task's Needs line).** The 20% first-purchase bonus stays. Load Razorpay Checkout script on demand. On success callback → poll `/payments/{id}` every 1.5 s (max 60 s) → toast + wallet refresh. Failure/dismiss → "Payment didn't go through" sheet with retry.
 - [ ] **Widen the CSP here (D-059):** Razorpay Checkout's script, frame and connect hosts, exactly as Razorpay documents them. The CSP has been enforced since T-2.5, so checkout fails with a CSP error until this lands.
+- [ ] **The man's claim form (P-481):** `POST /refund-requests` from a payment that broke, the two
+  kinds only (D-580).
 - [ ] **Commit:** `feat(web): store and razorpay checkout [T-8.7]`
 
 ### T-8.8 · Web album, kudos, referral UI
@@ -3225,6 +3227,8 @@ number** per account gets its 5 each, one Thread's worth, and is **accepted**, k
   support sees it as erased, with its reports. Its row can't leave `deleted`
   (`ck_users_anonymised_is_deleted`): ban its number through `banned_identities` only. And
   **P-401**: what a ban landing during a deletion's 29 days does to the erasure.
+- [ ] **The claims screen (P-480):** T-8.3's queue and resolution (`/admin/refund-requests`,
+  D-580 to D-582), admin only, each action behind a confirmation.
 - [ ] **Commit:** `feat(admin): moderation panel [T-9.5]`
 
 ### T-9.6 · Settings and data rights
@@ -5595,7 +5599,7 @@ The number comes from the session's own block, given in its brief, from P-100 up
   accounts, so a ban today keeps everything (`deleted_requested_at` stays set as the record of
   the request). Filed by Claude building T-9.6, 8 October 2026; its session's block, P-400 to
   P-409.
-- [ ] P-420 · Make a reversal that found nothing to take a repeat too. **In T-8.3, or a task of
+- [x] P-420 · Make a reversal that found nothing to take a repeat too. **In T-8.3, or a task of
   its own: the founder's call.** Worst case: a refund or dispute reaches a man who has spent every
   Vela of that payment, so `wallet.reverse()` takes 0 and, by design, writes nothing (a ledger
   entry can't be 0, `ck_ledger_entries_delta_non_zero`); the shortfall is logged, and on a dispute
@@ -5604,7 +5608,12 @@ The number comes from the session's own block, given in its brief, from P-100 up
   records its signal a second time. Razorpay retries for about a day, so it needs a redelivery
   and a new purchase inside that window. One way: record each refund or dispute id handled, on the
   payment or in a small table, and treat a known id as a repeat. Found building T-8.2 (D-520);
-  filed by Claude, 8 October 2026; its session's block, P-420 to P-429.
+  filed by Claude, 8 October 2026; its session's block, P-420 to P-429. **Closed by T-8.3 (D-581, the
+  founder, 8 October 2026):** `payment_reversals` records every refund and dispute handled, once,
+  by its Razorpay id, 0 taken included, and the webhook's repeat check reads it.
+  `tests/modules/payments/test_reversals.py` buys again between two deliveries of one refund, and
+  of one dispute, and finds the new Velas untouched and one signal; `test_reversal_races.py`
+  delivers it five times at once and finds one record.
 - [ ] P-460 · Keep the countdown and the expiry off her screens. **In T-7.10 and T-7.12** (on
   neither's Needs line yet: the founder to place it). Worst case: she sees a Thread's countdown,
   "Ran out" or an expired state, and so learns that time, and money, stands between her message
@@ -5643,3 +5652,19 @@ The number comes from the session's own block, given in its brief, from P-100 up
   (`pg_advisory_lock`, blocking) rather than polls. Its proof: hold the turn from a second
   connection in the gap and see today's test go red, the fixed one green. Found in P-220's
   session; filed from its block (P-470 to P-479).
+- [ ] P-480 · The admin's claims screen. **In T-9.5** (on its line). Worst case without it: a man's
+  claim that his money went through and no Velas came sits unread, since the queue exists only
+  as an API (`GET /admin/refund-requests`, D-582) and nobody looks at it, and the published
+  `/refunds` promise ("we fix it") goes unkept. The screen lists the open claims, oldest first,
+  and resolves each with grant, refund or reject (a note required), behind a confirmation, from
+  what the API already decides (D-580). Until it exists, nothing tells the founder a claim was
+  filed. Found building T-8.3; filed by Claude, 8 October 2026; its session's block, P-480 to
+  P-489.
+- [ ] P-481 · The man's claim form. **In T-8.7** (on its line). Worst case without it: a man whose
+  payment broke has no way in the product to say so, only the support email `/refunds` names,
+  and the claim never reaches the queue T-8.3 built. A "Report a problem with this payment" on
+  a payment (the checkout's failure sheet and T-5.5's history), with the two kinds and their
+  plain words, never a change of mind (D-230). He can't yet see a claim's outcome: the API has
+  no list of his own claims, so this task adds `GET /refund-requests` (his own, D-270) if it
+  shows one. Found building T-8.3; filed by Claude, 8 October 2026; its session's block, P-480
+  to P-489.

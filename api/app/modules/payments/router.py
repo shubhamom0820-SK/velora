@@ -1,6 +1,8 @@
 """`GET /v1/packs` and `POST /v1/payments/orders` (T-8.1), for men once
 onboarding is done; a woman is refused both, `NOT_ALLOWED` (D-076).
 `POST /v1/payments/webhook` and `GET /v1/payments/{id}` (T-8.2).
+`POST /v1/refund-requests` (T-8.3): a broken payment's claim, 10 a day per user,
+room for every payment a man could make in one; more is a script.
 
 `GET /packs` reads and writes nothing else, so `current_user`'s 300 a minute is
 its only limit. An order asks the gateway for one, so it has its own: 20 an hour
@@ -24,17 +26,20 @@ from app.core.config import Settings
 from app.core.db import get_session
 from app.core.deps import app_settings, onboarded_user, user_rate_limit
 from app.core.providers import Providers, get_providers
-from app.modules.payments import rules, service, webhooks
+from app.modules.payments import claims, rules, service, webhooks
 from app.modules.payments.schemas import (
     Order,
     OrderRequest,
     Pack,
     PaymentStatusView,
+    RefundRequestCreate,
+    RefundRequestView,
     WebhookReceived,
 )
 from app.modules.users.models import User
 
 ORDERS_PER_HOUR = 20
+CLAIMS_PER_DAY = 10
 
 router = APIRouter(tags=["payments"])
 
@@ -91,3 +96,20 @@ async def payment_status(
     session: Annotated[AsyncSession, Depends(get_session)],
 ) -> PaymentStatusView:
     return await service.status_of(session, user, payment_id)
+
+
+@router.post(
+    "/refund-requests",
+    status_code=201,
+    dependencies=[
+        Depends(
+            user_rate_limit("refund_requests", limit=CLAIMS_PER_DAY, window_s=86400)
+        )
+    ],
+)
+async def file_refund_request(
+    body: RefundRequestCreate,
+    user: Annotated[User, Depends(onboarded_user)],
+    session: Annotated[AsyncSession, Depends(get_session)],
+) -> RefundRequestView:
+    return await claims.file(session, user, body.payment_id, body.reason)

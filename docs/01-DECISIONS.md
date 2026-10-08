@@ -4252,6 +4252,79 @@ none.
 
 **Rejected:** the same data for both and the screen hiding it.
 
+### D-580 · A broken payment's claim: two kinds, resolved by what the gateway says — Locked
+**The decision (T-8.3; the founder, 8 October 2026, on the advisor's recommendation (Claude, in a
+separate chat), relayed; the shape Claude's, in T-8.3's plan), D-050's broken payments built:**
+- **Two kinds, never a change of mind** (D-050, D-230): `missing_velas`, the money went through
+  and no Velas came, and `duplicate_charge`, charged twice for one purchase. `POST
+  /refund-requests {payment_id, reason}` takes the caller's own payment (anyone else's is
+  `NOT_FOUND`, the same as none), nothing in his words, one open claim per payment
+  (`ALREADY_EXISTS`), and refuses `missing_velas` on a payment whose Velas were granted
+  (`NOT_ALLOWED`). 10 a day per user.
+- **Statuses:** `open`, then `granted`, `refunded` or `rejected`; the database holds the shape
+  (a resolved claim has `resolved_at`, a refund names the gateway's payment and refund, a
+  rejection has a note).
+- **The admin acts, the gateway decides** (rule 6): a resolution first asks the gateway for every
+  payment on the order (`GET /v1/orders/{id}/payments`), never the claim's kind or the admin's
+  word, and does only what that shows:
+  - **grant**, while the row has credited nothing, of the first captured, untouched payment for
+    exactly the order's amount, **through the webhook's own capture**: `purchase` and, by D-522's
+    rule, `purchase_bonus`, under the webhook's key (D-077), **never `admin_grant`**, so the
+    webhook arriving after the repair is a repeat.
+  - **refund**, in full in the gateway, of a captured, untouched payment no Velas can ever stand
+    against (D-076 rule 3): never the credited one, and never one a grant could credit, whose fix
+    is the grant. The claim's id is Razorpay's `receipt`, which it takes once.
+  - **reject**, with a note. **Two orders, both credited, are rejected:** both purchases completed
+    and nothing is broken (D-230). If the founder ever returns money anyway, he refunds from
+    Razorpay's dashboard, and T-8.2's webhook takes those Velas back.
+- **A refund's record is the claim's** (`refunded`, the gateway's payment and refund ids). **The
+  credited payment's row is never touched.** This corrects T-8.3's plan line, which said
+  "`payments.status = refunded`": the payment refunded has no row of its own, so marking the row
+  would call the purchase that stands refunded and drop it from turnover (D-483).
+- **One resolution at a time:** the claim's row is locked for the whole of it, the gateway's
+  calls included; the payment row's lock and the wallet's come only after the gateway has
+  answered (D-077). A race test forces two admins into overlap at that lock and asserts one
+  refund.
+
+**Why:** a broken payment is ours to fix (D-050), and a fix that trusts a claim or an admin's
+word could grant Velas nobody paid for, or return money whose Velas still stand.
+
+**Rejected:** `payments.status = refunded` for a duplicate (above); `admin_grant` for missing
+Velas (a later webhook would credit them again); the claim's kind choosing the action (a
+`missing_velas` payment for the wrong amount is fixed by a refund); refunding a payment a grant
+could still credit.
+
+### D-581 · Every refund and dispute handled is recorded once, whatever it took (P-420) — Locked
+**The decision (T-8.3, closing P-420; approved with D-580):** `payment_reversals` records each
+refund and dispute the webhook handles, once, by its own Razorpay id (`rfnd_…`, `disp_…`,
+unique), with what its reversal took and what it couldn't (`taken`, `shortfall`), 0 and 0 when
+nothing was outstanding. The webhook's repeat check reads it first; the ledger's own entry still
+counts for a reversal made before the table existed. Append-only (`refuse_change()`, and no UPDATE
+or DELETE for the app role), keyed to `payments` only, never `users`, so an erasure (D-500)
+neither takes it nor needs to. Its downgrade refuses while any row exists.
+
+**Why:** P-420's worst case. A refund or dispute reaching a man who had spent every Vela of that
+payment took 0, and a ledger entry can't be 0, so nothing marked it handled. A redelivery after he
+bought Velas again took from the new ones, up to the shortfall, and a dispute recorded its
+`chargeback_shortfall` signal a second time. A test buys again between the two deliveries and
+finds the new Velas untouched; another delivers one such refund five times at once and finds one
+record.
+
+**Rejected:** a list of handled ids on the `payments` row (an append-only fact kept in a mutable
+row); writing the record only when something was taken (the case P-420 is about).
+
+### D-582 · The claims' admin routes: admin only, audited — Locked
+**The decision (T-8.3; approved with D-580):** `GET /admin/refund-requests?status=&cursor=&limit=`,
+the claims in a status (`open` if absent), oldest first by `(created_at, id)` (D-270), and `POST
+/admin/refund-requests/{id}/resolve {action, note?}`. `require_role(admin)`, never a moderator: a
+claim moves Velas or money. Every list and every resolution writes `audit_log`; a refused one
+changes nothing and writes nothing. T-9.5's panel uses them (P-480); the user's claim form is
+T-8.7's (P-481).
+
+**Rejected:** `python -m app.tools.refund_claims` over `fly ssh`, as D-264's selfie review is
+run: Fly's login is a stronger gate than a role check, but `audit_log` needs an actor, and the
+tool would serve no panel later.
+
 ---
 
 ### D-530 · Welcome Velas: a missing setting skips with a warning, no backfill, and a toast — Locked

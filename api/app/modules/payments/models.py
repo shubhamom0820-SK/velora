@@ -1,4 +1,4 @@
-"""`credit_packs`, `payments`, `refund_requests` — 03-SCHEMA.md §6.
+"""`credit_packs`, `payments`, `refund_requests`, `payment_reversals` — 03-SCHEMA.md §6.
 
 Credits are granted only by the verified webhook, idempotent on
 `provider_payment_id` (D-026). Money is integer paise (D-029). Payments are never
@@ -17,6 +17,7 @@ from sqlalchemy import (
     CheckConstraint,
     DateTime,
     ForeignKey,
+    Index,
     Integer,
     SmallInteger,
     Text,
@@ -120,15 +121,78 @@ class Payment(Timestamps, Base):
 
 
 class RefundRequest(Timestamps, Base):
-    """`status` is free text on purpose: T-8.3 owns the refund workflow and
-    defines its values; guessing an enum now would mean a migration later."""
+    """A claim that a payment broke (T-8.3, D-580): `missing_velas` or
+    `duplicate_charge`, never a change of mind (D-050, D-230). An admin resolves
+    it from what the gateway says: `granted`, `refunded` or `rejected`
+    (`payments/claims.py`). A refund's record is here, with the gateway's ids:
+    the payment refunded has no row of its own, and the credited one is never
+    touched (D-580)."""
 
     __tablename__ = "refund_requests"
 
     id: Mapped[uuid.UUID] = uuid_pk()
     user_id: Mapped[uuid.UUID] = uuid_fk("users.id")
     payment_id: Mapped[uuid.UUID] = uuid_fk("payments.id")
-    reason: Mapped[str | None] = mapped_column(Text)
+    reason: Mapped[str] = mapped_column(Text, nullable=False)
     status: Mapped[str] = mapped_column(
         Text, nullable=False, server_default=text("'open'")
+    )
+    # The admin's, required on a rejection: never the user's words.
+    note: Mapped[str | None] = mapped_column(Text)
+    # A refund's: the gateway's payment returned, and its refund.
+    provider_payment_id: Mapped[str | None] = mapped_column(Text)
+    provider_refund_id: Mapped[str | None] = mapped_column(Text, unique=True)
+    resolved_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+    __table_args__ = (
+        CheckConstraint(
+            "reason IN ('missing_velas', 'duplicate_charge')", name="reason_known"
+        ),
+        CheckConstraint(
+            "status IN ('open', 'granted', 'refunded', 'rejected')",
+            name="status_known",
+        ),
+        CheckConstraint(
+            "(status = 'open') = (resolved_at IS NULL)", name="resolved_when_closed"
+        ),
+        CheckConstraint(
+            "status <> 'refunded' "
+            "OR (provider_payment_id IS NOT NULL AND provider_refund_id IS NOT NULL)",
+            name="refund_names_its_ids",
+        ),
+        CheckConstraint(
+            "status <> 'rejected' OR note IS NOT NULL", name="rejection_has_note"
+        ),
+        # One open claim per payment.
+        Index(
+            "uq_refund_requests_open_per_payment",
+            "payment_id",
+            unique=True,
+            postgresql_where=text("status = 'open'"),
+        ),
+    )
+
+
+class PaymentReversal(CreatedAt, Base):
+    """Every refund and dispute the webhook handled, once, by its own Razorpay
+    id, with what its reversal took and what it couldn't (P-420, D-581). The
+    repeat check reads it: a reversal that took 0 wrote no ledger entry, so
+    without this a redelivery would take from Velas bought since.
+
+    Append-only in the database (migration d4f1d16b2191)."""
+
+    __tablename__ = "payment_reversals"
+
+    id: Mapped[uuid.UUID] = uuid_pk()
+    payment_id: Mapped[uuid.UUID] = uuid_fk("payments.id")
+    # `rfnd_…` or `disp_…`.
+    provider_ref: Mapped[str] = mapped_column(Text, nullable=False, unique=True)
+    kind: Mapped[str] = mapped_column(Text, nullable=False)
+    taken: Mapped[int] = mapped_column(Integer, nullable=False)
+    shortfall: Mapped[int] = mapped_column(Integer, nullable=False)
+
+    __table_args__ = (
+        CheckConstraint("kind IN ('refund', 'dispute')", name="kind_known"),
+        CheckConstraint("taken >= 0", name="taken_non_negative"),
+        CheckConstraint("shortfall >= 0", name="shortfall_non_negative"),
     )

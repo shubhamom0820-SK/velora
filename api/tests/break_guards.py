@@ -3362,8 +3362,8 @@ T81: list[Case] = [
         edits=[
             (
                 PAY_SCHEMAS,
-                'model_config = ConfigDict(extra="forbid")',
-                'model_config = ConfigDict(extra="ignore")',
+                'model_config = ConfigDict(extra="forbid")\n\n    pack_id: str',
+                'model_config = ConfigDict(extra="ignore")\n\n    pack_id: str',
             )
         ],
         expect=["test_a_body_naming_a_price_or_velas_is_refused"],
@@ -3557,8 +3557,8 @@ T81: list[Case] = [
         edits=[
             (
                 ADMIN_ROUTER,
-                "require_role(Role.ADMIN)",
-                "require_role(Role.MODERATOR, Role.ADMIN)",
+                "async def turnover(\n    admin: Annotated[User, Depends(require_role(Role.ADMIN))]",
+                "async def turnover(\n    admin: Annotated[User, Depends(require_role(Role.MODERATOR, Role.ADMIN))]",
             )
         ],
         expect=["test_anyone_but_an_admin_is_forbidden[moderator]"],
@@ -6287,6 +6287,304 @@ T73: list[Case] = [
     ),
 ]
 
+# --- T-8.3: a broken payment's claim, and P-420's record ---------------------------
+
+CLAIMS = "app/modules/payments/claims.py"
+CLAIM_SHAPE = (
+    "alembic/versions/20261008_9a3d5384d962_refund_request_kinds_and_status.py"
+)
+REVERSALS = "alembic/versions/20261008_d4f1d16b2191_payment_reversals.py"
+T83_SELECTION = [
+    "tests/modules/payments",
+    "tests/test_schema.py",
+    "tests/test_app_role.py",
+    "tests/test_migrations.py",
+    "tests/core/test_razorpay.py",
+    "tests/core/test_providers.py",
+]
+P420 = "test_a_reversal_that_took_nothing_never_takes_velas_bought_since"
+GRANT = "test_a_grant_credits_the_purchase_under_the_webhooks_own_key"
+
+T83: list[Case] = [
+    Case(
+        id="t83-01-repeat-read-from-the-ledger-only",
+        what="P-420: a refund that took nothing isn't a repeat when redelivered",
+        edits=[
+            (
+                WEBHOOKS,
+                "    if await repository.reversal_recorded(\n        session, other.id\n    ) or await wallet_service.entry_for(\n",
+                "    if await wallet_service.entry_for(\n",
+            )
+        ],
+        expect=[
+            f"{P420}[refund]",
+            f"{P420}[dispute]",
+            "test_a_refund_that_takes_nothing_delivered_five_times_at_once_is_handled_once",
+        ],
+    ),
+    Case(
+        id="t83-02-a-reversal-that-took-nothing-not-recorded",
+        what="P-420: the record written only when something was taken",
+        edits=[
+            (
+                PAY_REPO,
+                '    `uq_payment_reversals_provider_ref`, never carries on."""\n',
+                '    `uq_payment_reversals_provider_ref`, never carries on."""\n    if taken == 0:\n        return\n',
+            )
+        ],
+        expect=[
+            f"{P420}[refund]",
+            f"{P420}[dispute]",
+            "test_every_refund_handled_is_recorded_with_what_it_took",
+        ],
+    ),
+    Case(
+        id="t83-03-reversal-records-mutable",
+        what="D-581: payment_reversals without its refuse_change() triggers",
+        edits=[
+            (
+                REVERSALS,
+                "    for name, when, level in GUARDS:\n",
+                "    for name, when, level in ():\n",
+            )
+        ],
+        expect=[
+            "test_a_reversal_record_cannot_change_or_disappear",
+            "test_reversal_records_cannot_be_truncated",
+        ],
+    ),
+    Case(
+        id="t83-04-app-role-keeps-update-and-delete",
+        what="D-581: the app role may update and delete reversal records",
+        edits=[
+            (
+                REVERSALS,
+                '    op.execute(sa.text(f"revoke update, delete on payment_reversals from {APP_ROLE}"))\n',
+                "",
+            )
+        ],
+        expect=["test_no_refuse_change_trigger_is_reachable_by_the_app_role"],
+    ),
+    Case(
+        id="t83-05-one-refund-recorded-twice",
+        what="D-581: provider_ref not unique",
+        edits=[
+            (
+                REVERSALS,
+                '        sa.UniqueConstraint(\n            "provider_ref", name=op.f("uq_payment_reversals_provider_ref")\n        ),\n',
+                "",
+            ),
+            (
+                PAYMENT_MODELS,
+                "    provider_ref: Mapped[str] = mapped_column(Text, nullable=False, unique=True)\n",
+                "    provider_ref: Mapped[str] = mapped_column(Text, nullable=False)\n",
+            ),
+        ],
+        expect=["test_a_refund_or_dispute_is_recorded_once"],
+    ),
+    Case(
+        id="t83-06-missing-velas-granted-as-admin-grant",
+        what="D-077: the repair credits admin_grant, not the webhook's purchase",
+        edits=[
+            (
+                CLAIMS,
+                "    outcome = await webhooks.capture_from_gateway(session, row, found)\n",
+                '    from app.core.enums import LedgerReason\n    from app.modules.wallet import service as wallet_service\n\n    row.status, row.provider_payment_id, row.paid_at = (\n        type(row.status)("paid"), found.id, clock.now()\n    )\n    await wallet_service.credit(\n        session, row.user_id, row.credits + row.bonus_credits,\n        LedgerReason.ADMIN_GRANT, event=str(claim.id),\n    )\n    outcome = webhooks.Outcome.CAPTURED\n',
+            )
+        ],
+        expect=[GRANT],
+    ),
+    Case(
+        id="t83-07-a-credited-payment-granted-again",
+        what="D-580: a grant on a row the webhook already credited",
+        edits=[
+            (
+                CLAIMS,
+                '    if row.provider_payment_id is not None:\n        raise _not_allowed("This payment\'s Velas were granted already.", "credited")\n',
+                "",
+            )
+        ],
+        expect=["test_a_grant_on_a_credited_payment_is_not_allowed"],
+    ),
+    Case(
+        id="t83-08-a-grant-for-any-amount",
+        what="rule 6: a captured payment of any amount is grantable",
+        edits=[
+            (
+                PAY_RULES,
+                "            if _untouched_capture(payment) and _for_the_order(payment, amount_paise)\n",
+                "            if _untouched_capture(payment)\n",
+            )
+        ],
+        expect=[
+            "test_a_grant_with_no_matching_capture_at_the_gateway_is_not_allowed[another amount]"
+        ],
+    ),
+    Case(
+        id="t83-09-the-credited-payment-refunded",
+        what="D-076 rule 3: money back for the payment whose Velas stand",
+        edits=[(PAY_RULES, "            and payment.id != anchor\n", "")],
+        expect=["test_the_credited_payment_is_never_refunded"],
+    ),
+    Case(
+        id="t83-10-a-grantable-payment-refunded",
+        what="D-050: money back for a payment a grant could still credit",
+        edits=[
+            (
+                PAY_RULES,
+                "            and not (anchor is None and _for_the_order(payment, amount_paise))\n",
+                "",
+            )
+        ],
+        expect=["test_a_payment_a_grant_could_credit_is_never_refunded"],
+    ),
+    Case(
+        id="t83-11-a-refund-marks-the-credited-row",
+        what="D-580: the duplicate's refund recorded as payments.status = refunded",
+        edits=[
+            (
+                CLAIMS,
+                "    _close(\n        claim,\n        ClaimStatus.REFUNDED,\n",
+                '    payment.status = type(payment.status)("refunded")\n    _close(\n        claim,\n        ClaimStatus.REFUNDED,\n',
+            )
+        ],
+        expect=["test_a_duplicate_charge_is_refunded_and_recorded_on_the_claim"],
+    ),
+    Case(
+        id="t83-12-claim-lock-dropped",
+        what="D-580: the claim read without FOR UPDATE",
+        edits=[
+            (
+                PAY_REPO,
+                "        .where(RefundRequest.id == claim_id)\n        .with_for_update()\n",
+                "        .where(RefundRequest.id == claim_id)\n",
+            )
+        ],
+        expect=["test_two_admins_resolving_one_claim_at_once_refund_once"],
+    ),
+    Case(
+        id="t83-13-two-open-claims-on-one-payment",
+        what="D-580: the one-open-claim index gone",
+        edits=[
+            (
+                CLAIM_SHAPE,
+                "        unique=True,\n        postgresql_where",
+                "        unique=False,\n        postgresql_where",
+            ),
+        ],
+        expect=[
+            "test_a_second_open_claim_on_one_payment_already_exists",
+            "test_a_payment_has_one_open_claim_at_a_time",
+        ],
+    ),
+    Case(
+        id="t83-14-anothers-payment-claimable",
+        what="D-580: a claim on someone else's payment",
+        edits=[
+            (
+                CLAIMS,
+                "        if payment is None or payment.user_id != user.id:\n",
+                "        if payment is None:\n",
+            )
+        ],
+        expect=["test_another_mans_payment_and_none_are_the_same_not_found"],
+    ),
+    Case(
+        id="t83-15-missing-velas-on-a-credited-payment",
+        what="D-580: missing_velas filed on a payment that granted them",
+        edits=[
+            (
+                CLAIMS,
+                "        if reason is ClaimReason.MISSING_VELAS and payment.status in MONEY_MOVED:\n",
+                "        if reason is ClaimReason.MISSING_VELAS and False and payment.status in MONEY_MOVED:\n",
+            )
+        ],
+        expect=["test_missing_velas_on_a_payment_that_granted_them_is_not_allowed"],
+    ),
+    Case(
+        id="t83-16-a-moderator-resolves",
+        what="D-582: a moderator may resolve a claim",
+        edits=[
+            (
+                ADMIN_ROUTER,
+                "    body: RefundRequestResolution,\n    admin: Annotated[User, Depends(require_role(Role.ADMIN))],\n",
+                "    body: RefundRequestResolution,\n    admin: Annotated[User, Depends(require_role(Role.MODERATOR, Role.ADMIN))],\n",
+            )
+        ],
+        expect=["test_anyone_but_an_admin_is_forbidden[moderator]"],
+    ),
+    Case(
+        id="t83-17-a-rejection-without-a-note",
+        what="D-580: reject accepted with no note (the database still refuses: a 500)",
+        edits=[
+            (
+                CLAIMS,
+                "    if action is ClaimAction.REJECT and note is None:\n",
+                "    if False:\n",
+            )
+        ],
+        expect=["test_a_rejection_says_why"],
+    ),
+    Case(
+        id="t83-18-a-resolution-not-audited",
+        what="D-582: a resolution writes no audit_log",
+        edits=[
+            (
+                CLAIMS,
+                '        await admin_service.audit(\n            session,\n            admin_id,\n            "refund_requests.resolve",\n',
+                '        if False:\n            await admin_service.audit(\n            session,\n            admin_id,\n            "refund_requests.resolve",\n',
+            )
+        ],
+        expect=[GRANT],
+    ),
+    Case(
+        id="t83-19-the-queue-not-audited",
+        what="D-582: a list of claims writes no audit_log",
+        edits=[
+            (
+                CLAIMS,
+                '        await admin_service.audit(\n            session, admin_id, "refund_requests.list",',
+                '        if False:\n            await admin_service.audit(\n            session, admin_id, "refund_requests.list",',
+            )
+        ],
+        expect=["test_the_queue_is_open_claims_oldest_first_a_page_at_a_time_audited"],
+    ),
+    Case(
+        id="t83-20-another-orders-payments-trusted",
+        what="Razorpay's answer naming another order's payment trusted",
+        edits=[(RAZORPAY, "            and payment.order_id == order_id\n", "")],
+        expect=["test_payments_that_arent_the_orders_are_never_trusted[other-order]"],
+    ),
+    Case(
+        id="t83-21-another-refund-trusted",
+        what="Razorpay's refund of another payment trusted",
+        edits=[
+            (
+                RAZORPAY,
+                "    if of != payment_id or amount != amount_paise:\n",
+                "    if amount != amount_paise:\n",
+            )
+        ],
+        expect=[
+            "test_a_refund_that_isnt_the_one_asked_for_is_never_trusted[other-payment]"
+        ],
+    ),
+    Case(
+        id="t83-22-the-receipt-not-the-claims",
+        what="D-580: the refund's receipt isn't the claim's id, so Razorpay can't take it once",
+        edits=[
+            (
+                CLAIMS,
+                "            payment_id=found.id, amount_paise=found.amount_paise, receipt=str(claim.id)\n",
+                "            payment_id=found.id, amount_paise=found.amount_paise, receipt=str(uuid4())\n",
+            ),
+            (CLAIMS, "from uuid import UUID\n", "from uuid import UUID, uuid4\n"),
+        ],
+        expect=["test_a_duplicate_charge_is_refunded_and_recorded_on_the_claim"],
+    ),
+]
+
+
 CASES: list[tuple[Case, list[str]]] = (
     [(c, T51_SELECTION) for c in T51]
     + [(c, T54_SELECTION) for c in T54]
@@ -6314,6 +6612,7 @@ CASES: list[tuple[Case, list[str]]] = (
     + [(c, T811_SELECTION) for c in T811]
     + [(c, T72_SELECTION) for c in T72]
     + [(c, T73_SELECTION) for c in T73]
+    + [(c, T83_SELECTION) for c in T83]
 )
 
 # The fifty-connection fixture's own message when Postgres refuses a connection.

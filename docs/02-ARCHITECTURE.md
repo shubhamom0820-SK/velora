@@ -324,10 +324,23 @@ the same webhook, one transaction per event, the row locked by the payment (or i
   refund's or dispute's reversal took (keyed by its id), or nothing.
 - `refund.processed`, `payment.dispute.lost`: reversed first if `.created` hasn't come, then
   `refunded`: turnover (D-483) stops counting it.
+- Each refund or dispute is handled once, by its own id, whatever it took: `payment_reversals`
+  records it, 0 taken included, so a redelivery after he has bought Velas again takes none of them
+  (P-420, D-581).
+
+**A broken payment's claim (D-050, T-8.3, D-580):** a man files `POST /v1/refund-requests
+{payment_id, reason}`, `missing_velas` or `duplicate_charge`; an admin resolves it at `POST
+/v1/admin/refund-requests/{id}/resolve`, under the claim's row lock. First the gateway is asked
+for every payment on the order (`GET /v1/orders/{id}/payments`), outside the payment row's and the
+wallet's locks. Then only what that shows: **grant**, the capture the webhook never brought,
+through the webhook's own `_capture` (`purchase`, `purchase_bonus`, its key: never
+`admin_grant`); **refund**, in full in the gateway with the claim's id as the receipt, of a
+captured payment no Velas can ever stand against (never the credited one, never one a grant
+could credit), recorded on the claim, the payment row untouched; or **reject**, with a note.
 
 **Nothing is returned on a ban** (D-230, 4 October 2026): there is no product refund, so T-9.3 is
 dropped and `refund_banned_partner` stays unused. Money goes back only for a chargeback (D-076
-rule 3, T-8.2) or a duplicate charge (T-8.3).
+rule 3, T-8.2) or a charge no Velas were granted for (T-8.3, D-580).
 
 ## 10. Uploads and moderation
 

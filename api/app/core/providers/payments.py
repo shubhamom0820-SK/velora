@@ -12,6 +12,15 @@ a key.
 `X-Razorpay-Signature` is the hex HMAC-SHA256 of the raw request body, keyed by
 the webhook secret, compared in constant time. Without the secret every
 signature is refused, with an error naming the setting (P-382).
+
+**A claim's two calls** (T-8.3, D-580; Razorpay's Orders and Refunds APIs, read
+8 October 2026): `order_payments()` is what the gateway says happened on an
+order, `GET /v1/orders/{id}/payments`, which a resolution reads before doing
+anything; `refund()` returns a payment in full, `POST /v1/payments/{id}/refund`,
+with the claim's id as its `receipt`, which Razorpay refuses to take twice
+("Duplicate receipt found for this refund request"). Either raises
+`PaymentsUnavailable` if the gateway can't answer or its answer isn't what was
+asked about.
 """
 
 from __future__ import annotations
@@ -19,7 +28,7 @@ from __future__ import annotations
 import hashlib
 import hmac
 import json
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from typing import Final, Literal, Protocol
 
 import httpx
@@ -33,6 +42,29 @@ class ProviderOrder:
     id: str
     amount_paise: int
     currency: str = "INR"
+
+
+@dataclass(frozen=True)
+class ProviderPayment:
+    """A payment on an order, as the gateway reports it: what a claim reads,
+    and nothing about the payer (D-524). `status` is Razorpay's: `created`,
+    `authorized`, `captured`, `refunded` or `failed`."""
+
+    id: str
+    order_id: str
+    amount_paise: int
+    currency: str
+    status: str
+    amount_refunded_paise: int = 0
+
+
+@dataclass(frozen=True)
+class ProviderRefund:
+    """A refund the gateway made: its id, of which payment, how much."""
+
+    id: str
+    payment_id: str
+    amount_paise: int
 
 
 @dataclass(frozen=True)
@@ -61,6 +93,19 @@ class PaymentsProvider(Protocol):
 
     def verify_webhook(self, body: bytes, signature: str) -> bool:
         """True only if `signature` is the gateway's signature of the raw `body`."""
+        ...
+
+    async def order_payments(self, order_id: str) -> list[ProviderPayment]:
+        """Every payment the gateway holds on this order (T-8.3). Raises
+        `PaymentsUnavailable` if it can't say."""
+        ...
+
+    async def refund(
+        self, *, payment_id: str, amount_paise: int, receipt: str
+    ) -> ProviderRefund:
+        """Return `amount_paise` of a captured payment to the way it was paid;
+        `receipt` is ours, and the gateway takes each one once (T-8.3). Raises
+        `PaymentsUnavailable` if it doesn't."""
         ...
 
     async def aclose(self) -> None:
@@ -99,6 +144,12 @@ class FakePayments:
     def __init__(self) -> None:
         self.orders: dict[str, ProviderOrder] = {}
         self._payments = 0
+        # What the gateway holds on each order, as `order_payments` reports it:
+        # every payment a webhook was built for, delivered or not (T-8.3).
+        self.payments: dict[str, list[ProviderPayment]] = {}
+        self.refunds: list[ProviderRefund] = []
+        # Every refund's receipt, taken once each, as Razorpay does.
+        self.receipts: set[str] = set()
 
     async def create_order(self, *, amount_paise: int, receipt: str) -> ProviderOrder:
         order = ProviderOrder(
@@ -152,6 +203,15 @@ class FakePayments:
         self, event: str, status: str, order_id: str, amount_paise: int
     ) -> SignedWebhook:
         self._payments += 1
+        self.payments.setdefault(order_id, []).append(
+            ProviderPayment(
+                id=f"pay_fake_{self._payments}",
+                order_id=order_id,
+                amount_paise=amount_paise,
+                currency="INR",
+                status=status,
+            )
+        )
         payment = {
             "id": f"pay_fake_{self._payments}",
             "order_id": order_id,
@@ -164,6 +224,41 @@ class FakePayments:
             separators=(",", ":"),
         ).encode()
         return SignedWebhook(body=body, signature=_sign(self._secret, body))
+
+    async def order_payments(self, order_id: str) -> list[ProviderPayment]:
+        return list(self.payments.get(order_id, []))
+
+    async def refund(
+        self, *, payment_id: str, amount_paise: int, receipt: str
+    ) -> ProviderRefund:
+        """As Razorpay does: a receipt once, a captured payment only, never
+        more than is left of it."""
+        if receipt in self.receipts:
+            raise PaymentsUnavailable("Razorpay refused the refund: HTTP 400")
+        for held in self.payments.values():
+            for index, payment in enumerate(held):
+                if payment.id != payment_id:
+                    continue
+                left = payment.amount_paise - payment.amount_refunded_paise
+                if payment.status != "captured" or not 0 < amount_paise <= left:
+                    raise PaymentsUnavailable("Razorpay refused the refund: HTTP 400")
+                refunded = payment.amount_refunded_paise + amount_paise
+                held[index] = replace(
+                    payment,
+                    amount_refunded_paise=refunded,
+                    status="refunded"
+                    if refunded == payment.amount_paise
+                    else "captured",
+                )
+                self.receipts.add(receipt)
+                made = ProviderRefund(
+                    id=f"rfnd_fake_{len(self.refunds) + 1}",
+                    payment_id=payment_id,
+                    amount_paise=amount_paise,
+                )
+                self.refunds.append(made)
+                return made
+        raise PaymentsUnavailable("Razorpay refused the refund: HTTP 400")
 
     async def aclose(self) -> None:
         return None
@@ -179,7 +274,8 @@ class RazorpayPayments:
     """Razorpay over httpx: `POST /v1/orders`, basic auth with the key id and
     secret, the amount in paise, INR, and our payment's id as the receipt
     (Razorpay's Orders API, read 8 October 2026: at most 40 ASCII characters,
-    unique; a UUID is 36).
+    unique; a UUID is 36). A claim's `GET /v1/orders/{id}/payments` and `POST
+    /v1/payments/{id}/refund` (T-8.3) the same way.
 
     Built to the documentation and tested against a mock transport: no call has
     reached Razorpay yet, since there is no account (P-0.8). Without keys it
@@ -211,6 +307,36 @@ class RazorpayPayments:
         return self._key_id
 
     async def create_order(self, *, amount_paise: int, receipt: str) -> ProviderOrder:
+        response = await self._call(
+            "POST",
+            "/orders",
+            "the order",
+            json={"amount": amount_paise, "currency": "INR", "receipt": receipt},
+        )
+        return _order_from(response, amount_paise)
+
+    async def order_payments(self, order_id: str) -> list[ProviderPayment]:
+        response = await self._call(
+            "GET", f"/orders/{order_id}/payments", "the order's payments"
+        )
+        return _payments_from(response, order_id)
+
+    async def refund(
+        self, *, payment_id: str, amount_paise: int, receipt: str
+    ) -> ProviderRefund:
+        response = await self._call(
+            "POST",
+            f"/payments/{payment_id}/refund",
+            "the refund",
+            json={"amount": amount_paise, "speed": "normal", "receipt": receipt},
+        )
+        return _refund_from(response, payment_id, amount_paise)
+
+    async def _call(
+        self, method: str, path: str, what: str, *, json: object | None = None
+    ) -> httpx.Response:
+        """One request, with the keys in the Authorization header. Refused,
+        unanswered or without keys: `PaymentsUnavailable`, naming what failed."""
         if not (self._key_id and self._key_secret):
             raise PaymentsUnavailable(
                 "RAZORPAY_KEY_ID and RAZORPAY_KEY_SECRET aren't set (P-0.8, P-382)"
@@ -222,10 +348,8 @@ class RazorpayPayments:
                 transport=self._transport,
             )
         try:
-            response = await self._client.post(
-                "/orders",
-                auth=(self._key_id, self._key_secret),
-                json={"amount": amount_paise, "currency": "INR", "receipt": receipt},
+            response = await self._client.request(
+                method, path, auth=(self._key_id, self._key_secret), json=json
             )
         except httpx.HTTPError as error:
             raise PaymentsUnavailable(
@@ -233,9 +357,9 @@ class RazorpayPayments:
             ) from None
         if not response.is_success:
             raise PaymentsUnavailable(
-                f"Razorpay refused the order: HTTP {response.status_code}"
+                f"Razorpay refused {what}: HTTP {response.status_code}"
             )
-        return _order_from(response, amount_paise)
+        return response
 
     def verify_webhook(self, body: bytes, signature: str) -> bool:
         if not self._webhook_secret:
@@ -265,3 +389,59 @@ def _order_from(response: httpx.Response, amount_paise: int) -> ProviderOrder:
     if amount != amount_paise or currency != "INR":
         raise PaymentsUnavailable("Razorpay's order isn't for the amount asked")
     return ProviderOrder(id=order_id, amount_paise=amount_paise)
+
+
+def _payments_from(response: httpx.Response, order_id: str) -> list[ProviderPayment]:
+    """Razorpay's collection of the order's payments, each read for what a
+    claim needs, and each of this order: anything else is refused."""
+    try:
+        items = response.json()["items"]
+        payments = [
+            ProviderPayment(
+                id=item["id"],
+                order_id=item["order_id"],
+                amount_paise=item["amount"],
+                currency=item["currency"],
+                status=item["status"],
+                amount_refunded_paise=item.get("amount_refunded") or 0,
+            )
+            for item in items
+        ]
+    except (ValueError, KeyError, TypeError, AttributeError):
+        raise PaymentsUnavailable(
+            "Razorpay's answer wasn't the order's payments"
+        ) from None
+    for payment in payments:
+        if not (
+            isinstance(payment.id, str)
+            and payment.id.startswith("pay_")
+            and payment.order_id == order_id
+            and all(
+                type(value) is int
+                for value in (payment.amount_paise, payment.amount_refunded_paise)
+            )
+            and isinstance(payment.currency, str)
+            and isinstance(payment.status, str)
+        ):
+            raise PaymentsUnavailable(
+                "Razorpay's answer named a payment not the order's"
+            )
+    return payments
+
+
+def _refund_from(
+    response: httpx.Response, payment_id: str, amount_paise: int
+) -> ProviderRefund:
+    """The refund Razorpay says it made, if it is the one asked for."""
+    try:
+        body = response.json()
+        refund_id, of, amount = body["id"], body["payment_id"], body["amount"]
+    except (ValueError, KeyError, TypeError):
+        raise PaymentsUnavailable("Razorpay's answer wasn't a refund") from None
+    if not (isinstance(refund_id, str) and refund_id.startswith("rfnd_")):
+        raise PaymentsUnavailable("Razorpay's answer had no refund id")
+    if of != payment_id or amount != amount_paise:
+        raise PaymentsUnavailable("Razorpay's refund isn't the one asked for")
+    return ProviderRefund(
+        id=refund_id, payment_id=payment_id, amount_paise=amount_paise
+    )

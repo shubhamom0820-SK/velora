@@ -676,6 +676,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/refund-requests": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** File Refund Request */
+        post: operations["file_refund_request_v1_refund_requests_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/admin/turnover": {
         parameters: {
             query?: never;
@@ -687,6 +704,40 @@ export interface paths {
         get: operations["turnover_v1_admin_turnover_get"];
         put?: never;
         post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/admin/refund-requests": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Refund Requests */
+        get: operations["refund_requests_v1_admin_refund_requests_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/admin/refund-requests/{claim_id}/resolve": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Resolve Refund Request */
+        post: operations["resolve_refund_request_v1_admin_refund_requests__claim_id__resolve_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -915,6 +966,57 @@ export interface components {
             access_token: string;
         };
         /**
+         * AdminRefundRequest
+         * @description The claim as the admin sees it, beside its payment: the gateway's order,
+         *     and the row's status. On a grant or a refund, the gateway's payment it was
+         *     resolved on; on a refund, the gateway's refund too.
+         */
+        AdminRefundRequest: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /**
+             * User Id
+             * Format: uuid
+             */
+            user_id: string;
+            /**
+             * Payment Id
+             * Format: uuid
+             */
+            payment_id: string;
+            /** Order Id */
+            order_id: string;
+            payment_status: components["schemas"]["PaymentStatus"];
+            reason: components["schemas"]["ClaimReason"];
+            status: components["schemas"]["ClaimStatus"];
+            /** Note */
+            note: string | null;
+            /** Provider Payment Id */
+            provider_payment_id: string | null;
+            /** Provider Refund Id */
+            provider_refund_id: string | null;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /** Resolved At */
+            resolved_at: string | null;
+        };
+        /**
+         * AdminRefundRequestPage
+         * @description `Page<AdminRefundRequest>`: oldest first by `(created_at, id)`, a queue.
+         */
+        AdminRefundRequestPage: {
+            /** Items */
+            items: components["schemas"]["AdminRefundRequest"][];
+            /** Next Cursor */
+            next_cursor: string | null;
+        };
+        /**
          * Area
          * @description One of the seeded areas, for the picker (T-4.10). Never its centroid:
          *     the picker shows names, and data no screen shows isn't sent.
@@ -1013,6 +1115,23 @@ export interface components {
             /** Next Cursor */
             next_cursor: string | null;
         };
+        /**
+         * ClaimAction
+         * @enum {string}
+         */
+        ClaimAction: "grant" | "refund" | "reject";
+        /**
+         * ClaimReason
+         * @description What a man says broke. Never a change of mind: purchases are final
+         *     (D-050, D-230).
+         * @enum {string}
+         */
+        ClaimReason: "missing_velas" | "duplicate_charge";
+        /**
+         * ClaimStatus
+         * @enum {string}
+         */
+        ClaimStatus: "open" | "granted" | "refunded" | "rejected";
         /**
          * DataExport
          * @description A copy of the user's own data (D-502). `url` is a link to the file,
@@ -1571,6 +1690,52 @@ export interface components {
              */
             status: "ok";
             checks: components["schemas"]["ReadinessChecks"];
+        };
+        /**
+         * RefundRequestCreate
+         * @description Which payment, and what broke. No words of his: the gateway's record is
+         *     what the admin reads (D-580).
+         */
+        RefundRequestCreate: {
+            /**
+             * Payment Id
+             * Format: uuid
+             */
+            payment_id: string;
+            reason: components["schemas"]["ClaimReason"];
+        };
+        /**
+         * RefundRequestResolution
+         * @description What the admin does. The server decides whether it can, from what the
+         *     gateway says (D-580); a rejection says why, in `note`.
+         */
+        RefundRequestResolution: {
+            action: components["schemas"]["ClaimAction"];
+            /** Note */
+            note?: string | null;
+        };
+        /**
+         * RefundRequestView
+         * @description The claim as its owner sees it.
+         */
+        RefundRequestView: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /**
+             * Payment Id
+             * Format: uuid
+             */
+            payment_id: string;
+            reason: components["schemas"]["ClaimReason"];
+            status: components["schemas"]["ClaimStatus"];
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
         };
         /**
          * ReviewStatus
@@ -2993,6 +3158,39 @@ export interface operations {
             };
         };
     };
+    file_refund_request_v1_refund_requests_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RefundRequestCreate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RefundRequestView"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     turnover_v1_admin_turnover_get: {
         parameters: {
             query?: {
@@ -3012,6 +3210,75 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["Turnover"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    refund_requests_v1_admin_refund_requests_get: {
+        parameters: {
+            query?: {
+                /** @description The claims in this status: open if absent. */
+                status?: components["schemas"]["ClaimStatus"];
+                cursor?: string | null;
+                limit?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AdminRefundRequestPage"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    resolve_refund_request_v1_admin_refund_requests__claim_id__resolve_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                claim_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RefundRequestResolution"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AdminRefundRequest"];
                 };
             };
             /** @description Validation Error */

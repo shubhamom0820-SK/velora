@@ -1,7 +1,10 @@
 """Razorpay's orders over httpx (T-8.1), against a mock transport: no keys, no
 network. Built to Razorpay's Orders API as documented (read 8 October 2026);
 no call has reached Razorpay itself yet (P-0.8). And its webhook signature
-(T-8.2): the hex HMAC-SHA256 of the raw body, keyed by the webhook secret."""
+(T-8.2): the hex HMAC-SHA256 of the raw body, keyed by the webhook secret.
+And a claim's two calls (T-8.3): an order's payments, and a refund, each read
+back and refused unless it is what was asked about (Razorpay's Orders and
+Refunds APIs, read 8 October 2026)."""
 
 from __future__ import annotations
 
@@ -18,6 +21,8 @@ from app.core.providers import build_providers
 from app.core.providers.payments import (
     PaymentsUnavailable,
     ProviderOrder,
+    ProviderPayment,
+    ProviderRefund,
     RazorpayPayments,
 )
 from tests.conftest import CapturedLogs, make_test_settings
@@ -224,3 +229,166 @@ def test_the_webhook_secret_is_the_settings() -> None:
     payments = build_providers(settings).payments
 
     assert payments.verify_webhook(BODY, _signature(WEBHOOK_SECRET, BODY)) is True
+
+
+# --- A claim's calls (T-8.3) ---------------------------------------------------------
+
+ORDER_ID = "order_RB58MiP5SPFYyM"
+PAYMENT = {
+    "id": "pay_RB59xa1bCdEf2G",
+    "entity": "payment",
+    "amount": 150_000,
+    "currency": "INR",
+    "status": "captured",
+    "order_id": ORDER_ID,
+    "amount_refunded": 0,
+    "refund_status": None,
+    "captured": True,
+    "method": "upi",
+    "email": "payer@example.com",
+    "contact": "+919800000000",
+    "vpa": "payer@okbank",
+    "created_at": 1_759_900_000,
+}
+REFUND = {
+    "id": "rfnd_RB5AbCdEfGh1Jk",
+    "entity": "refund",
+    "amount": 150_000,
+    "currency": "INR",
+    "payment_id": "pay_RB59xa1bCdEf2G",
+    "receipt": RECEIPT,
+    "status": "pending",
+    "speed_requested": "normal",
+    "created_at": 1_759_900_100,
+}
+
+
+async def test_an_orders_payments_are_fetched_as_razorpay_documents_it() -> None:
+    second = {**PAYMENT, "id": "pay_second", "amount_refunded": 150_000}
+    transport, seen = _answering(
+        200, {"entity": "collection", "count": 2, "items": [PAYMENT, second]}
+    )
+
+    payments = await _razorpay(transport).order_payments(ORDER_ID)
+
+    assert payments == [
+        ProviderPayment(
+            id="pay_RB59xa1bCdEf2G",
+            order_id=ORDER_ID,
+            amount_paise=150_000,
+            currency="INR",
+            status="captured",
+            amount_refunded_paise=0,
+        ),
+        ProviderPayment(
+            id="pay_second",
+            order_id=ORDER_ID,
+            amount_paise=150_000,
+            currency="INR",
+            status="captured",
+            amount_refunded_paise=150_000,
+        ),
+    ]
+    [request] = seen
+    assert request.method == "GET"
+    assert str(request.url) == f"https://api.razorpay.com/v1/orders/{ORDER_ID}/payments"
+    expected = base64.b64encode(f"{KEY_ID}:{KEY_SECRET}".encode()).decode()
+    assert request.headers["Authorization"] == f"Basic {expected}"
+
+
+@pytest.mark.parametrize(
+    "body",
+    [
+        "not json",
+        {"entity": "collection"},
+        {"items": [{**PAYMENT, "order_id": "order_other"}]},
+        {"items": [{**PAYMENT, "id": "order_RB58MiP5SPFYyM"}]},
+        {"items": [{**PAYMENT, "amount": "150000"}]},
+        {"items": [{key: v for key, v in PAYMENT.items() if key != "status"}]},
+    ],
+    ids=[
+        "text",
+        "no-items",
+        "other-order",
+        "not-a-payment",
+        "amount-text",
+        "no-status",
+    ],
+)
+async def test_payments_that_arent_the_orders_are_never_trusted(body: object) -> None:
+    transport, _ = _answering(200, body)
+
+    with pytest.raises(PaymentsUnavailable):
+        await _razorpay(transport).order_payments(ORDER_ID)
+
+
+async def test_a_refund_is_posted_as_razorpay_documents_it() -> None:
+    transport, seen = _answering(200, REFUND)
+
+    refund = await _razorpay(transport).refund(
+        payment_id="pay_RB59xa1bCdEf2G", amount_paise=150_000, receipt=RECEIPT
+    )
+
+    assert refund == ProviderRefund(
+        id="rfnd_RB5AbCdEfGh1Jk", payment_id="pay_RB59xa1bCdEf2G", amount_paise=150_000
+    )
+    [request] = seen
+    assert request.method == "POST"
+    assert (
+        str(request.url)
+        == "https://api.razorpay.com/v1/payments/pay_RB59xa1bCdEf2G/refund"
+    )
+    assert json.loads(request.content) == {
+        "amount": 150_000,
+        "speed": "normal",
+        "receipt": RECEIPT,
+    }
+
+
+@pytest.mark.parametrize(
+    "body",
+    [
+        "not json",
+        {**REFUND, "id": None},
+        {**REFUND, "id": "pay_123"},
+        {**REFUND, "payment_id": "pay_other"},
+        {**REFUND, "amount": 100},
+    ],
+    ids=["text", "null-id", "not-a-refund", "other-payment", "other-amount"],
+)
+async def test_a_refund_that_isnt_the_one_asked_for_is_never_trusted(
+    body: object,
+) -> None:
+    transport, _ = _answering(200, body)
+
+    with pytest.raises(PaymentsUnavailable):
+        await _razorpay(transport).refund(
+            payment_id="pay_RB59xa1bCdEf2G", amount_paise=150_000, receipt=RECEIPT
+        )
+
+
+async def test_a_refused_refund_is_unavailable_naming_the_status() -> None:
+    """Razorpay's "Duplicate receipt found for this refund request", or "The
+    payment has been fully refunded already": a 400 either way."""
+    transport, _ = _answering(
+        400,
+        {"error": {"code": "BAD_REQUEST_ERROR", "description": "Duplicate receipt"}},
+    )
+
+    with pytest.raises(PaymentsUnavailable, match="refused the refund: HTTP 400"):
+        await _razorpay(transport).refund(
+            payment_id="pay_RB59xa1bCdEf2G", amount_paise=150_000, receipt=RECEIPT
+        )
+
+
+@pytest.mark.parametrize("call", ["order_payments", "refund"])
+async def test_a_claims_calls_without_keys_call_nobody(call: str) -> None:
+    transport, seen = _answering(200, {})
+    payments = RazorpayPayments("", "", transport=transport)
+
+    with pytest.raises(PaymentsUnavailable, match="P-382"):
+        if call == "order_payments":
+            await payments.order_payments(ORDER_ID)
+        else:
+            await payments.refund(payment_id="pay_1", amount_paise=1, receipt="r")
+    assert seen == []

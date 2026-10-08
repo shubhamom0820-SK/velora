@@ -28,7 +28,7 @@ from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession
 from app.core.config import Settings
 from app.core.enums import Gender, LedgerReason
 from app.core.security import E164, decrypt_phone, normalize_phone
-from app.modules.payments.models import Payment
+from app.modules.payments.models import Payment, PaymentReversal, RefundRequest
 from app.modules.users import service as users_service
 from app.modules.users.models import User
 from app.modules.wallet import service as wallet_service
@@ -103,19 +103,40 @@ async def next_fresh_number(session: AsyncSession, settings: Settings) -> E164:
 
 
 async def take_back_payments(engine: AsyncEngine, payment_ids: Sequence[UUID]) -> None:
-    """Delete the payments a race test committed (T-8.2), test code only.
+    """Delete the payments a race test committed (T-8.2), test code only, with
+    the claims and reversal records that name them (T-8.3).
 
-    Payments are never deleted (rule 12: `payments_no_delete`), but a committed
+    Payments are never deleted (rule 12: `payments_no_delete`), nor are
+    reversal records (`payment_reversals_no_update_delete`), but a committed
     one would outlive its test and break every downgrade test after it: it
     names its pack by a RESTRICT key, and the seed's and T-5.2's downgrades
-    delete packs. So the trigger is switched off, as the owner the tests
-    connect as, the rows deleted, and switched on again, in one transaction in
-    this run's own database (P-55): a failure rolls all three back. The ledger
-    rows those payments credited stay; they name no pack.
+    delete packs; T-8.3's downgrades refuse while a claim is resolved or a
+    reversal recorded. So the triggers are switched off, as the owner the
+    tests connect as, the rows deleted, and switched on again, in one
+    transaction in this run's own database (P-55): a failure rolls it all
+    back. The ledger rows those payments credited stay; they name no pack.
     """
     if not payment_ids:
         return
     async with AsyncSession(engine) as session, session.begin():
+        await session.execute(
+            text(
+                "alter table payment_reversals "
+                "disable trigger payment_reversals_no_update_delete"
+            )
+        )
+        await session.execute(
+            delete(PaymentReversal).where(PaymentReversal.payment_id.in_(payment_ids))
+        )
+        await session.execute(
+            text(
+                "alter table payment_reversals "
+                "enable trigger payment_reversals_no_update_delete"
+            )
+        )
+        await session.execute(
+            delete(RefundRequest).where(RefundRequest.payment_id.in_(payment_ids))
+        )
         await session.execute(
             text("alter table payments disable trigger payments_no_delete")
         )
