@@ -130,6 +130,9 @@ async def test_the_main_photo_is_the_lowest_approved_public_place_gap_or_not(
     _, token = await person(db, make_user, Gender.MALE)
     her, _ = await person(db, make_user, at=north(1))
     await photo(db, her, place=0, status=ReviewStatus.REJECTED)
+    # Removed by her: rejected, its row keeping its public key (T-4.3).
+    removed = await photo(db, her, place=2)
+    removed.status, removed.reject_reason = ReviewStatus.REJECTED, "user_deleted"
     await photo(db, her, place=1, status=ReviewStatus.PENDING)
     await photo(db, her, kind=PhotoKind.PRIVATE)
     await photo(db, her, kind=PhotoKind.VERIFICATION)

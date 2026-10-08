@@ -32,7 +32,9 @@ from sqlalchemy import (
     select,
     text,
 )
+from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import aliased
 from sqlalchemy.sql import Select
 
 from app.core.enums import (
@@ -44,11 +46,16 @@ from app.core.enums import (
     Seeking,
     UserStatus,
 )
+from app.core.enums import Kudos as KudosKind
 from app.modules.discovery import rules
+from app.modules.discovery.models import ProfileView
+from app.modules.kudos.models import Kudos as KudosGiven
+from app.modules.matches.models import Match
 from app.modules.photos.models import Photo
-from app.modules.profiles.models import Profile, ProfileIntent
+from app.modules.profiles.models import Profile, ProfileIntent, ProfileInterest
 from app.modules.safety.models import Block, FraudScore
 from app.modules.swipes.models import Swipe
+from app.modules.threads.models import Thread
 from app.modules.users.models import User
 from app.modules.verification.repository import badge_of
 
@@ -269,18 +276,24 @@ async def feed(
     return (await session.execute(feed_query(viewer, **page))).all()
 
 
+def _shown_photo(user_id: Any) -> list[ColumnElement[bool]]:
+    """A photo anyone may see: the user's public photo, approved, with its
+    public copy. The card's main photo and the profile's list both read it."""
+    return [
+        Photo.user_id == user_id,
+        Photo.kind == PhotoKind.PUBLIC,
+        Photo.status == ReviewStatus.APPROVED,
+        Photo.public_key.is_not(None),
+    ]
+
+
 def main_photo_key(user_id: Any) -> Any:
     """The public key of the profile's main photo: its approved public photo
     at the lowest place (P-75, D-494). The server never closes a gap, so the
     lowest is the main one whether or not it is 0; none, no row."""
     return (
         select(Photo.public_key)
-        .where(
-            Photo.user_id == user_id,
-            Photo.kind == PhotoKind.PUBLIC,
-            Photo.status == ReviewStatus.APPROVED,
-            Photo.public_key.is_not(None),
-        )
+        .where(*_shown_photo(user_id))
         .order_by(Photo.position, Photo.id)
         .limit(1)
         .scalar_subquery()
@@ -314,6 +327,7 @@ async def cards(
             Profile.about,
             Profile.hide_age,
             Profile.hide_distance,
+            Profile.show_kudos,
             main_photo_key(User.id).label("main_photo_key"),
             badge_of(User.id, User.is_verified).label("shows_badge"),
             _intent_ids(User.id).label("intent_ids"),
@@ -322,3 +336,135 @@ async def cards(
         .where(User.id.in_(list(user_ids)))
     )
     return {row.id: row for row in rows}
+
+
+# --- The public profile (T-6.3) ------------------------------------------------------
+
+
+def _pair_low(a: Any, b: Any) -> Any:
+    return func.least(a, b)
+
+
+def _pair_high(a: Any, b: Any) -> Any:
+    return func.greatest(a, b)
+
+
+def shares_a_match_or_thread(viewer_id: UUID, other: Any) -> ColumnElement[bool]:
+    """A match or a Thread between the viewer and `other`, either kind: what
+    lets the viewer still open a hidden profile (D-493)."""
+    low, high = _pair_low(viewer_id, other), _pair_high(viewer_id, other)
+    return or_(
+        exists().where(Match.user_low == low, Match.user_high == high),
+        exists().where(Thread.user_low == low, Thread.user_high == high),
+    )
+
+
+async def is_visible(session: AsyncSession, viewer: Viewer, user_id: UUID) -> bool:
+    """Whether `viewer` may open `user_id`'s profile (D-493): `visible_to`
+    without seeking or the radius, which a link reaches past, and a hidden
+    profile only to someone it shares a match or a Thread with."""
+    found = await session.scalar(
+        select(User.id)
+        .join(Profile, Profile.user_id == User.id)
+        .where(
+            User.id == user_id,
+            *visible_to(
+                viewer,
+                mutual=False,
+                hidden_ok=shares_a_match_or_thread(viewer.id, User.id),
+            ),
+        )
+    )
+    return found is not None
+
+
+async def distance_between(session: AsyncSession, a: UUID, b: UUID) -> float | None:
+    """Metres between two people's grid points (D-490); None if either has none."""
+    other = aliased(Profile)
+    metres = await session.scalar(
+        select(func.ST_Distance(Profile.location, other.location))
+        .select_from(Profile)
+        .join(other, other.user_id == b)
+        .where(Profile.user_id == a)
+    )
+    return None if metres is None else float(metres)
+
+
+async def public_photo_keys(session: AsyncSession, user_id: UUID) -> list[str]:
+    """Every approved public photo's public key, in place order: the first is
+    the main one (P-75)."""
+    keys = await session.scalars(
+        select(Photo.public_key)
+        .where(*_shown_photo(user_id))
+        .order_by(Photo.position, Photo.id)
+    )
+    return [key for key in keys if key is not None]
+
+
+async def interest_ids(session: AsyncSession, user_id: UUID) -> list[int]:
+    ids = await session.scalars(
+        select(ProfileInterest.interest_id)
+        .where(ProfileInterest.user_id == user_id)
+        .order_by(ProfileInterest.interest_id)
+    )
+    return list(ids)
+
+
+async def kudos_counts(session: AsyncSession, user_id: UUID) -> dict[KudosKind, int]:
+    rows = await session.execute(
+        select(KudosGiven.kind, func.count())
+        .where(KudosGiven.to_id == user_id)
+        .group_by(KudosGiven.kind)
+    )
+    return {kind: count for kind, count in rows.tuples()}
+
+
+async def album_photo_count(session: AsyncSession, user_id: UUID) -> int:
+    """Their approved private photos: a number, never one of them."""
+    count = await session.scalar(
+        select(func.count())
+        .select_from(Photo)
+        .where(
+            Photo.user_id == user_id,
+            Photo.kind == PhotoKind.PRIVATE,
+            Photo.status == ReviewStatus.APPROVED,
+        )
+    )
+    return count or 0
+
+
+async def match_between(session: AsyncSession, a: UUID, b: UUID) -> UUID | None:
+    found: UUID | None = await session.scalar(
+        select(Match.id).where(
+            Match.user_low == _pair_low(a, b), Match.user_high == _pair_high(a, b)
+        )
+    )
+    return found
+
+
+async def thread_between(session: AsyncSession, a: UUID, b: UUID) -> Thread | None:
+    found: Thread | None = await session.scalar(
+        select(Thread).where(
+            Thread.user_low == _pair_low(a, b), Thread.user_high == _pair_high(a, b)
+        )
+    )
+    return found
+
+
+async def record_view(
+    session: AsyncSession, viewer_id: UUID, viewed_id: UUID, at: datetime
+) -> None:
+    """One row per viewer and profile: the first view writes it, each later
+    one moves its time and counts it (for "viewed you", backlog B-5)."""
+    statement = insert(ProfileView).values(
+        viewer_id=viewer_id, viewed_id=viewed_id, last_viewed_at=at
+    )
+    await session.execute(
+        statement.on_conflict_do_update(
+            index_elements=[ProfileView.viewer_id, ProfileView.viewed_id],
+            set_={
+                "last_viewed_at": statement.excluded.last_viewed_at,
+                "view_count": ProfileView.view_count + 1,
+            },
+        )
+    )

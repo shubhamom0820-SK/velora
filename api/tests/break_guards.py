@@ -4110,16 +4110,17 @@ T62: list[tuple[Case, list[str]]] = [
     (
         Case(
             id="t62-16-main-photo-any-status",
-            what="P-75: a pending or rejected photo as the main one",
+            what="P-75: a pending or rejected photo as the main one, or in the list",
             edits=[
                 (
                     "app/modules/discovery/repository.py",
-                    "            Photo.status == ReviewStatus.APPROVED,\n            Photo.public_key.is_not(None),\n        )\n        .order_by(Photo.position, Photo.id)\n",
-                    "            Photo.public_key.is_not(None) | Photo.public_key.is_(None),\n        )\n        .order_by(Photo.position, Photo.id)\n",
+                    "        Photo.status == ReviewStatus.APPROVED,\n        Photo.public_key.is_not(None),\n    ]\n",
+                    "        Photo.public_key.is_not(None) | Photo.public_key.is_(None),\n    ]\n",
                 )
             ],
             expect=[
-                "test_the_main_photo_is_the_lowest_approved_public_place_gap_or_not"
+                "test_the_main_photo_is_the_lowest_approved_public_place_gap_or_not",
+                "test_only_approved_public_photos_are_shown_and_nothing_private_named",
             ],
         ),
         DISCOVERY_TESTS62,
@@ -4216,6 +4217,141 @@ T62: list[tuple[Case, list[str]]] = [
     ),
 ]
 
+# --- T-6.3: the public profile -------------------------------------------------------
+
+T63: list[tuple[Case, list[str]]] = [
+    (
+        Case(
+            id="t63-01-hidden-closed-to-a-chat",
+            what="D-493: a hidden profile refused to someone it shares a Thread with",
+            edits=[
+                (
+                    "app/modules/discovery/repository.py",
+                    "                hidden_ok=shares_a_match_or_thread(viewer.id, User.id),\n",
+                    "                hidden_ok=None,\n",
+                )
+            ],
+            expect=[
+                "test_a_hidden_profile_opens_to_someone_it_shares_a_match_or_thread_with[match]",
+                "test_a_hidden_profile_opens_to_someone_it_shares_a_match_or_thread_with[thread]",
+            ],
+        ),
+        ["tests/modules/discovery/test_public_profile.py"],
+    ),
+    (
+        Case(
+            id="t63-02-hidden-open-to-anyone",
+            what="D-493: a hidden profile opened to strangers",
+            edits=[
+                (
+                    "app/modules/discovery/repository.py",
+                    "                hidden_ok=shares_a_match_or_thread(viewer.id, User.id),\n",
+                    "                hidden_ok=User.id == User.id,\n",
+                )
+            ],
+            expect=[
+                "test_every_refusal_is_the_same_not_found_as_nobody",
+                "test_a_hidden_profile_opens_to_someone_it_shares_a_match_or_thread_with[thread]",
+            ],
+        ),
+        ["tests/modules/discovery/test_public_profile.py"],
+    ),
+    (
+        Case(
+            id="t63-03-a-thread-doesnt-count",
+            what="D-493: only a match opens a hidden profile",
+            edits=[
+                (
+                    "app/modules/discovery/repository.py",
+                    "        exists().where(Thread.user_low == low, Thread.user_high == high),\n",
+                    "",
+                )
+            ],
+            expect=[
+                "test_a_hidden_profile_opens_to_someone_it_shares_a_match_or_thread_with[thread]"
+            ],
+        ),
+        ["tests/modules/discovery/test_public_profile.py"],
+    ),
+    (
+        Case(
+            id="t63-04-seeking-applied",
+            what="D-493: a link refused by seeking",
+            edits=[
+                (
+                    "app/modules/discovery/repository.py",
+                    "                mutual=False,\n",
+                    "                mutual=True,\n",
+                )
+            ],
+            expect=["test_seeking_and_the_radius_dont_apply_a_link_reaches_past_them"],
+        ),
+        ["tests/modules/discovery/test_public_profile.py"],
+    ),
+    (
+        Case(
+            id="t63-05-my-own-view-recorded",
+            what="a view of my own profile recorded",
+            edits=[
+                (
+                    "app/modules/discovery/service.py",
+                    "        if not own:\n            await repository.record_view(",
+                    "        if True:\n            await repository.record_view(",
+                )
+            ],
+            expect=["test_my_own_profile_opens_with_nothing_between_us"],
+        ),
+        ["tests/modules/discovery/test_public_profile.py"],
+    ),
+    (
+        Case(
+            id="t63-06-views-not-counted",
+            what="a second view not counted",
+            edits=[
+                (
+                    "app/modules/discovery/repository.py",
+                    '                "view_count": ProfileView.view_count + 1,\n',
+                    '                "view_count": ProfileView.view_count,\n',
+                )
+            ],
+            expect=["test_a_view_is_one_row_per_pair_counted"],
+        ),
+        ["tests/modules/discovery/test_public_profile.py"],
+    ),
+    (
+        Case(
+            id="t63-07-hidden-kudos-shown",
+            what="kudos shown when she hides them",
+            edits=[
+                (
+                    "app/modules/discovery/service.py",
+                    "            await repository.kudos_counts(session, user_id) if row.show_kudos else None\n",
+                    "            await repository.kudos_counts(session, user_id)\n",
+                )
+            ],
+            expect=["test_kudos_are_counted_and_null_when_hidden"],
+        ),
+        ["tests/modules/discovery/test_public_profile.py"],
+    ),
+    (
+        Case(
+            id="t63-08-album-counts-pending",
+            what="the album count including photos not approved",
+            edits=[
+                (
+                    "app/modules/discovery/repository.py",
+                    "            Photo.kind == PhotoKind.PRIVATE,\n            Photo.status == ReviewStatus.APPROVED,\n",
+                    "            Photo.kind == PhotoKind.PRIVATE,\n",
+                )
+            ],
+            expect=[
+                "test_only_approved_public_photos_are_shown_and_nothing_private_named"
+            ],
+        ),
+        ["tests/modules/discovery/test_public_profile.py"],
+    ),
+]
+
 CASES: list[tuple[Case, list[str]]] = (
     [(c, T51_SELECTION) for c in T51]
     + [(c, T54_SELECTION) for c in T54]
@@ -4234,6 +4370,7 @@ CASES: list[tuple[Case, list[str]]] = (
     + P120
     + P210
     + T62
+    + T63
 )
 
 # The fifty-connection fixture's own message when Postgres refuses a connection.

@@ -1,13 +1,15 @@
-"""`GET /v1/discover` (T-6.2): the ranked feed of people nearby, once
-onboarding is done.
+"""`GET /v1/discover` (T-6.2): the ranked feed of people nearby; and
+`GET /v1/users/{id}` (T-6.3), one person's public profile; once onboarding is
+done.
 
-No rate limit of its own: it reads and writes nothing of anyone's, so
-`current_user`'s 300 a minute is the one (02-ARCHITECTURE §12).
+No rate limit of their own: `current_user`'s 300 a minute (02-ARCHITECTURE
+§12). A profile is found by its id, a UUID nobody can walk.
 """
 
 from __future__ import annotations
 
 from typing import Annotated
+from uuid import UUID
 
 from fastapi import APIRouter, Depends, Query
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -17,7 +19,7 @@ from app.core.db import get_session
 from app.core.deps import app_settings, onboarded_user
 from app.core.pagination import PageParams, page_params
 from app.modules.discovery import service
-from app.modules.discovery.schemas import CardPage, Feed
+from app.modules.discovery.schemas import CardPage, Feed, PublicProfile
 from app.modules.users.models import User
 
 router = APIRouter(tags=["discovery"])
@@ -48,3 +50,13 @@ async def discover(
         params=params,
         settings=settings,
     )
+
+
+@router.get("/users/{user_id}")
+async def public_profile(
+    user_id: UUID,
+    user: Annotated[User, Depends(onboarded_user)],
+    session: Annotated[AsyncSession, Depends(get_session)],
+    settings: Annotated[Settings, Depends(app_settings)],
+) -> PublicProfile:
+    return await service.public_profile(session, user, user_id, settings=settings)

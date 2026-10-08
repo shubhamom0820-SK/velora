@@ -2708,9 +2708,13 @@ prices don't depend on the web photos step, and the hold is lifted.
 - [x] **Commit:** `feat(discovery): ranked nearby feed [T-6.2]`
 
 ### T-6.3 · Public profile
-- [ ] **Needs:** T-6.2
-- [ ] `GET /users/{id}` → `PublicProfile`: card fields + full about, all approved public photos, interests, kudos (if `show_kudos`), album photo count, existing thread/knot state with me. Blocked either way → 404 `NOT_FOUND`. Records a profile view (for later "viewed you").
-- [ ] **Commit:** `feat(profiles): public profile [T-6.3]`
+- [x] **Needs:** T-6.2
+- [x] `GET /users/{id}` → `PublicProfile`: card fields + full about, all approved public photos, interests, kudos (if `show_kudos`), album photo count, existing thread/knot state with me. Blocked either way → 404 `NOT_FOUND`. Records a profile view (for later "viewed you").
+  **Who may open one is D-493:** `visible_to` without seeking or the radius, a hidden profile only
+  to someone it shares a match or Thread with, your own always, every refusal the same
+  `NOT_FOUND`. `tests/modules/discovery/test_public_profile.py` holds it; breaking runs `t63-01`
+  to `t63-08` each red.
+- [x] **Commit:** `feat(profiles): public profile [T-6.3]`
 
 ### T-6.4 · Swipes and matching
 - [ ] **Needs:** T-6.3, T-5.1

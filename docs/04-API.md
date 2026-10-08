@@ -94,7 +94,7 @@ further rule, computed from the shown photos' records, never `is_verified` alone
 |---|---|---|---|---|
 | GET | /discover | ✅ | `?feed=foryou|new|online&intent_ids=&verified=&cursor=&limit=` → `Page<Card>` (`intent_ids`: any overlap, D-041, 1 to 10 known ids, repeated as `intent_ids=1&intent_ids=2`; `verified=true`: the badge, D-393) | T-6.2 |
 | POST | /swipes | ✅ | `{target_id, dir}` → `{matched, match_id?, swipes_left}` | T-6.4 |
-| GET | /users/{id} | ✅ | → `PublicProfile` | T-6.3 |
+| GET | /users/{id} | ✅ | → `PublicProfile`; `NOT_FOUND` for nobody and every refusal alike (D-493) | T-6.3 |
 | GET | /users/by-username/{u} | ✅ | → `PublicProfile` | T-6.6 |
 | GET | /search | ✅ | `?q=&cursor=&limit=` → `Page<CardLite>` (`@` prefix = username lookup) | T-6.6 |
 | GET | /likes | ✅ | `?cursor=&limit=` → `Page<LikeCard>` (blurred unless revealed; free for women) | T-6.7 |
@@ -108,6 +108,16 @@ public photo at the lowest place, P-75, or null, D-392), `shows_badge` (D-393's 
 date of birth, a position, a phone number or `is_verified`. The feed: everyone 02-ARCHITECTURE §8
 leaves out stays out, ranked by D-491's score, best first, then by id; its cursor carries the
 instant the scroll began, so time passing between pages can't repeat or skip a card (D-491).
+
+`PublicProfile` (T-6.3, D-493): a `Card`, and `about` (whole), `photo_urls` (every approved public
+photo in place order; the first is `main_photo_url`), `interest_ids`, `kudos` (`{great_conversation,
+genuinely_funny, easy_to_talk_to, really_thoughtful}`, each a count; null when `show_kudos` is
+off), `album_photo_count` (approved private photos, a number, never one of them), `match_id` and
+`thread` (`{id, status, expires_at}`), what is already between the viewer and them, or null.
+Shown to anyone `visible_to` allows without seeking or the radius (a link reaches past both); a
+hidden profile only to someone it shares a match or a Thread with; your own always. Every refusal
+is `NOT_FOUND`, the same body as an id nobody holds. A view is recorded, one row per pair,
+counted, never for your own profile or a refusal.
 
 ## Threads & messages
 | Method | Path | Auth | Body → Response | Task |

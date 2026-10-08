@@ -675,6 +675,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/users/{user_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Public Profile */
+        get: operations["public_profile_v1_users__user_id__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/auth/otp/send": {
         parameters: {
             query?: never;
@@ -888,6 +905,20 @@ export interface components {
         InterestsSet: {
             /** Interest Ids */
             interest_ids: number[];
+        };
+        /**
+         * KudosCounts
+         * @description How many people gave each of the four kudos (T-8.x builds the giving).
+         */
+        KudosCounts: {
+            /** Great Conversation */
+            great_conversation: number;
+            /** Genuinely Funny */
+            genuinely_funny: number;
+            /** Easy To Talk To */
+            easy_to_talk_to: number;
+            /** Really Thoughtful */
+            really_thoughtful: number;
         };
         /**
          * LedgerEntry
@@ -1139,6 +1170,57 @@ export interface components {
             /** About */
             about?: string | null;
         };
+        /**
+         * PublicProfile
+         * @description A `Card` and the rest of the profile (T-6.3): the whole `about`, every
+         *     approved public photo in place order (the first is `main_photo_url`),
+         *     the interests, the kudos unless they hide them, how many private photos
+         *     they hold (never one of them), and what is already between the viewer and
+         *     them. Never a position, a date of birth or raw `is_verified`.
+         */
+        PublicProfile: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** First Name */
+            first_name: string;
+            /** Age */
+            age: number | null;
+            /** Username */
+            username: string;
+            /** City */
+            city: string | null;
+            /** Hometown */
+            hometown: string | null;
+            /** Distance Km */
+            distance_km: number | null;
+            /** Intent Ids */
+            intent_ids: number[];
+            /** Bio Line */
+            bio_line: string;
+            /** Main Photo Url */
+            main_photo_url: string | null;
+            /** Shows Badge */
+            shows_badge: boolean;
+            /** Is Online */
+            is_online: boolean;
+            /** Is New */
+            is_new: boolean;
+            /** About */
+            about: string;
+            /** Photo Urls */
+            photo_urls: string[];
+            /** Interest Ids */
+            interest_ids: number[];
+            kudos: components["schemas"]["KudosCounts"] | null;
+            /** Album Photo Count */
+            album_photo_count: number;
+            /** Match Id */
+            match_id: string | null;
+            thread: components["schemas"]["ThreadWithMe"] | null;
+        };
         /** ReadinessChecks */
         ReadinessChecks: {
             /**
@@ -1200,6 +1282,26 @@ export interface components {
              * Format: uuid
              */
             photo_id: string;
+        };
+        /**
+         * ThreadStatus
+         * @enum {string}
+         */
+        ThreadStatus: "active" | "expired" | "knotted";
+        /**
+         * ThreadWithMe
+         * @description The Thread between the viewer and this person, if there is one: its
+         *     state, and when it expires while it is active (never once knotted).
+         */
+        ThreadWithMe: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            status: components["schemas"]["ThreadStatus"];
+            /** Expires At */
+            expires_at: string | null;
         };
         /**
          * Turnover
@@ -2389,6 +2491,37 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["CardPage"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    public_profile_v1_users__user_id__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                user_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PublicProfile"];
                 };
             };
             /** @description Validation Error */

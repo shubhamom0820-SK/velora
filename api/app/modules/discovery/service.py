@@ -1,4 +1,5 @@
-"""Discovery (T-6.2): the ranked feed of people nearby.
+"""Discovery (T-6.2): the ranked feed of people nearby; and (T-6.3) one
+person's public profile.
 
 Who may be seen is `repository.visible_to`, one rule the feed, the public
 profile (T-6.3) and swipes (T-6.4) share. The feed adds the radius from
@@ -20,12 +21,20 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core import clock
 from app.core.config import Settings
 from app.core.enums import FraudBand
-from app.core.errors import invalid_field
+from app.core.enums import Kudos as KudosKind
+from app.core.errors import AppError, invalid_field
 from app.core.pagination import Cursor, PageParams
 from app.core.storage_keys import public_url
 from app.modules.admin import service as admin_service
 from app.modules.discovery import repository, rules
-from app.modules.discovery.schemas import Card, CardPage, Feed
+from app.modules.discovery.schemas import (
+    Card,
+    CardPage,
+    Feed,
+    KudosCounts,
+    PublicProfile,
+    ThreadWithMe,
+)
 from app.modules.profiles import repository as profiles_repository
 from app.modules.users import service as users_service
 from app.modules.users.models import User
@@ -131,4 +140,66 @@ def card_of(
         is_online=row.last_active_at is not None
         and row.last_active_at >= now - rules.ONLINE_FOR,
         is_new=row.created_at >= now - rules.NEW_FOR,
+    )
+
+
+# --- The public profile (T-6.3) ------------------------------------------------------
+
+
+def _not_found() -> AppError:
+    """One answer for nobody, someone blocked either way, hidden, not done,
+    not active or held back by their band: which, the asker never learns
+    (04-API: `NOT_FOUND` for a blocked user too)."""
+    return AppError("NOT_FOUND", "Not found.", status=404)
+
+
+async def public_profile(
+    session: AsyncSession, user: User, user_id: UUID, *, settings: Settings
+) -> PublicProfile:
+    """`user_id`'s profile as `user` may see it (D-493), and the view
+    recorded; your own needs no permission and records nothing."""
+    own = user_id == user.id
+    async with session.begin():
+        viewer = await viewer_of(session, user)
+        if not own and not await repository.is_visible(session, viewer, user_id):
+            raise _not_found()
+        rows = await repository.cards(session, [user_id])
+        row = rows.get(user_id)
+        if row is None:
+            raise _not_found()
+        distance = (
+            None
+            if own
+            else await repository.distance_between(session, user.id, user_id)
+        )
+        keys = await repository.public_photo_keys(session, user_id)
+        interests = await repository.interest_ids(session, user_id)
+        kudos = (
+            await repository.kudos_counts(session, user_id) if row.show_kudos else None
+        )
+        album = await repository.album_photo_count(session, user_id)
+        match_id = (
+            None if own else await repository.match_between(session, user.id, user_id)
+        )
+        thread = (
+            None if own else await repository.thread_between(session, user.id, user_id)
+        )
+        if not own:
+            await repository.record_view(session, user.id, user_id, clock.now())
+    card = card_of(row, distance, clock.now(), settings)
+    return PublicProfile(
+        **card.model_dump(),
+        about=row.about or "",
+        photo_urls=[public_url(settings, key) for key in keys],
+        interest_ids=interests,
+        kudos=None
+        if kudos is None
+        else KudosCounts(**{kind.value: kudos.get(kind, 0) for kind in KudosKind}),
+        album_photo_count=album,
+        match_id=match_id,
+        thread=None
+        if thread is None
+        else ThreadWithMe(
+            id=thread.id, status=thread.status, expires_at=thread.expires_at
+        ),
     )

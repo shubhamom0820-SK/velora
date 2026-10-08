@@ -3836,6 +3836,28 @@ chat), relayed by the founder, after Claude built and measured the window and re
 numbers; written up by Claude in T-6.2. The advisor's own words on its recommendation: "option 1
 was wrong".
 
+### D-493 · Who may open a public profile — Locked
+**Decision (T-6.3).** `GET /v1/users/{id}` answers to anyone discovery's `visible_to` allows, **without
+seeking or the radius**: a profile is reached by link too (T-6.8's share page, T-6.6's
+`@username`), so a man seeking women may open a man's, and anyone's across India. Its other
+conditions all stand: no block either way, onboarding `done`, status `active`, not in the `freeze`
+band, `shadow` only to the shadowed (D-031). **A hidden profile** (`is_hidden`) opens only to
+someone it already shares a match or a Thread with, so a chat's header keeps working; it stays out
+of the feed and search. A block beats that exception. **Your own profile** always opens, hidden or
+not, and records no view. **Every refusal is the same `NOT_FOUND`** as an id nobody holds: the
+asker never learns which reason (04-API: a blocked user is `NOT_FOUND`). A view is one
+`profile_views` row per pair, its time moved and its count raised on each later view, never written
+for your own profile or a refusal (B-5 reads it later).
+
+**Why:** the plan's question, answered by the founder; the hidden exception because a hidden profile
+otherwise broke every conversation it was in.
+
+**Rejected:** applying seeking (a shared link would 404 for half its readers); hiding a hidden
+profile from its own matches and Threads.
+
+The founder's approval, 8 October 2026, of Claude's Q4 in T-6.2's plan, on the advisor's
+recommendation (Claude, in a separate chat), relayed by the founder.
+
 ---
 
 ## Adding a decision

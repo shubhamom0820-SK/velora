@@ -1,12 +1,15 @@
-"""`GET /v1/discover` — the request's feed and the response (04-API.md, T-6.2)."""
+"""`GET /v1/discover` (T-6.2) and `GET /v1/users/{id}` (T-6.3): the feed, its
+cards, and a public profile (04-API.md)."""
 
 from __future__ import annotations
 
+from datetime import datetime
 from enum import StrEnum
 from uuid import UUID
 
 from pydantic import BaseModel
 
+from app.core.enums import ThreadStatus
 from app.core.pagination import Page
 
 
@@ -50,3 +53,38 @@ class Card(BaseModel):
 
 class CardPage(Page[Card]):
     """`Page<Card>`: by score, best first, then by id (D-491)."""
+
+
+class KudosCounts(BaseModel):
+    """How many people gave each of the four kudos (T-8.x builds the giving)."""
+
+    great_conversation: int
+    genuinely_funny: int
+    easy_to_talk_to: int
+    really_thoughtful: int
+
+
+class ThreadWithMe(BaseModel):
+    """The Thread between the viewer and this person, if there is one: its
+    state, and when it expires while it is active (never once knotted)."""
+
+    id: UUID
+    status: ThreadStatus
+    expires_at: datetime | None
+
+
+class PublicProfile(Card):
+    """A `Card` and the rest of the profile (T-6.3): the whole `about`, every
+    approved public photo in place order (the first is `main_photo_url`),
+    the interests, the kudos unless they hide them, how many private photos
+    they hold (never one of them), and what is already between the viewer and
+    them. Never a position, a date of birth or raw `is_verified`."""
+
+    about: str
+    photo_urls: list[str]
+    interest_ids: list[int]
+    # Null when they hide their kudos (`show_kudos`).
+    kudos: KudosCounts | None
+    album_photo_count: int
+    match_id: UUID | None
+    thread: ThreadWithMe | None
