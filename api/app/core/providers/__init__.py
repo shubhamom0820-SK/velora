@@ -89,7 +89,7 @@ def build_providers(settings: Settings) -> Providers:
         else guard_real_sms(Msg91Sms(), settings),
         payments=FakePayments()
         if settings.PAYMENTS_PROVIDER == "fake"
-        else RazorpayPayments(),
+        else RazorpayPayments(settings.RAZORPAY_KEY_ID, settings.RAZORPAY_KEY_SECRET),
         moderation=(
             FakeModeration()
             if settings.MODERATION_PROVIDER == "fake"

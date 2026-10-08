@@ -9,7 +9,10 @@ themselves).
 - **It polls every `WORKER_POLL_DELAY_S`, 10 seconds** (D-091): on Upstash's
   Free plan that is 260,640 commands a month idle; ARQ's default 0.5 seconds
   would be over five million. The health key is written once an hour, the sum
-  D-091 counted; abort and cron are off.
+  D-091 counted; abort is off.
+- **One cron, `log_turnover`, once a day** (D-483): ARQ checks its schedule in
+  the heartbeat each poll already makes, so it adds a job's few commands a day,
+  nothing per poll. Schedules are in UTC, whatever the machine's clock says.
 - **A wake runs `verify_selfie` at once** (D-261): a listener on a Redis
   channel of its own (`app/workers/wake.py`), started with the worker, so a
   woman's selfie is decided in seconds, not at the next look at the queue. The
@@ -31,12 +34,14 @@ import contextlib
 import logging
 import sys
 from collections.abc import MutableMapping, Sequence
+from datetime import UTC
 from typing import Any, Final
 from uuid import UUID
 
 import structlog
 from arq import func
 from arq.connections import RedisSettings
+from arq.cron import CronJob, cron
 from arq.worker import Function, run_worker
 
 from app.core import facemodels
@@ -46,11 +51,13 @@ from app.core.logging import configure_logging
 from app.core.providers import Providers, build_providers
 from app.core.queue import (
     DELETE_FILES,
+    LOG_TURNOVER,
     MATCH_PHOTO,
     MODERATE_PHOTO,
     VERIFY_SELFIE,
     ArqQueue,
 )
+from app.workers.tasks import log_turnover as log_turnover_job
 from app.workers.tasks import verify_selfie as verify_selfie_job
 from app.workers.tasks.delete_files import delete_files
 from app.workers.tasks.match_photo import MATCH_TRIES, match_photo
@@ -69,6 +76,15 @@ JOBS: Final[Sequence[Function]] = (
     ),
     # T-4.12, D-393: a shown photo's face against the kept selfie, for the badge.
     func(match_photo, name=MATCH_PHOTO, max_tries=MATCH_TRIES),
+)
+# Once a day, in UTC (`WorkerSettings.timezone`).
+CRON_JOBS: Final[Sequence[CronJob]] = (
+    cron(
+        log_turnover_job.log_turnover,
+        name=LOG_TURNOVER,
+        hour=log_turnover_job.RUN_AT_UTC[0],
+        minute=log_turnover_job.RUN_AT_UTC[1],
+    ),
 )
 # Jobs at once. Decoding is synchronous on the event loop, so only one image is
 # ever decoded at a time, whatever this says (D-092, D-088's 1 GB); the others
@@ -171,6 +187,10 @@ class WorkerSettings:
     from `Settings` at run time (`worker_options`)."""
 
     functions = JOBS
+    cron_jobs = CRON_JOBS
+    # Cron schedules read this, not the machine's zone: a Mac in IST and Fly in
+    # UTC would otherwise run the same cron five and a half hours apart.
+    timezone = UTC
     on_startup = startup
     on_shutdown = shutdown
     max_jobs = MAX_JOBS

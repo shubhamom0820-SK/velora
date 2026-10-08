@@ -726,3 +726,25 @@ def test_a_badly_shaped_storage_setting_is_named_but_not_echoed(
     assert expected in message
     if name == "R2_ACCOUNT_ID":
         assert value not in message
+
+
+# --- GST (D-450, D-482) --------------------------------------------------------------
+
+
+def test_velora_is_unregistered_for_gst_by_default() -> None:
+    assert _settings().GST_REGISTERED is False
+    assert _settings(GST_REGISTERED="false").GST_REGISTERED is False
+
+
+@pytest.mark.parametrize("registered", ["true", "1", "yes"])
+def test_registering_for_gst_refuses_to_start_until_p350_builds_it(
+    registered: str,
+) -> None:
+    """The flag alone would change nothing and look as if it had: the split,
+    the receipt's GST line, rate and GSTIN are P-350's task."""
+    with pytest.raises(ValidationError) as excinfo:
+        _settings(GST_REGISTERED=registered)
+
+    message = str(excinfo.value)
+    assert "GST_REGISTERED=true needs P-350's task first" in message
+    assert "D-482" in message

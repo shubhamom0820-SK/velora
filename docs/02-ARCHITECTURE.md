@@ -201,6 +201,7 @@ a failed or hung publish (1 s) is logged without failing the request (`core/even
 | `warn_expiring` | cron, every 5 min | threads with <2 h left, warned once |
 | `recompute_fraud` | cron every 10 min + on report | recompute score, apply band actions |
 | `cleanup` | cron, daily 03:30 IST | purge expired OTP keys, old WS tickets, stale push subs |
+| `log_turnover` | cron, daily 03:30 UTC (09:00 IST) | the financial year's paid turnover, logged: warning from ₹15 lakh, error from ₹20 lakh (D-483, P-350). The worker's cron schedules are in UTC (`WorkerSettings.timezone`) |
 
 Every job is idempotent and safe to retry (max 3, exponential backoff).
 
@@ -264,8 +265,10 @@ Indexes that make this fast are listed in `03-SCHEMA.md`. Target: p95 < 80 ms at
    or neither does.
 
 **Purchase:**
-1. `POST /v1/payments/orders {pack_id}` → server creates Razorpay order, stores `payments` row
-   (`created`), returns `order_id` + public key.
+1. `POST /v1/payments/orders {pack_id}` + `Idempotency-Key` → server prices it from the pack's
+   row, creates the Razorpay order, stores the `payments` row (`created`, `gst_paise` 0), returns
+   `order_id` + public key. The same key again is the same order (D-481); a woman is refused
+   first (D-076).
 2. Browser opens Razorpay Checkout.
 3. Razorpay → `POST /v1/payments/webhook` (`payment.captured`). Verify signature. Look up by
    `razorpay_order_id`. If `razorpay_payment_id` already recorded → return 200, do nothing.
@@ -326,7 +329,8 @@ rule 3, T-8.2) or a duplicate charge (T-8.3).
 | `SMS_LOCAL_ALLOWED_TO` | api | locally, the only numbers a real SMS provider is called for: comma-separated, each passing `normalize_phone` at startup, empty by default. Any other number gets `503 PROVIDER_UNAVAILABLE` and its code is discarded, because the seed's numbers may be real people's (D-064). Refused outside local, where it would look like protection it isn't (D-066) |
 | `MSG91_AUTH_KEY`, `MSG91_TEMPLATE_ID`, `MSG91_SENDER_ID` | api | Path B only |
 | `PAYMENTS_PROVIDER` | api | `razorpay` \| `fake` (`fake` locally) |
-| `RAZORPAY_KEY_ID`, `RAZORPAY_KEY_SECRET`, `RAZORPAY_WEBHOOK_SECRET` | api | |
+| `RAZORPAY_KEY_ID`, `RAZORPAY_KEY_SECRET`, `RAZORPAY_WEBHOOK_SECRET` | api | not checked at startup: without the first two each order is `503 PROVIDER_UNAVAILABLE`, since staging and production run Razorpay and, until the account exists (P-0.8), can have no keys (P-382). `RAZORPAY_KEY_ID` is public, sent to Checkout |
+| `GST_REGISTERED` | api | `false`, Velora unregistered (D-450). `true` refuses to start until P-350's task builds the split and the receipt's GST line (D-482) |
 | `WORKER_POLL_DELAY_S` | worker | seconds between the worker's looks at the queue, default 10 (D-091): 260,640 Redis commands a month idle on Upstash Free, 52% of its 500K. Redo that sum before changing it |
 | `MODERATION_PROVIDER` | worker | `sightengine` \| `fake` |
 | `SIGHTENGINE_API_USER`, `SIGHTENGINE_API_SECRET` | worker | with `sightengine`, the worker refuses to start without both, naming them (`python -m app.workers --check`, Fly's release command). The API never moderates, so it needs neither |
@@ -394,6 +398,7 @@ secret is left empty. Real secret values are never committed.
 | Send message | 30 / min / user |
 | Reports | 10 / day / user |
 | Username check | 30 / min / user |
+| `POST /payments/orders` | 20 / hour / user (T-8.1): each asks the gateway for an order; every retry a real checkout needs fits |
 | `PUT /me/location` | 10 / hour / user (T-4.10). Onboarding's tries and a refresh each time the app opens fit easily; it slows someone moving themselves about to measure distances, and can't stop them (P-120) |
 | Waitlist | 5 / min / IP, invalid tries included (D-056) |
 | `GET /prices` | None (T-5.2): public and read-only, one read of a table of about ten rows, as `/readyz` with none; a per-IP limit would mostly catch men behind one carrier's shared address. Flooding is the edge's to stop |
@@ -401,6 +406,7 @@ secret is left empty. Real secret values are never committed.
 
 - Logs are structured JSON with `request_id`; never log phone, OTP, tokens, message bodies.
 - Admin routes require `role in (moderator, admin)`; every admin action writes `audit_log`.
+  `GET /admin/turnover` is admin only: it is revenue (D-483).
 
 ## 13. Environments
 

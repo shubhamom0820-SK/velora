@@ -1,9 +1,11 @@
 from __future__ import annotations
 
 from typing import Annotated
+from uuid import UUID
 
-from pydantic import BaseModel, StringConstraints
+from pydantic import BaseModel, ConfigDict, Field, StringConstraints
 
+from app.core.providers.payments import Outcome
 from app.modules.auth.schemas import PHONE_INPUT_MAX
 
 
@@ -17,3 +19,20 @@ class LastCode(BaseModel):
     """The code the fake provider last sent the number, or null if it never did."""
 
     code: str | None
+
+
+class SimulateWebhook(BaseModel):
+    """Which payment's webhook to send, and how it ended. `amount_paise` fakes
+    an amount other than the order's, for T-8.2's mismatch."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    payment_id: UUID
+    outcome: Outcome
+    amount_paise: Annotated[int, Field(gt=0)] | None = None
+
+
+class SimulatedWebhook(BaseModel):
+    """The HTTP status the API's own webhook route answered the delivery with."""
+
+    delivered_status: int

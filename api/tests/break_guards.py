@@ -3311,6 +3311,347 @@ T412: list[tuple[Case, list[str]]] = [
     ),
 ]
 
+# --- T-8.1: packs, orders, GST, turnover, the simulator, Razorpay's orders ------
+
+PAY_SERVICE = "app/modules/payments/service.py"
+PAY_REPO = "app/modules/payments/repository.py"
+PAY_RULES = "app/modules/payments/rules.py"
+PAY_SCHEMAS = "app/modules/payments/schemas.py"
+PAY_ROUTER = "app/modules/payments/router.py"
+ADMIN_ROUTER = "app/modules/admin/router.py"
+GST_COLUMN = "alembic/versions/20261008_86d605e7b904_payments_carry_gst_paise.py"
+ORDER_KEY = "alembic/versions/20261008_25558532ccde_one_order_per_idempotency_key.py"
+RAZORPAY = "app/core/providers/payments.py"
+T81_SELECTION = [
+    "tests/modules/payments",
+    "tests/modules/e2e/test_payments_simulator.py",
+    "tests/workers/test_log_turnover.py",
+    "tests/core/test_razorpay.py",
+    "tests/test_config.py",
+    "tests/test_schema.py",
+    "tests/test_migrations.py",
+]
+
+T81: list[Case] = [
+    Case(
+        id="t81-01-a-woman-sold-velas",
+        what="D-076: a woman shown the store and sold an order",
+        edits=[
+            (
+                PAY_SERVICE,
+                "    if user.gender is not Gender.MALE:\n",
+                "    if user.gender is None:\n",
+            )
+        ],
+        expect=[
+            "test_a_woman_is_refused_the_store",
+            "test_a_woman_is_refused_before_any_gateway_is_asked",
+        ],
+    ),
+    Case(
+        id="t81-02-variant-b-shown-its-own-empty-store",
+        what="D-480: variant B shown its own packs, of which none is active",
+        edits=[(PAY_RULES, 'MappingProxyType({"B": "A"})', "MappingProxyType({})")],
+        expect=[
+            "test_each_variant_sees_d099s_four_with_the_first_purchase_bonus[B]",
+            "test_no_man_is_ever_shown_an_empty_store",
+            "test_every_variant_a_man_can_be_in_is_shown_packs_that_exist",
+        ],
+    ),
+    Case(
+        id="t81-03-an-empty-store-shown-blank",
+        what="D-480: a store with no active pack answered with an empty list",
+        edits=[(PAY_SERVICE, "    if not packs:\n", "    if False:\n")],
+        expect=["test_a_store_with_no_active_pack_is_a_500_and_an_error_never_a_blank"],
+    ),
+    Case(
+        id="t81-04-the-browser-names-a-price",
+        what="rule 6: an order body naming an amount or Velas accepted",
+        edits=[
+            (
+                PAY_SCHEMAS,
+                'model_config = ConfigDict(extra="forbid")',
+                'model_config = ConfigDict(extra="ignore")',
+            )
+        ],
+        expect=["test_a_body_naming_a_price_or_velas_is_refused"],
+    ),
+    Case(
+        id="t81-05-the-keys-order-not-looked-up",
+        what="D-481: a key sent again makes a second gateway order",
+        edits=[
+            (PAY_SERVICE, "        if existing is not None:\n", "        if False:\n")
+        ],
+        expect=["test_the_same_key_twice_is_one_order"],
+    ),
+    Case(
+        id="t81-06-the-race-not-caught",
+        what="D-481: the insert's conflict on the key not handled",
+        edits=[
+            (
+                PAY_REPO,
+                '        .on_conflict_do_nothing(constraint="uq_payments_user_id_idempotency_key")\n',
+                "",
+            )
+        ],
+        expect=["test_the_same_key_racing_itself_is_one_order"],
+    ),
+    Case(
+        id="t81-07-the-key-not-unique-per-man",
+        what="D-481: the database's unique key widened until it holds nothing",
+        edits=[
+            (
+                ORDER_KEY,
+                '["user_id", "idempotency_key"],',
+                '["idempotency_key", "provider_order_id"],',
+            )
+        ],
+        expect=[
+            "test_the_database_refuses_a_second_order_for_one_key",
+            "test_the_same_key_racing_itself_is_one_order",
+        ],
+    ),
+    Case(
+        id="t81-08-a-key-reused-for-another-pack",
+        what="D-481: a key's first order returned for another pack",
+        edits=[
+            (PAY_SERVICE, "    if payment.pack_id != pack_id:\n", "    if False:\n")
+        ],
+        expect=["test_the_same_key_with_another_pack_is_already_used"],
+    ),
+    Case(
+        id="t81-09-another-variants-pack-sold",
+        what="D-480: an order for a pack outside the man's store",
+        edits=[
+            (
+                PAY_REPO,
+                "            CreditPack.variant == variant,\n            CreditPack.active.is_(True),\n",
+                "            CreditPack.active.is_(True),\n",
+            )
+        ],
+        expect=["test_a_pack_outside_his_store_isnt_found"],
+    ),
+    Case(
+        id="t81-10-a-retired-pack-sold",
+        what="D-250: an order for a retired pack",
+        edits=[
+            (
+                PAY_REPO,
+                "            CreditPack.variant == variant,\n            CreditPack.active.is_(True),\n",
+                "            CreditPack.variant == variant,\n",
+            )
+        ],
+        expect=["test_a_retired_or_unknown_pack_isnt_found[pack-25]"],
+    ),
+    Case(
+        id="t81-11-a-refund-restores-the-bonus",
+        what="D-231: a refunded purchase not counted as a purchase",
+        edits=[
+            (
+                PAY_REPO,
+                "Payment.status.in_((PaymentStatus.PAID, PaymentStatus.REFUNDED))",
+                "Payment.status.in_((PaymentStatus.PAID,))",
+            )
+        ],
+        expect=["test_a_refunded_purchase_was_still_a_purchase"],
+    ),
+    Case(
+        id="t81-12-registered-for-gst-accepted",
+        what="D-482: GST_REGISTERED=true starts, changing nothing",
+        edits=[
+            (
+                "app/core/config.py",
+                "        if self.GST_REGISTERED:\n",
+                "        if False:\n",
+            )
+        ],
+        expect=["test_registering_for_gst_refuses_to_start_until_p350_builds_it"],
+    ),
+    Case(
+        id="t81-13-a-registered-split-made-up",
+        what="D-482: a registered split computed as 0, silently",
+        edits=[(PAY_RULES, "    if registered:\n", "    if False:\n")],
+        expect=["test_a_registered_split_isnt_built"],
+    ),
+    Case(
+        id="t81-14-gst-outside-the-amount",
+        what="D-450: the database lets gst_paise reach the whole amount",
+        edits=[
+            (
+                GST_COLUMN,
+                '"gst_paise >= 0 AND gst_paise < amount_paise",',
+                '"gst_paise >= 0",',
+            )
+        ],
+        expect=["test_the_database_keeps_gst_inside_the_amount"],
+    ),
+    Case(
+        id="t81-15-gst-shown-unregistered",
+        what="D-450: the order's response carries gst_paise, 0",
+        edits=[
+            (
+                PAY_SCHEMAS,
+                "    key_id: str\n    amount_paise: int\n",
+                "    key_id: str\n    amount_paise: int\n    gst_paise: int = 0\n",
+            )
+        ],
+        expect=["test_an_unregistered_payment_says_gst_nowhere"],
+    ),
+    Case(
+        id="t81-16-the-year-in-utc",
+        what="D-483: the financial year turned at midnight UTC, not IST",
+        edits=[
+            (
+                PAY_RULES,
+                "    local = instant.astimezone(IST)\n",
+                "    local = instant.astimezone(UTC)\n",
+            ),
+            (
+                PAY_RULES,
+                "datetime(self.first_year, 4, 1, tzinfo=IST)",
+                "datetime(self.first_year, 4, 1, tzinfo=UTC)",
+            ),
+            (
+                PAY_RULES,
+                "datetime(self.first_year + 1, 4, 1, tzinfo=IST)",
+                "datetime(self.first_year + 1, 4, 1, tzinfo=UTC)",
+            ),
+            (
+                PAY_RULES,
+                "from datetime import datetime\n",
+                "from datetime import UTC, datetime\n",
+            ),
+        ],
+        expect=[
+            "test_payments_either_side_of_1_april_fall_in_their_own_years",
+            "test_the_year_turns_at_midnight_in_india_not_utc",
+        ],
+    ),
+    Case(
+        id="t81-17-unpaid-orders-counted",
+        what="D-483: turnover counts every payment, paid or not",
+        edits=[
+            (PAY_REPO, "                Payment.status == PaymentStatus.PAID,\n", "")
+        ],
+        expect=["test_only_paid_payments_count"],
+    ),
+    Case(
+        id="t81-18-the-years-end-counted-twice",
+        what="D-483: a payment at the year's end counted in both years",
+        edits=[(PAY_REPO, "Payment.paid_at < ends_at,", "Payment.paid_at <= ends_at,")],
+        expect=["test_payments_either_side_of_1_april_fall_in_their_own_years"],
+    ),
+    Case(
+        id="t81-19-the-warning-a-paisa-late",
+        what="D-483: the warning only above ₹15 lakh, not at it",
+        edits=[(PAY_RULES, ">= TURNOVER_ALERT_PAISE", "> TURNOVER_ALERT_PAISE")],
+        expect=[
+            "test_the_lines_level_at_15_and_20_lakh[150000000-warning]",
+            "test_the_line_warns_at_15_lakh_and_not_a_paisa_below",
+        ],
+    ),
+    Case(
+        id="t81-20-the-error-a-paisa-late",
+        what="D-483: the error only above ₹20 lakh, not at it",
+        edits=[(PAY_RULES, ">= GST_THRESHOLD_PAISE", "> GST_THRESHOLD_PAISE")],
+        expect=[
+            "test_the_lines_level_at_15_and_20_lakh[200000000-error]",
+            "test_the_line_is_an_error_from_20_lakh",
+        ],
+    ),
+    Case(
+        id="t81-21-a-moderator-reads-revenue",
+        what="D-483: turnover readable by a moderator",
+        edits=[
+            (
+                ADMIN_ROUTER,
+                "require_role(Role.ADMIN)",
+                "require_role(Role.MODERATOR, Role.ADMIN)",
+            )
+        ],
+        expect=["test_anyone_but_an_admin_is_forbidden[moderator]"],
+    ),
+    Case(
+        id="t81-22-a-read-not-audited",
+        what="02-ARCHITECTURE §12: an admin's read of turnover leaves no audit row",
+        edits=[
+            (
+                PAY_SERVICE,
+                (
+                    "        await admin_service.audit(\n"
+                    '            session, admin_id, "turnover.read", {"financial_year": year.label}\n'
+                    "        )\n"
+                ),
+                "",
+            )
+        ],
+        expect=["test_an_admin_reads_this_years_turnover_and_the_read_is_audited"],
+    ),
+    Case(
+        id="t81-23-the-simulator-by-blacklist",
+        what="rule 16: the simulator served everywhere but production",
+        edits=[
+            (
+                "app/main.py",
+                "        settings.ENV in PAYMENTS_SIMULATOR_SERVED_IN\n",
+                '        settings.ENV != "production"\n',
+            )
+        ],
+        expect=[
+            "test_isnt_served_anywhere_else[ENV=staging]",
+            "test_isnt_served_anywhere_else[ENV=env-nobody-has-named-2031]",
+        ],
+    ),
+    Case(
+        id="t81-24-the-simulator-beside-razorpay",
+        what="rule 16: the simulator served beside a real gateway",
+        edits=[
+            (
+                "app/main.py",
+                "        and settings.PAYMENTS_PROVIDER in PAYMENTS_SIMULATOR_SERVED_FOR\n",
+                "        and True\n",
+            )
+        ],
+        expect=["test_isnt_served_anywhere_else[PAYMENTS_PROVIDER=razorpay]"],
+    ),
+    Case(
+        id="t81-25-orders-unlimited",
+        what="02-ARCHITECTURE §12: more than 20 orders an hour",
+        edits=[(PAY_ROUTER, "ORDERS_PER_HOUR = 20\n", "ORDERS_PER_HOUR = 21\n")],
+        expect=["test_twenty_orders_an_hour"],
+    ),
+    Case(
+        id="t81-26-razorpays-amount-trusted",
+        what="Razorpay's order trusted for an amount we didn't ask",
+        edits=[
+            (
+                RAZORPAY,
+                '    if amount != amount_paise or currency != "INR":\n',
+                '    if currency != "INR":\n',
+            )
+        ],
+        expect=["test_an_answer_that_isnt_our_order_is_never_trusted[other-amount]"],
+    ),
+    Case(
+        id="t81-27-razorpay-called-with-half-a-key",
+        what="P-382: Razorpay called with one of its two keys missing",
+        edits=[
+            (
+                RAZORPAY,
+                "        if not (self._key_id and self._key_secret):\n",
+                "        if not (self._key_id or self._key_secret):\n",
+            )
+        ],
+        expect=["test_without_keys_it_refuses_and_calls_nobody"],
+    ),
+    Case(
+        id="t81-28-the-cron-in-the-machines-zone",
+        what="D-483: the daily line scheduled in the machine's zone, not UTC",
+        edits=[("app/workers/main.py", "    timezone = UTC\n", "")],
+        expect=["test_it_runs_once_a_day_at_0900_ist"],
+    ),
+]
+
 CASES: list[tuple[Case, list[str]]] = (
     [(c, T51_SELECTION) for c in T51]
     + [(c, T54_SELECTION) for c in T54]
@@ -3325,6 +3666,7 @@ CASES: list[tuple[Case, list[str]]] = (
     + T48
     + [(c, T411_SELECTION) for c in T411]
     + T412
+    + [(c, T81_SELECTION) for c in T81]
 )
 
 # The fifty-connection fixture's own message when Postgres refuses a connection.

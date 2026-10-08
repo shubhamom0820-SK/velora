@@ -2204,6 +2204,10 @@ propose and the founder's to decide; the poll interval doesn't change for it.
 
 **If 10 seconds ever exceeds Free,** report the number and stop; never quietly pick a paid plan
 (the founder).
+**Noted 8 October 2026 (T-8.1, D-483):** the worker now runs one cron, `log_turnover`, once a day.
+ARQ checks cron schedules in the heartbeat each poll already makes, so the sum above is unchanged
+but for one job's enqueue, run and cleanup a day, about a dozen commands: a few hundred a month,
+under 0.1% of Free. Estimated from arq's source, not measured.
 
 ### D-092 · Pillow re-encodes every photo, pinned, bounded and proved — Locked
 **The decision (T-4.4; approved by the founder, 4 October 2026, with three conditions):** Pillow, a
@@ -3608,6 +3612,85 @@ grant, not a free Thread.
 The grant is the founder's decision, 8 October 2026, in the words above. Its shape is the
 advisor's (Claude, in a separate chat), relayed by the founder; the ledger's shape is Claude's.
 P-371's answers are the founder's, on the advisor's recommendation, relayed the same day.
+
+### D-480 · Variant B is shown A's packs until T-10.4; no man ever gets an empty store — Locked
+**The decision (the founder, 8 October 2026, on the advisor's recommendation, Claude in a separate
+chat, relayed by the founder):** a man is still put in price-test variant A or B by a hash of his
+id, stable for as long as he exists (`payments/rules.py`, `variant_of`: SHA-256 of a salt and the
+id's bytes). Since T-5.2 retired `entry-25`, B has no active pack (D-250), so an allowlist,
+`SHOWN_AS = {"B": "A"}`, shows B the A packs until T-10.4 proposes a new test. A variant shows its
+own packs unless it is named there. **If a man's store would be empty**, because every pack it
+shows is inactive, `GET /packs` is a 500 and an error line (`payments.store_empty`, naming the
+variant), never an empty list: an empty store looks like a working page with nothing to buy, and
+nobody would hear of it. An order can name only a pack in the man's own store; any other, retired
+or another variant's, is `NOT_FOUND`.
+
+**Why:** the store is where money comes in, and B's men would otherwise find nothing to buy (the
+worst case on T-8.1's box). Keeping the hash costs nothing and is what T-10.4 will need; showing B
+the A packs means every man sees D-099's ladder today. This settles P-23: B sees four packs.
+
+**Rejected:** dropping the hash until T-10.4 (option (b), the same store for everyone, but T-10.4
+would rebuild the split); putting `entry-25` back for B (D-250 retired it below the ladder); an
+empty list for a store with no packs.
+
+### D-481 · An order's `Idempotency-Key` lives on its `payments` row, unique per man — Locked
+**The decision (T-8.1, Claude's shape in the plan the founder approved, 8 October 2026):**
+`payments.idempotency_key`, NOT NULL, with `uq_payments_user_id_idempotency_key` on `(user_id,
+idempotency_key)`. `POST /payments/orders` requires the header, 8 to 64 letters, digits, `-` or
+`_` (a UUID fits). The same key again returns the same order, as it was made, however much later;
+the same key for another pack is `409 ALREADY_EXISTS`, since returning the first order would hide
+the client's bug (D-077's reasoning). Two men may send the same key: it is the client's, unique per
+man only. **Under a race** the gateway's order is created outside any transaction, so two requests
+with one key may each create one; the insert is `ON CONFLICT` on the key, so only one row is
+written, and the loser answers with the winner's order. The loser's gateway order is never handed
+out, so it can't be paid. The test forces that interleaving rather than hoping for it.
+
+**Why:** a retried click must never become a second order the man could pay. Postgres holds the
+guarantee permanently; a Redis store expires and can be flushed (02-ARCHITECTURE §3).
+
+**Rejected:** a Redis replay store (it isn't the guarantee, and none is needed beside the row);
+returning the first order for a key reused with another pack; a unique key across all men.
+
+### D-482 · GST while unregistered: `gst_paise` 0, no GST anywhere a user looks, registering refused until P-350 — Locked
+**The decision (the founder, 8 October 2026, on the advisor's recommendation, relayed; the shape
+Claude's, in T-8.1's plan), D-450's points 1 to 3 built:**
+- `payments.gst_paise`, 0 for every payment while unregistered, with a check holding it inside
+  `amount_paise` (`ck_payments_gst_within_amount`): registration splits the inclusive price and
+  never adds to it (D-099).
+- `GST_REGISTERED`, an environment setting, false. **The API refuses to start with it true**,
+  naming P-350: the split and its rounding, and the receipt's GST line, rate and GSTIN, are that
+  task's, and the flag alone would change nothing and look as if it had. `payments.rules.gst_paise`
+  refuses a registered split too, the second lock.
+- `app_config.gst_rate_bps`, 1800, seeded now and read by nothing until P-350.
+- **No response a user is shown carries GST:** not a field, not a word. Today that is the order's
+  response and `GET /packs`; a test reads both, as delivered, for the letters "gst" in any case.
+  `GET /payments/{id}` (T-8.2), T-8.7's copy and T-5.5's history take the same rule.
+
+**Why:** D-450 point 3: showing or collecting GST without a GSTIN is against the law. A field
+holding 0 would still put the word in front of the web, and so on a screen one day.
+
+**Rejected:** a `gst_paise: 0` field in responses; `gst_rate_bps` as an environment setting (it
+is a rate, tuned by a row, like the rest of `app_config`); accepting `GST_REGISTERED=true` and
+ignoring it.
+
+### D-483 · Aggregate turnover: paid payments in India's financial year, an admin's read, and a daily line — Locked
+**The decision (T-8.1; the ₹20 lakh error line and an admin-only, audited route approved by the
+founder, 8 October 2026):**
+- **What counts:** the sum of `amount_paise` of `payments` with `status = 'paid'` and `paid_at` in
+  the financial year. Never the ledger: turnover is money in, and bonus Velas aren't money. A
+  refunded payment isn't counted.
+- **The year:** 1 April to 31 March **in IST**, so 18:30 UTC on 31 March is already the next year.
+- **Who reads it:** `GET /v1/admin/turnover?year=`, admin only (not a moderator: it is revenue),
+  this year by default; each call writes `audit_log` (`turnover.read`).
+- **The alert:** the worker's `log_turnover` cron, once a day at 03:30 UTC (09:00 IST), logs
+  `payments.turnover` with the figure: info below ₹15 lakh, **warning from ₹15 lakh**, **error from
+  ₹20 lakh** ("register within 30 days", P-350). Until T-9.12 it reaches Fly's logs only (P-381).
+
+**Why:** P-350's worst case is crossing ₹20 lakh unnoticed, with penalty and interest from the
+first day over. The counter is the only thing that can say the threshold is near.
+
+**Rejected:** counting from the ledger (bonus Velas aren't turnover); the year in UTC (a sale at
+11 pm IST on 31 March would land in the wrong year); a moderator's read.
 
 ---
 

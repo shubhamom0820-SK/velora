@@ -607,6 +607,57 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/packs": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Packs */
+        get: operations["list_packs_v1_packs_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/payments/orders": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Create Order */
+        post: operations["create_order_v1_payments_orders_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/admin/turnover": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Turnover */
+        get: operations["turnover_v1_admin_turnover_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/auth/otp/send": {
         parameters: {
             query?: never;
@@ -872,6 +923,33 @@ export interface components {
          * @enum {string}
          */
         OnboardingStep: "dob" | "gender" | "seeking" | "profile" | "username" | "about" | "photos" | "interests" | "pin" | "selfie" | "done";
+        /**
+         * Order
+         * @description What Checkout opens with: our payment, the gateway's order, its public
+         *     key, and the amount, the pack's price (inclusive, D-099).
+         */
+        Order: {
+            /**
+             * Payment Id
+             * Format: uuid
+             */
+            payment_id: string;
+            /** Order Id */
+            order_id: string;
+            /** Key Id */
+            key_id: string;
+            /** Amount Paise */
+            amount_paise: number;
+        };
+        /**
+         * OrderRequest
+         * @description Only the pack: the amount and the Velas come from its row, never from
+         *     the browser (rule 6), so a body naming either is refused.
+         */
+        OrderRequest: {
+            /** Pack Id */
+            pack_id: string;
+        };
         /** OtpSend */
         OtpSend: {
             /** Phone */
@@ -892,6 +970,21 @@ export interface components {
             phone: string;
             /** Otp */
             otp: string;
+        };
+        /**
+         * Pack
+         * @description A pack in this man's store. `bonus_credits` is what he would get on top
+         *     if he bought it now: the first-purchase bonus, or 0 (D-231).
+         */
+        Pack: {
+            /** Id */
+            id: string;
+            /** Credits */
+            credits: number;
+            /** Price Paise */
+            price_paise: number;
+            /** Bonus Credits */
+            bonus_credits: number;
         };
         /**
          * Photo
@@ -1038,6 +1131,33 @@ export interface components {
              * Format: uuid
              */
             photo_id: string;
+        };
+        /**
+         * Turnover
+         * @description The financial year's aggregate turnover, for the admin (D-483): the sum
+         *     of paid payments, beside the alert and the threshold (P-350).
+         */
+        Turnover: {
+            /** Financial Year */
+            financial_year: string;
+            /**
+             * Starts At
+             * Format: date-time
+             */
+            starts_at: string;
+            /**
+             * Ends At
+             * Format: date-time
+             */
+            ends_at: string;
+            /** Turnover Paise */
+            turnover_paise: number;
+            /** Paid Payments */
+            paid_payments: number;
+            /** Alert At Paise */
+            alert_at_paise: number;
+            /** Threshold Paise */
+            threshold_paise: number;
         };
         /** UploadUrl */
         UploadUrl: {
@@ -2078,6 +2198,93 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["LedgerEntryPage"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_packs_v1_packs_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Pack"][];
+                };
+            };
+        };
+    };
+    create_order_v1_payments_orders_post: {
+        parameters: {
+            query?: never;
+            header: {
+                "Idempotency-Key": string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["OrderRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Order"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    turnover_v1_admin_turnover_get: {
+        parameters: {
+            query?: {
+                /** @description The financial year's first year: 2026 is 2026-27. This one if absent. */
+                year?: number | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Turnover"];
                 };
             };
             /** @description Validation Error */

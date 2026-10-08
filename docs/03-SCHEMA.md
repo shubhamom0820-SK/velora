@@ -443,7 +443,9 @@ Seed (D-005): `pack-25` 25/₹1,500 · `pack-50` 50/₹2,500 · `pack-75` 75/₹
 `pack-30` 30/₹1,500 · `pack-100` 100/₹4,500 (repriced in place) · `pack-250` 250/₹6,000 ·
 `pack-450` 450/₹10,000, sort 1–4, with the 20% bonus kept. `pack-25`, `pack-50`, `pack-75` and
 `entry-25` are retired, `active = false`, never deleted (`payments` points at packs): `entry-25`
-was ₹40 a Vela, below the ladder's ₹50 (D-250), so variant B has no active pack (T-8.1).
+was ₹40 a Vela, below the ladder's ₹50 (D-250), so variant B has no active pack. **Since T-8.1**
+(D-480), B is shown A's packs until T-10.4: a man's variant is a hash of his id, and an allowlist
+in `payments/rules.py` (`SHOWN_AS`) maps B to A. No man is ever shown an empty store.
 
 ### payments
 | column | type | notes |
@@ -454,6 +456,8 @@ was ₹40 a Vela, below the ladder's ₹50 (D-250), so variant B has no active p
 | amount_paise | int not null | copied from pack at order time; check `> 0` |
 | credits | int not null | copied; check `> 0` |
 | bonus_credits | int not null default 0 | check `>= 0` |
+| gst_paise | int not null default 0 | the government's part of the GST-inclusive `amount_paise` (D-099, D-450): 0 while unregistered, until P-350. Check `gst_paise >= 0 AND gst_paise < amount_paise` (`ck_payments_gst_within_amount`): registration splits the amount, never adds to it (T-8.1, D-482) |
+| idempotency_key | text not null | the client's `Idempotency-Key` for the order; unique per user, `uq_payments_user_id_idempotency_key` (T-8.1, D-481) |
 | provider | text not null default 'razorpay' | |
 | provider_order_id | text unique not null | |
 | provider_payment_id | text unique null | **idempotency anchor** |
@@ -516,7 +520,9 @@ trace is exactly the person with admin access (T-1.13).
 fifteen free sends a week, D-231),
 `gift_same_recipient_cooldown_h=24`; and, by its own data migration
 (T-3.2), `otp_sms_daily_cap=500`: the most Path B sign-in codes sent in one IST day across every
-number, ₹100 a day at D-035's unconfirmed ₹0.20 an SMS (D-066).
+number, ₹100 a day at D-035's unconfirmed ₹0.20 an SMS (D-066); and, by T-8.1's,
+`gst_rate_bps=1800`: 18% in basis points, read by nothing while Velora is unregistered (P-350,
+D-482).
 Two settings are also promised in copy, in `web/src/i18n/en.ts`, written out because copy is a
 promise, not a computation. Change the copy with the setting:
 - `thread_hours`: the landing page ("Threads last a day", "24-hour", T-2.1), `/terms` ("lasts

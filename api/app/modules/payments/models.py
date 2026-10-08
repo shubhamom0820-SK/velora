@@ -20,6 +20,7 @@ from sqlalchemy import (
     Integer,
     SmallInteger,
     Text,
+    UniqueConstraint,
     text,
     true,
 )
@@ -75,6 +76,15 @@ class Payment(Timestamps, Base):
     bonus_credits: Mapped[int] = mapped_column(
         Integer, nullable=False, server_default=text("0")
     )
+    # The government's part of `amount_paise`, which is GST-inclusive (D-099,
+    # D-450): 0 while Velora is unregistered, as it is until P-350, which splits
+    # each new payment's amount and never moves it.
+    gst_paise: Mapped[int] = mapped_column(
+        Integer, nullable=False, server_default=text("0")
+    )
+    # The client's `Idempotency-Key` for the order: one order per key per user,
+    # however many times it is sent, at once or later (D-481).
+    idempotency_key: Mapped[str] = mapped_column(Text, nullable=False)
     provider: Mapped[str] = mapped_column(
         Text, nullable=False, server_default=text("'razorpay'")
     )
@@ -94,6 +104,11 @@ class Payment(Timestamps, Base):
         CheckConstraint("amount_paise > 0", name="amount_positive"),
         CheckConstraint("credits > 0", name="credits_positive"),
         CheckConstraint("bonus_credits >= 0", name="bonus_non_negative"),
+        # Part of the amount, never more: the price doesn't move (D-450).
+        CheckConstraint(
+            "gst_paise >= 0 AND gst_paise < amount_paise", name="gst_within_amount"
+        ),
+        UniqueConstraint("user_id", "idempotency_key"),
         # Once money has moved, the anchor must exist — a paid row without it
         # would silently break webhook idempotency and credit a payment twice.
         CheckConstraint(

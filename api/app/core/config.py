@@ -157,6 +157,10 @@ class Settings(BaseSettings):
     RAZORPAY_KEY_ID: str = ""
     RAZORPAY_KEY_SECRET: str = ""
     RAZORPAY_WEBHOOK_SECRET: str = ""
+    # Whether Velora is registered for GST (D-450). False until P-350, which
+    # registers within 30 days of crossing ₹20 lakh, and refused below until
+    # that task builds the split: so nothing collects or names GST unregistered.
+    GST_REGISTERED: bool = False
 
     # --- The worker (T-4.4) ---
     # How long the worker waits between looks at the queue (D-091). 10 seconds
@@ -325,6 +329,24 @@ class Settings(BaseSettings):
             f"{', '.join(sorted(SMS_LOCAL_ALLOWED_TO_ALLOWED_IN))}, and here it would "
             "look like protection it isn't (D-066). Remove it."
         )
+
+    @model_validator(mode="after")
+    def _gst_registration_is_p350s(self) -> Settings:
+        """Refuse `GST_REGISTERED=true` until P-350's task builds what it means.
+
+        Registered, a payment's inclusive price is split into Velora's share and
+        `gst_paise`, and the receipt names the tax, the rate and the GSTIN. None
+        of that exists yet (D-450, D-482), so the flag alone would change nothing
+        and look as if it had.
+        """
+        if self.GST_REGISTERED:
+            raise ValueError(
+                "GST_REGISTERED=true needs P-350's task first: the split of each "
+                "inclusive price into gst_paise and the receipt's GST line, rate and "
+                "GSTIN aren't built. Until then Velora is unregistered and every "
+                "payment's gst_paise is 0 (D-450, D-482). Remove it or set it false."
+            )
+        return self
 
     @model_validator(mode="after")
     def _fakes_only_where_allowed(self) -> Settings:

@@ -33,7 +33,7 @@ COUNTS = {
     "action_prices": 9,
     "credit_packs": 8,
     "gifts": 6,
-    "app_config": 8,
+    "app_config": 9,
     "interests": 24,
     "areas": 17,
 }
@@ -201,6 +201,8 @@ async def test_app_config_seeds(db: AsyncSession) -> None:
         "gift_same_recipient_cooldown_h": 24,
         # T-3.2, D-066: at most ₹100 a day of Path B SMS at ₹0.20 each.
         "otp_sms_daily_cap": 500,
+        # T-8.1, D-450, D-482: 18%, read only once registered (P-350).
+        "gst_rate_bps": 1800,
     }
 
 

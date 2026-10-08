@@ -3,6 +3,10 @@
 Credits are granted only by a verified webhook. The fake signs its webhooks
 with HMAC-SHA256 of the raw body, as Razorpay does, so the webhook route runs
 the same verification code in tests as in production.
+
+An order the gateway can't create raises `PaymentsUnavailable`, which the API
+answers with `PROVIDER_UNAVAILABLE` (503); its message names what failed, never
+a key.
 """
 
 from __future__ import annotations
@@ -11,7 +15,9 @@ import hashlib
 import hmac
 import json
 from dataclasses import dataclass
-from typing import Protocol
+from typing import Final, Literal, Protocol
+
+import httpx
 
 
 @dataclass(frozen=True)
@@ -29,13 +35,28 @@ class SignedWebhook:
     signature: str
 
 
+class PaymentsUnavailable(Exception):
+    """The gateway didn't create the order: down, refusing, or not configured.
+    The message says which, and never carries a key."""
+
+
 class PaymentsProvider(Protocol):
+    @property
+    def key_id(self) -> str:
+        """The public key Checkout opens with: not a secret (D-085's sense)."""
+        ...
+
     async def create_order(self, *, amount_paise: int, receipt: str) -> ProviderOrder:
-        """Create the gateway's order; `receipt` is our own reference for it."""
+        """Create the gateway's order; `receipt` is our own reference for it.
+        Raises `PaymentsUnavailable` if it can't."""
         ...
 
     def verify_webhook(self, body: bytes, signature: str) -> bool:
         """True only if `signature` is the gateway's signature of the raw `body`."""
+        ...
+
+    async def aclose(self) -> None:
+        """Close any connection it opened. Safe to call more than once."""
         ...
 
 
@@ -43,14 +64,21 @@ def _sign(secret: bytes, body: bytes) -> str:
     return hmac.new(secret, body, hashlib.sha256).hexdigest()
 
 
+Outcome = Literal["captured", "failed"]
+
+
 class FakePayments:
     """Orders in memory, and webhooks signed with a fixed local secret.
 
     `capture(order_id)` and `fail(order_id)` build the webhook the gateway
-    would send, for a test (or T-8.1's local-only simulator) to deliver.
+    would send for an order it made, for a test to deliver. `webhook()` builds
+    one from an order's id and amount alone: T-8.1's local-only simulator reads
+    those from the `payments` row, so it works after the API restarts and the
+    orders in memory are gone.
     """
 
     _secret = b"fake-payments-local-only"
+    key_id = "rzp_fake_local_only"
 
     def __init__(self) -> None:
         self.orders: dict[str, ProviderOrder] = {}
@@ -80,12 +108,29 @@ class FakePayments:
         self, event: str, status: str, order_id: str, amount_paise: int | None
     ) -> SignedWebhook:
         order = self.orders[order_id]  # an unknown order is a mistake in the test
+        return self._signed(
+            event,
+            status,
+            order.id,
+            order.amount_paise if amount_paise is None else amount_paise,
+        )
+
+    def webhook(
+        self, outcome: Outcome, *, order_id: str, amount_paise: int
+    ) -> SignedWebhook:
+        """The signed webhook for an order known only by its id and amount."""
+        event = "payment.captured" if outcome == "captured" else "payment.failed"
+        return self._signed(event, outcome, order_id, amount_paise)
+
+    def _signed(
+        self, event: str, status: str, order_id: str, amount_paise: int
+    ) -> SignedWebhook:
         self._payments += 1
         payment = {
             "id": f"pay_fake_{self._payments}",
-            "order_id": order.id,
-            "amount": order.amount_paise if amount_paise is None else amount_paise,
-            "currency": order.currency,
+            "order_id": order_id,
+            "amount": amount_paise,
+            "currency": "INR",
             "status": status,
         }
         body = json.dumps(
@@ -94,12 +139,95 @@ class FakePayments:
         ).encode()
         return SignedWebhook(body=body, signature=_sign(self._secret, body))
 
+    async def aclose(self) -> None:
+        return None
+
+
+RAZORPAY_API: Final = "https://api.razorpay.com/v1"
+# Long enough for a slow gateway, short enough that a man at checkout isn't
+# left waiting on a request that won't come back.
+ORDER_TIMEOUT_S: Final = 10.0
+
 
 class RazorpayPayments:
-    """Razorpay over httpx. Not built yet."""
+    """Razorpay over httpx: `POST /v1/orders`, basic auth with the key id and
+    secret, the amount in paise, INR, and our payment's id as the receipt
+    (Razorpay's Orders API, read 8 October 2026: at most 40 ASCII characters,
+    unique; a UUID is 36).
+
+    Built to the documentation and tested against a mock transport: no call has
+    reached Razorpay yet, since there is no account (P-0.8). Without keys it
+    refuses each order, `PaymentsUnavailable`, rather than refusing to start:
+    staging and production run `PAYMENTS_PROVIDER=razorpay`, and without the
+    account they can have no keys, so a startup check waits for it (P-382).
+
+    The client opens on first use, so the worker, which builds every provider
+    and never orders, opens none. The keys go in the Authorization header, never
+    the URL, which httpx logs.
+    """
+
+    def __init__(
+        self,
+        key_id: str = "",
+        key_secret: str = "",
+        *,
+        transport: httpx.AsyncBaseTransport | None = None,
+    ) -> None:
+        self._key_id = key_id
+        self._key_secret = key_secret
+        self._transport = transport
+        self._client: httpx.AsyncClient | None = None
+
+    @property
+    def key_id(self) -> str:
+        return self._key_id
 
     async def create_order(self, *, amount_paise: int, receipt: str) -> ProviderOrder:
-        raise NotImplementedError("Razorpay orders arrive with T-8.1.")
+        if not (self._key_id and self._key_secret):
+            raise PaymentsUnavailable(
+                "RAZORPAY_KEY_ID and RAZORPAY_KEY_SECRET aren't set (P-0.8, P-382)"
+            )
+        if self._client is None:
+            self._client = httpx.AsyncClient(
+                base_url=RAZORPAY_API,
+                timeout=ORDER_TIMEOUT_S,
+                transport=self._transport,
+            )
+        try:
+            response = await self._client.post(
+                "/orders",
+                auth=(self._key_id, self._key_secret),
+                json={"amount": amount_paise, "currency": "INR", "receipt": receipt},
+            )
+        except httpx.HTTPError as error:
+            raise PaymentsUnavailable(
+                f"Razorpay didn't answer: {type(error).__name__}"
+            ) from None
+        if not response.is_success:
+            raise PaymentsUnavailable(
+                f"Razorpay refused the order: HTTP {response.status_code}"
+            )
+        return _order_from(response, amount_paise)
 
     def verify_webhook(self, body: bytes, signature: str) -> bool:
         raise NotImplementedError("Razorpay webhook verification arrives with T-8.2.")
+
+    async def aclose(self) -> None:
+        client, self._client = self._client, None
+        if client is not None:
+            await client.aclose()
+
+
+def _order_from(response: httpx.Response, amount_paise: int) -> ProviderOrder:
+    """The order Razorpay says it made, if it is the one we asked for: an id,
+    our amount, in rupees. Anything else is refused, never trusted."""
+    try:
+        body = response.json()
+        order_id, amount, currency = body["id"], body["amount"], body["currency"]
+    except (ValueError, KeyError, TypeError):
+        raise PaymentsUnavailable("Razorpay's answer wasn't an order") from None
+    if not (isinstance(order_id, str) and order_id.startswith("order_")):
+        raise PaymentsUnavailable("Razorpay's answer had no order id")
+    if amount != amount_paise or currency != "INR":
+        raise PaymentsUnavailable("Razorpay's order isn't for the amount asked")
+    return ProviderOrder(id=order_id, amount_paise=amount_paise)

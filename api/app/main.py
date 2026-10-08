@@ -22,11 +22,14 @@ from app.core.logging import RequestIDMiddleware, configure_logging
 from app.core.providers import build_providers
 from app.core.queue import ArqQueue
 from app.core.redis import build_redis
+from app.modules.admin.router import router as admin_router
 from app.modules.auth.router import firebase_router, otp_router
 from app.modules.auth.router import router as auth_router
+from app.modules.e2e.router import payments_router as e2e_payments_router
 from app.modules.e2e.router import router as e2e_router
 from app.modules.health.router import router as health_router
 from app.modules.onboarding.router import router as onboarding_router
+from app.modules.payments.router import router as payments_router
 from app.modules.photos.router import router as photos_router
 from app.modules.pricing.router import router as pricing_router
 from app.modules.profiles.router import router as profiles_router
@@ -52,6 +55,11 @@ SIGN_IN_PATHS: tuple[tuple[APIRouter, frozenset[str]], ...] = (
 # fake's, whose outbox they read. Allowlists both (rule 16).
 E2E_SERVED_IN: frozenset[str] = frozenset({"local"})
 E2E_SERVED_FOR: frozenset[str] = frozenset({"fake"})
+# The fake gateway's webhook simulator (T-8.1): only where ENV is local and the
+# payments provider is the fake, whose secret signs what it sends. Allowlists
+# both (rule 16): anywhere else it would pay for Velas with nothing.
+PAYMENTS_SIMULATOR_SERVED_IN: frozenset[str] = frozenset({"local"})
+PAYMENTS_SIMULATOR_SERVED_FOR: frozenset[str] = frozenset({"fake"})
 
 
 async def close_resources(app: FastAPI) -> None:
@@ -63,6 +71,7 @@ async def close_resources(app: FastAPI) -> None:
     await app.state.redis.aclose()
     await app.state.engine.dispose()
     await app.state.providers.storage.aclose()
+    await app.state.providers.payments.aclose()
 
 
 @asynccontextmanager
@@ -139,11 +148,18 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.include_router(pricing_router, prefix="/v1")
     app.include_router(verification_router, prefix="/v1")
     app.include_router(wallet_router, prefix="/v1")
+    app.include_router(payments_router, prefix="/v1")
+    app.include_router(admin_router, prefix="/v1")
     for sign_in_router, served_for in SIGN_IN_PATHS:
         if settings.AUTH_PHONE_PROVIDER in served_for:
             app.include_router(sign_in_router, prefix="/v1")
     if settings.ENV in E2E_SERVED_IN and settings.SMS_PROVIDER in E2E_SERVED_FOR:
         app.include_router(e2e_router, prefix="/v1")
+    if (
+        settings.ENV in PAYMENTS_SIMULATOR_SERVED_IN
+        and settings.PAYMENTS_PROVIDER in PAYMENTS_SIMULATOR_SERVED_FOR
+    ):
+        app.include_router(e2e_payments_router, prefix="/v1")
 
     return app
 

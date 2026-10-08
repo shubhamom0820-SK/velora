@@ -148,13 +148,17 @@ turns them into copy.
 | GET | /wallet | ✅ | → `Wallet`: `{balance}`. A woman's is 0, never a refusal (D-076). No rate limit of its own (02-ARCHITECTURE §12) | T-5.3 |
 | GET | /wallet/ledger | ✅ | `?cursor=&limit=` → `Page<LedgerEntry>`, newest first by `(created_at, id)`. A woman's is empty, never a refusal. No rate limit of its own | T-5.3 |
 | GET | /prices | 🔓 | → `{action: credits}`: every active action's price for a man; a woman pays 0 for each (D-098). Never gifts (`GET /gifts`), never an inactive action. No rate limit (02-ARCHITECTURE §12) | T-5.2 |
-| GET | /packs | ✅ | → `Pack[]` (variant-aware) | T-8.1 |
-| POST | /payments/orders | ✅ | `{pack_id}` + Idempotency-Key → `{payment_id, order_id, key_id, amount_paise}` | T-8.1 |
+| GET | /packs | ✅ | → `Pack[]`: `{id, credits, price_paise, bonus_credits}`, the man's store by his price-test variant, B shown A's packs until T-10.4, in order, never empty (a store with no active pack is a 500, D-480). `bonus_credits` is the first-purchase bonus he would get buying it now, or 0. A woman: `NOT_ALLOWED` (D-076). No rate limit of its own | T-8.1 |
+| POST | /payments/orders | ✅ | `{pack_id}` (nothing else: a body naming an amount or Velas is `VALIDATION_ERROR`, rule 6) + `Idempotency-Key` (8 to 64 of `A-Za-z0-9_-`) → `{payment_id, order_id, key_id, amount_paise}`, priced from the pack's row. A woman: `NOT_ALLOWED`, before any gateway is asked (D-076). A pack not active in his store: `NOT_FOUND`. The same key again: the same order; with another pack, `ALREADY_EXISTS` (D-481). Gateway down or unconfigured: `PROVIDER_UNAVAILABLE`, nothing written. 20 an hour per user | T-8.1 |
 | POST | /payments/webhook | 🔓 signature | Razorpay events → 200 | T-8.2 |
 | GET | /payments/{id} | ✅ | → `{status, credits, bonus_credits}` | T-8.2 |
 | POST | /refund-requests | ✅ | `{payment_id, reason}` → 201 | T-8.3 |
 | GET | /referrals/me | ✅ | → `{code, invited, rewarded}` | T-8.6 |
 | POST | /referrals/apply | 🔐 | `{code}` → 204 (only during onboarding) | T-8.6 |
+
+**No GST in anything a user is shown about a payment while Velora is unregistered** (D-450,
+D-482): not a field, not a word, in any case, in the order's response, `GET /packs`, `GET
+/payments/{id}` or anything after them. P-350 adds the GST line, rate and GSTIN on registration.
 
 `LedgerEntry` (T-5.3): `id`, `delta`, `balance_after`, `reason` (`LedgerReason`, every value) and
 `created_at`. Never its ref or its key. The web turns `reason` into words from `en.ts` (D-033,
@@ -176,6 +180,7 @@ list is the caller's own (D-270).
 | Method | Path | Body → Response | Task |
 |---|---|---|---|
 | GET | /admin/metrics | → counts, revenue, reports open | T-9.5 |
+| GET | /admin/turnover | `?year=` (the financial year's first, 2026 for 2026-27; this one if absent) → `Turnover`: `{financial_year, starts_at, ends_at, turnover_paise, paid_payments, alert_at_paise, threshold_paise}`, paid payments in the year, 1 April to 31 March in IST. **Admin only**, never a moderator; each call writes `audit_log` (D-483) | T-8.1 |
 | GET | /admin/users | `?q=&cursor=&limit=` → `Page<AdminUser>` | T-9.5 |
 | GET | /admin/users/{id} | → full detail incl. fraud, reports, ledger | T-9.5 |
 | POST | /admin/users/{id}/status | `{status, reason}` → 204 (freeze/ban/unban) | T-9.5 |
@@ -200,12 +205,21 @@ Five tries a minute per client IP, invalid ones included → `RATE_LIMITED` (D-0
 | Method | Path | Auth | Body → Response | Task |
 |---|---|---|---|---|
 | POST | /test/sms/last-code | 🔓 | `{phone}` → `{code}`, the code the fake SMS last sent the number, or `null` | T-3.13 |
+| POST | /test/payments/webhook | 🔓 | `{payment_id, outcome: captured\|failed, amount_paise?}` → `{delivered_status}`: the fake gateway's signed webhook for that payment, delivered in process to `POST /v1/payments/webhook`, and the status it answered (404 until T-8.2 builds the route). `amount_paise` fakes a mismatch | T-8.1 |
 
-Served only where `ENV` is `local` and `SMS_PROVIDER` is `fake` (an allowlist, rule 16); a 404
-everywhere else. Kept out of the OpenAPI schema, so `make types` is the same everywhere and the web
-can't call it. The number is in the body, never the path or query, which the request logger and
-uvicorn's access log record (rule 15). It reads the fake's outbox, not the stored code: a number the
+Each is kept out of the OpenAPI schema, so `make types` is the same everywhere and the web can't
+call it, and each is a 404 everywhere but where its allowlists say (rule 16).
+
+`/test/sms/last-code` is served only where `ENV` is `local` and `SMS_PROVIDER` is `fake`. The
+number is in the body, never the path or query, which the request logger and uvicorn's access log
+record (rule 15). It reads the fake's outbox, not the stored code: a number the
 API sent nothing to (D-073) gets `null`, as its phone would. The E2E is its only caller (06-TESTING).
+
+`/test/payments/webhook` is served only where `ENV` is `local` and `PAYMENTS_PROVIDER` is `fake`:
+anywhere else it would pay for Velas with nothing. It builds the webhook from the `payments` row,
+so it works for an order made before the API restarted, and signs it with the fake's secret, so
+T-8.2's route verifies it with the same code as Razorpay's. It stands in for Razorpay locally: a
+fake order is paid by calling it, for T-8.2's tests and T-8.7's local checkout.
 
 ---
 
@@ -227,12 +241,12 @@ API sent nothing to (D-073) gets `null`, as its phone would. The E2E is its only
 | `VERIFICATION_REQUIRED` | 403 | anyone but a man without a matched selfie: a woman, or someone with no gender (D-310) |
 | `NOT_FOUND` | 404 | also used when a blocked user is looked up |
 | `USERNAME_TAKEN` | 409 | |
-| `ALREADY_EXISTS` | 409 | duplicate swipe/report/etc. |
+| `ALREADY_EXISTS` | 409 | duplicate swipe/report/etc.; an order's `Idempotency-Key` sent again for another pack (D-481) |
 | `THREAD_EXPIRED` | 410 | his send on an expired Thread; hers is delivered (D-097) |
 | `UNDERAGE` | 422 | the account is deleted, only the number's hash kept (D-072) |
 | `IMMUTABLE_FIELD` | 422 | gender/dob change; a username after onboarding (D-068) |
 | `MESSAGE_REJECTED` | 422 | abuse or payment-solicitation filter; `details.rule` |
-| `NOT_ALLOWED` | 422 | man sending voice note, kudos too early, woman sending a gift, verifying a PIN when none is set (D-069) |
+| `NOT_ALLOWED` | 422 | man sending voice note, kudos too early, woman sending a gift, verifying a PIN when none is set (D-069), a woman's store or order (D-076) |
 | `GIFT_LIMIT_REACHED` | 429 | free gifts used up today; `details.resets_at`. D-231 charges the sixteenth send a week rather than refusing it, so T-8.9 says whether this keeps a case |
 | `GIFT_COOLDOWN` | 429 | same gift to same person too soon; `details.retry_after_s` |
 | `SWIPE_LIMIT_REACHED` | 429 | daily cap |
@@ -242,5 +256,5 @@ API sent nothing to (D-073) gets `null`, as its phone would. The E2E is its only
 | `PHONE_NOT_SUPPORTED` | 422 | non-`+91` number |
 | `PIN_INVALID` | 401 | `details.attempts_left`; `details.reset_required` when the stored PIN can't be checked (D-069) |
 | `INTERNAL` | 500 | unexpected server error; the message never contains internals |
-| `PROVIDER_UNAVAILABLE` | 503 | SMS/payment provider down; Google's Firebase keys unreachable (D-085); the daily SMS cap reached (D-066); locally, a number not in `SMS_LOCAL_ALLOWED_TO` (D-064) |
+| `PROVIDER_UNAVAILABLE` | 503 | SMS/payment provider down, or Razorpay's keys not set (P-382); Google's Firebase keys unreachable (D-085); the daily SMS cap reached (D-066); locally, a number not in `SMS_LOCAL_ALLOWED_TO` (D-064) |
 | `NOT_READY` | 503 | a dependency of ours is not ready (`/readyz` only); `details` = `{"database": "ok"\|"fail", "redis": "ok"\|"fail"}` |

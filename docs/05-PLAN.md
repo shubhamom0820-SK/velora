@@ -2849,14 +2849,14 @@ prices don't depend on the web photos step, and the hold is lifted.
 # Sprint 8 — Payments, album, kudos, referrals (week 13)
 
 ### T-8.1 · Packs and orders
-- [ ] **Needs:** T-5.1, T-1.21, and P-0.17: a chartered accountant has confirmed how prepaid Velas are treated, before any real sale can happen, **answered 8 October 2026 (below)**; and **P-130**: no Velas are sold while `/refunds` promises returns that don't exist (D-230)
-- [ ] `GET /packs`: active packs for the user's price-test variant (`users.id` hash → A/B, stable). `POST /payments/orders {pack_id}` + `Idempotency-Key`: copy amount + `credits` from the pack, compute first-purchase bonus, create provider order, insert `payments` (`created`), return checkout params.
-- [ ] **A woman can't order Velas** → `NOT_ALLOWED` (D-076). The database would refuse her credit anyway; the route says so first, before she pays for something she could never use.
-- [ ] **Variant B has no active pack** since T-5.2 retired `entry-25` (D-250). Worst case: a man
+- [x] **Needs:** T-5.1, T-1.21, and P-0.17: a chartered accountant has confirmed how prepaid Velas are treated, before any real sale can happen, **answered 8 October 2026 (below)**; and **P-130**: no Velas are sold while `/refunds` promises returns that don't exist (D-230)
+- [x] `GET /packs`: active packs for the user's price-test variant (`users.id` hash → A/B, stable). `POST /payments/orders {pack_id}` + `Idempotency-Key`: copy amount + `credits` from the pack, compute first-purchase bonus, create provider order, insert `payments` (`created`), return checkout params.
+- [x] **A woman can't order Velas** → `NOT_ALLOWED` (D-076). The database would refuse her credit anyway; the route says so first, before she pays for something she could never use.
+- [x] **Variant B has no active pack** since T-5.2 retired `entry-25` (D-250). Worst case: a man
   hashed into B opens the store and finds nothing to buy. This task decides what B is shown until
   T-10.4 proposes a new test, and tests that no man ever gets an empty list.
-- [ ] Fake provider: returns a fake order and exposes a local-only endpoint that simulates the webhook.
-- [ ] **GST, as P-0.17 and D-450 have it (the founder, 8 October 2026):** `gst_paise` on the
+- [x] Fake provider: returns a fake order and exposes a local-only endpoint that simulates the webhook.
+- [x] **GST, as P-0.17 and D-450 have it (the founder, 8 October 2026):** `gst_paise` on the
   `payments` row, 0 while `GST_REGISTERED` is false, which it is today and stays until P-350;
   and a `gst_rate_bps` config, 1800 once registered. Prices are GST-inclusive (D-099), so
   registration never moves `amount_paise`: it splits it. A receipt, anything the user is shown
@@ -2865,7 +2865,7 @@ prices don't depend on the web photos step, and the hold is lifted.
   GST", no rate, no GSTIN, since showing or collecting GST without a GSTIN is against the law.
   **Test:** an unregistered payment, serialised as the user sees it, contains the string "GST"
   nowhere. 03-SCHEMA and 04-API take the column and the fields in this task (rule 10).
-- [ ] **Aggregate turnover counter, P-350's companion:** the sum of paid payments' `amount_paise`
+- [x] **Aggregate turnover counter, P-350's companion:** the sum of paid payments' `amount_paise`
   (`status = 'paid'`, Razorpay's captured) with `paid_at` in the financial year, 1 April to 31
   March, at `GET /admin/turnover` or wherever the admin reads it (T-9.5's `/admin/metrics`
   otherwise), and an **alert at ₹15 lakh**: by whatever alerting exists before T-9.12, at the
@@ -2875,7 +2875,7 @@ prices don't depend on the web photos step, and the hold is lifted.
   knows, and registration is late, with penalty and interest from the first day over (P-350).
   **Test:** payments either side of 1 April fall into the right year, and the alert line
   appears at ₹15 lakh and not below it.
-- [ ] **Commit:** `feat(payments): packs and order creation [T-8.1]`
+- [x] **Commit:** `feat(payments): packs and order creation [T-8.1]`
 
 ### T-8.2 · Webhook
 - [ ] **Needs:** T-8.1
@@ -3358,10 +3358,13 @@ The number comes from the session's own block, given in its brief, from P-100 up
   `docs/prototype/`. **Before T-1.15.** Found during T-1.14.
   **Done:** committed as `docs/prototype/velora-prototype-reference.html`. It predates the Velora
   rename, so it says "Knot": the screens and flows are the reference, not the name.
-- [ ] P-23 · Define what a variant-B man sees in `GET /packs` (T-8.1) — T-1.14 seeds variant B as
+- [x] P-23 · Define what a variant-B man sees in `GET /packs` (T-8.1) — T-1.14 seeds variant B as
   one row, `entry-25` (25 Velas, ₹999). Read literally, "active packs for the user's price-test
   variant" gives a B user a one-pack store. What D-005 describes is A's ladder with the entry pack
   in place of `pack-25`. Decide in T-8.1, with a test that B sees four packs. Found during T-1.14.
+  **Done (T-8.1, D-480, the founder, 8 October 2026):** B is shown A's four packs until T-10.4,
+  by an allowlist (`SHOWN_AS`); `test_each_variant_sees_d099s_four_with_the_first_purchase_bonus[B]`
+  is the test, and no man is ever shown an empty store.
 - [ ] P-24 · Make the catalogue columns NOT NULL — `areas.city`, `areas.name`, `areas.centroid`,
   `interests.slug` and `interests.label` are nullable (T-1.9). A catalogue row with no name means
   nothing, and nullable unique keys (`(city, name)`, `slug`) don't stop duplicate NULLs, so a
@@ -5281,3 +5284,27 @@ The number comes from the session's own block, given in its brief, from P-100 up
      pointer.
   Filed and answered the same day, so T-8.11 isn't blocked on it. Filed by Claude; its session's
   block, P-370 to P-379.
+- [ ] P-380 · Grant the first-purchase bonus only to a man's first paid payment, decided at
+  capture, not only at order. **In T-8.2, which credits it.** Worst case: a man opens two
+  checkouts before paying either; T-8.1 computes the bonus at order time, when neither is paid, so
+  both rows carry it, and if he pays both he is credited it twice, up to 90 + 90 Velas on two
+  ₹10,000 packs, with nothing in the ledger saying it shouldn't be. The fix belongs where Velas
+  are granted: T-8.2's capture grants `purchase_bonus` only if no other payment of his is paid or
+  refunded, in the same transaction, the wallet row locked (D-077). Found building T-8.1; filed
+  by Claude, 8 October 2026; its session's block, P-380 to P-389.
+- [ ] P-381 · Route the daily turnover line to the alert channel. **In T-9.12.** Worst case:
+  turnover passes ₹20 lakh, `log_turnover` logs an error every morning to Fly's logs, which nobody
+  reads and which rotate out in about 25 minutes, and registration is late, with penalty and
+  interest from the first day over (P-350). Until T-9.12 the line is the only alarm (D-483), the
+  same gap as D-066's OTP warning. The founder can read the figure meanwhile at
+  `GET /v1/admin/turnover`. Filed by Claude building T-8.1, 8 October 2026; its session's block,
+  P-380 to P-389.
+- [ ] P-382 · Require `RAZORPAY_KEY_ID` and `RAZORPAY_KEY_SECRET` at startup where
+  `PAYMENTS_PROVIDER` is `razorpay`. **When P-0.8 gives Velora a Razorpay account, before the
+  keys go into Fly.** Worst case: a deploy with a key missing or mistyped starts cleanly, every
+  checkout fails with `PROVIDER_UNAVAILABLE`, and the first anyone hears of it is a man who
+  couldn't pay. Today the API can't require them: staging and production run Razorpay, and with
+  no account there are no keys to set, so T-8.1 refuses each order instead of refusing to start
+  (02-ARCHITECTURE §11). The check names each missing key, never a value,
+  as the storage check does. Filed by Claude building T-8.1, 8 October 2026; its session's block,
+  P-380 to P-389.

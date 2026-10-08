@@ -1037,9 +1037,15 @@ async def _payment(db: AsyncSession, user_id: uuid.UUID) -> uuid.UUID:
     payment_id = await db.scalar(
         text(
             "insert into payments (user_id, pack_id, amount_paise, credits, "
-            "provider_order_id) values (:u, :p, 150000, 25, :o) returning id"
+            "provider_order_id, idempotency_key) "
+            "values (:u, :p, 150000, 25, :o, :k) returning id"
         ),
-        {"u": user_id, "p": pack_id, "o": f"order_{uuid.uuid4().hex}"},
+        {
+            "u": user_id,
+            "p": pack_id,
+            "o": f"order_{uuid.uuid4().hex}",
+            "k": str(uuid.uuid4()),
+        },
     )
     assert isinstance(payment_id, uuid.UUID)
     return payment_id
