@@ -136,9 +136,10 @@ counted, never for your own profile or a refusal.
 | GET | /threads/{id}/messages | ✅ | `?cursor=&limit=` → `Page<Message>` | T-7.3 |
 | POST | /threads/{id}/messages | ✅ | `{client_msg_id, kind, body?, media_key?, duration_s?}` → `Message` | T-7.3 |
 | POST | /threads/{id}/read | ✅ | `{up_to_message_id}` → 204 | T-7.5 |
-| POST | /threads/{id}/reopen | ✅ | → `Thread` (2 Velas, D-098) | T-7.6 |
+| POST | /threads/{id}/reopen | ✅ | `Idempotency-Key` → `Thread` (expired only; 2 Velas, D-098; a fresh hour from now) | T-7.6 |
+| POST | /threads/{id}/extend | ✅ | `Idempotency-Key` → `Thread` (10 Velas, adding 24 hours to what is left, D-250; from expired the same 10 re-opens it, D-253; a Knot or a woman `NOT_ALLOWED`) | T-7.6 |
 | POST | /threads/{id}/knot | ✅ | → `Thread` (sets your tap; converts when both) | T-7.7 |
-| DELETE | /threads/{id}/knot | ✅ | → `Thread` (untie → active, fresh 24h) | T-7.7 |
+| DELETE | /threads/{id}/knot | ✅ | → `Thread` (untie → active, a fresh hour) | T-7.7 |
 | POST | /threads/{id}/clear | ✅ | → 204 (one-sided) | T-7.8 |
 | POST | /threads/clear | ✅ | `{thread_ids[]}` or `{expired: true}` → `{cleared}` | T-7.8 |
 | DELETE | /threads/{id}/clear | ✅ | → 204 (undo / restore) | T-7.8 |

@@ -134,7 +134,7 @@ If any of these fails, nothing ships.
 10. **Clearing is one-sided** (T-7.8): A clears → B still sees every message.
 11. **Contact masking** (T-7.3): numbers, spaced digits, emails, UPI IDs, social handles masked in
     the first 20 messages; `body_raw` never returned by any user-facing endpoint.
-12. **Expired thread** (T-7.6): his send → `THREAD_EXPIRED`, and hers is delivered (D-097); re-open charges exactly 2 (D-098).
+12. **Expired thread** (T-7.6): his send → `THREAD_EXPIRED`, and hers is delivered (D-097); re-open charges exactly 2 (D-098); Extend charges 10 once, from expired too, never 2 beside it (D-253); his message never restarts the hour and hers does (D-097).
 13. **A Knot is mutual** (T-7.7): one tap never converts; two taps always do.
 14. **Private data** (T-4.4, T-4.5): processed images contain no EXIF; selfies never appear in
     any public response. From T-4.4: photos that genuinely carry a location

@@ -68,7 +68,7 @@ profiles and intuitive navigation.
 | Complaint | What we do | Where |
 |---|---|---|
 | C5 inbox flood | A man pays Velas to open any conversation — spam is not economically possible | D-002, D-004 |
-| C4 dead matches | Threads expire in 24 h; only a mutual knot persists | D-003 |
+| C4 dead matches | Threads expire after an hour without her reply; only a mutual knot persists | D-003, D-097 |
 | C2 push to WhatsApp | Contact details masked server-side for the first 20 messages; solicitation patterns rejected | D-030, T-7.3 |
 | C5 slow reports | 24 h SLA, 3 independent reports in 24 h auto-freezes, fraud scoring runs continuously | T-9.1, T-9.2 |
 | C5 social overlap | Hide profile, exclude phonebook contacts, hide age, hide distance, rounded distances only | T-9.6 |

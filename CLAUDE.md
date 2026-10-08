@@ -6,7 +6,8 @@ The detail lives in `docs/`. When a rule here conflicts with anything else, this
 ## What Velora is
 
 A web-first dating app for India. Women use it free. Men buy **Velas**.
-Every conversation starts as a **Thread** that expires in 24 hours.
+Every conversation starts as a **Thread** that expires after an hour, restarted only by her
+messages (D-097; T-7.6 builds it, and until then the code runs 24 hours). Extend buys a day.
 If both people tap "Tie the knot", it becomes a **Knot** — permanent and free forever.
 Permanence is granted by the other person, never bought.
 

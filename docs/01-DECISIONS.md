@@ -2384,6 +2384,10 @@ to P-150, decided at 12:40 at night, in his words:
 Nothing above changes; the five steps stand, and step 2's "restarted by her message" now means
 hers only. Written up by Claude, 8 October 2026.
 
+**Written 8 October 2026: the 1-hour task is T-7.6** (P-150). It sets `thread_hours` to 1 with
+the copy that promises it, and sells Extend; how it keeps the hour is D-560. Until it lands, 24
+hours still runs.
+
 ### D-098 · What things cost: men pay per action, women pay nothing — Locked (values tunable)
 Prices stay data (D-004, D-016): `action_prices` and `gifts`, changed by a row, not a deploy.
 
@@ -4139,6 +4143,40 @@ payer field set, and one nobody has listed, and reads back exactly these keys.
 residency read); an allowlist keeps out what a strip list can't know about.
 
 **Rejected:** storing the payload whole; a list of fields to strip.
+
+### D-560 · The hour lives in `expires_at` alone; Extend is sold by T-7.6 — Open (the mechanism, until T-7.6 builds it)
+**Decision.** T-7.6 keeps D-097's hour in the one column the schema already has. Each event moves
+`expires_at`, in its own transaction with the Thread row locked:
+
+| event | `expires_at` becomes |
+|---|---|
+| open (T-7.1) | `now + thread_hours` |
+| her message, on a live Thread | `max(expires_at, sent_at + thread_hours)` |
+| his message | unchanged (D-097's amendment, a) |
+| Extend, live or expired | `max(expires_at, now) + thread_extend_hours` |
+| re-open, untie | `now + thread_hours` |
+
+Every move later clears `expiry_warned_at`. **A Thread is expired once `expires_at` has passed**,
+whatever its status says: the cron only catches the status up. Extend is sold by
+`POST /threads/{id}/extend`, in T-7.6, as P-150 proposed.
+
+**Why one column carries all of it.** The `max` with her message is D-097's amendment (d): an
+Extend ending finds the Thread expired unless she wrote in its last hour, which pushed
+`expires_at` past it, with no column for when Extend ends. Extend's `max(expires_at, now)` is the
+founder's answer that a second Extend adds to what is left, and from expired it is simply `now`.
+Expiry by the clock closes the minute between crons, in which his send would otherwise pass and
+her message would revive a Thread that had run out. The settings (`thread_hours` 1,
+`thread_extend_hours` 24, `thread_warn_minutes` 10), re-open's fresh hour and the one warning are
+the founder's answers, 8 October 2026, on the advisor's recommendation (Claude, in a separate
+chat), written into T-7.6.
+
+**Rejected:** columns of their own for her last message and the end of an Extend, with expiry
+computed from them, which is more state that can disagree, and a cron that can't use the partial
+index on `expires_at`; expiry by the status column alone, which leaves the minute's gap above.
+
+**Open** because the mechanism is Claude's, written in P-150, 8 October 2026, and T-7.6 may find a
+better one while building; the rules it keeps are Locked where they are written (D-097, D-098,
+D-250, D-253, and T-7.6's five answers), and no change to the mechanism may change them.
 
 ---
 

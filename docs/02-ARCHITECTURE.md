@@ -170,8 +170,8 @@ Envelope, both directions: `{ "type": "…", "id": "<uuid>", "data": { … } }`
 | `message.read` | the other person read up to a message |
 | `typing` | other person typing (throttled 1/3 s) |
 | `thread.opened` | someone opened a thread with you |
-| `thread.expiring` | 2 h left |
-| `thread.expired` | expired |
+| `thread.expiring` | `thread_warn_minutes` (10) left; to him only, never her (T-7.6) |
+| `thread.expired` | expired; to him only (T-7.6) |
 | `knot.requested` / `knot.accepted` / `knot.untied` | knot state changes |
 | `wallet.updated` | balance changed |
 | `match.created` | a like or Super Like met one back (T-6.4): `{match_id, user_id}`, the other person, to both |
@@ -202,7 +202,7 @@ a failed or hung publish (1 s) is logged without failing the request (`core/even
 | `watermark_album` | album access granted | render per-viewer watermarked copies |
 | `send_push` | any notification | Web Push, drop dead subscriptions on 404/410 |
 | `expire_threads` | cron, every minute | active threads past `expires_at` → `expired`, emit event |
-| `warn_expiring` | cron, every 5 min | threads with <2 h left, warned once |
+| `warn_expiring` | cron, every minute | threads with `thread_warn_minutes` (10) or less left, warned once per expiry, him only (T-7.6) |
 | `recompute_fraud` | cron every 10 min + on report | recompute score, apply band actions |
 | `cleanup` | cron, daily 03:30 IST | purge expired OTP keys, old WS tickets, stale push subs |
 | `log_turnover` | cron, daily 03:30 UTC (09:00 IST) | the financial year's paid turnover, logged: warning from ₹15 lakh, error from ₹20 lakh (D-483, P-350). The worker's cron schedules are in UTC (`WorkerSettings.timezone`) |

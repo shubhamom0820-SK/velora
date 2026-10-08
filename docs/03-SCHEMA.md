@@ -254,7 +254,8 @@ Check `status <> 'knotted' OR (knotted_at IS NOT NULL AND expires_at IS NULL)` �
 carries an expiry, so the expiry cron can never kill a conversation both people were told is
 permanent. Check `status <> 'active' OR expires_at IS NOT NULL` — an active thread always expires;
 every way into `active` (open, reopen, untie) sets a fresh expiry of `app_config.thread_hours`
-(seeded 24) — read the setting, never hardcode the number (T-1.10).
+(seeded 24; 1 from T-7.6, D-097) — read the setting, never hardcode the number (T-1.10). From
+T-7.6 her message and Extend can also move `expires_at` later, and his never does (D-560).
 Indexes: `(expires_at) where status='active'`, `(user_low, last_message_at desc)`,
 `(user_high, last_message_at desc)`.
 
@@ -543,7 +544,8 @@ trace is exactly the person with admin access (T-1.13).
 
 ### app_config  (key/value, cached 60 s per app, P-47; OTP send's daily cap reads it fresh)
 `key text pk, value jsonb not null, updated_at`. Seeds: `swipe_daily_limit_men=50`,
-`discovery_radius_km=25`, `thread_hours=24`, `mask_first_n_messages=20`, `kudos_min_messages=6`,
+`discovery_radius_km=25`, `thread_hours=24` (1 by T-7.6's data migration, which adds
+`thread_extend_hours=24` and `thread_warn_minutes=10`; D-097, D-560), `mask_first_n_messages=20`, `kudos_min_messages=6`,
 `gift_free_daily_limit=3` (replaced by T-5.2's data migration with `gift_free_weekly_limit=15`,
 fifteen free sends a week, D-231),
 `gift_same_recipient_cooldown_h=24`; and, by its own data migration
@@ -556,7 +558,7 @@ promise, not a computation. Change the copy with the setting:
 - `thread_hours`: the landing page ("Threads last a day", "24-hour", T-2.1), `/terms` ("lasts
   a day", T-2.2), and the share image, whose pixels say "Threads last a day"
   (`web/src/app/opengraph-image.jpg`, T-2.4): the easiest one to forget. 08-DESIGN §7 says how to
-  regenerate it.
+  regenerate it. T-7.6 changes them all with the setting.
 - `mask_first_n_messages`: `/terms` and `/privacy` ("first 20 messages", T-2.2).
 
 ### waitlist

@@ -315,7 +315,7 @@ card uses it).
 price badge on a button is the number alone: Super's "5", "Extend 24h · 10". Nowhere "verified"
 (D-262): the badge says "Selfie matched", and `web/src/i18n/claims.test.ts` holds every string.
 **Every hour on these screens is D-097's** ("41m left", "Threads last an hour", "The hour ran
-out"), decided and not built: `app_config.thread_hours` is 24 until the 1-hour task (P-150) lands.
+out"), decided and not built: `app_config.thread_hours` is 24 until T-7.6, the 1-hour task, lands.
 A screen built before then says what runs, as the landing does (copy follows the setting, P-14),
 and takes these words when the task lands.
 
@@ -407,8 +407,9 @@ the hour ran out: "The hour ran out". Her new message has an `--accent` border a
 in `--accent`. A sheet at the bottom, `--corner-sheet` with `--shadow-2`: `title-2` "She wrote
 back. The hour had run out."; `small` `--mute` "You can read everything. To reply, open the Thread
 again."; "Re-open · 2 Velas", filled `--accent`; "Re-open and keep it for 24h · 10 Velas",
-outlined (D-253: ten in all, never twelve); and in `micro`, "Re-open restarts the hour from her
-message. Extend holds it for a day, as many times as you like." A woman never sees this screen.
+outlined (D-253: ten in all, never twelve); and in `micro`, "Re-open gives you a fresh hour.
+Extend adds a day, as many times as you like." (the canvas,
+changed 8 October 2026). A woman never sees this screen.
 
 **Knot tied ✦ (T-7.7).** The match sheet again, but both initials have the `--chrome-accent`
 border, and the ring is filled: 28 px `--chrome-accent` with `--shadow-1`, a `--chrome` ring inside

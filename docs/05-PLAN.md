@@ -2816,24 +2816,82 @@ prices don't depend on the web photos step, and the hold is lifted.
 - [ ] `POST /threads/{id}/read` sets `read_at` up to a message, publishes `message.read`. Client `typing` relay throttled.
 - [ ] **Commit:** `feat(realtime): read receipts and typing [T-7.5]`
 
-### T-7.6 · Expiry and re-open
-- [ ] **Needs:** T-7.4
-- **How a Thread lives, answered 8 October 2026** (the founder; D-097's amendment, P-150): his own
-  message never restarts the hour, only hers does; and when Extend's 24 hours end, the hour runs
-  from her last message, so an extended Thread can expire the instant the extension ends. They
-  decide when this task's cron expires a Thread once the 1-hour task lands (P-150, still nobody's).
-  **Beside them, the advisor's rule (D-253, Open until the founder's word; Locked on it 8 October
-  2026):** Extend on an expired Thread re-opens it too, for 10 in all, never this task's 2 and
-  then 10.
-- [ ] Cron `expire_threads` (every minute, batches of 500, `FOR UPDATE SKIP LOCKED`) → `expired` + event. Cron `warn_expiring` (< 2 h, once) → push + event.
-- [ ] `POST /threads/{id}/reopen` (expired only) → debit 2 (men; D-098), `active`, `expires_at = now + 24h`, reset warning.
-- [ ] Tests using a controllable clock.
-- [ ] **Commit:** `feat(threads): expiry, warnings, reopen [T-7.6]`
+### T-7.6 · The 1-hour Thread: expiry, re-open, Extend
+- [ ] **Needs:** T-7.4 (and through it T-7.3, whose send path this task changes)
+- **This is the 1-hour task D-097 names** (written by P-150, 8 October 2026). Until it lands, 24
+  hours is what runs. What it builds is decided: D-097's five steps and its amendment (his message
+  never restarts the hour; when Extend ends, the hour runs from her last message), D-098's prices,
+  D-250 (Extend again and again), D-253 (Extend from expired is 10 in all), and the five answers
+  below. How it is kept is D-560.
+- **Decided 8 October 2026** (the founder, on the advisor's recommendation, Claude in a separate
+  chat, relayed by the founder; P-150's five questions):
+  1. **After a re-open, the hour starts now.** He paid 2 for an hour. From her last message, a
+     message over an hour old would have had him pay 2 and expire on the spot.
+  2. **One warning, 10 minutes before expiry, to him only;** the cron runs every minute. The old
+     "< 2 h" never fires on a 1-hour Thread.
+  3. **`thread_hours` keeps its name and is set to 1 here;** beside it, `thread_extend_hours = 24`
+     and `thread_warn_minutes = 10`. T-7.1 already reads `thread_hours`, so no code is renamed.
+  4. **A second Extend adds 24 hours to what is left,** never 24 from now: extending with 4 hours
+     left gives 28, so no paid hour is lost.
+  5. **The setting and the copy change together, in this task;** `/terms`' new sentence is shown
+     to the founder before this task lands.
+- [ ] **The hour lives in `expires_at` alone (D-560),** every move of it in the transaction that
+  causes it, with the Thread row locked:
+  - open: `now + thread_hours` (T-7.1, as built);
+  - **her** message on a live Thread: `max(expires_at, sent_at + thread_hours)`, so a message in
+    an Extend's last hour carries the Thread past it and one earlier changes nothing (D-097's
+    amendment, d). **His message never moves it** (a): a test has him write every 59 minutes and
+    the Thread expire an hour after her last message;
+  - Extend: `max(expires_at, now) + thread_extend_hours` (answer 4; from expired, `now` wins);
+  - re-open: `now + thread_hours` (answer 1);
+  - untie (T-7.7): `now + thread_hours`.
+  Every move later clears `expiry_warned_at`, so each expiry gets its one warning.
+- [ ] **Expired is the clock, not the status column.** A Thread whose `expires_at` has passed is
+  expired for every check, though the cron hasn't caught its status up: his send is refused with
+  `THREAD_EXPIRED`, and her message is delivered and moves nothing (D-097 step 4: it stays expired
+  until he re-opens). Without this, the minute between crons lets him send in a Thread that ran
+  out, and lets her message revive one. T-7.3's send changes here to read it.
+- [ ] Cron `expire_threads` (every minute, batches of 500, `FOR UPDATE SKIP LOCKED`): active
+  Threads past `expires_at` → `expired`, `thread.expired` to him. Cron `warn_expiring` (every
+  minute): active Threads with `thread_warn_minutes` or less left and no `expiry_warned_at` →
+  set it, push + `thread.expiring` to him. **Neither reaches her** (D-097: her side shows only
+  that her message hasn't been seen; T-7.2 sends her `expires_at` as null).
+- [ ] **`POST /threads/{id}/extend`** + `Idempotency-Key` → `Thread`: Extend is sold here (D-253:
+  no other task sells it). 10 Velas through `pricing.service.charge`, one `thread_extend` debit
+  (D-251), the key naming the event the wallet keys a repeating reason on (D-077), so a double tap
+  charges once. An active or an expired Thread; from expired the same 10 re-opens it, `active`,
+  never a `thread_reopen` beside it (D-253). A Knot, or a woman (D-097: she is never charged and
+  never shown it), → `NOT_ALLOWED`, and no ledger row.
+- [ ] `POST /threads/{id}/reopen` + `Idempotency-Key` (expired only) → debit 2 (men; D-098,
+  `thread_reopen`), `active`, `expires_at = now + thread_hours`, warning cleared.
+- [ ] **The setting and every promise of it, in one commit** (answer 5). A data migration sets
+  `thread_hours` to 1 and adds `thread_extend_hours` (24) and `thread_warn_minutes` (10),
+  reversibly; with it, everything that says a Thread lasts a day (P-150's sweep, 8 October 2026):
+  - `web/src/i18n/en.ts`: `landing.headlineThreads` ("Threads last a day."), `landing.intro` ("a
+    24-hour thread"), `landing.features.threads.title` ("24-hour threads"), and `/terms`'
+    `conversations.body` ("which lasts a day"), each with its comment. **`/terms` is a published
+    page: its new sentence goes to the founder before this lands.**
+  - `web/src/app/opengraph-image.jpg`, whose pixels say "Threads last a day", and
+    `opengraph-image.alt.txt`, regenerated as 08-DESIGN §7 says.
+  - the comments that say 24: `web/src/app/(marketing)/page.tsx`, `web/src/lib/site.ts`,
+    `api/app/modules/threads/models.py`'s docstring, `api/tests/test_reference_data.py`'s seed
+    test, `api/tests/test_schema.py`'s "24-hour promise".
+  Untouched, and right: the seed migration's `thread_hours: 24` (history; the new migration
+  moves it), and `api/tests/modules/pricing/test_service.py`'s "another 24 hours", which is
+  Extend's.
+- [ ] Tests using a controllable clock: her message restarts the hour and his never does; Extend
+  stacks (answer 4); an extended Thread expires the instant Extend ends when her last message is
+  over an hour old (d), and doesn't when she wrote in its last hour; Extend from expired is one
+  debit of 10; re-open is 2 and an hour from now; a woman's Extend writes nothing; past
+  `expires_at` before the cron, his send is refused and her message revives nothing; her message
+  racing the cron, the overlap forced, never leaves an active Thread with an expiry in the past;
+  one warning per expiry, never to her.
+- [ ] **Commit:** `feat(threads): the 1-hour Thread, expiry, re-open and Extend [T-7.6]`
 
 ### T-7.7 · Tie the knot
 - [ ] **Needs:** T-7.6
 - [ ] `POST /threads/{id}/knot`: set my `*_knot_at`; if both set → `knotted`, `knotted_at`, `expires_at = null`, publish `knot.accepted` to both; else publish `knot.requested` to the other. Works on `expired` threads too (converts directly if both).
-- [ ] `DELETE /threads/{id}/knot`: untie → `active`, fresh 24 h, clear both taps, notify.
+- [ ] `DELETE /threads/{id}/knot`: untie → `active`, a fresh hour (`now + thread_hours`, T-7.6), clear both taps, notify.
 - [ ] **Commit:** `feat(threads): tie and untie knot [T-7.7]`
 
 ### T-7.8 · Clearing
@@ -4705,7 +4763,7 @@ The number comes from the session's own block, given in its brief, from P-100 up
   `release-gate`, the hole scenario exited 0. Each check removed alone went red: `ci-gate`'s branch
   filter (4 scenarios), its read-back check (1), `release-gate`'s filter (3); each restored and
   checked by SHA-256.
-- [ ] P-150 · Write the 1-hour task D-097 names, which moves a Thread from 24 hours to 1 and lists
+- [x] P-150 · Write the 1-hour task D-097 names, which moves a Thread from 24 hours to 1 and lists
   every place that says 24 hours. **Needs:** nothing now. The founder's word on D-253, the
   advisor's rule for Extend from an expired Thread, came 8 October 2026 (Locked). The two questions
   moved here from T-5.2's item 10 on 4 October 2026 were **answered 8 October 2026 (the founder, in
@@ -4726,6 +4784,18 @@ The number comes from the session's own block, given in its brief, from P-100 up
   T-7.6 points here. Found in T-5.2; filed from this session's block (P-150 to P-159).
   **Still nobody's, 8 October 2026:** the questions are answered, and the work, the 1-hour task
   that sells Extend, is unwritten. This box stays open until it is.
+  **Done 8 October 2026: written into T-7.6,** which was not yet built, so rewritten in place
+  rather than reopened: the hour in `expires_at` alone (D-560), the expire and warning crons,
+  re-open, and `POST /threads/{id}/extend`, Extend's home as this entry proposed (in the plan the
+  founder approved, 8 October 2026). Its five questions (re-open's hour, the warning, the settings, a second
+  Extend, where the copy changes) were answered the same day and are written there as decided.
+  **The sweep** (`git grep -i` for 24 h, 24h, 24-hour, 24 hours, `thread_hours`, "a day", every
+  hit classified): docs that gave a Thread 24 hours now say an hour (CLAUDE.md, README, 02, 03,
+  04, 06, 08, 09; D-097 points at T-7.6); the code and copy that say it are T-7.6's, listed on its
+  setting-and-copy line. Left as they are: D-003 and the other entries' history, the prototype
+  (the design reference, whose departures 08-DESIGN records), and every 24 that isn't a Thread's
+  (sign-in codes, exports, grievances, the report SLA, the selfie window, discovery's recency, the
+  gift cooldown, and Extend's own 24 hours).
 - [x] P-141 · Let only `main` deploy to staging. **Before the next session that can push a
   branch.** Worst case: a workflow file edited on any branch runs with staging's secrets, among
   them the database owner's connection used for migrations, and the Vercel and Fly tokens: it can
@@ -5454,3 +5524,14 @@ The number comes from the session's own block, given in its brief, from P-100 up
   and a new purchase inside that window. One way: record each refund or dispute id handled, on the
   payment or in a small table, and treat a known id as a repeat. Found building T-8.2 (D-520);
   filed by Claude, 8 October 2026; its session's block, P-420 to P-429.
+- [ ] P-460 · Keep the countdown and the expiry off her screens. **In T-7.10 and T-7.12** (on
+  neither's Needs line yet: the founder to place it). Worst case: she sees a Thread's countdown,
+  "Ran out" or an expired state, and so learns that time, and money, stands between her message
+  and his reply, which D-097 says she is never shown ("Her side shows only that her message hasn't
+  been seen"). T-7.10's line asks for "live countdown per row", and T-7.12's events update the
+  list's state, neither saying whose rows. 08-DESIGN covers her conversation screen (T-7.11, no
+  countdown, no price), not the list. **The API half is closed:** T-7.2's session sends her
+  `expires_at` as null (its Q6, approved 8 October 2026), and T-7.6 sends `thread.expiring` and
+  `thread.expired` to him only. What is left is the web: her rows draw no countdown pill and no
+  expired state, and the client reads nothing from a null. Found writing T-7.6; filed by Claude,
+  8 October 2026; its session's block, P-460 to P-469.
