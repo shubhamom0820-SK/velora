@@ -3,6 +3,7 @@
 catalogue (D-041), and T-3.2 the OTP daily cap (D-066), tested the same way.
 T-5.2's data migrations reprice them (D-098, D-099, D-231, D-250): the tests
 read the head, and one goes back to T-1.14's values to check its downgrades.
+P-370 moves the "liked you" reveal from 20 to 1 Vela, tested the same way.
 P-38 replaces T-1.14's Bengaluru areas with Phagwara's (D-013).
 
 Expected values are written out here, not read from the migration, so a wrong
@@ -81,7 +82,7 @@ async def test_action_prices_are_d098_and_d231(db: AsyncSession) -> None:
         "album_request": 1,  # D-231, viewing private pictures, was 5
         "voice_unlock": 5,  # D-004's, by default (D-231)
         "super_like": 5,  # D-004's, by default: not swiping (D-250)
-        "liked_you_reveal": 20,  # D-004's, by default (D-231)
+        "liked_you_reveal": 1,  # the founder, 8 October 2026 (P-370), was 20
     }
     assert await db.scalar(text("select count(*) from action_prices")) == 9
 
@@ -400,6 +401,37 @@ async def test_t52_data_downgrades_restore_t114s_values(
         (key, json.dumps(value))
         for key, value in {**REVISION.APP_CONFIG, "otp_sms_daily_cap": 500}.items()
     }
+
+
+# --- P-370: the "liked you" reveal at 1 Vela (D-004's note) -------------------
+
+REVEAL_REVISION = _revision("e4e517f62ce3")
+
+
+async def _prices(connection: AsyncConnection) -> dict[str, tuple[int, bool]]:
+    rows = await connection.execute(
+        text("select action, credits, active from action_prices")
+    )
+    return {action: (credits, active) for action, credits, active in rows}
+
+
+async def test_the_reveal_moves_and_nothing_else_does(test_engine: AsyncEngine) -> None:
+    """Undone, the reveal is D-004's 20; done again, 1. Every other row is the
+    same throughout, credits and active alike."""
+    async with test_engine.connect() as connection:
+        at_head = await _prices(connection)
+    try:
+        await run_alembic(test_engine, command.downgrade, REVEAL_REVISION.down_revision)
+        async with test_engine.connect() as connection:
+            undone = await _prices(connection)
+    finally:
+        await run_alembic(test_engine, command.upgrade, "head")
+    async with test_engine.connect() as connection:
+        redone = await _prices(connection)
+
+    assert at_head["liked_you_reveal"] == (1, True)
+    assert undone == {**at_head, "liked_you_reveal": (20, True)}
+    assert redone == at_head
 
 
 # --- P-25: intents (D-041) ----------------------------------------------------

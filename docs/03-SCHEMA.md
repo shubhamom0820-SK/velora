@@ -429,8 +429,8 @@ pictures). `super_like` stays 5, by default: it isn't swiping (D-250). Read only
 `pricing.service.price_for()` (T-5.2): fresh, in the debit's transaction, 0 for a woman, a missing
 row a 500 and an inactive one `NOT_ALLOWED`.
 **`liked_you_reveal` is 1 from 8 October 2026 (the founder),** a value change (D-004's note).
-The database holds 20 until P-370's data migration moves the row, which it must before T-6.7
-charges it.
+P-370's data migration `e4e517f62ce3` moved the row from 20 to 1 the same day, before T-6.7
+charges it; its downgrade puts D-004's 20 back.
 
 ### credit_packs
 `id text pk, credits int not null, price_paise int not null, bonus_first_pct smallint not null default 20,

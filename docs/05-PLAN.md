@@ -2725,8 +2725,8 @@ prices don't depend on the web photos step, and the hold is lifted.
 - [ ] **Commit:** `feat(search): search and username lookup [T-6.6]`
 
 ### T-6.7 · Liked you
-- [ ] **Needs:** T-6.4, T-5.1, and **P-370**: the `liked_you_reveal` row holds 1, not 20, before
-  anything charges it (the founder, 8 October 2026)
+- [ ] **Needs:** T-6.4, T-5.1 (P-370, the `liked_you_reveal` row at 1, not 20, came off this line
+  when it landed, 8 October 2026)
 - [ ] `GET /likes`: people who liked/super-liked me and whom I haven't swiped; for men, unrevealed entries return only a blurred thumbnail URL (server-generated blur, not CSS) and no name. `POST /likes/{id}/reveal` debits the `liked_you_reveal` row's price, through `pricing.service`, never a literal (1 Vela from 8 October 2026, the founder; this line said "debits 20" until then), and records `liked_you_reveals`.
 - [ ] Web "Liked you" tab: grid, count badge, reveal flow.
 - [ ] **Commit:** `feat(discovery): liked you with paid reveal [T-6.7]`
@@ -5254,7 +5254,7 @@ The number comes from the session's own block, given in its brief, from P-100 up
   URL ever covered and the row points there; or `complete` revokes the window by moving the
   object. Found building T-4.12; filed by Claude, 8 October 2026; its session's block, P-300 to
   P-309.
-- [ ] P-370 · Move the `liked_you_reveal` row from 20 to 1 Vela, by a data migration. **Before
+- [x] P-370 · Move the `liked_you_reveal` row from 20 to 1 Vela, by a data migration. **Before
   T-6.7, on its Needs line.** Worst case first: the founder set the reveal at 1 Vela (8 October
   2026, D-004's note), but the price is a row, and every database holds 20, written by T-1.14's
   `fa16c0908c2c`. Editing the docs changes nothing that is shown or charged: T-5.5's price list
@@ -5267,6 +5267,16 @@ The number comes from the session's own block, given in its brief, from P-100 up
   the API's answer; this task says whether it follows. Filed by Claude
   at the direction of the advisor (Claude, in a separate chat, relayed by the founder), 8 October
   2026; its session's block, P-370 to P-379.
+  **Done 8 October 2026:** `e4e517f62ce3` moves the row to 1 and its downgrade puts 20 back; a
+  test in `test_reference_data.py` holds both, with every other row unchanged. The two tests
+  named, and `tests/modules/pricing/test_service.py`, which held 20 too, say 1, so T-5.5's price
+  list (`GET /prices`) is held at 1. `WalletScreen.test.tsx` follows, since it stands in for that
+  answer, and asserts each row's action and price apart, as a person sees them. Not a bug to
+  file: the row's markup, read once in Playwright's Chromium (a one-off reading, not a committed
+  check), gives `innerText` "See one person who liked you\n1 Vela" and an accessible text with a
+  space between; only jsdom's `textContent` runs them together. 08-DESIGN's "Reveal · 20 Velas"
+  pill is now 1, read from `/prices`; D-099 notes that its number to watch falls on a man's second
+  Thread (both the founder's, 8 October 2026). `api/seed/` holds no price.
 - [x] P-371 · Welcome Velas: can one person collect them again and again? **Answered by the
   founder, 8 October 2026, on the advisor's recommendation (Claude, in a separate chat), relayed;
   recorded in D-470.** The question, found filing T-8.11: one number holds one account at a time

@@ -21,7 +21,7 @@ const PRICES = {
   album_request: 1,
   dm_message: 2,
   dm_open: 8,
-  liked_you_reveal: 20,
+  liked_you_reveal: 1,
   super_like: 5,
   thread_extend: 10,
   thread_open: 5,
@@ -150,18 +150,22 @@ describe("a man's wallet: what things cost (T-5.5)", () => {
       name: t("wallet.prices"),
     });
     const rows = await within(prices).findAllByRole("listitem");
-    expect(rows.map((row) => row.textContent)).toEqual([
-      "Open a thread5 Velas",
-      "Re-open an expired thread2 Velas",
-      "Extend a thread by a day10 Velas",
-      "First private message8 Velas",
-      "Each private message after it2 Velas",
-      "View private pictures1 Vela",
-      "Listen to a voice note5 Velas",
-      "Super Like5 Velas",
-      "See one person who liked you20 Velas",
-      "Tie the knotFree",
-      "Messaging in a knotFree",
+    // Each row as a person sees it: the action, and apart from it the price
+    // (`textContent` would run the two together, as no browser shows them).
+    expect(
+      rows.map((row) => Array.from(row.children, (cell) => cell.textContent)),
+    ).toEqual([
+      ["Open a thread", "5 Velas"],
+      ["Re-open an expired thread", "2 Velas"],
+      ["Extend a thread by a day", "10 Velas"],
+      ["First private message", "8 Velas"],
+      ["Each private message after it", "2 Velas"],
+      ["View private pictures", "1 Vela"],
+      ["Listen to a voice note", "5 Velas"],
+      ["Super Like", "5 Velas"],
+      ["See one person who liked you", "1 Vela"],
+      ["Tie the knot", "Free"],
+      ["Messaging in a knot", "Free"],
     ]);
   });
 

@@ -355,9 +355,10 @@ and Like.
 
 **Liked you (T-6.7).** A two-column grid of 204 px tiles, `--corner-card`. Revealed: the photo, the
 thread, name and distance, and a star badge at the top left for a Super Like. Unrevealed: the
-server's blur (T-6.7, never CSS), and under it a "Reveal · 20 Velas" pill, `--surface` with
-`--shadow-2` and a lock icon. A woman's tiles are all revealed (`/likes` is free for her). The count
-in the header is a `--chrome-accent` badge.
+server's blur (T-6.7, never CSS), and under it a "Reveal · 1 Vela" pill, `--surface` with
+`--shadow-2` and a lock icon. The number is read from `/prices`, never written into the code (it
+was "Reveal · 20 Velas" until 8 October 2026, the founder, P-370). A woman's tiles are all
+revealed (`/likes` is free for her). The count in the header is a `--chrome-accent` badge.
 
 **Filters (T-6.9).** A bottom sheet, `--corner-sheet`, over `--scrim`. Intent chips 38 px; pressed,
 they fill `--accent-soft` with an `--accent` border and `--accent` text. Two toggles, "Selfie

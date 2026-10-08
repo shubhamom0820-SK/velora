@@ -9,12 +9,12 @@ from httpx import AsyncClient
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
-# Written out, as in test_service.py: D-097 to D-099, D-231 and D-250.
+# Written out, as in test_service.py: D-097 to D-099, D-231, D-250 and P-370.
 PRICES = {
     "album_request": 1,
     "dm_message": 2,
     "dm_open": 8,
-    "liked_you_reveal": 20,
+    "liked_you_reveal": 1,  # the founder, 8 October 2026 (P-370)
     "super_like": 5,
     "thread_extend": 10,
     "thread_open": 5,

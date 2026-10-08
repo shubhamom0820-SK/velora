@@ -38,7 +38,8 @@ PRICES = {
     LedgerReason.VOICE_UNLOCK: 5,
     # Survived by default, never decided (D-231, D-250).
     LedgerReason.SUPER_LIKE: 5,
-    LedgerReason.LIKED_YOU_REVEAL: 20,
+    # The founder, 8 October 2026 (P-370): was D-004's 20, by default.
+    LedgerReason.LIKED_YOU_REVEAL: 1,
 }
 THREAD_OPEN = LedgerReason.THREAD_OPEN
 

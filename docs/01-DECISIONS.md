@@ -62,8 +62,8 @@ now 8 and then 2; the album request is viewing private pictures, now 1, and a de
 nothing (D-230). The voice-note unlock, Super Like and "liked you" reveal stay, by default.
 **Noted 8 October 2026: the "liked you" reveal is 1 Vela,** the founder's word ("koi like kiya
 reveal karne ka ek vela"). A value change, since the values are tunable (D-098): the row changes
-and no decision reopens. The database holds 20 until P-370's data migration moves the row, before
-T-6.7 charges it.
+and no decision reopens. P-370's data migration `e4e517f62ce3` moved the row from 20 to 1 the
+same day, before T-6.7 charges it.
 
 ### D-005 · Credit packs — Locked
 | Credits | Price | Per credit | Cost of one thread (5 cr) |
@@ -2458,6 +2458,10 @@ be true on day one. **D-250:** `entry-25` is retired; the day-one question moved
 accountant, by phone). A user pays ₹1,500 today, with Velora unregistered, and ₹1,500 after
 registration, when ₹1,271 is Velora's and ₹229 the government's. The table's rupees don't move;
 what moves is the split.
+**Noted 8 October 2026: the number falls on his second Thread, not his first** (the founder, on
+the advisor's recommendation, Claude in a separate chat, relayed by the founder). The welcome 5
+Velas (D-470) cover a man's first Thread, so the one he first pays for is his second. Its ₹250
+and ₹111 don't move. Nothing else in this entry changes.
 
 The packs are the founder's decision, 4 October 2026. The reasoning beside them (the dominated
 pack, the ₹250 and ₹111) is the advisor's write-up (Claude, in a separate chat), relayed by the
