@@ -43,8 +43,14 @@ from app.core.providers.moderation import (
     Scores,
 )
 from app.core.providers.storage import ObjectNotFound, StorageProvider
-from app.core.queue import MATCH_PHOTO, MODERATE_PHOTO, Queue
-from app.core.storage_keys import public_photo_key, public_url, raw_key, scored_key
+from app.core.queue import BLUR_PHOTO, MATCH_PHOTO, MODERATE_PHOTO, Queue
+from app.core.storage_keys import (
+    blurred_photo_key,
+    public_photo_key,
+    public_url,
+    raw_key,
+    scored_key,
+)
 from app.modules.onboarding import service as onboarding_service
 from app.modules.photos import moderation as moderation_rules
 from app.modules.photos import repository
@@ -436,6 +442,7 @@ async def delete_photo(
     public photo of its own, and stays. An approved public photo's going
     lowers a finished profile's completeness at once (P-210)."""
     public_key: str | None = None
+    blur_key: str | None = None
     async with session.begin():
         user = await users_service.locked_user(session, user.id)
         photo = await repository.photo_for_update(session, user.id, photo_id)
@@ -449,11 +456,12 @@ async def delete_photo(
             await _refuse_changing_the_face_photo(session, user)
         photo.status = ReviewStatus.REJECTED
         photo.reject_reason = USER_DELETED
-        public_key = photo.public_key
+        public_key, blur_key = photo.public_key, photo.blur_key
         if photo.kind is PhotoKind.PUBLIC:
             await onboarding_service.refresh_completeness(session, user)
-    if public_key:
-        await storage.delete(settings.R2_BUCKET_PUBLIC, public_key)
+    for key in (public_key, blur_key):
+        if key:
+            await storage.delete(settings.R2_BUCKET_PUBLIC, key)
 
 
 # --- Showing the face photo (T-4.12, D-391) -------------------------------------------
@@ -542,6 +550,67 @@ async def queue_match(queue: Queue, photo: Photo) -> None:
     (D-393): on the worker, one at a time, the result in the photo's record."""
     await queue.enqueue(
         MATCH_PHOTO, job_id=f"{MATCH_PHOTO}:{photo.id}", photo_id=str(photo.id)
+    )
+
+
+async def queue_blur(queue: Queue, photo_id: UUID) -> None:
+    """Make an approved public photo's blurred copy, for Liked you (D-543):
+    on the worker, once at a time per photo."""
+    await queue.enqueue(
+        BLUR_PHOTO, job_id=f"{BLUR_PHOTO}:{photo_id}", photo_id=str(photo_id)
+    )
+
+
+async def blur(
+    sessions: Sessions,
+    photo_id: UUID,
+    *,
+    storage: StorageProvider,
+    settings: Settings,
+) -> str:
+    """`blur_photo`'s work (D-543): the photo's public copy read, blurred, and
+    written to the public bucket under a fresh key, never one derived from the
+    photo's id, whose own copy that would name. Recorded only if the photo is
+    still the approved public copy it was read from and has no blur yet;
+    otherwise the file just written is deleted. What it did, for the job's
+    result."""
+    async with sessions() as session:
+        photo = await session.get(Photo, photo_id)
+        if photo is None or not _blurrable(photo):
+            return "nothing to blur"
+        public_key = photo.public_key
+        assert public_key is not None
+    try:
+        data = await storage.get_bytes(settings.R2_BUCKET_PUBLIC, public_key)
+    except Exception as error:  # noqa: BLE001 — storage is down: try again
+        raise TryAgain("blur.read_failed", type(error).__name__) from None
+    try:
+        blurred = images.blur(data)
+    except images.UnreadableImage:
+        return "its public copy is unreadable: left without a blur"
+    key = blurred_photo_key(uuid4())
+    await _stored(
+        storage.put_bytes(settings.R2_BUCKET_PUBLIC, key, blurred, "image/jpeg")
+    )
+    async with sessions() as session, session.begin():
+        locked = await repository.photo_for_update(session, photo.user_id, photo_id)
+        if (
+            locked is not None
+            and _blurrable(locked)
+            and locked.public_key == public_key
+        ):
+            locked.blur_key = key
+            return "blurred"
+    await storage.delete(settings.R2_BUCKET_PUBLIC, key)
+    return "changed while it was blurred: its blur removed"
+
+
+def _blurrable(photo: Photo) -> bool:
+    return (
+        photo.kind is PhotoKind.PUBLIC
+        and photo.status is ReviewStatus.APPROVED
+        and photo.public_key is not None
+        and photo.blur_key is None
     )
 
 
@@ -725,6 +794,8 @@ async def _record(
             await onboarding_service.refresh_completeness(session, user)
         if locked.kind is PhotoKind.PUBLIC and scores.minors and user.is_verified:
             await queue_match(queue, locked)
+        if locked.kind is PhotoKind.PUBLIC:
+            await queue_blur(queue, locked.id)
     return None
 
 

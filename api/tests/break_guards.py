@@ -7322,6 +7322,236 @@ P79: list[Case] = [
     ),
 ]
 
+# --- T-6.7: liked you, the paid reveal, the blur ------------------------------------
+
+LIKES_SERVICE = "app/modules/likes/service.py"
+LIKES_REPO = "app/modules/likes/repository.py"
+PHOTOS_SERVICE = "app/modules/photos/service.py"
+T67_SELECTION = [
+    "tests/modules/likes",
+    "tests/core/test_images_blur.py",
+    "tests/modules/photos/test_blur.py",
+    "tests/modules/account/test_erasure.py",
+    "tests/modules/pricing/test_debit_callers.py",
+]
+NAMES_NOBODY = "test_a_man_sees_who_liked_him_as_a_blur_and_nothing_that_names_them"
+ANSWERED = "test_only_likes_not_yet_answered_from_someone_i_could_swipe_back"
+
+T67: list[tuple[Case, list[str]]] = [
+    (
+        Case(
+            id="t67-01-shown-unpaid",
+            what="D-542: a man shown everyone who liked him, unrevealed or not",
+            edits=[
+                (
+                    LIKES_SERVICE,
+                    "        shown = [row.liker_id for row in rows if everyone or row.revealed]\n",
+                    "        shown = [row.liker_id for row in rows]\n",
+                )
+            ],
+            expect=[NAMES_NOBODY],
+        ),
+        T67_SELECTION,
+    ),
+    (
+        Case(
+            id="t67-02-handle-is-the-id",
+            what="D-542: the handle the liker's own id, which opens their profile free",
+            edits=[
+                (
+                    LIKES_REPO,
+                    '    return func.encode(func.substring(digest, 1, rules.HANDLE_HEX // 2), "hex")\n',
+                    '    return func.replace(cast(liker, Text), "-", "")\n',
+                )
+            ],
+            expect=[NAMES_NOBODY],
+        ),
+        T67_SELECTION,
+    ),
+    (
+        Case(
+            id="t67-03-reveal-row-not-once",
+            what="two reveals at once: the second's row a unique violation, not nothing",
+            edits=[
+                (
+                    LIKES_REPO,
+                    '        .on_conflict_do_nothing(index_elements=["viewer_id", "liker_id"])\n',
+                    "",
+                )
+            ],
+            expect=[
+                "test_two_reveals_at_once_pay_once_and_both_see_him",
+                "test_revealing_again_charges_nothing",
+            ],
+        ),
+        T67_SELECTION,
+    ),
+    (
+        Case(
+            id="t67-05-a-literal-price",
+            what="rule 5, D-004: the reveal debited a literal 1, past pricing",
+            edits=[
+                (
+                    LIKES_SERVICE,
+                    "            await pricing_service.charge(\n                session,\n                user,\n                LedgerReason.LIKED_YOU_REVEAL,\n",
+                    "            await wallet_service.debit(\n                session,\n                user.id,\n                1,\n                LedgerReason.LIKED_YOU_REVEAL,\n",
+                ),
+                (
+                    LIKES_SERVICE,
+                    "from app.modules.pricing import service as pricing_service\n",
+                    "from app.modules.pricing import service as pricing_service\nfrom app.modules.wallet import service as wallet_service\n",
+                ),
+            ],
+            expect=[
+                "test_a_man_pays_the_rows_price_once_and_sees_who_it_was",
+                "test_a_woman_pays_nothing",
+                "test_only_charge_reaches_the_debit",
+            ],
+        ),
+        T67_SELECTION,
+    ),
+    (
+        Case(
+            id="t67-06-answered-likes-listed",
+            what="a like the viewer already swiped back on still listed",
+            edits=[
+                (
+                    LIKES_REPO,
+                    "            ~exists().where(\n                mine.swiper_id == viewer.id, mine.target_id == Swipe.swiper_id\n            ),\n",
+                    "",
+                )
+            ],
+            expect=[ANSWERED],
+        ),
+        T67_SELECTION,
+    ),
+    (
+        Case(
+            id="t67-07-not-mutual",
+            what="D-492: likers the viewer couldn't swipe back listed",
+            edits=[
+                (
+                    LIKES_REPO,
+                    "            *visible_to(viewer, mutual=True),\n",
+                    "            *visible_to(viewer, mutual=False),\n",
+                )
+            ],
+            expect=[ANSWERED],
+        ),
+        T67_SELECTION,
+    ),
+    (
+        Case(
+            id="t67-08-a-woman-blurred",
+            what="D-002: a woman made to reveal who liked her",
+            edits=[
+                (
+                    "app/modules/likes/rules.py",
+                    "    return gender is Gender.FEMALE\n",
+                    "    return False\n",
+                )
+            ],
+            expect=["test_a_woman_sees_everyone_who_liked_her_free"],
+        ),
+        T67_SELECTION,
+    ),
+    (
+        Case(
+            id="t67-09-no-blur",
+            what="D-543: the 'blur' the photo itself",
+            edits=[
+                (
+                    "app/core/images.py",
+                    '    spread.save(out, "JPEG", quality=BLUR_QUALITY)\n',
+                    "    out.write(data)\n",
+                )
+            ],
+            expect=[
+                "test_a_face_found_in_the_photo_is_found_in_no_blur_of_it",
+                "test_a_blur_holds_no_more_than_its_few_pixels",
+            ],
+        ),
+        T67_SELECTION,
+    ),
+    (
+        Case(
+            id="t67-10-blur-key-from-the-photos-id",
+            what="D-543: the blur's key derived from the photo's id",
+            edits=[
+                (
+                    PHOTOS_SERVICE,
+                    "    key = blurred_photo_key(uuid4())\n",
+                    "    key = blurred_photo_key(photo_id)\n",
+                )
+            ],
+            expect=["test_an_approved_public_photo_gets_a_blur_under_a_key_of_its_own"],
+        ),
+        T67_SELECTION,
+    ),
+    (
+        Case(
+            id="t67-11-blur-kept-after-removal",
+            what="D-543: a removed photo's blur left in the public bucket",
+            edits=[
+                (
+                    PHOTOS_SERVICE,
+                    "    for key in (public_key, blur_key):\n",
+                    "    for key in (public_key,):\n",
+                )
+            ],
+            expect=["test_removing_a_photo_removes_its_blur"],
+        ),
+        T67_SELECTION,
+    ),
+    (
+        Case(
+            id="t67-12-blur-kept-at-erasure",
+            what="D-503: the blur left out of the erasure's files",
+            edits=[
+                (
+                    "app/modules/account/erasure.py",
+                    '    (Photo, "blur_key", "public"),\n',
+                    "",
+                )
+            ],
+            expect=["test_every_storage_key_on_an_erased_table_is_in_the_file_list"],
+        ),
+        T67_SELECTION,
+    ),
+    (
+        Case(
+            id="t67-13-orphan-blur",
+            what="D-543: a blur written for a photo removed meanwhile, left behind",
+            edits=[
+                (
+                    PHOTOS_SERVICE,
+                    '    await storage.delete(settings.R2_BUCKET_PUBLIC, key)\n    return "changed while it was blurred: its blur removed"\n',
+                    '    return "changed while it was blurred: its blur removed"\n',
+                )
+            ],
+            expect=["test_a_photo_removed_while_it_was_blurred_keeps_no_blur"],
+        ),
+        T67_SELECTION,
+    ),
+    (
+        Case(
+            id="t67-14-shown-price-ignored",
+            what="P-56: the reveal charged at whatever price, not the one shown",
+            edits=[
+                (
+                    "app/modules/likes/router.py",
+                    "session, user, handle, shown_price=body.shown_price, settings=settings",
+                    "session, user, handle, shown_price=1, settings=settings",
+                )
+            ],
+            expect=[
+                "test_a_price_not_the_one_shown_is_refused_with_nothing_charged_or_written"
+            ],
+        ),
+        T67_SELECTION,
+    ),
+]
+
 CASES: list[tuple[Case, list[str]]] = (
     [(c, T51_SELECTION) for c in T51]
     + [(c, T54_SELECTION) for c in T54]
@@ -7356,6 +7586,7 @@ CASES: list[tuple[Case, list[str]]] = (
     + [(c, P56_SELECTION) for c in P56]
     + [(c, T65_SELECTION) for c in T65]
     + [(c, P79_SELECTION) for c in P79]
+    + T67
 )
 
 # The fifty-connection fixture's own message when Postgres refuses a connection.

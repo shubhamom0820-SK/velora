@@ -105,8 +105,9 @@ further rule, computed from the shown photos' records, never `is_verified` alone
 | GET | /users/{id} | ✅ | → `PublicProfile`; `NOT_FOUND` for nobody and every refusal alike (D-493) | T-6.3 |
 | GET | /users/by-username/{u} | ✅ | → `PublicProfile`, in any case, by exactly `GET /users/{id}`'s rule (D-493); a name nobody holds, an erased one's included (D-505), the same `NOT_FOUND` | T-6.6 |
 | GET | /search | ✅ | `?q=&cursor=&limit=` → `Page<SearchResult>` (D-540). `@` and 1 to 20 of `[A-Za-z0-9._]`: usernames starting with it, the exact one first, across India and past seeking, never a hidden profile. Otherwise 2 to 50 characters: within the radius, mutual, by name or username (trigram or prefix), city (prefix), or an intent or interest label. Swiped or not; active accounts only. Anything else `VALIDATION_ERROR` on `q`. 60 a minute | T-6.6 |
-| GET | /likes | ✅ | `?cursor=&limit=` → `Page<LikeCard>` (blurred unless revealed; free for women) | T-6.7 |
-| POST | /likes/{user_id}/reveal | ✅ | → `PublicProfile` (`liked_you_reveal`'s price: 1 Vela from 8 October 2026, the founder; 20 before; P-370 moves the row) | T-6.7 |
+| GET | /likes | ✅ | `?cursor=&limit=` → `Page<LikeCard>` (D-542): everyone whose like or Super Like of you waits on your swipe, from someone you could swipe back, newest first; a man's unrevealed ones blurred, never named; a woman's all shown | T-6.7 |
+| GET | /likes/count | ✅ | → `{count}`: how many `/likes` lists (D-542) | T-6.7 |
+| POST | /likes/{handle}/reveal | ✅ | `{shown_price}` (P-56, D-600: the price the screen showed, compared, never charged; absent is 0) → `PublicProfile` (D-542): `liked_you_reveal`'s price (1 Vela from 8 October 2026, P-370) for a man, nothing for a woman, once per pair; a second is free. 402 / `NOT_ALLOWED` / `PRICE_CHANGED` (409, `details.price`) write nothing; a handle naming no like still waiting on you, `NOT_FOUND`. Was `/likes/{user_id}/reveal` until T-6.7 | T-6.7 |
 
 The feed's page is `Page<Card>` with one more field, `swipes_left`: a man's swipes left today,
 the same number `POST /swipes` answers with, null for anyone uncapped (a woman), so the deck can
@@ -125,6 +126,11 @@ instant the scroll began, so time passing between pages can't repeat or skip a c
 `city`, `main_photo_url` and `shows_badge` (each the `Card`'s), `is_online`, and `exact` (`@`
 search only: the username is exactly what was asked). No distance, date of birth, position or
 `is_verified`.
+
+`LikeCard` (T-6.7, D-542): `handle` (opaque, 32 hex: what a reveal names; never the person's
+id), `is_super`, `card` (the person's `Card`: a woman's always, a man's once revealed, else null),
+and `blurred_photo_url` (unrevealed only: the server's blur of their main photo, D-543, or null
+with none yet). Nothing in an unrevealed one, nor in the list's cursor, names the person.
 
 `PublicProfile` (T-6.3, D-493): a `Card`, and `about` (whole), `photo_urls` (every approved public
 photo in place order; the first is `main_photo_url`), `interest_ids`, `kudos` (`{great_conversation,

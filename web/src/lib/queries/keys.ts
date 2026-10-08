@@ -32,4 +32,7 @@ export const queryKeys = {
       feed,
       { intentIds: [...filters.intentIds].sort(), verified: filters.verified },
     ] as const,
+  // `likes()` is the prefix of the count's key too (T-6.7).
+  likes: () => ["likes"] as const,
+  likesCount: () => ["likes", "count"] as const,
 };

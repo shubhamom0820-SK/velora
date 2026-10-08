@@ -126,5 +126,6 @@ FILES: tuple[tuple[type[Any], str, Literal["public", "private"]], ...] = (
     (Photo, "raw_key", "private"),
     (Photo, "public_key", "public"),
     (Photo, "scored_key", "private"),
+    (Photo, "blur_key", "public"),
     (DataExport, "file_key", "private"),
 )

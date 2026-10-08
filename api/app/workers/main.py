@@ -51,6 +51,7 @@ from app.core.db import build_engine, build_sessionmaker
 from app.core.logging import configure_logging
 from app.core.providers import Providers, build_providers
 from app.core.queue import (
+    BLUR_PHOTO,
     DELETE_FILES,
     ERASE_ACCOUNTS,
     EXPIRE_EXPORT,
@@ -63,6 +64,7 @@ from app.core.queue import (
 )
 from app.workers.tasks import log_turnover as log_turnover_job
 from app.workers.tasks import verify_selfie as verify_selfie_job
+from app.workers.tasks.blur_photo import BLUR_TRIES, blur_photo
 from app.workers.tasks.delete_files import delete_files
 from app.workers.tasks.erase_accounts import erase_accounts
 from app.workers.tasks.expire_export import EXPIRE_TRIES, expire_export
@@ -83,6 +85,8 @@ JOBS: Final[Sequence[Function]] = (
     ),
     # T-4.12, D-393: a shown photo's face against the kept selfie, for the badge.
     func(match_photo, name=MATCH_PHOTO, max_tries=MATCH_TRIES),
+    # T-6.7, D-543: an approved public photo's blurred copy, for Liked you.
+    func(blur_photo, name=BLUR_PHOTO, max_tries=BLUR_TRIES),
     # T-9.6, D-502: a user's own data, and its file deleted 24 hours on.
     func(export_data, name=EXPORT_DATA, max_tries=EXPORT_TRIES),
     func(expire_export, name=EXPIRE_EXPORT, max_tries=EXPIRE_TRIES),

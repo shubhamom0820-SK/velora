@@ -147,6 +147,7 @@ UNDERAGE_FILES = (
     FileColumn(Photo, "raw_key", "private"),
     FileColumn(Photo, "public_key", "public"),
     FileColumn(Photo, "scored_key", "private"),
+    FileColumn(Photo, "blur_key", "public"),
     FileColumn(DataExport, "file_key", "private"),
 )
 

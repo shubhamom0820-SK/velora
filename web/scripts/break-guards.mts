@@ -52,6 +52,7 @@ const HER_DECK = "shows no price anywhere and sends 0 with her Super Like";
 const HIS_THREAD =
   "offers him the Thread at /prices' price and sends exactly it";
 const HER_THREAD = "offers her the Thread free, sending 0";
+const LIKES_TEST = "src/components/likes/LikedYouScreen.test.tsx";
 
 const HEADERS = "src/lib/security-headers.ts";
 const CONNECT = "connect: ` ${storage.privateBucket}`,";
@@ -873,6 +874,39 @@ export const CASES: BreakCase[] = [
     new: "",
     run: [CSP_TEST],
     expect: ["has the proxy match exactly NONCE_ROUTES", "leaves /people/"],
+  },
+  // --- T-6.7: Liked you (D-542, D-543) ---
+  {
+    id: "t67-likes-01-a-css-blur",
+    file: "src/components/likes/LikeTile.tsx",
+    old: '              alt={t("likes.someone")}\n              className="size-full object-cover"',
+    new: '              alt={t("likes.someone")}\n              className="size-full object-cover blur-xl"',
+    run: [LIKES_TEST],
+    expect: ["shows a man the server's blur, never a CSS one"],
+  },
+  {
+    id: "t67-likes-02-a-price-written-in",
+    file: "src/components/likes/LikedYouScreen.tsx",
+    old: "const price = man ? prices.data?.liked_you_reveal : undefined;",
+    new: "const price = man ? 1 : undefined;",
+    run: [LIKES_TEST],
+    expect: ["the price from /prices"],
+  },
+  {
+    id: "t67-likes-03-a-woman-asked-for-prices",
+    file: "src/components/likes/LikedYouScreen.tsx",
+    old: "const prices = usePrices({ enabled: man });",
+    new: "const prices = usePrices();",
+    run: [LIKES_TEST],
+    expect: ["shows a woman everyone, with no reveal and no prices asked"],
+  },
+  {
+    id: "t67-likes-04-a-price-never-shown",
+    file: "src/components/likes/LikedYouScreen.tsx",
+    old: "{ handle, shownPrice: price ?? 0 }",
+    new: "{ handle, shownPrice: 0 }",
+    run: [LIKES_TEST],
+    expect: ["reveals one, and the tile shows who it was"],
   },
 ];
 

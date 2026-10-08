@@ -201,6 +201,7 @@ socket of theirs and is never sent to a client (T-7.4).
 | Job | Trigger | Does |
 |---|---|---|
 | `moderate_photo` | photo upload completed | re-encode (D-092: decoded and encoded afresh, so no EXIF survives), score with Sightengine (D-094), decide: approve → the scored bytes to the public bucket; a possible minor → rejected, a `fraud_events` score, every copy deleted (D-093) |
+| `blur_photo` | a public photo approved; `GET /likes` for one approved before T-6.7 | its public copy shrunk to 24 px, softened and spread to 240, written to the public bucket under a fresh key and recorded in `photos.blur_key` only if the photo is unchanged, else the file deleted (D-543). 3 tries |
 | `delete_files` | under-18 refusal, before its commit | delete the refused user's files once they're gone, each read back (D-090) |
 | `verify_selfie` | selfie submitted, then a wake (D-261) | the selfie re-encoded, then face match vs the approved photos' public copies, on the worker itself: YuNet and SFace (D-088), no third party (D-087), at SFace's published 0.363 (D-260); approved → `is_verified`. A wake on `wake:verify_selfie`, published after the submit commits, runs it at once; the queued job is the path sure to run. Liveness is T-4.11's, and nothing claims it until then (D-262) |
 | `export_data` | `POST /me/export`, after its commit | a user's own data as JSON to the private bucket, key recorded first; `ready` for 24 hours (D-502). 3 tries, the last marking it `failed` |
@@ -386,6 +387,8 @@ rule 3, T-8.2) or a charge no Velas were granted for (T-8.3, D-580).
    `selfie_match` into the photo's record, never a rejection. The selfie's own approval queues the
    same for every shown photo already there. `POST /v1/photos/{id}/show` makes a public copy of
    the face photo through steps 3 to 5, never approved at once (T-4.4's rule, P-79).
+   Every approved public photo is also queued as `blur_photo` (T-6.7, D-543): the blurred copy a
+   man sees in Liked you until he pays to reveal who it is.
 6. Only `approved` photos are ever returned to other users; the face photo and the selfie never
    are.
 

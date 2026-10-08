@@ -1,10 +1,12 @@
-import { Search } from "lucide-react";
+import { Heart, Search } from "lucide-react";
 import Link from "next/link";
 
+import { Badge } from "@/components/ui/Badge";
 import { Icon } from "@/components/ui/Icon";
 import { t } from "@/i18n/t";
 import { cx } from "@/lib/cx";
 import type { Feed } from "@/lib/queries/discover";
+import { useLikesCount } from "@/lib/queries/likes";
 
 export const FEEDS: readonly Feed[] = ["foryou", "new", "online"];
 
@@ -15,10 +17,11 @@ type FeedRowProps = {
 
 /**
  * For you, New and Online as pills, the current one filled `--ink`; Search at
- * the row's end, to T-6.6's screen (P-443). Filters joins it with T-6.9's
- * sheet, and Liked you with T-6.7's screen and count.
+ * the row's end, to T-6.6's screen, and Liked you, to T-6.7's, with how many
+ * are waiting (P-443). Filters joins it with T-6.9's sheet.
  */
 export function FeedRow({ feed, onFeed }: FeedRowProps) {
+  const waiting = useLikesCount().data?.count ?? 0;
   return (
     <div className="flex items-center gap-2">
       <div
@@ -49,6 +52,22 @@ export function FeedRow({ feed, onFeed }: FeedRowProps) {
         className="rounded-pill border-line bg-surface text-ink focus-visible:outline-accent relative flex size-10 shrink-0 items-center justify-center border before:absolute before:-inset-0.5 focus-visible:outline-2"
       >
         <Icon icon={Search} size={18} />
+      </Link>
+      <Link
+        href="/discover/likes"
+        aria-label={
+          waiting > 0
+            ? t("likes.entryCount", { count: waiting })
+            : t("likes.entry")
+        }
+        className="rounded-pill border-line bg-surface text-ink focus-visible:outline-accent relative flex size-10 shrink-0 items-center justify-center border before:absolute before:-inset-0.5 focus-visible:outline-2"
+      >
+        <Icon icon={Heart} size={18} />
+        {waiting > 0 && (
+          <span aria-hidden className="absolute -top-1.5 -right-1.5">
+            <Badge tone="count">{waiting}</Badge>
+          </span>
+        )}
       </Link>
     </div>
   );

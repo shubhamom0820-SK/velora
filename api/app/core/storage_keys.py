@@ -29,6 +29,13 @@ def public_photo_key(photo_id: UUID) -> str:
     return f"p/{_id(photo_id)}.jpg"
 
 
+def blurred_photo_key(blur_id: UUID) -> str:
+    """An approved public photo's blurred copy, in the public bucket (T-6.7,
+    D-543). Its id is a fresh one, never the photo's: `p/{photo id}.jpg` is
+    the photo itself, so a key derived from it would name the unblurred one."""
+    return f"b/{_id(blur_id)}.jpg"
+
+
 def voice_key(thread_id: UUID, message_id: UUID) -> str:
     """A voice note, in the private bucket (T-7.9)."""
     return f"voice/{_id(thread_id)}/{_id(message_id)}.webm"

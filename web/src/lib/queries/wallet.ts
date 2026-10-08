@@ -46,9 +46,10 @@ export function useLedger() {
  * What each active action costs a man, in Velas (`GET /prices`, T-5.2), keyed
  * by the debit reason it is charged under. A switched-off action isn't in it.
  */
-export function usePrices() {
+export function usePrices({ enabled = true }: { enabled?: boolean } = {}) {
   return useQuery({
     queryKey: queryKeys.prices(),
     queryFn: ({ signal }) => api.get("/v1/prices", { signal }),
+    enabled,
   });
 }

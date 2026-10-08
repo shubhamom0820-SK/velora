@@ -1102,6 +1102,7 @@ def test_every_storage_key_on_a_deleted_table_is_in_the_file_list() -> None:
             ("photos", "raw_key"),
             ("photos", "public_key"),
             ("photos", "scored_key"),
+            ("photos", "blur_key"),
             ("data_exports", "file_key"),
         }
     )

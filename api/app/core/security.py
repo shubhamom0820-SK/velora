@@ -34,7 +34,7 @@ from argon2 import Parameters, PasswordHasher, Type, extract_parameters
 from argon2.exceptions import InvalidHashError, VerificationError, VerifyMismatchError
 from cryptography.fernet import Fernet, MultiFernet
 from cryptography.hazmat.primitives import hashes
-from cryptography.hazmat.primitives.kdf.hkdf import HKDFExpand
+from cryptography.hazmat.primitives.kdf.hkdf import HKDF, HKDFExpand
 
 from app.core import clock
 from app.core.config import Settings
@@ -242,6 +242,20 @@ def decode_access_token(token: str, settings: Settings) -> AccessClaims:
 
 def _jwt_key(settings: Settings) -> bytes:
     return bytes.fromhex(settings.JWT_SECRET)
+
+
+# HKDF's `info` for Liked you's handles: its own key, never the JWT's itself.
+_LIKES_HANDLE_INFO = b"velora liked-you handle v1"
+
+
+def likes_handle_key(settings: Settings) -> bytes:
+    """The key Liked you's handles are an HMAC under (T-6.7, D-542): derived
+    from `JWT_SECRET` by HKDF, so no new secret is needed and the JWT key
+    itself never keys anything else. Rotating `JWT_SECRET` changes every
+    handle."""
+    return HKDF(
+        algorithm=hashes.SHA256(), length=32, salt=None, info=_LIKES_HANDLE_INFO
+    ).derive(_jwt_key(settings))
 
 
 def _auth_required() -> AppError:

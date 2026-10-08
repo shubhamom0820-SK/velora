@@ -4571,6 +4571,72 @@ change have none; T-8.4 shows only rows that do.
 still lands); T-8.4 re-moderating each album photo when granted (a Sightengine call per grant, and
 the window reopens at every grant).
 
+### D-542 · Liked you: a handle, never the id, until he pays; one charge per pair — Locked
+**The decision (T-6.7):**
+- **Who is listed** (`GET /v1/likes`): everyone whose like or Super Like of you is still waiting
+  on your swipe, from someone discovery's `visible_to` lets you see **mutually**, the radius aside,
+  as a swipe back needs (D-492): no block either way, active, done, not hidden, not frozen,
+  `shadow` only to the shadowed. Newest first. `GET /v1/likes/count` counts the same list.
+- **A `LikeCard`** is `{handle, is_super, card, blurred_photo_url}`. A woman's `card` is always the
+  person's `Card` (D-002). A man's is null until he has revealed them, and until then the only
+  picture is `blurred_photo_url`, the server's blur of their main photo (D-543), or null.
+- **`handle`, never the person's id.** An id would open their profile for free (`GET
+  /users/{id}`, D-493), so nothing a man is sent before he pays names the person: not the item,
+  not the cursor. The handle is the first 128 bits of HMAC-SHA256 over the viewer's id and the
+  liker's, keyed by HKDF from `JWT_SECRET` (info `velora liked-you handle v1`), in hex, computed
+  by the database (pgcrypto) so the list is ordered and paged by it. Another viewer's handle
+  names nothing of yours. Rotating `JWT_SECRET` changes every handle: a list open across it gets
+  `NOT_FOUND` on reveal and reloads.
+- **`POST /v1/likes/{handle}/reveal`** replaces 04-API's `/likes/{user_id}/reveal`. It returns
+  the `PublicProfile` (a view recorded, as D-493's), and charges the `liked_you_reveal` row's
+  price through `pricing.charge`, so a woman pays nothing and a man the row's value, 1 Vela from
+  8 October 2026 (P-370), its ledger ref the other person. **Once per pair, held twice:** the
+  `liked_you_reveals` row is written first (`ON CONFLICT DO NOTHING`) and only the request that
+  wrote it asks to pay; and the wallet keys the debit by the man, the reason and the other person
+  (D-077), so a second debit would be a replay of the first, never a charge. A second reveal, at
+  once or later, gets the profile free. Weakening the first layer alone stays green, since the
+  wallet's key still holds: T-6.7's breaking runs found it, and T-5.1's break the key itself.
+  The request carries `shown_price` (P-56, D-600), passed to `charge(..., shown=)`: a price that
+  isn't the one his screen showed is `PRICE_CHANGED` with nothing charged or written. 402 when he can't afford it,
+  `NOT_ALLOWED` when the row is switched off, each writing nothing. A handle that names no like
+  still waiting on you, a malformed one, another's, or one blocked since, is the one `NOT_FOUND`.
+
+**Why:** the plan's line ("for men, unrevealed entries return only a blurred thumbnail URL and no
+name"), and the founder's answers to Q2 and Q3 of Claude's plan (the handle in the path; a count
+endpoint, since a `Page` has no total, D-270).
+
+**Rejected:** the user id in the path (the paywall leaks through `GET /users/{id}`); a total on
+`LikeCardPage` (D-270's `Page` is items and a cursor); charging before writing the reveal's row
+(two at once would both pay).
+
+Approved by the founder on the advisor's recommendation (Claude, in a separate chat), relayed, 8
+October 2026; written up by Claude.
+
+### D-543 · The blurred copy: the server's, 24 pixels, under a key of its own — Locked
+**The decision (T-6.7):** each approved public photo gets a blurred copy, made on the worker
+(`blur_photo`, queued when the photo is approved): shrunk to 24 pixels on its longest side,
+softened, spread back to 240, a JPEG at quality 70, in the public bucket at `b/<a fresh random
+id>.jpg`, recorded in `photos.blur_key`. **Never a key derived from the photo's id:**
+`p/<photo id>.jpg` is the photo itself, so a derived key would hand over the unblurred one. A
+photo approved before T-6.7 gets its blur when `GET /likes` first needs it (the founder's Q7);
+until then a man's tile shows no picture. The blur is deleted with the photo: at its owner's
+removal, the underage deletion (D-078, `UNDERAGE_FILES`) and the erasure (D-503, `FILES`), each
+of which a test holds to every `*_key` column. A photo removed while its blur was being made
+keeps none: the file just written is deleted.
+
+**Proved, not asserted:** YuNet, the selfie check's own detector (D-088), finds the face in each
+NASA portrait in `tests/fixtures/faces` and none in its blur; and a blur, shrunk to 24 pixels and
+spread back, is what it was.
+
+**Why:** the plan's "server-generated blur, not CSS": a CSS filter over the real photo is one
+DevTools click from the photo.
+
+**Rejected:** a CSS blur; blurring on each request (a read of every photo per page); a key from
+the photo's id.
+
+Approved by the founder with Claude's plan for T-6.7 (Q7 its backfill), 8 October 2026, on the
+advisor's recommendation (Claude, in a separate chat), relayed; written up by Claude.
+
 ## Adding a decision
 
 Append `D-0NN · Title — Locked|Open`, with Decision, Why, Rejected. Never edit a Locked entry —

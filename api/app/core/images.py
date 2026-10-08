@@ -29,7 +29,7 @@ import warnings
 from dataclasses import dataclass
 from typing import Final, Literal
 
-from PIL import Image, ImageOps, UnidentifiedImageError
+from PIL import Image, ImageFilter, ImageOps, UnidentifiedImageError
 
 ImageType = Literal["image/jpeg", "image/png", "image/webp"]
 ACCEPTED_TYPES: tuple[ImageType, ...] = ("image/jpeg", "image/png", "image/webp")
@@ -133,3 +133,40 @@ def _rgb(image: Image.Image) -> Image.Image:
         flat.paste(rgba, mask=rgba.getchannel("A"))
         return flat
     return image.convert("RGB")
+
+
+# --- The blurred copy (T-6.7, D-543) -------------------------------------------------
+
+# The blur keeps no more than this many pixels along the longest side: a face
+# in a 24-pixel image is a few pixels across, too few for anyone, or a face
+# detector, to find it (the tests run YuNet on one).
+BLUR_SOURCE_SIDE: Final = 24
+# Softens the 24 pixels' edges, so the copy reads as a blur, not a mosaic.
+BLUR_RADIUS: Final = 1.5
+# What the web is sent: the 24 pixels spread across a tile's width.
+BLUR_SIDE: Final = 240
+BLUR_QUALITY: Final = 70
+
+
+def blur(data: bytes) -> bytes:
+    """A blurred JPEG of `data`, an approved public copy this server wrote
+    (`reencode`'s JPEG): shrunk to `BLUR_SOURCE_SIDE` on its longest side,
+    softened, and spread back to `BLUR_SIDE`. Nothing of it but those few
+    pixels reaches the result. Raises `UnreadableImage`."""
+    try:
+        with Image.open(io.BytesIO(data), formats=["JPEG"]) as image:
+            image.draft("RGB", (BLUR_SOURCE_SIDE * 4, BLUR_SOURCE_SIDE * 4))
+            image.load()
+            small = _rgb(image)
+            small.thumbnail((BLUR_SOURCE_SIDE, BLUR_SOURCE_SIDE), Image.Resampling.BOX)
+    except (UnidentifiedImageError, OSError, SyntaxError, ValueError, EOFError):
+        raise UnreadableImage from None
+    width, height = small.size
+    scale = BLUR_SIDE / max(width, height)
+    spread = small.filter(ImageFilter.GaussianBlur(BLUR_RADIUS)).resize(
+        (max(1, round(width * scale)), max(1, round(height * scale))),
+        Image.Resampling.BICUBIC,
+    )
+    out = io.BytesIO()
+    spread.save(out, "JPEG", quality=BLUR_QUALITY)
+    return out.getvalue()

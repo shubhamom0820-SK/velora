@@ -220,7 +220,7 @@ async def public_profile(
     """`user_id`'s profile as `user` may see it (D-493), and the view
     recorded; your own needs no permission and records nothing."""
     async with session.begin():
-        return await _public_profile_in(session, user, user_id, settings=settings)
+        return await public_profile_in(session, user, user_id, settings=settings)
 
 
 async def profile_by_username(
@@ -235,10 +235,10 @@ async def profile_by_username(
         user_id = await repository.user_id_by_username(session, username)
         if user_id is None:
             raise _not_found()
-        return await _public_profile_in(session, user, user_id, settings=settings)
+        return await public_profile_in(session, user, user_id, settings=settings)
 
 
-async def _public_profile_in(
+async def public_profile_in(
     session: AsyncSession, user: User, user_id: UUID, *, settings: Settings
 ) -> PublicProfile:
     """The profile and the view, in the caller's transaction."""

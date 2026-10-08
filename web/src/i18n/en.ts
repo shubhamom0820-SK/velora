@@ -165,6 +165,27 @@ export const en = {
       openFailed: "We couldn't open the thread. Try again.",
     },
   },
+  // Liked you (T-6.7, D-542): who liked you and is waiting on your swipe. A
+  // man reveals each for the price `/prices` gives, never written here; a
+  // woman sees everyone. Drafted by Claude, for the founder's review.
+  likes: {
+    title: "Liked you",
+    count: "{count} waiting",
+    someone: "Someone who liked you",
+    superLike: "Super Like",
+    reveal: "Reveal · {price}",
+    revealing: "Revealing",
+    revealFailed: "We couldn't show who it was just now. Try again.",
+    priceChanged: "The price changed. It's {velas} now.",
+    entry: "Liked you",
+    entryCount: "Liked you, {count} waiting",
+    nameAge: "{name}, {age}",
+    distance: "{km} km away",
+    empty: "No one yet",
+    emptyBody: "When someone likes you, they'll be here.",
+    failed: "We couldn't load who liked you",
+    loadingMore: "Loading more",
+  },
   // The balance pill, the wallet screen and the store sheet (T-5.5). Users see
   // Velas, never "credits" (D-049). Drafted by Claude, for the founder's review.
   wallet: {

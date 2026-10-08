@@ -2793,15 +2793,35 @@ prices don't depend on the web photos step, and the hold is lifted.
 - [x] **Commit:** `feat(search): search and username lookup [T-6.6]`
 
 ### T-6.7 · Liked you
-- [ ] **Needs:** T-6.4, T-5.1 (P-370, the `liked_you_reveal` row at 1, not 20, came off this line
+- [x] **Needs:** T-6.4, T-5.1 (P-370, the `liked_you_reveal` row at 1, not 20, came off this line
   when it landed, 8 October 2026)
-- [ ] `GET /likes`: people who liked/super-liked me and whom I haven't swiped; for men, unrevealed entries return only a blurred thumbnail URL (server-generated blur, not CSS) and no name. `POST /likes/{id}/reveal` debits the `liked_you_reveal` row's price, through `pricing.service`, never a literal (1 Vela from 8 October 2026, the founder; this line said "debits 20" until then), and records `liked_you_reveals`.
-- [ ] Web "Liked you" tab: grid, count badge, reveal flow.
-- [ ] **The price shown (P-56, D-600):** `POST /likes/{id}/reveal` takes `shown_price` and passes it to `pricing.service.charge(..., shown=)`, which compares it, never charges it (the check came with T-6.5's first commit, before this task was on main). Test `PRICE_CHANGED` with nothing charged or written, and its web sends the price it displayed, from `/prices`.
-- [ ] **Liked you's entry on the deck (P-443):** T-6.5's feed row holds Search; this task adds
+- [x] `GET /likes`: people who liked/super-liked me and whom I haven't swiped; for men, unrevealed entries return only a blurred thumbnail URL (server-generated blur, not CSS) and no name. `POST /likes/{id}/reveal` debits the `liked_you_reveal` row's price, through `pricing.service`, never a literal (1 Vela from 8 October 2026, the founder; this line said "debits 20" until then), and records `liked_you_reveals`.
+  **Built as D-542:** a man's unrevealed like carries an opaque `handle`, never the liker's id
+  (which would open their profile free), and the reveal is `POST /likes/{handle}/reveal`; the
+  reveal's row is written first and only the request that wrote it pays, so two at once pay once
+  (`test_race.py` forces it). `GET /likes/count` for the badge. Listed: likes waiting on your swipe
+  from someone you could swipe back. A woman sees everyone, free.
+- [x] **The blur is the server's (D-543):** 24 pixels, under a fresh key in the public bucket
+  (`photos.blur_key`), made by the `blur_photo` job on approval, or when `/likes` first needs one
+  for a photo approved before; deleted with the photo and at the erasure. YuNet finds the face in
+  each NASA portrait and none in its blur. Breaking runs `t67-01` to `t67-13` (API, but `t67-04`)
+  and `t67-likes-*` (web) each red. `t67-04`, the reveal charged whether its row was written or
+  not, stayed green: the wallet's key for the debit (D-077) holds the charge to once by itself, so
+  the case was dropped, never weakened to pass (D-542).
+- [x] Web "Liked you" tab: grid, count badge, reveal flow.
+  **Built as** `/discover/likes`, a two-column grid, the count in its chrome header; the price is
+  `/prices`' and a 402 opens the store sheet. T-6.5's deck links to it (P-443).
+- [x] **The price shown (P-56, D-600):** `POST /likes/{id}/reveal` takes `shown_price` and passes it to `pricing.service.charge(..., shown=)`, which compares it, never charges it (the check came with T-6.5's first commit, before this task was on main). Test `PRICE_CHANGED` with nothing charged or written, and its web sends the price it displayed, from `/prices`.
+  **Built** with the opaque handle (D-542): `POST /likes/{handle}/reveal` takes `{shown_price}`;
+  shown 0, stale or absent is `PRICE_CHANGED` with the reveal unwritten and nothing charged. The
+  web sends the price it showed, hers 0, and says the new one. Breaking runs `t67-14` and
+  `t67-likes-04` each red.
+- [x] **Liked you's entry on the deck (P-443):** T-6.5's feed row holds Search; this task adds
   Liked you, with its count from `GET /likes/count`, in `web/src/components/discover/FeedRow.tsx`,
   linking to `/discover/likes`. A revealed tile links to the profile at `/people/{id}` (T-6.8).
-- [ ] **Commit:** `feat(discovery): liked you with paid reveal [T-6.7]`
+  **Built:** a heart in `FeedRow.tsx` beside Search, its count a badge when anyone is waiting;
+  a revealed tile links to `/people/{id}`.
+- [x] **Commit:** `feat(discovery): liked you with paid reveal [T-6.7]`
 
 ### T-6.8 · Profile pages
 - [ ] **Needs:** T-6.3
@@ -5618,7 +5638,16 @@ The number comes from the session's own block, given in its brief, from P-100 up
   `wake.not_an_id` log, its first PUBLISH lost in the same window. Once in 20 runs of the file
   alone: the reconnect test, after `client_kill_filter`, timed out waiting to hear its id, which
   fits the window reopening when the listener subscribes again (inferred, not observed). So the
-  window hits more than the first test. **Closed (approved by the founder on the advisor's
+  window hits more than the first test.
+  **Seen twice more, 8 October 2026, in T-6.6's local `make test` (only the API half's
+  non-critical run; CI green on the same commits, 37778006933 and 37779494195), while other
+  sessions' pytest ran on the Mac (load average about 4):**
+  `test_a_dropped_connection_is_made_again` timed out at `heard.next()` (10 s) after the
+  re-subscribe, on c94033f; and `test_what_isnt_an_id_is_ignored_and_it_listens_on` heard the id
+  but never logged `wake.not_an_id`, so the first publish found nobody subscribed, on 12c2534.
+  The file passed 5 of 5 run alone (8 tests, about 1 s each). Both fit the cause above.
+  Recorded by Claude landing T-6.6, at the founder's direction.
+  **Closed (approved by the founder on the advisor's
   recommendation, 8 October 2026):** `_listen` reads messages until Redis's `subscribe`
   confirmation arrives, and only then sets `subscribed`, on every connection, a reconnect's
   included, so all three failures above lose their window. `test_wake.py`'s

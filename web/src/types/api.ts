@@ -882,6 +882,57 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/likes": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Likes */
+        get: operations["likes_v1_likes_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/likes/count": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Likes Count */
+        get: operations["likes_count_v1_likes_count_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/likes/{handle}/reveal": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Reveal */
+        post: operations["reveal_v1_likes__handle__reveal_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/threads": {
         parameters: {
             query?: never;
@@ -1372,6 +1423,41 @@ export interface components {
          */
         LedgerReason: "purchase" | "purchase_bonus" | "referral_reward" | "admin_grant" | "refund" | "gift" | "refund_banned_partner" | "refund_album_declined" | "thread_open" | "dm_open" | "thread_reopen" | "voice_unlock" | "album_request" | "super_like" | "liked_you_reveal" | "thread_extend" | "dm_message" | "purchase_reversal" | "purchase_restored" | "welcome";
         /**
+         * LikeCard
+         * @description Someone who liked or Super Liked you, whom you haven't swiped (D-542).
+         *
+         *     A man sees who only once he has revealed them: until then `card` is null,
+         *     and the only picture is the server's blur of their main photo, never their
+         *     name, id or photo. A woman sees everyone (D-002).
+         */
+        LikeCard: {
+            /** Handle */
+            handle: string;
+            /** Is Super */
+            is_super: boolean;
+            card: components["schemas"]["Card"] | null;
+            /** Blurred Photo Url */
+            blurred_photo_url: string | null;
+        };
+        /**
+         * LikeCardPage
+         * @description `Page<LikeCard>`: newest first.
+         */
+        LikeCardPage: {
+            /** Items */
+            items: components["schemas"]["LikeCard"][];
+            /** Next Cursor */
+            next_cursor: string | null;
+        };
+        /**
+         * LikesCount
+         * @description How many people `GET /likes` lists: the header's badge.
+         */
+        LikesCount: {
+            /** Count */
+            count: number;
+        };
+        /**
          * Me
          * @description The age, never the date of birth, and no phone number: no screen shows
          *     either, so neither leaves the server (D-067's discipline).
@@ -1797,6 +1883,17 @@ export interface components {
              * Format: date-time
              */
             created_at: string;
+        };
+        /**
+         * RevealRequest
+         * @description `POST /likes/{handle}/reveal`'s body (P-56, D-600).
+         */
+        RevealRequest: {
+            /**
+             * Shown Price
+             * @default 0
+             */
+            shown_price: number;
         };
         /**
          * ReviewStatus
@@ -3670,6 +3767,93 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["SwipeResult"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    likes_v1_likes_get: {
+        parameters: {
+            query?: {
+                cursor?: string | null;
+                limit?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LikeCardPage"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    likes_count_v1_likes_count_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LikesCount"];
+                };
+            };
+        };
+    };
+    reveal_v1_likes__handle__reveal_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                handle: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["RevealRequest"] | null;
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PublicProfile"];
                 };
             };
             /** @description Validation Error */

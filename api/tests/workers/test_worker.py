@@ -40,6 +40,7 @@ from app.core.db import build_engine
 from app.core.enums import OnboardingStep, PhotoKind, ReviewStatus
 from app.core.providers import FakeProviders
 from app.core.queue import (
+    BLUR_PHOTO,
     DELETE_FILES,
     ERASE_ACCOUNTS,
     EXPIRE_EXPORT,
@@ -105,8 +106,10 @@ def test_it_runs_exactly_the_jobs_the_api_queues() -> None:
         MATCH_PHOTO,
         EXPORT_DATA,
         EXPIRE_EXPORT,
+        BLUR_PHOTO,
     }
     assert jobs[MODERATE_PHOTO].max_tries == 3
+    assert jobs[BLUR_PHOTO].max_tries == 3
     assert jobs[VERIFY_SELFIE].max_tries == 5
     assert jobs[MATCH_PHOTO].max_tries == 3
     assert jobs[EXPORT_DATA].max_tries == 3
@@ -382,7 +385,8 @@ async def test_a_photo_the_api_completes_is_moderated_by_the_worker_through_arq(
 
     ran = await _run_burst(fake)
 
-    assert (ran.jobs_complete, ran.jobs_failed, ran.jobs_retried) == (1, 0, 0)
+    # Moderation, then the blur its approval queued (T-6.7, D-543).
+    assert (ran.jobs_complete, ran.jobs_failed, ran.jobs_retried) == (2, 0, 0)
     async with AsyncSession(test_engine) as session:
         photo = await session.scalar(select(Photo).where(Photo.id == photo_id))
     assert photo is not None
@@ -391,6 +395,14 @@ async def test_a_photo_the_api_completes_is_moderated_by_the_worker_through_arq(
         f"p/{photo_id}.jpg",
     )
     assert (PUBLIC, f"p/{photo_id}.jpg") in fake.storage.objects
+    assert photo.blur_key is not None
+    assert (PUBLIC, photo.blur_key) in fake.storage.objects
+    # Taken back: the blur migration's downgrade refuses while any photo has
+    # one, and `test_migrations` downgrades this database.
+    async with AsyncSession(test_engine) as session, session.begin():
+        await session.execute(
+            update(Photo).where(Photo.id == photo_id).values(blur_key=None)
+        )
 
 
 async def test_a_submitted_selfie_is_decided_by_the_wake_and_the_job_finds_it_done(
