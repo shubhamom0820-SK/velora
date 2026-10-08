@@ -113,7 +113,11 @@ async def _config(db: AsyncSession, key: str, value: int) -> None:
 
 
 async def test_a_man_opens_from_a_match_for_five_and_she_is_told(
-    db: AsyncSession, client: AsyncClient, make_user: MakeUser, clock: ModuleType
+    db: AsyncSession,
+    client: AsyncClient,
+    make_user: MakeUser,
+    clock: ModuleType,
+    published: list[events.Event],
 ) -> None:
     clock.freeze(NOON)
     man, token = await make_user(credits=12)
@@ -143,8 +147,8 @@ async def test_a_man_opens_from_a_match_for_five_and_she_is_told(
     )
     payload = {"thread_id": str(thread.id), "user_id": str(man.id)}
     assert [(n.kind, n.payload) for n in notes] == [("thread", payload)]
-    assert [(e.user_id, e.type, e.data) for e in events.take_committed(db)] == [
-        (man.id, "wallet.updated", {"balance": 12}),  # make_user's grant
+    # make_user's grant was the test's own, never published (P-64).
+    assert [(e.user_id, e.type, e.data) for e in published] == [
         (man.id, "wallet.updated", {"balance": 7}),
         (woman.id, "thread.opened", payload),
     ]
@@ -309,7 +313,10 @@ async def test_a_live_thread_is_returned_and_its_match_pointed_at_it(
 
 
 async def test_a_private_message_costs_him_eight_and_never_expires(
-    db: AsyncSession, client: AsyncClient, make_user: MakeUser
+    db: AsyncSession,
+    client: AsyncClient,
+    make_user: MakeUser,
+    published: list[events.Event],
 ) -> None:
     man, token = await make_user(credits=10)
     man_id = man.id
@@ -333,11 +340,7 @@ async def test_a_private_message_costs_him_eight_and_never_expires(
     assert message.body_raw == "Hi, call me on 9876543210"
     assert thread.message_count == 1
     assert thread.last_message_at == message.created_at
-    sent = [
-        (e.user_id, e.type)
-        for e in events.take_committed(db)
-        if e.type != "wallet.updated"
-    ]
+    sent = [(e.user_id, e.type) for e in published if e.type != "wallet.updated"]
     assert sorted(sent, key=str) == sorted(
         [
             (woman.id, "thread.opened"),
@@ -349,16 +352,19 @@ async def test_a_private_message_costs_him_eight_and_never_expires(
 
 
 async def test_the_message_event_never_carries_the_original(
-    db: AsyncSession, client: AsyncClient, make_user: MakeUser
+    db: AsyncSession,
+    client: AsyncClient,
+    make_user: MakeUser,
+    published: list[events.Event],
 ) -> None:
     man, token = await make_user(credits=10)
     woman, _ = await make_user(Gender.FEMALE)
 
     await _opened(client, token, user_id=woman.id, first_message="mail priya@x.com")
 
-    published = [e for e in events.take_committed(db) if e.type == "message.new"]
-    assert len(published) == 2
-    for each in published:
+    new = [e for e in published if e.type == "message.new"]
+    assert len(new) == 2
+    for each in new:
         assert "priya@x.com" not in each.envelope()
         assert each.data["message"]["mine"] is (each.user_id == man.id)
 

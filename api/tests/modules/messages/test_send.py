@@ -114,13 +114,16 @@ async def _expires(db: AsyncSession, thread: Thread, at: datetime) -> None:
 
 
 async def test_a_message_is_stored_counted_and_both_told(
-    db: AsyncSession, client: AsyncClient, make_user: MakeUser, make_thread: MakeThread
+    db: AsyncSession,
+    client: AsyncClient,
+    make_user: MakeUser,
+    make_thread: MakeThread,
+    published: list[events.Event],
 ) -> None:
     man, _ = await make_user()
     woman, token = await make_user(Gender.FEMALE)
     thread = await make_thread(man, woman)
     man_id, woman_id, thread_id = man.id, woman.id, thread.id
-    events.take_committed(db)
     client_msg_id = uuid.uuid4()
 
     body = await _sent(
@@ -145,9 +148,7 @@ async def test_a_message_is_stored_counted_and_both_told(
     refreshed = await _thread(db, thread_id)
     assert refreshed.message_count == 1
     assert refreshed.last_message_at == row.created_at
-    told = {
-        e.user_id: e.data for e in events.take_committed(db) if e.type == "message.new"
-    }
+    told = {e.user_id: e.data for e in published if e.type == "message.new"}
     assert set(told) == {man_id, woman_id}
     assert told[woman_id]["message"]["mine"] is True
     assert told[man_id]["message"]["mine"] is False

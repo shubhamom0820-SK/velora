@@ -6769,6 +6769,55 @@ T83: list[Case] = [
 ]
 
 
+# --- P-64: what a request publishes, seen through `client` --------------------------
+
+P64_SELECTION = [
+    "tests/test_harness.py",
+    "tests/modules/threads/test_open.py",
+    "tests/modules/messages/test_send.py",
+]
+INFRA = "tests/infra.py"
+
+P64: list[Case] = [
+    Case(
+        id="p64-01-never-published",
+        what="the stand-in for get_session publishing nothing",
+        edits=[
+            (
+                INFRA,
+                "        await events.publish(committed, request.app.state.redis)\n",
+                "        pass\n",
+            )
+        ],
+        expect=["test_a_requests_committed_events_are_published_through_client"],
+    ),
+    Case(
+        id="p64-02-never-kept",
+        what="what a request published not kept for `published`",
+        edits=[(INFRA, "        ActiveSession.published.extend(committed)\n", "")],
+        expect=[
+            "test_a_requests_committed_events_are_published_through_client",
+            "test_a_man_opens_from_a_match_for_five_and_she_is_told",
+            "test_a_message_is_stored_counted_and_both_told",
+        ],
+    ),
+    Case(
+        id="p64-03-the-tests-own-published",
+        what="what the test itself committed published with the request",
+        edits=[
+            (
+                INFRA,
+                "        await session.commit()\n    events.take_committed(session)\n",
+                "        await session.commit()\n",
+            )
+        ],
+        expect=[
+            "test_what_the_test_committed_itself_is_never_published",
+            "test_a_man_opens_from_a_match_for_five_and_she_is_told",
+        ],
+    ),
+]
+
 CASES: list[tuple[Case, list[str]]] = (
     [(c, T51_SELECTION) for c in T51]
     + [(c, T54_SELECTION) for c in T54]
@@ -6798,6 +6847,7 @@ CASES: list[tuple[Case, list[str]]] = (
     + [(c, T73_SELECTION) for c in T73]
     + [(c, T83_SELECTION) for c in T83]
     + T66
+    + [(c, P64_SELECTION) for c in P64]
 )
 
 # The fifty-connection fixture's own message when Postgres refuses a connection.

@@ -91,7 +91,11 @@ empty (P-55), but other tests in the same run commit too. So a test that commits
   unless given, and an onboarded woman who isn't verified can't be made; `credits` are granted
   through `wallet.service.credit()` as an `admin_grant` (T-5.1, rule 5), so anyone but a man is
   refused by the wallet (D-076).
-- `make_thread(a, b, status="active", messages=0)`.
+- `make_thread(a, b, status="active", origin="match", messages=0)` (T-7.1): a Thread written
+  directly, charging nothing; its messages a second apart.
+- `published` (P-64): every event this test's requests published through `client`, in order,
+  as `get_session` publishes them to Redis, which they reach too. What the test commits itself
+  through `db` is never in it.
 - `clock` — freezes/advances "now" for expiry tests (the app reads time only through
   `core.clock.now()` — never `datetime.now()` directly).
 - `captured_logs` (P-48) — every log line, structlog's and the stdlib's, with a probe through each.

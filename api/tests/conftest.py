@@ -26,7 +26,7 @@ from collections.abc import AsyncIterator, Iterator, MutableMapping
 from dataclasses import dataclass
 from datetime import date, timedelta
 from types import ModuleType
-from typing import Any, NoReturn, Protocol
+from typing import Any, Protocol
 
 import pytest
 import structlog
@@ -68,9 +68,9 @@ for _key, _value in {
     os.environ.setdefault(_key, _value)
 
 from redis.asyncio import Redis
-from redis.asyncio.client import PubSub
 
 from app.core import clock as core_clock
+from app.core import events
 from app.core.clock import today_ist
 from app.core.config import Settings
 from app.core.db import build_engine, get_session
@@ -191,6 +191,7 @@ async def db(test_engine: AsyncEngine) -> AsyncIterator[AsyncSession]:
     """A session whose every write — commits included — is rolled back."""
     async with transactional_session(test_engine) as session:
         ActiveSession.session = session
+        ActiveSession.published = []
         try:
             yield session
         finally:
@@ -208,29 +209,11 @@ def fake_providers() -> FakeProviders:
     return FakeProviders()
 
 
-UNPUBLISHED_HERE = (
-    "P-64: nothing a request makes through the `client` fixture is ever "
-    "published. `session_for_the_app` stands in for `get_session`, and "
-    "`get_session` is what publishes a request's committed events, so a "
-    "subscription here would see nothing and pass blind. Read published events "
-    "from an app built with the real `get_session`, as `real_app` in "
-    "tests/core/test_events.py is, until P-64 lets endpoint tests see them."
-)
-
-
-# Every way a test listens: a new subscription, and one made before the app was
-# (fixtures set up in order), subscribing or reading.
-LISTENING: tuple[tuple[type, str], ...] = (
-    (Redis, "pubsub"),
-    (PubSub, "subscribe"),
-    (PubSub, "psubscribe"),
-    (PubSub, "get_message"),
-    (PubSub, "listen"),
-)
-
-
-def _unpublished_here(*args: Any, **kwargs: Any) -> NoReturn:
-    raise RuntimeError(UNPUBLISHED_HERE)
+@pytest.fixture
+def published(db: AsyncSession) -> list[events.Event]:
+    """Every event this test's requests published through `client`, in order
+    (P-64): what `get_session` sends to Redis, kept to read."""
+    return ActiveSession.published
 
 
 @pytest.fixture
@@ -244,19 +227,14 @@ def fake_queue() -> FakeQueue:
 async def app(
     fake_providers: FakeProviders,
     fake_queue: FakeQueue,
-    monkeypatch: pytest.MonkeyPatch,
 ) -> AsyncIterator[FastAPI]:
     """The app, built from test settings; requests share the test's `db`, and
-    every provider is the test's fake, and the job queue `fake_queue`.
-
-    While it's up, listening on Redis raises, naming P-64: through this app
-    nothing is ever published, and a test that listened would pass blind."""
+    every provider is the test's fake, and the job queue `fake_queue`. What a
+    request publishes reaches Redis, as in the app, and `published` (P-64)."""
     application = create_app(make_test_settings())
     application.dependency_overrides[get_session] = session_for_the_app
     application.state.providers = fake_providers.as_providers()
     application.state.queue = fake_queue
-    for owner, listen in LISTENING:
-        monkeypatch.setattr(owner, listen, _unpublished_here)
     try:
         yield application
     finally:

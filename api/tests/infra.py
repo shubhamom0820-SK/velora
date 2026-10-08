@@ -30,11 +30,12 @@ from collections.abc import AsyncIterator, Callable, Coroutine, Sequence
 from contextlib import asynccontextmanager
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Literal, TypeVar
+from typing import Any, ClassVar, Literal, TypeVar
 from urllib.parse import urlsplit
 
 import pytest
 from alembic.config import Config
+from fastapi import Request
 from redis.asyncio import Redis
 from sqlalchemy import text
 from sqlalchemy.engine import Connection, make_url
@@ -45,6 +46,10 @@ from sqlalchemy.ext.asyncio import (
     create_async_engine,
 )
 from sqlalchemy.pool import NullPool
+
+# Events only: it reads no settings, so importing it here is safe before
+# conftest makes the environment safe.
+from app.core import events
 
 # The local stack's servers (`make infra-up`). Test-only, not app config, so
 # they live here and in 06-TESTING.md, not in 02-ARCHITECTURE §11.
@@ -333,18 +338,25 @@ async def transactional_session(engine: AsyncEngine) -> AsyncIterator[AsyncSessi
 
 
 class ActiveSession:
-    """The current test's session, for the app's `get_session` override.
+    """The current test's session, for the app's `get_session` override, and
+    what its requests published (P-64).
 
     A plain holder rather than a ContextVar: fixtures and the test body run in
     different tasks, so a ContextVar set in `db` would not be seen by requests.
     """
 
     session: AsyncSession | None = None
+    published: ClassVar[list[events.Event]] = []
 
 
-async def session_for_the_app() -> AsyncIterator[AsyncSession]:
+async def session_for_the_app(request: Request) -> AsyncIterator[AsyncSession]:
     """Stands in for `get_session` in tests: the `db` fixture's session, or a
-    loud refusal — a test that forgets `db` must not write for real."""
+    loud refusal — a test that forgets `db` must not write for real.
+
+    When the request ends it publishes the events the request's committed
+    transactions queued, to the app's Redis, as `get_session` does (P-64), and
+    keeps them for the `published` fixture. What the test itself committed
+    before the request is no request's, and is never published."""
     session = ActiveSession.session
     if session is None:
         raise RuntimeError(
@@ -358,7 +370,13 @@ async def session_for_the_app() -> AsyncIterator[AsyncSession]:
     # the test's outer transaction still rolls everything back.
     if session.in_transaction():
         await session.commit()
-    yield session
+    events.take_committed(session)
+    try:
+        yield session
+    finally:
+        committed = events.take_committed(session)
+        ActiveSession.published.extend(committed)
+        await events.publish(committed, request.app.state.redis)
 
 
 API_DIR = Path(__file__).resolve().parent.parent

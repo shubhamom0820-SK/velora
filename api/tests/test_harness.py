@@ -3,14 +3,14 @@ under test shares the test's transaction."""
 
 from __future__ import annotations
 
+import json
 import uuid
-from collections.abc import AsyncIterator, Callable
 from datetime import UTC, datetime, timedelta
 from types import ModuleType
-from typing import Annotated, Any
+from typing import Annotated, Any, cast
 
 import pytest
-from fastapi import Depends, FastAPI
+from fastapi import Depends, FastAPI, Request
 from httpx import AsyncClient
 from redis.asyncio import Redis
 from redis.asyncio.client import PubSub
@@ -19,6 +19,7 @@ from sqlalchemy.engine import make_url
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession
 
 from app.core import clock as clock_module
+from app.core import events
 from app.core.db import get_session
 from app.core.enums import Gender, LedgerReason, OnboardingStep, Role, Seeking
 from app.core.security import (
@@ -32,7 +33,7 @@ from app.modules.users.models import User
 from app.modules.wallet import service as wallet_service
 from app.modules.wallet.models import LedgerEntry, Wallet
 from app.modules.wallet.service import WalletMisuse
-from tests.conftest import UNPUBLISHED_HERE, MakeUser, shuffled
+from tests.conftest import MakeUser, shuffled
 from tests.infra import (
     TEST_DATABASE_URL,
     ensure_test_database,
@@ -168,56 +169,100 @@ async def test_a_route_cannot_reach_the_database_without_the_db_fixture(
 
 async def test_the_app_session_refuses_when_no_db_fixture_is_active() -> None:
     with pytest.raises(RuntimeError, match="without the `db` fixture"):
-        async for _ in session_for_the_app():
+        async for _ in session_for_the_app(cast(Request, None)):
             pass
 
 
-# --- P-64's tripwire --------------------------------------------------------------
+# --- P-64: what a request publishes, heard through `client` ---------------------------
 
 
-@pytest.fixture
-async def subscribed_first(test_redis: Redis) -> AsyncIterator[PubSub]:
-    """A subscription made before the app is, as a `listening` fixture would
-    make one: fixtures set up in the order a test asks for them."""
+async def _first_message(pubsub: PubSub) -> dict[str, Any] | None:
+    found: dict[str, Any] | None = await pubsub.get_message(
+        ignore_subscribe_messages=True, timeout=2.0
+    )
+    return found
+
+
+async def test_a_requests_committed_events_are_published_through_client(
+    db: AsyncSession,
+    app: FastAPI,
+    client: AsyncClient,
+    test_redis: Redis,
+    published: list[events.Event],
+) -> None:
+    """P-64: `session_for_the_app` publishes what a request committed, to
+    Redis, when the request ends, as `get_session` does; and keeps it."""
+    user_id = uuid.uuid4()
+
+    @app.post("/v1/_test/queue")
+    async def _queue(
+        session: Annotated[AsyncSession, Depends(get_session)],
+    ) -> dict[str, str]:
+        async with session.begin():
+            events.queue(session, user_id, "harness.heard", {"n": 1})
+        return {}
+
     pubsub = test_redis.pubsub()
     try:
-        yield pubsub
+        await pubsub.subscribe(f"user:{user_id}")
+        confirmed = await pubsub.get_message(timeout=2.0)
+        assert confirmed is not None and confirmed["type"] == "subscribe"
+
+        response = await client.post("/v1/_test/queue")
+        heard = await _first_message(pubsub)
     finally:
         await pubsub.aclose()  # type: ignore[no-untyped-call]
 
+    assert response.status_code == 200
+    assert heard is not None
+    envelope = json.loads(heard["data"])
+    assert (envelope["type"], envelope["data"]) == ("harness.heard", {"n": 1})
+    assert [(e.user_id, e.type, e.data) for e in published] == [
+        (user_id, "harness.heard", {"n": 1})
+    ]
 
-async def test_listening_for_events_through_client_raises_naming_p64(
-    subscribed_first: PubSub, app: FastAPI, client: AsyncClient, test_redis: Redis
+
+async def test_a_rolled_back_requests_events_are_never_published(
+    db: AsyncSession, app: FastAPI, client: AsyncClient, published: list[events.Event]
 ) -> None:
-    """P-64's gap announces itself. Through `client` nothing is ever published,
-    so a test that listened would hear nothing and pass blind. It raises
-    instead, on any Redis client, and on a subscription made before the app."""
-    attempts: dict[str, Callable[[], object]] = {
-        "a new subscription": test_redis.pubsub,
-        "on the app's own Redis": app.state.redis.pubsub,
-        "subscribing, made earlier": lambda: subscribed_first.subscribe("user:x"),
-        "by pattern, made earlier": lambda: subscribed_first.psubscribe("user:*"),
-        "reading, made earlier": lambda: subscribed_first.get_message(timeout=0.1),
-        "listening, made earlier": subscribed_first.listen,
-    }
-    refused = {}
-    for way, attempt in attempts.items():
-        with pytest.raises(RuntimeError) as raised:
-            attempt()
-        refused[way] = str(raised.value)
+    @app.post("/v1/_test/queue-and-fail")
+    async def _queue_and_fail(
+        session: Annotated[AsyncSession, Depends(get_session)],
+    ) -> dict[str, str]:
+        async with session.begin():
+            events.queue(session, uuid.uuid4(), "harness.never", {})
+            raise RuntimeError("rolled back")
 
-    assert refused == dict.fromkeys(attempts, UNPUBLISHED_HERE)
-    assert UNPUBLISHED_HERE.startswith("P-64: ")
-    assert "`get_session`" in UNPUBLISHED_HERE
-    assert "tests/core/test_events.py" in UNPUBLISHED_HERE
+    response = await client.post("/v1/_test/queue-and-fail")
+
+    assert response.status_code == 500
+    assert published == []
+
+
+async def test_what_the_test_committed_itself_is_never_published(
+    db: AsyncSession, app: FastAPI, client: AsyncClient, published: list[events.Event]
+) -> None:
+    """Rows a test writes through `db` are the test's, not a request's: their
+    events stay unpublished, as code outside a request publishes nothing."""
+    async with db.begin_nested():
+        events.queue(db, uuid.uuid4(), "harness.setup", {})
+
+    @app.get("/v1/_test/nothing")
+    async def _nothing(
+        session: Annotated[AsyncSession, Depends(get_session)],
+    ) -> dict[str, str]:
+        return {}
+
+    await client.get("/v1/_test/nothing")
+
+    assert published == []
 
 
 async def test_listening_works_where_nothing_stands_in_for_get_session(
     test_redis: Redis,
 ) -> None:
-    """The tripwire is the overridden app's alone. Without it a subscription
-    hears what is published, as `real_app`'s tests in tests/core/test_events.py
-    hear a request's events."""
+    """A subscription hears what is published, here as `real_app`'s tests in
+    tests/core/test_events.py hear a request's events."""
     channel = f"harness:{uuid.uuid4()}"  # channels span Redis databases
     pubsub = test_redis.pubsub()
     try:

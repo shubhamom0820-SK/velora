@@ -2861,7 +2861,7 @@ prices don't depend on the web photos step, and the hold is lifted.
 
 ### T-7.4 · Real-time server
 - [ ] **Needs:** T-7.3, and **P-64**: in tests `session_for_the_app` replaces `get_session`, which is what publishes, so no endpoint test sees an event; and services queue events through `core/events.py` (T-5.1), never a publish of their own
-- [ ] `POST /ws/ticket` (Redis, 30 s, single use). `/ws` endpoint: validate ticket, register connection, subscribe `user:{id}`, heartbeat, close on logout/freeze. Publishing helper `realtime.publish(user_id, type, data)` used by services.
+- [ ] `POST /ws/ticket` (Redis, 30 s, single use). `/ws` endpoint: validate ticket, register connection, subscribe `user:{id}`, heartbeat, close on logout/freeze. ~~Publishing helper `realtime.publish(user_id, type, data)` used by services.~~ **Services queue events through `core/events.py`, published after commit (T-5.1); this task builds the socket side only** (P-64's note, struck 8 October 2026 as P-64 landed).
 - [ ] Load test: 1,000 concurrent sockets on one instance stay under 256 MB.
 - [ ] **Commit:** `feat(realtime): websocket gateway [T-7.4]`
 
@@ -4360,7 +4360,7 @@ The number comes from the session's own block, given in its brief, from P-100 up
   **Its gate moved on 4 October 2026:** T-9.3 is dropped (D-230). The next task that can lock
   two wallets is T-8.6: its referral reward credits both men, and T-8.2's webhook runs that check
   inside the buyer's own transaction. So P-63 is on T-8.6's Needs line now, under that condition.
-- [ ] P-64 · Let endpoint tests see the events a request publishes. **Before T-7.4,** on its Needs
+- [x] P-64 · Let endpoint tests see the events a request publishes. **Before T-7.4,** on its Needs
   line. Worst case: T-7.4 ships with every socket event untested end to end, or a service publishes
   on its own to make one visible, which would publish before commit and under a lock. In tests the
   `app` fixture replaces `get_session` with `session_for_the_app` (the test's rolled-back session),
@@ -4377,6 +4377,16 @@ The number comes from the session's own block, given in its brief, from P-100 up
   `tests/conftest.py`), so the gap fails loudly until T-7.4 closes it. Proved both ways in
   `tests/test_harness.py`, and red with the tripwire removed and with it on `pubsub()` alone.
   This item's fix removes it, and turns that test into one that sees the events.
+  **Done, 8 October 2026** (its own commit, before T-7.4): `session_for_the_app` now takes the
+  request, and when it ends publishes the request's committed events to the app's Redis, as
+  `get_session` does, and keeps them for a new fixture, `published`. What the test itself
+  committed before the request is the test's, never published, as code outside a request
+  publishes nothing. The tripwire is gone, and its test is three: a request's events heard on
+  Redis through `client` and kept; a rolled-back request's never; the test's own setup never.
+  T-7.1's and T-7.3's tests read `published` now, where they had read the session's committed
+  events by hand. **Broken once each** (`uv run python -m tests.break_guards p64-`): three
+  cases, the publish, the keeping and the test's own setup, each red in 1 of 1, every file
+  restored and none differing by SHA-256 after.
 - [x] P-65 · Make the deploy read `alembic_version` back after migrating. **Before P-38 or P-62,
   whichever lands first:** the plan's next migrations (P-38's areas, due before T-4.10, on whose
   Needs line this sits; P-62's trigger fix). No task from T-3.12 to T-6.4 carries one: checked

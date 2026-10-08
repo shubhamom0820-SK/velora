@@ -6,7 +6,7 @@ Without this, an edit to a guarded file would leave a case that can't apply,
 and the claim it backed (T-5.1's thirty-five, T-5.4's six, T-4.4's thirty-seven, T-4.6's three,
 the landing guard's five, T-5.2's twenty-two, P-38's eleven, T-4.8's twenty-six
 (twenty-seven until T-4.12 took the photo requirement away, D-392),
-T-4.11's eight, T-4.12's twenty-two, T-8.1's twenty-eight, T-8.2's eighteen, T-7.1's twenty, T-7.2's fourteen, T-7.3's twenty-six)
+T-4.11's eight, T-4.12's twenty-two, T-8.1's twenty-eight, T-8.2's eighteen, T-7.1's twenty, T-7.2's fourteen, T-7.3's twenty-six, P-64's three)
 unrecheckable.
 """
 
@@ -69,6 +69,7 @@ def test_case_ids_are_unique_and_name_their_task() -> None:
         "t73",
         "t83",
         "t66",
+        "p64",
     }
     assert len([i for i in ids if i.startswith("t51-")]) == 35
     assert len([i for i in ids if i.startswith("t54-")]) == 6
@@ -96,6 +97,7 @@ def test_case_ids_are_unique_and_name_their_task() -> None:
     assert len([i for i in ids if i.startswith("t73-")]) == 26
     assert len([i for i in ids if i.startswith("t83-")]) == 22
     assert len([i for i in ids if i.startswith("t66-")]) == 11
+    assert len([i for i in ids if i.startswith("p64-")]) == 3
 
 
 def test_failed_tests_reads_ids_whole() -> None:
