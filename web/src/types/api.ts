@@ -797,6 +797,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/threads": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Open Thread */
+        post: operations["open_thread_v1_threads_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/auth/otp/send": {
         parameters: {
             query?: never;
@@ -1167,6 +1184,19 @@ export interface components {
          */
         OnboardingStep: "dob" | "gender" | "seeking" | "profile" | "username" | "about" | "photos" | "interests" | "pin" | "selfie" | "done";
         /**
+         * OpenThreadRequest
+         * @description `{match_id}`, a Thread from a match, or `{user_id, first_message}`, a
+         *     private message (D-231): one or the other, never both.
+         */
+        OpenThreadRequest: {
+            /** Match Id */
+            match_id?: string | null;
+            /** User Id */
+            user_id?: string | null;
+            /** First Message */
+            first_message?: string | null;
+        };
+        /**
          * Order
          * @description What Checkout opens with: our payment, the gateway's order, its public
          *     key, and the amount, the pack's price (inclusive, D-099).
@@ -1489,6 +1519,46 @@ export interface components {
             /** Swipes Left */
             swipes_left: number | null;
         };
+        /**
+         * Thread
+         * @description A Thread as one of its two people sees it.
+         *
+         *     `expires_at` is shown to a man only: her side has no countdown (D-097,
+         *     08-DESIGN §8, D-554), and is null for her, as it is once knotted and for a
+         *     private message, which never expires (D-231).
+         */
+        Thread: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            origin: components["schemas"]["ThreadOrigin"];
+            status: components["schemas"]["ThreadStatus"];
+            /**
+             * Other User Id
+             * Format: uuid
+             */
+            other_user_id: string;
+            /** Expires At */
+            expires_at: string | null;
+            /** Knotted At */
+            knotted_at: string | null;
+            /** I Tied */
+            i_tied: boolean;
+            /** Last Message At */
+            last_message_at: string | null;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+        };
+        /**
+         * ThreadOrigin
+         * @enum {string}
+         */
+        ThreadOrigin: "match" | "dm";
         /**
          * ThreadStatus
          * @enum {string}
@@ -2957,6 +3027,39 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["SwipeResult"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    open_thread_v1_threads_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["OpenThreadRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Thread"];
                 };
             };
             /** @description Validation Error */

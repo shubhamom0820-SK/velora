@@ -2777,13 +2777,28 @@ prices don't depend on the web photos step, and the hold is lifted.
 # Sprint 7 — Threads, knots, chat (weeks 11–12)
 
 ### T-7.1 · Open a thread
-- [ ] **Needs:** T-6.4, T-5.5-ready wallet (T-5.1)
-- [ ] `POST /threads` from `{match_id}` (origin `match`) or `{user_id, first_message}` (origin `dm`, first message required, 1–500 chars).
-- [ ] Rules: not blocked; both onboarded; if a thread already exists for the pair → `active`/`knotted` returns it (no charge), `expired` → `THREAD_EXPIRED` (client offers re-open). That refusal is his alone: an expired Thread accepts her sends (D-097).
-- [ ] In one transaction: debit (men only, `thread_open` or `dm_open`), insert thread (`expires_at = now + thread_hours`), link match, insert first message if dm. Notify the other person.
-- [ ] **The `dm` origin is a private message (D-231):** sent from a profile with no swipe and no match, 8 Velas for the first and 2 for each after, and it never expires. This task proposes how that lives beside 03-SCHEMA's rule that an active Thread always expires, and where each later message's 2 Velas are charged.
-- [ ] Tests: man pays once; woman pays nothing; double-tap race creates one thread and one charge.
-- [ ] **Commit:** `feat(threads): open thread [T-7.1]`
+- [x] **Needs:** T-6.4, T-5.5-ready wallet (T-5.1)
+- [x] `POST /threads` from `{match_id}` (origin `match`) or `{user_id, first_message}` (origin `dm`, first message required, 1–500 chars).
+- [x] Rules: not blocked; both onboarded; if a thread already exists for the pair → `active`/`knotted` returns it (no charge), `expired` → `THREAD_EXPIRED` (client offers re-open). That refusal is his alone: an expired Thread accepts her sends (D-097).
+- [x] In one transaction: debit (men only, `thread_open` or `dm_open`), insert thread (`expires_at = now + thread_hours`), link match, insert first message if dm. Notify the other person.
+- [x] **The `dm` origin is a private message (D-231):** sent from a profile with no swipe and no match, 8 Velas for the first and 2 for each after, and it never expires. This task proposes how that lives beside 03-SCHEMA's rule that an active Thread always expires, and where each later message's 2 Velas are charged.
+- [x] Tests: man pays once; woman pays nothing; double-tap race creates one thread and one charge.
+  **Built as D-550 to D-554** (the founder's answers, 8 October 2026): a private message is a
+  Thread of origin `dm` that never expires (`ddf84381ef6c` changes the CHECK; its downgrade
+  refuses while one is active); whom you may reach is the public profile's rule, and for a private
+  message each wanting the other's gender, every refusal `NOT_FOUND`; `expires_at` is a man's
+  alone; the hours are `thread_hours`, read when the Thread opens, never a number in the code; a
+  woman's two daily limits are `app_config` values (`386bbc188276`); the first message passes
+  `messages/filters.py`, the prototype's lists with three corrections (D-552), and a refusal keeps
+  a `message_rejected` signal. The double tap is forced in `test_race.py`: both opens inside
+  their transactions before either locks the pair, each waiting alone with the lock.
+  **Broken once each, 8 October 2026** (`uv run python -m tests.break_guards t71- t63-04`):
+  T-7.1's twenty cases, each red in 1 of 1, every file restored and none differing by SHA-256
+  after. **One stayed green at first and was a finding:** `t71-20` (the bare word "transfer"
+  refused) passed, because the test's sentence said "transferring", which `\btransfer\b` never
+  matches; a sentence with the bare word was added and the case went red. T-6.3's `t63-04`
+  anchored on `mutual=False`, which this task made a parameter; it now weakens the parameter's
+  default, and went red.
 
 ### T-7.2 · Thread list
 - [ ] **Needs:** T-7.1
@@ -2892,6 +2907,8 @@ prices don't depend on the web photos step, and the hold is lifted.
 - [ ] **Needs:** T-7.6
 - [ ] `POST /threads/{id}/knot`: set my `*_knot_at`; if both set → `knotted`, `knotted_at`, `expires_at = null`, publish `knot.accepted` to both; else publish `knot.requested` to the other. Works on `expired` threads too (converts directly if both).
 - [ ] `DELETE /threads/{id}/knot`: untie → `active`, a fresh hour (`now + thread_hours`, T-7.6), clear both taps, notify.
+  **A private message's Knot untied never expires again** (D-550, T-7.1): `expires_at` stays
+  null, as the CHECK allows only for origin `dm`; a match's gets a fresh `thread_hours`.
 - [ ] **Commit:** `feat(threads): tie and untie knot [T-7.7]`
 
 ### T-7.8 · Clearing
@@ -5535,3 +5552,14 @@ The number comes from the session's own block, given in its brief, from P-100 up
   `thread.expired` to him only. What is left is the web: her rows draw no countdown pill and no
   expired state, and the client reads nothing from a null. Found writing T-7.6; filed by Claude,
   8 October 2026; its session's block, P-460 to P-469.
+- [ ] P-450 · Add Hindi and Hinglish words to the message filters. **Before REL-1,** the first
+  time strangers message each other. Worst case: a man writes "paytm kar do", "number do" or a
+  Hindi slur, in the language most of our users write in, and it reaches her unmasked and
+  unrefused, while `/terms` promises "We refuse messages that are abusive or that ask for money".
+  T-7.1's `messages/filters.py` (D-552) holds the prototype's lists: eight abuse words, five of
+  them romanised Hindi, and English money phrases. Wanted: Hindi and Hinglish abuse words, and
+  solicitation in the forms people use (payment-app asks, "number do", "paise bhejo", "recharge
+  kar do", "UPI pe"), in Devanagari and romanised. **The founder supplies or approves the list**
+  (8 October 2026): a word list is a product judgment, and a wrong one refuses ordinary sentences.
+  Each word goes in with a test, and each with an ordinary sentence it must not catch. Filed by
+  Claude in T-7.1 at the founder's direction; its session's block, P-450 to P-459.

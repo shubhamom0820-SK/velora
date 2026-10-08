@@ -4178,6 +4178,71 @@ index on `expires_at`; expiry by the status column alone, which leaves the minut
 better one while building; the rules it keeps are Locked where they are written (D-097, D-098,
 D-250, D-253, and T-7.6's five answers), and no change to the mechanism may change them.
 
+### D-550 · A private message is a Thread of origin `dm` that never expires — Locked
+**The decision (T-7.1, approved by the founder 8 October 2026 on the advisor's recommendation,
+relayed):** D-231's private message is a Thread of origin `dm`, the same one row per pair as a
+Thread from a match. While active it carries no `expires_at`: `ck_threads_active_expires` reads
+`status <> 'active' OR expires_at IS NOT NULL OR origin = 'dm'` (migration `ddf84381ef6c`), so the
+expiry cron (T-7.6), which reads `expires_at`, never reaches it. A Knot still carries none.
+- **Opening** costs him `dm_open` (8) with its first message (1 to 500 characters); her nothing.
+  **Each message of his after it** costs `dm_message` (2), charged in T-7.3's send, the message
+  as its ref (D-251), and nothing once the Thread is knotted.
+- **Whom:** someone the public profile's rule lets you reach (D-493) who also wants your gender,
+  as swipes ask (D-492's `visible_to`, mutual, the radius aside). A link reaches a profile outside
+  her seeking; it doesn't let him message her. Every refusal is `NOT_FOUND`.
+- **One Thread per pair:** if the pair matches later, the match points at the private message's
+  Thread, and nothing is charged.
+- **Untying** (T-7.7) a private-message Knot returns it to never expiring, not to a fresh hour;
+  noted on T-7.7.
+
+The downgrade refuses while an active private-message Thread exists, rather than inventing an
+expiry for a conversation both people were told never ends.
+
+**Rejected:** a far-future `expires_at` (a lie the cron would one day act on); a status of its
+own (every list, filter and Knot rule would need a fourth case).
+
+### D-552 · What a message may say: the prototype's lists, three corrections — Locked
+**The decision (T-7.1, D-030 built; the founder, 8 October 2026):** `messages/filters.py` holds
+the prototype's lists ("text safety filters"). Refused, on every message ever, with
+`MESSAGE_REJECTED` and `details.rule`: `abuse` (its eight words, as a prefix) and `solicitation`
+(paytm, gpay, phonepe, western union, and money phrases). Masked, in a Thread's first
+`mask_first_n_messages`: phone numbers, anything@something (email and every UPI app's handle),
+and social handles. A refusal writes a `message_rejected` fraud event, weight 0, naming the rule
+and never the text, in a transaction of its own so the refusal can't roll it back.
+
+**Three corrections to the prototype, each because it hid or refused ordinary sentences:**
+1. "transfer" and "upi" refuse only inside a money phrase ("transfer money", "send 500 rupees",
+   "upi id"): "I'm transferring jobs" passes. The founder's choice, from Claude's plan.
+2. A handle needs its app named and then a separator (`insta: x`, `snap @x`, `insta id x`,
+   `my insta is x`): the prototype's `wa` followed by any three letters hid "watching" and
+   "water". The known cost, accepted: "whatsapp is down" is masked in the first 20 messages.
+3. Any `name@handle` is masked, rather than the prototype's five UPI suffixes.
+Found and made by Claude building T-7.1; (2) and (3) weren't in the plan the founder approved,
+and are reported to him with the task.
+
+**Not yet:** Hindi and Hinglish words, payment-app asks and "number do": P-450, the founder's
+list, before REL-1.
+
+### D-553 · A woman's daily limits: settings, by the IST day, `RATE_LIMITED` — Locked (values tunable)
+**The decision (T-7.1, T-7.3; the founder, 8 October 2026, building D-098's limits):**
+- `women_new_men_daily_limit` (30): different men a day she opens a Thread with or writes to
+  first. The same man twice in a day counts once; a woman she writes to never counts.
+- `women_private_messages_daily_limit` (30): her messages a day in private-message Threads,
+  the first included.
+Both in `app_config` (migration `386bbc188276`), counted in Redis by the IST day, `RATE_LIMITED`
+past either with `details.retry_after_s` to the next IST midnight. A place is taken before the
+transaction and given back if nothing is written, as swipes' cap (D-492). Limits, never prices:
+she is never charged (D-098), and nothing limits a man here.
+
+### D-554 · Her side carries no countdown: `expires_at` is a man's alone — Locked
+**The decision (T-7.1, approved 8 October 2026 on the advisor's recommendation):** `Thread` and
+`ThreadRow` send `expires_at` to a man only; a woman's is null, so the server decides, and her
+screen can't show her a countdown by mistake (D-097, 08-DESIGN §8: "No countdown, no price, no
+locked state"). `status` stays true for both. An allowlist: a person with no gender is shown
+none.
+
+**Rejected:** the same data for both and the screen hiding it.
+
 ---
 
 ## Adding a decision

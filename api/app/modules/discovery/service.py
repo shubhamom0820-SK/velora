@@ -147,6 +147,16 @@ def card_of(
 # --- The public profile (T-6.3) ------------------------------------------------------
 
 
+async def can_reach(
+    session: AsyncSession, user: User, other_id: UUID, *, mutual: bool
+) -> bool:
+    """Whether `user` may reach `other_id` at all, in the caller's transaction:
+    the public profile's rule (D-493), and with `mutual` each wanting the
+    other's gender. A Thread is opened only with someone this allows (T-7.1)."""
+    viewer = await viewer_of(session, user)
+    return await repository.is_visible(session, viewer, other_id, mutual=mutual)
+
+
 def _not_found() -> AppError:
     """One answer for nobody, someone blocked either way, hidden, not done,
     not active or held back by their band: which, the asker never learns

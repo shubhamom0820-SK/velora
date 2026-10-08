@@ -24,6 +24,11 @@ POSSIBLE_MINOR_NOTE: Final = (
 # repeated flags go to a human, never to an automatic action (D-093, P-72).
 POSSIBLE_MINOR_WEIGHT: Final = 0
 
+# T-7.3, D-030: a message refused for a rule. The rule's name only, never the
+# text (CLAUDE.md rule 15). Counts for nothing until T-9.2 weighs it.
+MESSAGE_REJECTED: Final = "message_rejected"
+MESSAGE_REJECTED_WEIGHT: Final = 0
+
 
 def record_possible_minor(
     session: AsyncSession, user_id: UUID, *, score: float, model: str
@@ -69,5 +74,19 @@ def record_chargeback_shortfall(
                 "payment_id": str(payment_id),
                 "shortfall": shortfall,
             },
+        ),
+    )
+
+
+def record_message_rejected(session: AsyncSession, user_id: UUID, *, rule: str) -> None:
+    """A message `user_id` tried to send, refused for `rule`, in the caller's
+    transaction: who, when and which rule. Never the message."""
+    repository.add_fraud_event(
+        session,
+        FraudEvent(
+            user_id=user_id,
+            signal=MESSAGE_REJECTED,
+            weight=MESSAGE_REJECTED_WEIGHT,
+            meta={"rule": rule},
         ),
     )

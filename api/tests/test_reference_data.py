@@ -35,7 +35,7 @@ COUNTS = {
     "action_prices": 9,
     "credit_packs": 8,
     "gifts": 6,
-    "app_config": 9,
+    "app_config": 11,
     "interests": 24,
     "areas": 17,
 }
@@ -205,6 +205,9 @@ async def test_app_config_seeds(db: AsyncSession) -> None:
         "otp_sms_daily_cap": 500,
         # T-8.1, D-450, D-482: 18%, read only once registered (P-350).
         "gst_rate_bps": 1800,
+        # T-7.1, D-098: a woman's limits by the IST day, never prices.
+        "women_new_men_daily_limit": 30,
+        "women_private_messages_daily_limit": 30,
     }
 
 

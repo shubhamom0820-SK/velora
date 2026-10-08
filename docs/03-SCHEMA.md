@@ -252,10 +252,12 @@ Check `user_low < user_high`. Unique `(user_low, user_high)`.
 Check `user_low < user_high`. Unique `(user_low, user_high)`.
 Check `status <> 'knotted' OR (knotted_at IS NOT NULL AND expires_at IS NULL)` — a Knot never
 carries an expiry, so the expiry cron can never kill a conversation both people were told is
-permanent. Check `status <> 'active' OR expires_at IS NOT NULL` — an active thread always expires;
-every way into `active` (open, reopen, untie) sets a fresh expiry of `app_config.thread_hours`
-(seeded 24; 1 from T-7.6, D-097) — read the setting, never hardcode the number (T-1.10). From
-T-7.6 her message and Extend can also move `expires_at` later, and his never does (D-560).
+permanent. Check `status <> 'active' OR expires_at IS NOT NULL OR origin = 'dm'` — an active
+thread from a match always expires; every way into `active` (open, reopen, untie) sets a fresh
+expiry of `app_config.thread_hours` (seeded 24; 1 from T-7.6, D-097) — read the setting, never
+hardcode the number (T-1.10). From T-7.6 her message and Extend can also move `expires_at` later,
+and his never does (D-560). A private message (origin `dm`) never expires (D-231), so an active
+one carries none (T-7.1's `ddf84381ef6c`, D-550).
 Indexes: `(expires_at) where status='active'`, `(user_low, last_message_at desc)`,
 `(user_high, last_message_at desc)`.
 
@@ -553,6 +555,8 @@ fifteen free sends a week, D-231),
 number, ₹100 a day at D-035's unconfirmed ₹0.20 an SMS (D-066); and, by T-8.1's,
 `gst_rate_bps=1800`: 18% in basis points, read by nothing while Velora is unregistered (P-350,
 D-482).
+And by T-7.1's (D-553): `women_new_men_daily_limit=30` and `women_private_messages_daily_limit=30`,
+a woman's two daily limits (D-098), by the IST day: limits, never prices.
 Two settings are also promised in copy, in `web/src/i18n/en.ts`, written out because copy is a
 promise, not a computation. Change the copy with the setting:
 - `thread_hours`: the landing page ("Threads last a day", "24-hour", T-2.1), `/terms` ("lasts

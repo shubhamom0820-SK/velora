@@ -599,6 +599,20 @@ async def test_an_active_thread_must_expire(db: AsyncSession) -> None:
     assert refusal.constraint == "ck_threads_active_expires"
 
 
+async def test_an_active_private_message_never_expires(db: AsyncSession) -> None:
+    """A private message never expires (D-231, D-550): the rule above is a
+    Thread from a match's, and a `dm` one may be active with no expiry."""
+    low, high = await _pair(db)
+
+    await db.execute(
+        text(
+            "insert into threads (user_low, user_high, origin, opened_by) "
+            "values (:low, :high, 'dm', :low)"
+        ),
+        {"low": low, "high": high},
+    )
+
+
 async def test_untying_back_to_active_needs_a_fresh_expiry(db: AsyncSession) -> None:
     """Untie (04-API: DELETE /threads/{id}/knot) returns a Knot to active."""
     low, high = await _pair(db)

@@ -6,9 +6,11 @@ that promise from both sides, whatever code path writes the row:
 
 - a knotted thread has `knotted_at` and **no** `expires_at` — otherwise the
   expiry cron would kill a conversation both people were told is permanent;
-- an active thread **has** `expires_at` — otherwise it would never expire. Every
-  way into `active` (open, reopen, untie) sets a fresh `thread_hours` expiry —
-  read from app_config, never a literal (checklist A).
+- an active thread **from a match** has `expires_at` — otherwise it would never
+  expire. Every way into `active` (open, reopen, untie) sets a fresh
+  `thread_hours` expiry — read from app_config, never a literal (checklist A).
+  A private message (origin `dm`) never expires (D-231, D-550), so an active
+  one carries none.
 """
 
 from __future__ import annotations
@@ -63,7 +65,7 @@ class Thread(Timestamps, Base):
             name="knotted_is_permanent",
         ),
         CheckConstraint(
-            "status <> 'active' OR expires_at IS NOT NULL",
+            "status <> 'active' OR expires_at IS NOT NULL OR origin = 'dm'",
             name="active_expires",
         ),
         UniqueConstraint("user_low", "user_high"),

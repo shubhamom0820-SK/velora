@@ -21,9 +21,10 @@ import json
 import logging
 import os
 import random
+import uuid
 from collections.abc import AsyncIterator, Iterator, MutableMapping
 from dataclasses import dataclass
-from datetime import date
+from datetime import date, timedelta
 from types import ModuleType
 from typing import Any, NoReturn, Protocol
 
@@ -76,9 +77,12 @@ from app.core.db import build_engine, get_session
 from app.core.enums import (
     Gender,
     LedgerReason,
+    MessageKind,
     OnboardingStep,
     Role,
     Seeking,
+    ThreadOrigin,
+    ThreadStatus,
     UserStatus,
 )
 from app.core.providers import FakeProviders
@@ -89,6 +93,8 @@ from app.core.security import make_access_token, normalize_phone
 from app.main import close_resources, create_app
 from app.modules.auth.firebase_store import KEY_PREFIX as FIREBASE_KEY_PREFIX
 from app.modules.auth.otp_store import KEY_PREFIX as OTP_KEY_PREFIX
+from app.modules.messages.models import Message
+from app.modules.threads.models import Thread
 from app.modules.users import service as users_service
 from app.modules.users.models import User
 from app.modules.wallet import service as wallet_service
@@ -349,6 +355,79 @@ def make_user(db: AsyncSession) -> MakeUser:
             user.id, user.role, settings, auth_time=core_clock.now()
         )
         return user, token
+
+    return factory
+
+
+class MakeThread(Protocol):
+    async def __call__(
+        self,
+        a: User,
+        b: User,
+        *,
+        status: ThreadStatus | str = ThreadStatus.ACTIVE,
+        origin: ThreadOrigin | str = ThreadOrigin.MATCH,
+        messages: int = 0,
+    ) -> Thread: ...
+
+
+@pytest.fixture
+def make_thread(db: AsyncSession) -> MakeThread:
+    """A Thread between `a` and `b`, opened by `a`, as the rules leave one
+    (06-TESTING's fixture): active from a match expires in 24 hours, active
+    and private never does, expired ran out an hour ago, knotted has no
+    expiry. `messages` text messages from `a`, counted on the Thread. Written
+    directly, charging nothing: what opening costs is T-7.1's own tests'."""
+
+    async def factory(
+        a: User,
+        b: User,
+        *,
+        status: ThreadStatus | str = ThreadStatus.ACTIVE,
+        origin: ThreadOrigin | str = ThreadOrigin.MATCH,
+        messages: int = 0,
+    ) -> Thread:
+        status, origin = ThreadStatus(status), ThreadOrigin(origin)
+        now = core_clock.now()
+        expires_at = {
+            ThreadStatus.ACTIVE: None
+            if origin is ThreadOrigin.DM
+            else now + timedelta(hours=24),
+            ThreadStatus.EXPIRED: now - timedelta(hours=1),
+            ThreadStatus.KNOTTED: None,
+        }[status]
+        knotted = status is ThreadStatus.KNOTTED
+        # Python orders UUIDs as Postgres does: by their bytes.
+        low, high = sorted((a.id, b.id))
+        thread = Thread(
+            user_low=low,
+            user_high=high,
+            origin=origin,
+            opened_by=a.id,
+            status=status,
+            expires_at=expires_at,
+            knotted_at=now if knotted else None,
+            low_knot_at=now if knotted else None,
+            high_knot_at=now if knotted else None,
+        )
+        db.add(thread)
+        await db.flush()
+        for n in range(messages):
+            db.add(
+                Message(
+                    thread_id=thread.id,
+                    sender_id=a.id,
+                    kind=MessageKind.TEXT,
+                    body=f"Message {n + 1}",
+                    client_msg_id=uuid.uuid4(),
+                )
+            )
+        if messages:
+            thread.message_count = messages
+            thread.last_message_at = now
+        await db.flush()
+        await db.refresh(thread)
+        return thread
 
     return factory
 

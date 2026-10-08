@@ -131,7 +131,7 @@ counted, never for your own profile or a refusal.
 | Method | Path | Auth | Body → Response | Task |
 |---|---|---|---|---|
 | GET | /threads | ✅ | `?tier=threads|knots&filter=all|unread|recent&q=&cursor=&limit=` → `Page<ThreadRow>` | T-7.2 |
-| POST | /threads | ✅ | `{match_id}` or `{user_id, first_message}` → `Thread` (5 Velas from a match; 8 for a private message, D-231) | T-7.1 |
+| POST | /threads | ✅ | `{match_id}` or `{user_id, first_message}` (1–500) → `Thread` (5 Velas from a match; 8 for a private message, D-231). One per pair: an existing one is returned, nothing charged; an expired one is `THREAD_EXPIRED` for him and returned to her (D-097). Every refusal of whom is `NOT_FOUND` (D-550). A woman past her daily limits: `RATE_LIMITED` (D-553). 20 a minute | T-7.1 |
 | GET | /threads/{id} | ✅ | → `Thread` | T-7.2 |
 | GET | /threads/{id}/messages | ✅ | `?cursor=&limit=` → `Page<Message>` | T-7.3 |
 | POST | /threads/{id}/messages | ✅ | `{client_msg_id, kind, body?, media_key?, duration_s?}` → `Message` | T-7.3 |
@@ -146,6 +146,15 @@ counted, never for your own profile or a refusal.
 | POST | /media/voice-upload-url | ✅ | `{thread_id}` → `{media_key, put_url}` (women only) | T-7.9 |
 | POST | /messages/{id}/unlock | ✅ | → `{url}` (5 Velas, men) | T-7.9 |
 | GET | /messages/{id}/media | ✅ | → `{url}` (signed, 10 min, only if unlocked or sender) | T-7.9 |
+
+`Thread` (T-7.1): `id`, `origin` (`match`, `dm`), `status`, `other_user_id`, `expires_at` (a
+man's alone, D-554: null for a woman, once knotted, and for a private message, which never
+expires, D-550), `knotted_at`, `i_tied`, `last_message_at`, `created_at`.
+
+`Message` (T-7.1, T-7.3): `id`, `thread_id`, `kind`, `body` (the text shown, masked where it had
+to be; never the original, D-030), `masked`, `duration_s`, `mine`, `from_deleted_account`
+(D-051), `locked` (a voice note a man hasn't unlocked; the file is never here, T-7.9),
+`read_at`, `created_at`, and `client_msg_id` on your own messages only.
 
 ## Album, kudos, safety
 | Method | Path | Auth | Body → Response | Task |

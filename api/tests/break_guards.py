@@ -4280,8 +4280,8 @@ T63: list[tuple[Case, list[str]]] = [
             edits=[
                 (
                     "app/modules/discovery/repository.py",
-                    "                mutual=False,\n",
-                    "                mutual=True,\n",
+                    "    session: AsyncSession, viewer: Viewer, user_id: UUID, *, mutual: bool = False\n",
+                    "    session: AsyncSession, viewer: Viewer, user_id: UUID, *, mutual: bool = True\n",
                 )
             ],
             expect=["test_seeking_and_the_radius_dont_apply_a_link_reaches_past_them"],
@@ -5284,6 +5284,266 @@ T82: list[Case] = [
     ),
 ]
 
+# --- T-7.1: opening a Thread -----------------------------------------------------
+
+T71_SELECTION = [
+    "tests/modules/threads",
+    "tests/modules/messages",
+    "tests/test_schema.py",
+]
+THREADS_SERVICE = "app/modules/threads/service.py"
+THREADS_RULES = "app/modules/threads/rules.py"
+MESSAGES_SERVICE = "app/modules/messages/service.py"
+FILTERS = "app/modules/messages/filters.py"
+LIMITS = "app/modules/messages/limits.py"
+DM_MIGRATION = (
+    "alembic/versions/20261008_ddf84381ef6c_private_message_threads_never_expire.py"
+)
+
+T71: list[Case] = [
+    Case(
+        id="t71-01-no-pair-lock",
+        what="opening without the pair's lock",
+        edits=[
+            (
+                THREADS_SERVICE,
+                "    await repository.lock_pair(session, user.id, other_id)\n",
+                "    pass  # no lock\n",
+            )
+        ],
+        expect=["test_a_double_tap_opens_one_thread_and_charges_once"],
+    ),
+    Case(
+        id="t71-02-no-existing-thread",
+        what="a second open never finding the first's Thread",
+        edits=[
+            (
+                THREADS_SERVICE,
+                "    if existing is not None:\n",
+                "    if existing is not None and False:\n",
+            )
+        ],
+        expect=[
+            "test_a_second_open_returns_the_thread_and_charges_nothing",
+            "test_an_expired_thread_refuses_him",
+            "test_a_live_thread_is_returned_and_its_match_pointed_at_it",
+        ],
+    ),
+    Case(
+        id="t71-03-expired-lets-him-through",
+        what="an expired Thread letting a man through",
+        edits=[
+            (
+                THREADS_RULES,
+                "    return gender is Gender.FEMALE\n",
+                "    return True\n",
+            )
+        ],
+        expect=["test_an_expired_thread_refuses_him"],
+    ),
+    Case(
+        id="t71-04-no-charge",
+        what="opening without the charge",
+        edits=[
+            (
+                THREADS_SERVICE,
+                "    await pricing_service.charge(\n",
+                "    None and await pricing_service.charge(\n",
+            )
+        ],
+        expect=[
+            "test_a_man_opens_from_a_match_for_five_and_she_is_told",
+            "test_a_private_message_costs_him_eight_and_never_expires",
+            "test_a_man_without_the_velas_opens_nothing",
+        ],
+    ),
+    Case(
+        id="t71-05-dm-at-the-match-price",
+        what="a private message charged as a Thread from a match",
+        edits=[
+            (
+                THREADS_RULES,
+                "    ThreadOrigin.DM: LedgerReason.DM_OPEN,\n",
+                "    ThreadOrigin.DM: LedgerReason.THREAD_OPEN,\n",
+            )
+        ],
+        expect=["test_a_private_message_costs_him_eight_and_never_expires"],
+    ),
+    Case(
+        id="t71-06-countdown-to-her",
+        what="her side shown the expiry",
+        edits=[
+            (
+                THREADS_RULES,
+                "    return gender is Gender.MALE\n",
+                "    return True\n",
+            )
+        ],
+        expect=["test_a_woman_opens_free_and_sees_no_countdown"],
+    ),
+    Case(
+        id="t71-07-hours-written-in",
+        what="24 hours written into the code, not read from thread_hours",
+        edits=[
+            (
+                THREADS_RULES,
+                "    return now + timedelta(hours=hours)\n",
+                "    return now + timedelta(hours=24)\n",
+            )
+        ],
+        expect=["test_the_hours_are_the_settings_never_a_number"],
+    ),
+    Case(
+        id="t71-08-dm-not-mutual",
+        what="a private message to someone who doesn't want your gender",
+        edits=[
+            (
+                THREADS_SERVICE,
+                "        other_id, mutual = request.user_id, True\n",
+                "        other_id, mutual = request.user_id, False\n",
+            ),
+            (
+                THREADS_SERVICE,
+                "        session, user, other_id, mutual=origin is ThreadOrigin.DM\n",
+                "        session, user, other_id, mutual=False\n",
+            ),
+        ],
+        expect=["test_a_private_message_needs_her_to_want_his_gender"],
+    ),
+    Case(
+        id="t71-09-match-not-pointed",
+        what="a new Thread's match left pointing at nothing",
+        edits=[
+            (
+                THREADS_SERVICE,
+                "        await repository.link_match(session, match.id, thread.id)\n",
+                "        pass\n",
+            )
+        ],
+        expect=["test_a_man_opens_from_a_match_for_five_and_she_is_told"],
+    ),
+    Case(
+        id="t71-10-she-isnt-told",
+        what="the other person never told",
+        edits=[
+            (
+                THREADS_SERVICE,
+                "    events.queue(session, other_id, THREAD_OPENED, payload)\n",
+                "    pass\n",
+            )
+        ],
+        expect=[
+            "test_a_man_opens_from_a_match_for_five_and_she_is_told",
+            "test_a_private_message_costs_him_eight_and_never_expires",
+        ],
+    ),
+    Case(
+        id="t71-11-first-message-unmasked",
+        what="the first message never masked",
+        edits=[
+            (
+                MESSAGES_SERVICE,
+                "        if thread.message_count < mask_first_n\n",
+                "        if False\n",
+            )
+        ],
+        expect=["test_a_private_message_costs_him_eight_and_never_expires"],
+    ),
+    Case(
+        id="t71-12-rejection-forgotten",
+        what="a refused message leaving no signal",
+        edits=[
+            (
+                MESSAGES_SERVICE,
+                "        safety_service.record_message_rejected(session, user_id, rule=rule)\n",
+                "        pass\n",
+            )
+        ],
+        expect=["test_a_rejected_first_message_opens_nothing_and_is_recorded"],
+    ),
+    Case(
+        id="t71-13-abuse-word-dropped",
+        what="a word gone from the abuse list",
+        edits=[(FILTERS, r'r"\b(bitch|slut', r'r"\b(slut')],
+        expect=["test_abuse_and_asking_for_money_are_refused"],
+    ),
+    Case(
+        id="t71-14-no-new-men-limit",
+        what="a woman's new-men limit never taken",
+        edits=[
+            (
+                THREADS_SERVICE,
+                "        if new_men is not None:\n",
+                "        if new_men is not None and False:\n",
+            )
+        ],
+        expect=["test_she_opens_with_so_many_new_men_a_day"],
+    ),
+    Case(
+        id="t71-15-no-private-message-limit",
+        what="a woman's private-message limit never taken",
+        edits=[
+            (
+                THREADS_SERVICE,
+                "        if private is not None:\n",
+                "        if private is not None and False:\n",
+            )
+        ],
+        expect=["test_she_sends_so_many_private_messages_a_day"],
+    ),
+    Case(
+        id="t71-16-places-kept",
+        what="a failed open keeping her places",
+        edits=[
+            (
+                THREADS_SERVICE,
+                "    except BaseException:\n        await taken.give_back()\n        raise\n",
+                "    except BaseException:\n        raise\n",
+            )
+        ],
+        expect=["test_her_places_come_back_when_nothing_is_written"],
+    ),
+    Case(
+        id="t71-17-every-woman-a-man",
+        what="a woman counted among her 30 men",
+        edits=[(LIMITS, "    return gender is Gender.MALE\n", "    return True\n")],
+        expect=["test_men_and_women_to_women_have_no_such_limit"],
+    ),
+    Case(
+        id="t71-18-dm-must-expire",
+        what="the CHECK still saying every active Thread expires",
+        edits=[
+            (
+                DM_MIGRATION,
+                """AFTER = "status <> 'active' OR expires_at IS NOT NULL OR origin = 'dm'"\n""",
+                """AFTER = "status <> 'active' OR expires_at IS NOT NULL"\n""",
+            )
+        ],
+        expect=[
+            "test_an_active_private_message_never_expires",
+            "test_a_private_message_costs_him_eight_and_never_expires",
+        ],
+    ),
+    Case(
+        id="t71-19-downgrade-invents-nothing",
+        what="the downgrade not refusing over an active private message",
+        edits=[(DM_MIGRATION, "    if never_expiring:\n", "    if False:\n")],
+        expect=["test_going_back_refuses_while_a_private_message_is_active"],
+    ),
+    Case(
+        id="t71-20-bare-transfer",
+        what="the bare word transfer refused, as the prototype did",
+        edits=[
+            (
+                FILTERS,
+                r'    r"\b(paytm|gpay',
+                r'    r"\btransfer\b|\b(paytm|gpay',
+            )
+        ],
+        expect=["test_ordinary_sentences_are_not_refused"],
+    ),
+]
+
 CASES: list[tuple[Case, list[str]]] = (
     [(c, T51_SELECTION) for c in T51]
     + [(c, T54_SELECTION) for c in T54]
@@ -5307,6 +5567,7 @@ CASES: list[tuple[Case, list[str]]] = (
     + P47
     + T64
     + [(c, T82_SELECTION) for c in T82]
+    + [(c, T71_SELECTION) for c in T71]
 )
 
 # The fifty-connection fixture's own message when Postgres refuses a connection.

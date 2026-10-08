@@ -359,10 +359,13 @@ def shares_a_match_or_thread(viewer_id: UUID, other: Any) -> ColumnElement[bool]
     )
 
 
-async def is_visible(session: AsyncSession, viewer: Viewer, user_id: UUID) -> bool:
+async def is_visible(
+    session: AsyncSession, viewer: Viewer, user_id: UUID, *, mutual: bool = False
+) -> bool:
     """Whether `viewer` may open `user_id`'s profile (D-493): `visible_to`
     without seeking or the radius, which a link reaches past, and a hidden
-    profile only to someone it shares a match or a Thread with."""
+    profile only to someone it shares a match or a Thread with. With `mutual`,
+    each must want the other's gender too: a private message (T-7.1, D-550)."""
     found = await session.scalar(
         select(User.id)
         .join(Profile, Profile.user_id == User.id)
@@ -370,7 +373,7 @@ async def is_visible(session: AsyncSession, viewer: Viewer, user_id: UUID) -> bo
             User.id == user_id,
             *visible_to(
                 viewer,
-                mutual=False,
+                mutual=mutual,
                 hidden_ok=shares_a_match_or_thread(viewer.id, User.id),
             ),
         )
