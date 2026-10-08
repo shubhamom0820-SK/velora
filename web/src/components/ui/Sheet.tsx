@@ -11,6 +11,7 @@ import {
 import { createPortal } from "react-dom";
 
 import { t } from "@/i18n/t";
+import { useSession } from "@/store/session";
 
 import { Icon } from "./Icon";
 
@@ -32,10 +33,16 @@ const FOCUSABLE =
  * A modal sheet: from the bottom on mobile, centred from 768 px. Focus moves
  * into it and can't Tab out; Esc, ✕ and the backdrop close it, and focus goes
  * back to whatever opened it.
+ *
+ * It portals to `<body>`, outside the PIN lock's `inert` frame, so it is
+ * `inert` itself while the lock is up (P-220): drawn under the lock, out of
+ * reach of Tab, clicks and screen readers, and still holding whatever was
+ * being written in it when the lock lifts.
  */
 export function Sheet({ open, onClose, title, children, footer }: SheetProps) {
   const titleId = useId();
   const panel = useRef<HTMLDivElement>(null);
+  const locked = useSession((state) => state.locked);
 
   useEffect(() => {
     if (!open) return;
@@ -81,7 +88,10 @@ export function Sheet({ open, onClose, title, children, footer }: SheetProps) {
   }
 
   return createPortal(
-    <div className="fixed inset-0 z-40 flex flex-col justify-end md:items-center md:justify-center md:p-6">
+    <div
+      inert={locked}
+      className="fixed inset-0 z-40 flex flex-col justify-end md:items-center md:justify-center md:p-6"
+    >
       <div
         aria-hidden
         onClick={onClose}

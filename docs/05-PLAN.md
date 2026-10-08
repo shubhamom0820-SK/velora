@@ -5129,7 +5129,7 @@ The number comes from the session's own block, given in its brief, from P-100 up
   that range for proofs, and make the wrong one refuse rather than rely on remembering: a guard
   beats a rule. In the text the founder relayed, 5 October 2026; filed from T-4.7's session block
   (P-110 to P-119).
-- [ ] P-220 · Keep an open sheet behind the PIN lock out of reach. **Before T-6.5** (on its Needs
+- [x] P-220 · Keep an open sheet behind the PIN lock out of reach. **Before T-6.5** (on its Needs
   line). Worst case: someone opens a sheet in the app, the lock comes up over it after five
   minutes away, and whoever picks up the phone can still Tab into the sheet, or hear it read by a
   screen reader: a report being written, a profile's ⋯ menu, whatever that sheet holds. The lock
@@ -5142,6 +5142,14 @@ The number comes from the session's own block, given in its brief, from P-100 up
   stays shut while `locked`, or the lock makes the portal's content `inert` too, with a test that
   a sheet open when the lock rises can't be reached. Found in T-5.5's plan; filed from its block
   (P-220 to P-229).
+  **Done, 8 October 2026:** the founder chose `inert`. `Sheet` reads `useSession`'s `locked` and
+  puts `inert` on its portal's root while the lock is up, so every sheet, today's and T-6.5's, sits
+  under the lock out of reach and keeps what was being written in it: a sheet shut instead would
+  unmount a half-written report. `StoreSheet` still closes itself on lock, with its own test; only
+  its comment changed. `Sheet.test.tsx` opens a sheet, types into it, raises the lock: the dialog
+  is inside `[inert]`; lowered, it isn't and the text is still there. jsdom only carries the
+  attribute (it doesn't act on `inert`), as T-3.10's frame test does. Broken once: without
+  `inert={locked}` that test went red; restored by file copy, SHA-256 checked, green.
 - [ ] P-221 · Read a balance on the web only from the wallet query, never from `Me`. **Before any
   screen shows a balance read from `Me`.** Worst case: a screen shows `Me.balance` beside the
   header's pill and the two disagree, a money number wrong on screen, silently. `Me` is cached for
@@ -5591,3 +5599,19 @@ The number comes from the session's own block, given in its brief, from P-100 up
   (8 October 2026): a word list is a product judgment, and a wrong one refuses ordinary sentences.
   Each word goes in with a test, and each with an ordinary sentence it must not catch. Filed by
   Claude in T-7.1 at the founder's direction; its session's block, P-450 to P-459.
+- [ ] P-470 · Stop `test_a_fifty_waits_while_another_run_holds_the_turn` failing when other
+  sessions test at once. **Before the next session's `make test` meets it** (no deadline beyond
+  that: it blocks a landing, it hides no bug). Worst case: a `make test` goes red on a branch that
+  touches nothing near it, the push gate refuses the landing, and the next session, told a red
+  is never waved through, spends its time on a test that is right about its own code. Seen once,
+  8 October 2026, in P-220's run (web files only): `TimeoutError` at
+  `asyncio.wait_for(waiting, timeout=10)`, `api/tests/modules/wallet/test_concurrency.py`, while
+  three other worktrees' `pytest -m "not critical"` were running (`pgrep`, minutes later). The
+  turn is one advisory lock on the shared server (P-142). The test holds it, releases it, and
+  gives its own waiter 10 s, but the waiter only polls every 0.2 s, so another run's fifty can
+  take the turn in that gap and hold it for its own whole test. **A hypothesis, not established:**
+  that interleaving wasn't observed, only the timeout beside the other runs. Fix, the doer's to
+  choose: the test's own lock id, so no other run can contend for it; or a waiter that queues
+  (`pg_advisory_lock`, blocking) rather than polls. Its proof: hold the turn from a second
+  connection in the gap and see today's test go red, the fixed one green. Found in P-220's
+  session; filed from its block (P-470 to P-479).

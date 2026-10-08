@@ -1,9 +1,10 @@
-import { render, screen } from "@testing-library/react";
+import { act, render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { useState } from "react";
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { t } from "@/i18n/t";
+import { resetSession, useSession } from "@/store/session";
 
 import { Sheet } from "./Sheet";
 
@@ -33,6 +34,10 @@ async function openSheet() {
   await userEvent.click(screen.getByRole("button", { name: "Block" }));
   return { onClose, dialog: screen.getByRole("dialog") };
 }
+
+afterEach(() => {
+  resetSession();
+});
 
 describe("Sheet", () => {
   it("renders nothing while closed", () => {
@@ -94,5 +99,23 @@ describe("Sheet", () => {
     expect(backdrop).not.toBe(dialog);
     await userEvent.click(backdrop as Element);
     expect(onClose).toHaveBeenCalledTimes(2);
+  });
+
+  it("is out of reach while the PIN lock is up, and keeps what was written (P-220)", async () => {
+    const { dialog } = await openSheet();
+    const reason = screen.getByRole("textbox", { name: "Reason" });
+    await userEvent.type(reason, "Rude in chat");
+    expect(dialog.closest("[inert]")).toBeNull();
+
+    act(() => useSession.getState().setLocked(true));
+    expect(dialog.closest("[inert]")).not.toBeNull();
+    // jsdom doesn't act on `inert`, nor Testing Library's role queries; a
+    // browser takes it out of focus, clicks and the accessibility tree, as it
+    // does the page behind the lock (SignedInFrame).
+
+    act(() => useSession.getState().setLocked(false));
+    expect(screen.getByRole("dialog")).toBe(dialog);
+    expect(dialog.closest("[inert]")).toBeNull();
+    expect(reason).toHaveValue("Rude in chat");
   });
 });

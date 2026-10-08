@@ -13,10 +13,10 @@ import { useStoreSheet } from "@/store/store-sheet";
  * hasn't started, with no promise of when. Opened by the balance pill, "Buy
  * Velas", and any mutation refused with `INSUFFICIENT_CREDITS`.
  *
- * A sheet portals to `<body>`, outside the PIN lock's `inert` (P-220), so this
- * one closes when the lock goes up rather than stay reachable behind it. It
- * closes when the app's routes unmount too, so a sign-out with it open doesn't
- * bring it back at the next sign-in.
+ * Behind the PIN lock any sheet is `inert` (P-220); this one closes as well
+ * when the lock goes up, since it holds nothing to come back to. It closes
+ * when the app's routes unmount too, so a sign-out with it open doesn't bring
+ * it back at the next sign-in.
  */
 export function StoreSheet() {
   const open = useStoreSheet((state) => state.open);
