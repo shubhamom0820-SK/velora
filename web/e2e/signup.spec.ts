@@ -1,6 +1,6 @@
 import { join, resolve } from "node:path";
 
-import { type Page } from "@playwright/test";
+import { type Locator, type Page } from "@playwright/test";
 
 import { codeFor, expect, freshNumber, signIn, test } from "./fixtures";
 
@@ -207,6 +207,78 @@ async function inTheApp(page: Page) {
   ).toHaveCount(4);
 }
 
+/** Outside the app there is no shell: no nav in the page at all (T-5.6). */
+async function noShell(page: Page) {
+  await expect(page.getByRole("navigation", { name: "Main" })).toHaveCount(0);
+}
+
+/** The box a browser drew, which must exist. */
+async function boxOf(locator: Locator) {
+  const box = await locator.boundingBox();
+  expect(box, "drawn on the page").not.toBeNull();
+  return box ?? { x: 0, y: 0, width: 0, height: 0 };
+}
+
+/**
+ * The shell where a browser draws it, at this project's width (P-82). T-5.6's
+ * tests run in jsdom, which applies no CSS, and Tailwind drops a class it
+ * can't compile without an error: only here does a lost style show. On a
+ * phone the nav is the screen's bottom edge and the page's last line stays
+ * clear of it; from 768 px it sits in the header's row.
+ */
+async function shellWhereItBelongs(page: Page) {
+  const { width, height } = page.viewportSize() ?? { width: 0, height: 0 };
+  const nav = page.getByRole("navigation", { name: "Main" });
+  await expect(nav.getByRole("link")).toHaveCount(4);
+  for (const link of await nav.getByRole("link").all()) {
+    await expect(link).toBeVisible();
+  }
+  const navBox = await boxOf(nav);
+  const header = await boxOf(page.locator("header"));
+  const inHeader =
+    navBox.x >= header.x &&
+    navBox.y >= header.y &&
+    navBox.x + navBox.width <= header.x + header.width &&
+    navBox.y + navBox.height <= header.y + header.height;
+  if (width >= 768) {
+    expect(inHeader, "the nav inside the header's box").toBe(true);
+    return;
+  }
+  expect(inHeader, "the nav out of the header").toBe(false);
+  expect(navBox.y + navBox.height, "the nav on the bottom edge").toBe(height);
+  // At the page's end, where its last line meets the nav: scrolled and
+  // measured in one step. Done in two, CI once read 1100 against the nav's
+  // 788 (8 October 2026): the page wasn't at its end when measured, most
+  // likely one still filling in. Under a pixel is the scroll's rounding
+  // (788.05 seen locally); a lost padding is the nav's whole height.
+  const contentEnd = await page.locator("main").evaluate((main) => {
+    window.scrollTo(0, document.documentElement.scrollHeight);
+    return (
+      main.getBoundingClientRect().bottom -
+      parseFloat(getComputedStyle(main).paddingBottom)
+    );
+  });
+  expect(
+    contentEnd,
+    `the page's content ends above the nav, on ${page.url()}`,
+  ).toBeLessThan(navBox.y + 1);
+}
+
+/** Each of the four places, opened from the nav, with the shell in place. */
+async function everyPlaceFromTheNav(page: Page) {
+  const nav = page.getByRole("navigation", { name: "Main" });
+  for (const [name, path] of [
+    ["Chats", /\/chats$/],
+    ["Wallet", /\/wallet$/],
+    ["You", /\/you$/],
+    ["Discover", /\/discover$/],
+  ] as const) {
+    await nav.getByRole("link", { name }).click();
+    await expect(page).toHaveURL(path);
+    await shellWhereItBelongs(page);
+  }
+}
+
 test("J1: a new man signs up all the way to Discover, with no selfie", async ({
   page,
   context,
@@ -216,7 +288,12 @@ test("J1: a new man signs up all the way to Discover, with no selfie", async ({
   await context.grantPermissions(["geolocation"], { origin: WEB });
   await context.setGeolocation(PHAGWARA);
   const phone = freshNumber();
+  // The control for P-82's checks: no shell before he's in the app.
+  await page.goto("/login");
+  await expect(page.getByLabel("Mobile number")).toBeVisible();
+  await noShell(page);
   await signIn(page, request, phone);
+  await noShell(page);
   await asFarAsLocation(page, ARJUN);
 
   await page.getByRole("button", { name: "Share my location" }).click();
@@ -256,6 +333,9 @@ test("J1: a new man signs up all the way to Discover, with no selfie", async ({
   await page.reload();
   await unlock(page, PIN);
   await inTheApp(page);
+
+  // The shell where the browser draws it, on each of its four places (P-82).
+  await everyPlaceFromTheNav(page);
 
   // D-080: the number never went in a URL.
   expect(urls.filter((url) => url.includes(phone.slice(-8)))).toEqual([]);

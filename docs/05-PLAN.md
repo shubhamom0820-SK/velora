@@ -4638,7 +4638,7 @@ The number comes from the session's own block, given in its brief, from P-100 up
   tests/modules/photos/test_upload.py`). CI runs file order, so it is green there. Seen in 3 of
   8 shuffled orders of the whole suite (seeds 3, 4 and 7) during T-5.4, which touches no photo
   code. Fix: `where(Photo.user_id == user.id)`, 06-TESTING's rule since T-5.1. Found in T-5.4.
-- [ ] P-82 · Check the app shell where a browser draws it, at a phone's width and a desktop's.
+- [x] P-82 · Check the app shell where a browser draws it, at a phone's width and a desktop's.
   **Before T-6.5** (on its Needs line). It needs T-4.9, whose journey is the first to reach
   `/discover`. Worst case without it: at one width the nav, the only way between Discover, Chats,
   Wallet and You, is gone, under the page, or over the last thing on every screen, and every test
@@ -4658,6 +4658,22 @@ The number comes from the session's own block, given in its brief, from P-100 up
   advisor directing T-5.6 (Claude, in a separate chat), relayed by the founder, 4 October 2026.
 
   Found building T-5.6.
+  **Done, 8 October 2026:** in J1 (`e2e/signup.spec.ts`), which already runs in both of the E2E's
+  projects, `mobile` at 390 × 844 and `desktop` at 1280 × 800. After the reload into `/discover`
+  it opens Chats, Wallet, You and Discover from the nav, and on each: four links visible; on the
+  phone the nav out of the header, its bottom edge the viewport's, and `<main>`'s content box
+  ending at or above the nav's top; on the desktop the nav inside the header's box. The control:
+  no `<nav>` in the page on `/login` or the birthday step, at both widths. Broken once each, run by
+  `pnpm exec playwright test -g "J1: a new man"`: without the nav's `md:static` the desktop case
+  went red ("the nav inside the header's box"), the phone's stayed green; without `<main>`'s
+  `pb-(--shell-nav-height)` the phone case went red (content ending at 844, the nav's top 788),
+  the desktop's stayed green. Restored, both green. **Its first CI run after a rebase went red,
+  the check's own fault:** scrolled to the end in one call and measured in another, a page read
+  1100 against the nav's 788, not at its end when measured (most likely still filling in; which
+  page wasn't named, so the message names it now). Scrolling and measuring are one call in the page
+  since, with under a pixel allowed for the scroll's rounding (788.05 seen locally, 1 of 3
+  phone runs; a lost padding misses by the nav's 56). Then 10 of 10 green (`--repeat-each=5`),
+  and both breaks red again in their own project only.
 - [ ] P-83 · Make the shell's look guard an allowlist. **Before T-6.5** (on its Needs line). Worst
   case: a look value from a family nobody listed lands in `AppShell.tsx`, the guard stays green,
   and T-6.5's design pass meets values written into structure: the rework T-5.6's rule exists to
