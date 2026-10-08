@@ -21,7 +21,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core import clock
 from app.core.config import Settings
-from app.core.enums import FraudBand
+from app.core.enums import FraudBand, Gender
 from app.core.enums import Kudos as KudosKind
 from app.core.errors import AppError, invalid_field
 from app.core.pagination import Cursor, PageParams
@@ -269,6 +269,13 @@ async def public_profile_in(
         None if own else await repository.match_between(session, user.id, user_id)
     )
     thread = None if own else await repository.thread_between(session, user.id, user_id)
+    # D-780: `POST /gifts/send`'s own rule, a man to a woman he could send a
+    # private message to (D-653); never your own, which is never both.
+    can_gift = (
+        user.gender is Gender.MALE
+        and row.gender is Gender.FEMALE
+        and await repository.is_visible(session, viewer, user_id, mutual=True)
+    )
     if not own:
         await repository.record_view(session, user.id, user_id, clock.now())
     card = card_of(row, distance, clock.now(), settings)
@@ -290,6 +297,7 @@ async def public_profile_in(
             expires_at=thread.expires_at,
             kudos=await kudos_service.state(session, user.id, user_id, thread),
         ),
+        can_gift=can_gift,
     )
 
 

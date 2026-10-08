@@ -326,6 +326,7 @@ async def cards(
         select(
             User.id,
             User.dob,
+            User.gender,
             User.created_at,
             User.last_active_at,
             Profile.first_name,

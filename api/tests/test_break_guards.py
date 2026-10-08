@@ -6,7 +6,7 @@ Without this, an edit to a guarded file would leave a case that can't apply,
 and the claim it backed (T-5.1's thirty-five, T-5.4's six, T-4.4's thirty-seven, T-4.6's three,
 the landing guard's five, T-5.2's twenty-two, P-38's eleven, T-4.8's twenty-six
 (twenty-seven until T-4.12 took the photo requirement away, D-392),
-T-4.11's eight, T-4.12's twenty-two, T-8.1's twenty-eight, T-8.2's eighteen, T-7.1's twenty, T-7.2's fourteen, T-7.3's twenty-six (twenty-five since T-7.9 let her voice notes through), P-64's three, T-7.4's eighteen, P-79's eight, T-8.5's ten, T-7.9's thirty-five, T-8.9's twenty-nine, P-152's five, P-740's five, T-8.4's twenty)
+T-4.11's eight, T-4.12's twenty-two, T-8.1's twenty-eight, T-8.2's eighteen, T-7.1's twenty, T-7.2's fourteen, T-7.3's twenty-six (twenty-five since T-7.9 let her voice notes through), P-64's three, T-7.4's eighteen, P-79's eight, T-8.5's ten, T-7.9's thirty-five, T-8.9's twenty-nine, P-152's five, P-740's five, T-8.4's twenty, T-8.10's three)
 unrecheckable.
 """
 
@@ -89,6 +89,7 @@ def test_case_ids_are_unique_and_name_their_task() -> None:
         "t84",
         "t77",
         "t88",
+        "t810",
     }
     assert len([i for i in ids if i.startswith("t51-")]) == 35
     assert len([i for i in ids if i.startswith("t54-")]) == 6
@@ -130,6 +131,7 @@ def test_case_ids_are_unique_and_name_their_task() -> None:
     assert len([i for i in ids if i.startswith("t76-")]) == 28
     assert len([i for i in ids if i.startswith("t77-")]) == 16
     assert len([i for i in ids if i.startswith("t88-")]) == 3
+    assert len([i for i in ids if i.startswith("t810-")]) == 3
 
 
 def test_failed_tests_reads_ids_whole() -> None:

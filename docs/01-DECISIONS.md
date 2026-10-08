@@ -5371,6 +5371,24 @@ there, from the same function); waiting for T-7.11 to build the prompt (the task
 would land with nothing to give kudos from); the requests list on her own profile (a profile is
 what others see); "You asked recently" (it says a previous request was answered).
 
+### D-780 · The gift button shows where the server says a gift is taken: `PublicProfile.can_gift` — Locked
+**The decision (T-8.10; the founder, 9 October 2026, on the advisor's recommendation, Claude in a
+separate chat, relayed by the founder):** `GET /users/{id}` answers `can_gift`, true only when the
+viewer is a man, the profile is a woman's, and he could send her a private message (D-653's reach:
+D-493's rule with each wanting the other's gender). Never on your own profile. The web shows the
+gift button exactly where it is true and reads no gender to decide (rule 6).
+`test_can_gift_is_the_sends_own_answer` holds it to `POST /gifts/send`'s own answer, case by
+case: each profile that says true takes a free gift, and each that says false refuses one.
+
+**Why:** `PublicProfile` carries no gender, and a man seeking men opens men's profiles (D-493),
+so the web alone can't tell a woman's profile from a man's. A woman seeking women is opened by a
+link too, and a gift to her is `NOT_FOUND`. Without the field, every man would see a button that
+some profiles refuse.
+
+**Rejected:** the button for every man on every profile, refused with `NOT_ALLOWED` or
+`NOT_FOUND` after the tap (a button that can't work); a `gender` field on `PublicProfile` (the web
+would then re-derive D-653's rule, and drift from the send's).
+
 ## Adding a decision
 
 Append `D-0NN · Title — Locked|Open`, with Decision, Why, Rejected. Never edit a Locked entry —

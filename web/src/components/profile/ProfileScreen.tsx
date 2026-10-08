@@ -2,6 +2,7 @@
 
 import { Check, MapPin, UserX } from "lucide-react";
 
+import { GiftCounts } from "@/components/gifts/GiftCounts";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { ErrorState } from "@/components/ui/ErrorState";
 import { Icon } from "@/components/ui/Icon";
@@ -158,6 +159,7 @@ function Profile({ person, own }: { person: PublicProfile; own: boolean }) {
             </ul>
           </Section>
         )}
+        <GiftCounts userId={person.id} own={own} />
         {person.album_photo_count > 0 && (
           <AlbumSection
             id={person.id}
@@ -166,7 +168,13 @@ function Profile({ person, own }: { person: PublicProfile; own: boolean }) {
           />
         )}
       </div>
-      {!own && <ProfileActions id={person.id} />}
+      {!own && (
+        <ProfileActions
+          id={person.id}
+          firstName={person.first_name}
+          canGift={person.can_gift}
+        />
+      )}
     </article>
   );
 }

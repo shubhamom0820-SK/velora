@@ -65,6 +65,7 @@ FIELDS = {
     "album_photo_count",
     "match_id",
     "thread",
+    "can_gift",
 }
 
 
@@ -418,6 +419,62 @@ async def test_my_own_profile_opens_with_nothing_between_us(
     assert body["id"] == str(me.id)
     assert (body["match_id"], body["thread"], body["distance_km"]) == (None, None, None)
     assert await _views(db) == []
+
+
+# --- Whether he may send her a gift (T-8.10, D-780) ------------------------------
+
+
+async def _sends(client: AsyncClient, token: str, user_id: object) -> bool:
+    """Whether `POST /gifts/send` takes a free gift to them, as the gift
+    button would send it: the answer `can_gift` must agree with."""
+    response = await client.post(
+        "/v1/gifts/send",
+        json={"recipient_id": str(user_id), "gift_id": "coffee", "shown_price": 0},
+        headers={**bearer(token), "Idempotency-Key": uuid.uuid4().hex},
+    )
+    assert response.status_code in (200, 404, 422), response.text
+    return response.status_code == 200
+
+
+@pytest.mark.parametrize(
+    ("viewer", "viewed", "seeking", "gifts"),
+    [
+        (Gender.MALE, Gender.FEMALE, Seeking.MEN, True),
+        (Gender.MALE, Gender.FEMALE, Seeking.EVERYONE, True),
+        # D-493 opens her profile by link; D-653 reaches her only as a
+        # private message would, each wanting the other's gender.
+        (Gender.MALE, Gender.FEMALE, Seeking.WOMEN, False),
+        (Gender.MALE, Gender.MALE, Seeking.MEN, False),
+        (Gender.FEMALE, Gender.MALE, Seeking.WOMEN, False),
+        (Gender.FEMALE, Gender.FEMALE, Seeking.WOMEN, False),
+    ],
+)
+async def test_can_gift_is_the_sends_own_answer(
+    db: AsyncSession,
+    client: AsyncClient,
+    make_user: MakeUser,
+    viewer: Gender,
+    viewed: Gender,
+    seeking: Seeking,
+    gifts: bool,
+) -> None:
+    """The gift button shows exactly where a send is taken: a man viewing a
+    woman he could send a private message to, and nobody else."""
+    _, token = await person(db, make_user, viewer, seeking=Seeking.EVERYONE)
+    them, _ = await person(db, make_user, viewed, at=north(1), seeking=seeking)
+    their_id = them.id
+
+    assert (await _ok(client, token, them))["can_gift"] is gifts
+    assert await _sends(client, token, their_id) is gifts
+
+
+@pytest.mark.parametrize("gender", [Gender.MALE, Gender.FEMALE])
+async def test_my_own_profile_offers_no_gift(
+    db: AsyncSession, client: AsyncClient, make_user: MakeUser, gender: Gender
+) -> None:
+    me, token = await person(db, make_user, gender)
+
+    assert (await _ok(client, token, me))["can_gift"] is False
 
 
 # --- The view ---------------------------------------------------------------------

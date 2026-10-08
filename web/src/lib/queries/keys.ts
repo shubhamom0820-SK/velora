@@ -57,6 +57,12 @@ export const queryKeys = {
   // requests to see one's own.
   album: (id: string) => ["album", "of", id] as const,
   albumIncoming: () => ["album", "incoming"] as const,
+  // `gifts()` is the prefix of every gift query (T-8.10), so a send asks the
+  // catalogue's free sends, a profile's counts and her list again together.
+  gifts: () => ["gifts"] as const,
+  giftCatalogue: () => ["gifts", "catalogue"] as const,
+  giftCounts: (userId: string) => ["gifts", "counts", userId] as const,
+  receivedGifts: () => ["gifts", "received"] as const,
   profileByUsername: (username: string) =>
     ["profiles", "by-username", username] as const,
 };

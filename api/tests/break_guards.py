@@ -10841,6 +10841,51 @@ T88: list[Case] = [
     ),
 ]
 
+T810_SELECTION = ["tests/modules/discovery/test_public_profile.py"]
+DISCOVERY_SERVICE = "app/modules/discovery/service.py"
+CAN_GIFT = "test_can_gift_is_the_sends_own_answer"
+
+# T-8.10 (D-780): `can_gift` says where `POST /gifts/send` takes a gift.
+T810: list[Case] = [
+    Case(
+        id="t810-1-can-gift-past-mutual-seeking",
+        what="the gift button where a link reaches her but a private message can't",
+        edits=[
+            (
+                DISCOVERY_SERVICE,
+                "        and await repository.is_visible(session, viewer, user_id, mutual=True)\n",
+                "        and await repository.is_visible(session, viewer, user_id, mutual=False)\n",
+            )
+        ],
+        expect=[f"{CAN_GIFT}[male-female-women-False]"],
+    ),
+    Case(
+        id="t810-2-can-gift-to-a-man",
+        what="the gift button on a man's profile",
+        edits=[
+            (
+                DISCOVERY_SERVICE,
+                "        and row.gender is Gender.FEMALE\n",
+                "",
+            )
+        ],
+        expect=[f"{CAN_GIFT}[male-male-men-False]"],
+    ),
+    Case(
+        id="t810-3-can-gift-from-a-woman",
+        what="the gift button for a woman viewing a woman",
+        edits=[
+            (
+                DISCOVERY_SERVICE,
+                "        user.gender is Gender.MALE\n        and row.gender",
+                "        True\n        and row.gender",
+            )
+        ],
+        expect=[f"{CAN_GIFT}[female-female-women-False]"],
+    ),
+]
+
+
 CASES: list[tuple[Case, list[str]]] = (
     [(c, T51_SELECTION) for c in T51]
     + [(c, T54_SELECTION) for c in T54]
@@ -10890,6 +10935,7 @@ CASES: list[tuple[Case, list[str]]] = (
     + [(c, P740_SELECTION) for c in P740]
     + [(c, T84_SELECTION) for c in T84]
     + [(c, T77_SELECTION) for c in T77]
+    + [(c, T810_SELECTION) for c in T810]
 )
 
 # The fifty-connection fixture's own message when Postgres refuses a connection.

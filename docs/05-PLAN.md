@@ -3171,6 +3171,9 @@ prices don't depend on the web photos step, and the hold is lifted.
   for `POST` and `DELETE /threads/{id}/knot` (T-7.7, D-770).
 - [ ] Composer: text (Enter sends, Shift+Enter newline), mic for women (MediaRecorder, hold or tap-to-record, 60 s cap, preview before send). Optimistic send with `client_msg_id`; failed → retry.
 - [ ] Rejected message → inline explanation, text kept in composer.
+- [ ] **His composer's gift button (08-DESIGN §8, "gifts go to a woman"):** T-8.10's `GiftSheet`
+  (`src/components/gifts/`), with her id and first name, shown only where her profile's
+  `can_gift` is true (`GET /users/{id}`, D-780), never decided from a gender in the browser.
 - [ ] **Her side of an expired Thread (D-097):** readable, and otherwise silent: no prompt, and no sign that money stands between her message and his reply. An expired Thread accepts her sends, so her composer keeps working; the re-open price is his alone.
 - [ ] **The kudos prompt here too (T-8.8, D-790):** T-8.8 built it on the profile, from
   `PublicProfile.thread.kudos`, shown only for `can_give`. The conversation shows the same
@@ -3317,10 +3320,10 @@ prices don't depend on the web photos step, and the hold is lifted.
 - [x] **Commit:** `feat(gifts): catalogue, sending, limits [T-8.9]`
 
 ### T-8.10 · Web gifts
-- [ ] **Needs:** T-8.9, T-5.5
-- [ ] Gift button on a woman's profile → sheet with D-231's four gifts: asset, label and the price
+- [x] **Needs:** T-8.9, T-5.5
+- [x] Gift button on a woman's profile → sheet with D-231's four gifts: asset, label and the price
   in Velas, and the free sends left this week. (Was six in a 3×2 grid, with a daily count.)
-- [ ] Sending: optimistic disable, success toast, balance updates from `wallet.updated`.
+- [x] Sending: optimistic disable, success toast, balance updates from `wallet.updated`.
   `GIFT_LIMIT_REACHED` / `GIFT_COOLDOWN` → friendly inline copy with when they can send again.
   `INSUFFICIENT_CREDITS` → store sheet.
   **From T-8.9 (D-650, D-652):** `GIFT_LIMIT_REACHED` is retired, never sent: past the week's free
@@ -3328,9 +3331,32 @@ prices don't depend on the web photos step, and the hold is lifted.
   `free_sends_reset_at`, and sends `shown_price`, the price it displayed: 0 while a free send is
   left, else the gift's `credits` from `GET /gifts`, never from `/prices` (gifts aren't in it).
   `PRICE_CHANGED` shows the new price again (D-600).
-- [ ] Received gifts row on her own profile and in You tab; toggle `show_gifts` in privacy settings.
-- [ ] Notification opens the sender's profile.
-- [ ] **Commit:** `feat(web): gifts on profile [T-8.10]`
+- [x] Received gifts row on her own profile and in You tab; toggle `show_gifts` in privacy settings.
+- **Notification opens the sender's profile: moved to T-9.4** (the founder, 9 October 2026, on
+  the advisor's recommendation): the web has no notification list or service worker until then,
+  so there is nothing to open. Pointer on T-9.4's line.
+- [x] **Built 9 October 2026 (D-780, and the founder's answers on the advisor's recommendation):**
+  the gift button shows where `GET /users/{id}`'s `can_gift` says a gift is taken (a man, a woman
+  he could send a private message to), which `test_can_gift_is_the_sends_own_answer` holds to
+  `POST /gifts/send`'s own answer, case by case, and each of its three conditions removed turns
+  it red (`uv run python -m tests.break_guards t810-`, 3 of 3, `out/t810-break-guards.log`). The sheet (`src/components/gifts/GiftSheet.tsx`,
+  `GiftGrid` in `ui/`) is existing parts only, as T-8.7's store was. "Free" and 0 while a free
+  send is left, else each gift's `credits`, and the price `PRICE_CHANGED` gives is shown and sent
+  next. A send keeps its `Idempotency-Key` for the same gift at the same price, so trying again
+  after no answer is the same send. `GIFT_COOLDOWN` says how long, rounded up to the minute, and
+  holds that gift until the sheet reopens. `INSUFFICIENT_CREDITS` opens the store. The balance
+  updates through `touchesWallet` until T-7.12's socket, whose line already updates the wallet.
+  Her counts are on every profile that shows them, with "Only you can see these" on her own
+  while `show_gifts` is off. Her list and the `show_gifts` switch are a women-only Gifts section
+  on the You page, built as T-9.8's placeholder still stands (`useUpdateSettings`, for T-9.8's
+  settings to reuse). Tested in `GiftSheet.test.tsx`, `ReceivedGifts.test.tsx`,
+  `GiftGrid.test.tsx`, `gifts.test.tsx` and `ProfileScreen.test.tsx`; eight of the web's controls
+  broken by hand, seven red, and the eighth (clearing the key after a refusal) removed as no
+  control at all.
+  Its E2E journey (she signs up as J2, he sends a free Coffee from her profile, she finds it in
+  the You tab, and her switch hides her counts from him) passed locally on both projects, but
+  isn't landed: CI's E2E has no OTP sends to spare (P-680, the founder, 9 October 2026).
+- [x] **Commit:** `feat(web): gifts on profile [T-8.10]`
 
 ### T-8.6 · Referrals
 - [x] **Needs:** T-8.2; and **P-63, if one transaction credits two men** (the referrer and a
@@ -3509,6 +3535,9 @@ number** per account gets its 5 each, one Thread's worth, and is **accepted**, k
 - [ ] **P-550: gifts.** T-8.9 writes a `gift` notification (`{gift_send_id, gift_id, user_id}`)
   for every gift received, and no setting names gifts: decide which one governs its push, and add
   `gift` to the kinds above.
+- [ ] **From T-8.10: a `gift` notification opens the sender's profile,** `/people/{user_id}`:
+  the payload's `user_id` is the sender's (T-8.9). Moved here from T-8.10's line (the founder, 9
+  October 2026), since the in-app list and `notificationclick` are this task's.
 - [ ] **P-631: album requests.** T-8.4 tells her nothing when someone asks to see her album (D-732):
   add an `album.requested` event and an `album_request` notification, and the setting that
   governs its push.
@@ -6329,6 +6358,34 @@ The number comes from the session's own block, given in its brief, from P-100 up
   through the screens in steps of its own, shortened from J1's helpers in `signup.spec.ts`, which
   aren't exported, and moving them would have reshaped T-3.13's file mid-task. Fix: move them to
   `e2e/onboarding.ts`, used by both. Filed by Claude building T-8.7, 9 October 2026.
+  **A third copy waits (T-8.10, 9 October 2026):** the gifts journey held by P-680 repeats J1's
+  steps for a man and J2's for a woman, her face photo and selfie included, for the same reason.
+  The move takes it too.
+- [ ] P-680 · Give the E2E room for another sign-in, then land T-8.10's gifts journey.
+  **Before the next journey that signs anyone in.** Worst case: every new sign-in journey turns
+  CI's E2E red at someone else's sign-in, as T-8.10's did (run 37859041045: J3, J8 and J9 on
+  desktop never got a code). The API allows 20 OTP sends an hour per client IP
+  (`OTP_SENDS_PER_IP`, D-066), every journey signs in from one address, and the suite already
+  sent exactly 20 a run before T-8.10 (ten a project: three in `session.spec.ts`, J1, J2 and
+  J1 refused, J3's two, J8 and J9). T-8.10's journey needs four more. A fix keeps production's
+  limit as it is and gives each journey its own budget: for example, the E2E API server alone
+  (`api/tests/e2e_server.py`, never a deployed build) takes the client address from a test header
+  each Playwright context sets, behind an allowlist gate. Then restore the journey: it is
+  `web/e2e/gifts.spec.ts` in commit 1fddbdc on branch `t-8.10-web-gifts`, kept on origin for it,
+  and it passed locally on both projects on 9 October 2026. Filed by Claude building T-8.10, 9
+  October 2026, at the founder's direction (dropped from T-8.10 to land it).
+- [ ] P-681 · Swipes' ledger reads sort by `created_at` alone, so a tie fails a landing at
+  random. **Soon: it costs a full `make test` each time it fires.** Worst case: a red `make test`
+  that isn't the change's, blocking a landing (or, worse, teaching sessions to rerun until
+  green). Seen once on 9 October 2026, building T-8.10, in its marking run:
+  `test_a_mans_super_like_debits_five_through_the_wallet` read the grant `make_user` wrote as
+  the last entry, not the debit; alone it passed 15 of 15. A ledger row's `created_at` is
+  Postgres' `now()`, the transaction's start, and rows from one transaction share it (as
+  `wallet/repository.py` says), so `_ledger` in `tests/modules/swipes/test_swipe.py`, ordered
+  by `created_at` with no tie-break, can return them in either order. Fix: assert on the debit
+  row found by its reason, or order by something that can't tie; grep the suite for the same
+  pattern (`order_by(LedgerEntry.created_at)` alone: three in `api/tests`). Filed by Claude
+  building T-8.10, 9 October 2026.
 - [ ] P-631 · Tell her when someone asks to see her album. **In T-9.4.** Worst case: a man pays a
   Vela for a request that sits unseen in her incoming list until she happens to open it, so the
   request reads to him as ignored and to her as nothing at all; T-8.4 writes no event and no

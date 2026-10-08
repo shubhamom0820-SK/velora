@@ -97,6 +97,10 @@ class PublicProfile(Card):
     album_photo_count: int
     match_id: UUID | None
     thread: ThreadWithMe | None
+    # Whether the viewer may send them a gift (T-8.10, D-780): a man viewing a
+    # woman he could send a private message to (D-653). The server's answer,
+    # so the web never reads a gender to decide.
+    can_gift: bool
 
 
 class SearchResult(BaseModel):

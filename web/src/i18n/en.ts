@@ -284,6 +284,51 @@ export const en = {
     loadFailed: "We couldn't load your requests",
     loadingMore: "Loading more",
   },
+  // Gifts (T-8.10, D-231, D-650, D-652): his sheet on a woman's profile, and
+  // what she received. He sees each gift's price, read from `GET /gifts`, never
+  // written here; she never sees a price or whether a send was free. Drafted
+  // by Claude, for the founder's review.
+  gifts: {
+    give: "Gift",
+    title: "Send {name} a gift",
+    free: "Free",
+    freeLeft: {
+      one: "1 free send left this week",
+      other: "{count} free sends left this week",
+    },
+    // The date is the next Monday, in IST (D-650).
+    noneLeft: "No free sends left this week. They come back {date}.",
+    tile: "{label}, {price}",
+    choose: "Choose a gift",
+    send: "Send {gift} · {price}",
+    sent: "{gift} sent to {name}",
+    // GIFT_COOLDOWN: the same gift to her inside the cooldown (D-016).
+    cooldown:
+      "You sent {name} a {gift} recently. You can send another in {wait}, or choose a different gift now.",
+    waitHours: "{hours}h {minutes}m",
+    waitMinutes: "{minutes}m",
+    priceChanged: "The price changed. It's {velas} now.",
+    nowFree: "The price changed. This one is free now.",
+    unavailable: "{name} can't receive gifts right now.",
+    failed: "We couldn't send that gift. Try again.",
+    loadFailed: "We couldn't load the gifts",
+    // Her profile's row: how many of each, never from whom.
+    received: "Gifts",
+    count: "{label}, {count}",
+    onlyYou: "Only you can see these. Turn on Show gifts under You.",
+    // The You tab's section (hers).
+    yours: "Gifts you've received",
+    from: "{gift} from {name}",
+    someGift: "A gift",
+    empty: "No gifts yet",
+    emptyBody: "When someone sends you a gift, it shows up here.",
+    listFailed: "We couldn't load your gifts",
+    more: "Show more",
+    show: "Show gifts on my profile",
+    showBody:
+      "People who open your profile see how many of each you've received, never who sent them.",
+    saveFailed: "We couldn't change that. Try again.",
+  },
   // `/@username` for someone not signed in (T-6.8, D-544).
   share: {
     title: "{name} on {app}",

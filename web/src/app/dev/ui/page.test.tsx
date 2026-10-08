@@ -29,6 +29,7 @@ describe("/dev/ui", () => {
       "ButtonLink",
       "IconButton and PriceTag",
       "Badge",
+      "GiftGrid",
       "Countdown",
       "Chip",
       "Field",

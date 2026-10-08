@@ -38,9 +38,19 @@ function her(overrides: Partial<PublicProfile> = {}): PublicProfile {
     album_photo_count: 2,
     match_id: null,
     thread: null,
+    can_gift: false,
     ...overrides,
   };
 }
+
+const CATALOGUE = {
+  gifts: [
+    { id: "coffee", label: "Coffee", asset: "☕", credits: 5 },
+    { id: "rose", label: "Rose", asset: "🌹", credits: 10 },
+  ],
+  free_sends_left: 15,
+  free_sends_reset_at: "2026-10-11T18:30:00Z",
+};
 
 function routes(profile: Route, overrides: Record<string, Route> = {}) {
   return fakeApi({
@@ -48,6 +58,8 @@ function routes(profile: Route, overrides: Record<string, Route> = {}) {
     // The album row asks for its state (T-8.8): never asked, by default.
     "GET /v1/users/u2/album": () => json(200, { status: null, photos: [] }),
     "GET /v1/prices": () => json(200, { album_request: 1 }),
+    "GET /v1/users/u2/gifts": () => json(200, { counts: [] }),
+    "GET /v1/gifts": () => json(200, CATALOGUE),
     ...overrides,
   });
 }
@@ -58,11 +70,15 @@ const THREAD = {
   expires_at: null,
 } as const;
 
-function renderProfile(meId = "u1") {
+function renderProfile(meId = "u1", showGifts = true) {
   const client = new QueryClient({
     defaultOptions: { queries: { retry: false } },
   });
-  client.setQueryData(queryKeys.me(), { id: meId, gender: "male" });
+  client.setQueryData(queryKeys.me(), {
+    id: meId,
+    gender: "male",
+    profile: { show_gifts: showGifts },
+  });
   return render(
     <QueryClientProvider client={client}>
       <ToastProvider>
@@ -229,7 +245,80 @@ describe("the profile (T-6.8)", () => {
         name: new RegExp(t("profile.albumAsk", { price: "" }).trim()),
       }),
     ).toBeNull();
-    expect(api.sent()).toEqual(["GET /v1/users/u2"]);
+    // Her gifts row asks for its counts (T-8.10); nothing about the album.
+    expect(api.sent().filter((sent) => !sent.includes("/gifts"))).toEqual([
+      "GET /v1/users/u2",
+    ]);
+  });
+
+  it("offers a gift where the API says one is taken, in its sheet", async () => {
+    routes(() => json(200, her({ can_gift: true })));
+    renderProfile();
+
+    await name();
+    await userEvent.click(
+      screen.getByRole("button", { name: t("gifts.give") }),
+    );
+
+    const sheet = await screen.findByRole("dialog", {
+      name: t("gifts.title", { name: "Simran" }),
+    });
+    expect(
+      await within(sheet).findByRole("button", { name: "Rose, Free" }),
+    ).toBeInTheDocument();
+  });
+
+  it("offers no gift where the API says none is taken (D-780)", async () => {
+    routes(() => json(200, her({ can_gift: false })));
+    renderProfile();
+
+    await name();
+    expect(
+      screen.getByRole("button", { name: t("profile.like") }),
+    ).toBeVisible();
+    expect(screen.queryByRole("button", { name: t("gifts.give") })).toBeNull();
+  });
+
+  it("shows how many of each gift she received, never from whom or a price", async () => {
+    routes(() => json(200, her()), {
+      "GET /v1/users/u2/gifts": () =>
+        json(200, { counts: [{ gift_id: "rose", count: 3 }] }),
+    });
+    renderProfile();
+
+    const heading = await screen.findByRole("heading", {
+      level: 2,
+      name: t("gifts.received"),
+    });
+    const row = heading.closest("section");
+    if (!row) throw new Error("the gifts row has no section");
+    expect(within(row).getByText("3")).toBeInTheDocument();
+    expect(within(row).getByText("Rose")).toBeInTheDocument();
+    expect(within(row).queryByText(/Vela/)).toBeNull();
+    expect(screen.queryByText(t("gifts.onlyYou"))).toBeNull();
+  });
+
+  it("shows no gifts row when she received none, or hides them", async () => {
+    routes(() => json(200, her()));
+    renderProfile();
+
+    await name();
+    await waitFor(() =>
+      expect(
+        screen.queryByRole("heading", { level: 2, name: t("gifts.received") }),
+      ).toBeNull(),
+    );
+  });
+
+  it("shows her own gifts to her with a note while they are hidden", async () => {
+    routes(() => json(200, her()), {
+      "GET /v1/users/u2/gifts": () =>
+        json(200, { counts: [{ gift_id: "coffee", count: 1 }] }),
+    });
+    renderProfile("u2", false);
+
+    expect(await screen.findByText(t("gifts.onlyYou"))).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: t("gifts.give") })).toBeNull();
   });
 
   it("shares the profile's /@username link", async () => {

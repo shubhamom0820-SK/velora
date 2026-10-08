@@ -1,8 +1,9 @@
 "use client";
 
-import { Heart } from "lucide-react";
+import { Gift, Heart } from "lucide-react";
 import { useState } from "react";
 
+import { GiftSheet } from "@/components/gifts/GiftSheet";
 import { Button } from "@/components/ui/Button";
 import { Icon } from "@/components/ui/Icon";
 import { useToast } from "@/components/ui/useToast";
@@ -13,12 +14,23 @@ import { useLike } from "@/lib/queries/profiles";
 /**
  * The sticky bar at the profile's foot (08-DESIGN §8): Like. "Open thread"
  * joins it with the chats' screens (P-440). A like already given, here or in
- * the deck, reads as given; one the API refuses says why.
+ * the deck, reads as given; one the API refuses says why. Gift, with its
+ * sheet (T-8.10), only where the API says a gift is taken (`can_gift`, D-780):
+ * a man on a woman's profile.
  */
-export function ProfileActions({ id }: { id: string }) {
+export function ProfileActions({
+  id,
+  firstName,
+  canGift,
+}: {
+  id: string;
+  firstName: string;
+  canGift: boolean;
+}) {
   const toast = useToast();
   const like = useLike();
   const [liked, setLiked] = useState(false);
+  const [gifting, setGifting] = useState(false);
 
   function onLike() {
     like.mutate(id, {
@@ -57,6 +69,19 @@ export function ProfileActions({ id }: { id: string }) {
         />
         {liked ? t("profile.liked") : t("profile.like")}
       </Button>
+      {canGift && (
+        <Button variant="ghost" onClick={() => setGifting(true)}>
+          <Icon icon={Gift} size={18} />
+          {t("gifts.give")}
+        </Button>
+      )}
+      {gifting && (
+        <GiftSheet
+          recipientId={id}
+          name={firstName}
+          onClose={() => setGifting(false)}
+        />
+      )}
     </div>
   );
 }

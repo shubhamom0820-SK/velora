@@ -1,3 +1,4 @@
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { render, screen } from "@testing-library/react";
 import type { ComponentType } from "react";
 import { describe, expect, it } from "vitest";
@@ -14,7 +15,11 @@ describe("the app's placeholder routes", () => {
   it.each<[string, ComponentType]>([["You", YouPage]])(
     "%s says what it is and that it's coming",
     (name, Page) => {
-      render(<Page />);
+      render(
+        <QueryClientProvider client={new QueryClient()}>
+          <Page />
+        </QueryClientProvider>,
+      );
 
       expect(screen.getByRole("heading", { level: 1 })).toHaveTextContent(name);
       expect(screen.getByText(t("placeholder.comingSoon"))).toBeInTheDocument();
@@ -23,7 +28,11 @@ describe("the app's placeholder routes", () => {
   );
 
   it("links You to your album's requests, for everyone (T-8.8, D-790)", () => {
-    render(<YouPage />);
+    render(
+      <QueryClientProvider client={new QueryClient()}>
+        <YouPage />
+      </QueryClientProvider>,
+    );
 
     expect(
       screen.getByRole("link", { name: t("albumRequests.title") }),

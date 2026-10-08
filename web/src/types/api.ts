@@ -2440,6 +2440,8 @@ export interface components {
             /** Match Id */
             match_id: string | null;
             thread: components["schemas"]["ThreadWithMe"] | null;
+            /** Can Gift */
+            can_gift: boolean;
         };
         /**
          * ReadRequest

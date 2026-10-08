@@ -22,6 +22,7 @@ import { Countdown } from "@/components/ui/Countdown";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { ErrorState } from "@/components/ui/ErrorState";
 import { Field } from "@/components/ui/Field";
+import { GiftGrid } from "@/components/ui/GiftGrid";
 import { Icon } from "@/components/ui/Icon";
 import { IconButton } from "@/components/ui/IconButton";
 import { OtpInput } from "@/components/ui/OtpInput";
@@ -64,6 +65,7 @@ export function UiGallery() {
   const inMinutes = (minutes: number) =>
     new Date(opened + minutes * 60_000).toISOString();
   const [messages, setMessages] = useState(false);
+  const [gift, setGift] = useState<string | null>("rose");
   const [sheetOpen, setSheetOpen] = useState(false);
   const [chromeSheetOpen, setChromeSheetOpen] = useState(false);
   const [pin, setPin] = useState("");
@@ -164,6 +166,37 @@ export function UiGallery() {
           <Badge tone="count" label="7 people">
             7
           </Badge>
+        </div>
+      </Section>
+
+      <Section title="GiftGrid">
+        <div className="flex max-w-sm flex-col gap-6">
+          <GiftGrid
+            gifts={[
+              { id: "coffee", label: "Coffee", asset: "☕", price: "Free" },
+              { id: "rose", label: "Rose", asset: "🌹", price: "Free" },
+              {
+                id: "chocolate",
+                label: "Chocolate",
+                asset: "🍫",
+                price: "Free",
+              },
+              { id: "teddy", label: "Teddy", asset: "🧸", price: "Free" },
+            ]}
+            selected={gift}
+            onSelect={setGift}
+            note="12 free sends left this week"
+          />
+          <GiftGrid
+            gifts={[
+              { id: "coffee", label: "Coffee", asset: "☕", price: "5 Velas" },
+              { id: "rose", label: "Rose", asset: "🌹", price: "10 Velas" },
+            ]}
+            selected={null}
+            onSelect={() => {}}
+            note="No free sends left this week. They come back Monday, 12 October."
+            disabled
+          />
         </div>
       </Section>
 
