@@ -13,10 +13,16 @@ verified or is who they say (D-262), and every decision is looked at by a
 person (D-264) until P-160 measures it.
 
 **What it does and doesn't stop.** It catches a careless impostor: a selfie of
-someone other than the person in the profile's photos. It does not stop a man who has a
-woman's photos and one real selfie of her: that selfie matches her photos
+someone other than the person in the face photo. It does not stop a man who has
+a woman's photos and one real selfie of her: that selfie matches her face
 closely, far from the threshold. Only liveness (T-4.11) or a person looking at
 the selfie stops that, and until one exists, the person isn't optional.
+
+**Two comparisons, one threshold (T-4.12).** The selfie is compared with the
+face photo alone (D-391): that decides the verification. Each shown public
+photo with a face is then compared with the kept selfie (D-393): that decides
+nothing about the person, only whether the badge shows, and a photo that
+doesn't match stays on the profile.
 """
 
 from __future__ import annotations
@@ -27,7 +33,8 @@ from typing import Final, Literal
 from app.core.providers.facematch import FaceMatch
 
 # D-260: SFace's published cosine threshold on LFW. At or above it, the selfie's
-# face counts as matching a photo's.
+# face counts as matching a photo's: the face photo's for the verification, a
+# shown photo's for the badge (D-393).
 MATCH_THRESHOLD: Final = 0.363
 
 # What the `challenge` column holds since T-4.5: no pose is asked (the pose
@@ -53,8 +60,8 @@ Reason = Literal[
 ]
 NO_FACE: Final[Reason] = "no_face"  # no face found in the selfie
 MANY_FACES: Final[Reason] = "many_faces"  # more than one
-NO_MATCH: Final[Reason] = "no_match"  # below the threshold against every photo
-NO_PHOTOS: Final[Reason] = "no_photos"  # no approved public photo with a face
+NO_MATCH: Final[Reason] = "no_match"  # below the threshold against the face photo
+NO_PHOTOS: Final[Reason] = "no_photos"  # no approved face photo, or no face found in it
 UNREADABLE: Final[Reason] = "unreadable"  # not an image the pipeline can read
 UNAVAILABLE: Final[Reason] = "unavailable"  # storage or the worker failed, finally
 OTHER: Final = "other"
@@ -75,7 +82,7 @@ def owner_reason(reason: str | None) -> str | None:
 
 def decide(match: FaceMatch) -> Reason | None:
     """None to approve, else why not: exactly one face in the selfie, and its
-    best similarity with any approved photo at or above the threshold."""
+    similarity with the face photo at or above the threshold."""
     if match.faces_in_selfie == 0:
         return NO_FACE
     if match.faces_in_selfie > 1:
@@ -99,6 +106,13 @@ def near_the_threshold(best: float | None) -> bool:
 
 
 def mixed(approved: bool, similarities: list[float | None]) -> bool:
-    """Approved on its best photo, while another photo with a face scored below
-    the threshold: a profile whose photos may not all be one person (P-162)."""
+    """Approved, while a shown photo with a face scored below the threshold
+    against the selfie (the badge's comparisons, D-393): a profile whose photos
+    may not all be one person (P-162)."""
     return approved and any(s is not None and s < MATCH_THRESHOLD for s in similarities)
+
+
+def badge(is_verified: bool, any_shown_face_matched: bool) -> bool:
+    """D-393's rule: the selfie matched the face photo, and at least one shown
+    photo's face matched the selfie. Never `is_verified` alone."""
+    return is_verified and any_shown_face_matched

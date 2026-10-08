@@ -36,6 +36,9 @@ log = structlog.get_logger(__name__)
 MODERATE_PHOTO = "moderate_photo"
 DELETE_FILES = "delete_files"
 VERIFY_SELFIE = "verify_selfie"
+# T-4.12, D-393: an approved public photo with a face compared with the kept
+# selfie, for the badge. Nobody waits on it, so it has no wake.
+MATCH_PHOTO = "match_photo"
 WAKE_TIMEOUT_S = 1.0
 
 

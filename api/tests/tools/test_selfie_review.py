@@ -12,6 +12,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.enums import Gender
 from app.core.providers.facematch import FaceMatch, FakeFaceMatch
 from app.core.providers.storage import FakeStorage
+from app.core.queue import FakeQueue
 from app.modules.photos.models import Photo
 from app.modules.verification import service
 from app.modules.verification.models import Verification
@@ -21,6 +22,7 @@ from tests.modules.photos.test_moderate import Sessions
 from tests.modules.verification.support import (
     approved_photo,
     at_selfie,
+    face_photo,
     fresh,
     submitted,
 )
@@ -31,24 +33,38 @@ async def _decided(
     make_user: MakeUser,
     storage: FakeStorage,
     gender: Gender,
-    *similarities: float | None,
+    similarity: float | None,
+    *shown: float | None,
 ) -> tuple[Verification, Photo, list[Photo]]:
+    """A selfie compared with the face photo at `similarity` (D-391), then each
+    shown photo compared with it at its own number for the badge (D-393), as
+    the worker would run them."""
     user, _ = await at_selfie(db, make_user, gender)
+    await face_photo(db, storage, user)
     photos = [
-        await approved_photo(db, storage, user, position=n)
-        for n in range(len(similarities))
+        await approved_photo(db, storage, user, position=n) for n in range(len(shown))
     ]
     verification, selfie = await submitted(db, storage, user)
     facematch = FakeFaceMatch()
-    facematch.next = FaceMatch("fake", 1, tuple(similarities))
+    facematch.next = FaceMatch("fake", 1, (similarity,))
     await service.verify(
         Sessions(db),
         verification.id,
         storage=storage,
         facematch=facematch,
+        queue=FakeQueue(),
         settings=make_test_settings(),
         via="queue",
     )
+    for photo, number in zip(photos, shown, strict=True):
+        facematch.next = FaceMatch("fake", 1, (number,))
+        await service.match_photo(
+            Sessions(db),
+            photo.id,
+            storage=storage,
+            facematch=facematch,
+            settings=make_test_settings(),
+        )
     return verification, selfie, photos
 
 
@@ -70,12 +86,14 @@ async def test_every_decision_is_listed_far_from_the_threshold_too(
     db: AsyncSession, make_user: MakeUser
 ) -> None:
     """A woman approved at 0.92 is exactly what her own stolen selfie would
-    score: listed, with the selfie to look at, beside the near one and the one
-    whose photos didn't all match."""
+    score: listed, with the selfie and the face photo to look at, beside the
+    near one and the one whose shown photos didn't all match."""
     storage = FakeStorage()
     far, far_selfie, _ = await _decided(db, make_user, storage, Gender.FEMALE, 0.92)
     near, _, _ = await _decided(db, make_user, storage, Gender.MALE, 0.30)
-    mixed, _, photos = await _decided(db, make_user, storage, Gender.FEMALE, 0.81, 0.05)
+    mixed, _, photos = await _decided(
+        db, make_user, storage, Gender.FEMALE, 0.81, 0.77, 0.05
+    )
 
     code, printed = await _review(db, storage)
 
@@ -90,7 +108,9 @@ async def test_every_decision_is_listed_far_from_the_threshold_too(
         f"selfie:  fake-storage://velora-private/{far_selfie.raw_key}"
         "?method=GET&ttl=600" in blocks[str(far.id)]
     )
-    assert f"photo 1: 0.05000  /p/{photos[1].id}.jpg" in blocks[str(mixed.id)]
+    assert "face photo: 0.92000  fake-storage://velora-private/" in blocks[str(far.id)]
+    assert f"shown 0: 0.77000  /p/{photos[0].id}.jpg" in blocks[str(mixed.id)]
+    assert f"shown 1: 0.05000  /p/{photos[1].id}.jpg" in blocks[str(mixed.id)]
 
 
 async def test_near_narrows_it_to_the_near_and_the_mixed(

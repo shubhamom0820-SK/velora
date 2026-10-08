@@ -7,15 +7,16 @@ import { codeFor, expect, freshNumber, signIn, test } from "./fixtures";
 /**
  * J1, J2 and J3 (06-TESTING), on Path B with the fake SMS (T-3.13, T-4.9).
  *
- * J1 and J2 run the whole of onboarding against the whole stack: a photo
- * the browser uploads to the local S3, checked by the worker and approved;
- * then, for her, a selfie from Chromium's fake camera (playwright.config.ts)
- * compared by the real models (D-088, D-330), and sign-up finished by T-4.8's
+ * J1 and J2 run the whole of onboarding against the whole stack. From
+ * T-4.12 (D-391, D-392) neither uploads a public photo: he leaves the photos
+ * step with none; she uploads her face photo, the one her selfie is compared
+ * with, to the local S3, checked by the worker and approved, private; then
+ * her selfie from Chromium's fake camera (playwright.config.ts), compared
+ * with it by the real models (D-088, D-330), and sign-up finished by T-4.8's
  * endpoint. The faces are NASA's public-domain portraits
- * (api/tests/fixtures/faces): her photo is Raja Chari's 2021 portrait and the
- * camera plays his 2017 one, so the match is between two photos of one
- * person, which is what the models decide; his is anyone's, since a man's
- * selfie is never compared. The names are the test's own.
+ * (api/tests/fixtures/faces): her face photo is Raja Chari's 2021 portrait
+ * and the camera plays his 2017 one, so the match is between two photos of
+ * one person, which is what the models decide. The names are the test's own.
  *
  * J1 shares a position in Phagwara (T-4.10): the browser hands it over only
  * because the Permissions-Policy allows `geolocation=(self)`, so this is the
@@ -116,18 +117,37 @@ async function usernameAndAbout(page: Page, who: Person, phone: string) {
 }
 
 /**
- * One photo, chosen as a person does, through the first slot's picker: up to
- * the local S3 by the presigned PUT, checked by the worker (T-4.4, the fake
- * moderation), and approved, with its public copy made, which is what
- * finishing sign-up needs (T-4.8). Then on to the interests.
+ * Her face photo (T-4.12, D-391), chosen as a person does, through its own
+ * slot's picker: up to the local S3 by the presigned PUT, checked by the
+ * worker (T-4.4, the fake moderation) and approved, private. No public photo
+ * at all (D-392): the grid stays empty, and Continue leaves the step by its
+ * own exit, which a woman may take once the face photo is there. Then on to
+ * the interests.
  */
-async function addPhoto(page: Page, file: string) {
+async function addFacePhoto(page: Page, file: string) {
   const chooser = page.waitForEvent("filechooser");
-  await page.getByRole("button", { name: "Add a photo" }).first().click();
+  // `exact`: the footer's disabled "Add your face photo to continue" would
+  // match the name too, and never become clickable.
+  await page
+    .getByRole("button", { name: "Add your face photo", exact: true })
+    .click();
   await (await chooser).setFiles(join(FACES, file));
 
-  const slot = page.getByRole("listitem", { name: "Photo 1" });
-  await expect(slot).toContainText("Approved", { timeout: 30_000 });
+  const slot = page.getByRole("region", { name: "Your face photo" });
+  await expect(slot).toContainText("Face photo approved", { timeout: 30_000 });
+  await expect(page.getByRole("button", { name: "Add a photo" })).toHaveCount(
+    6,
+  );
+  await page.getByRole("button", { name: "Continue" }).click();
+
+  await expect(page).toHaveURL(/\/onboarding\/interests$/);
+}
+
+/** No photo of any kind (D-392): a man leaves the step with the grid empty. */
+async function noPhoto(page: Page) {
+  await expect(page.getByRole("button", { name: "Add a photo" })).toHaveCount(
+    6,
+  );
   await page.getByRole("button", { name: "Continue" }).click();
 
   await expect(page).toHaveURL(/\/onboarding\/interests$/);
@@ -202,7 +222,7 @@ test("J1: a new man signs up all the way to Discover, with no selfie", async ({
   await page.getByRole("button", { name: "Share my location" }).click();
 
   await usernameAndAbout(page, ARJUN, phone);
-  await addPhoto(page, ARJUN.photo);
+  await noPhoto(page);
   await pickInterests(page);
 
   // A PIN, set and confirmed (T-3.12).
@@ -235,7 +255,7 @@ test("J1: a new man signs up all the way to Discover, with no selfie", async ({
   expect(urls.filter((url) => url.includes(phone.slice(-8)))).toEqual([]);
 });
 
-test("J2: a new woman is held at the selfie until it matches her photos", async ({
+test("J2: a new woman is held at the selfie until it matches her face photo", async ({
   page,
   context,
   request,
@@ -255,7 +275,7 @@ test("J2: a new woman is held at the selfie until it matches her photos", async 
   await page.getByRole("button", { name: "Share my location" }).click();
 
   await usernameAndAbout(page, PRIYA, phone);
-  await addPhoto(page, PRIYA.photo);
+  await addFacePhoto(page, PRIYA.photo);
   await pickInterests(page);
   await page.getByRole("button", { name: "Skip, I'll set it later" }).click();
 
@@ -294,12 +314,12 @@ test("J2: a new woman is held at the selfie until it matches her photos", async 
   await expect(
     page
       .getByRole("status")
-      .filter({ hasText: "Comparing your selfie with your photos" }),
+      .filter({ hasText: "Comparing your selfie with your face photo" }),
   ).toBeVisible();
   await expect(
     page
       .getByRole("status")
-      .filter({ hasText: "Your selfie matches your photos." }),
+      .filter({ hasText: "Your selfie matched your face photo." }),
   ).toBeVisible({ timeout: 30_000 });
 
   await page.getByRole("button", { name: "Continue" }).click();

@@ -1,5 +1,7 @@
-"""`GET /v1/me/photos`, `PATCH /v1/me/photos/order`, `DELETE /v1/photos/{id}`, and
-the `photos` step completing on one public photo, pending or approved (T-4.3)."""
+"""`GET /v1/me/photos`, `PATCH /v1/me/photos/order`, `DELETE /v1/photos/{id}`
+(T-4.3); and, from T-4.12, no photo completing the `photos` step, the last
+public photo removable past it (D-392), the face photo listed to its owner and
+removable until the selfie matched (D-391)."""
 
 from __future__ import annotations
 
@@ -16,6 +18,7 @@ from app.core.enums import OnboardingStep, PhotoKind, ReviewStatus
 from app.core.providers import FakeProviders
 from app.modules.photos.models import Photo
 from app.modules.users.models import User
+from app.modules.verification.models import Verification
 from tests.conftest import MakeUser
 from tests.images import HEIC, JPEG
 
@@ -156,8 +159,39 @@ async def test_not_listed_rejected_photos_selfies_or_anyone_elses(
     await _photo(db, fake_providers, user, position=0, status=ReviewStatus.REJECTED)
     await _photo(db, fake_providers, user, kind=PhotoKind.SELFIE, position=None)
     await _photo(db, fake_providers, other, position=0)
+    await _photo(db, fake_providers, other, kind=PhotoKind.VERIFICATION, position=None)
 
     assert await _list(client, token) == []
+
+
+async def test_the_face_photo_is_listed_last_to_its_owner_by_a_signed_link(
+    db: AsyncSession,
+    client: AsyncClient,
+    make_user: MakeUser,
+    fake_providers: FakeProviders,
+) -> None:
+    """D-391: private, so never at the CDN; after the public and private
+    photos, so the grid's places are untouched (T-4.12)."""
+    user, token = await _at(db, make_user)
+    main = await _photo(db, fake_providers, user, position=0)
+    private = await _photo(
+        db, fake_providers, user, kind=PhotoKind.PRIVATE, position=None
+    )
+    face = await _photo(
+        db, fake_providers, user, kind=PhotoKind.VERIFICATION, position=None
+    )
+
+    photos = await _list(client, token)
+
+    assert [(p["id"], p["kind"]) for p in photos] == [
+        (str(main.id), "public"),
+        (str(private.id), "private"),
+        (str(face.id), "verification"),
+    ]
+    assert photos[2]["url"] == (
+        f"fake-storage://{PRIVATE}/{face.raw_key}?method=GET&ttl=600"
+    )
+    assert face.public_key is None
 
 
 async def test_signed_out_sees_nothing(db: AsyncSession, client: AsyncClient) -> None:
@@ -337,20 +371,101 @@ async def test_a_selfie_isnt_removed_here(
     assert _error(response)["code"] == "NOT_ALLOWED"
 
 
-async def test_past_the_photos_step_the_last_public_photo_stays(
+@pytest.mark.parametrize(
+    "step", [OnboardingStep.INTERESTS, OnboardingStep.DONE], ids=["later", "done"]
+)
+async def test_the_last_public_photo_can_go_past_the_photos_step_too(
+    db: AsyncSession,
+    client: AsyncClient,
+    make_user: MakeUser,
+    fake_providers: FakeProviders,
+    step: OnboardingStep,
+) -> None:
+    """D-392 (T-4.12): nobody needs a public photo, so the last one goes as
+    any other; until then T-4.3 kept it, since discovery needed one."""
+    user, token = await _at(db, make_user, step)
+    last = await _photo(db, fake_providers, user, position=0)
+
+    response = await _delete(client, token, last.id)
+
+    assert response.status_code == 204
+    assert (await _fresh(db, last.id)).reject_reason == "user_deleted"
+    assert await _list(client, token) == []
+
+
+async def _matched(db: AsyncSession, user: User, selfie_id: uuid.UUID) -> None:
+    """The selfie matched: `is_verified`, T-4.5's own word, and its approved
+    verification."""
+    user.is_verified = True
+    db.add(
+        Verification(
+            user_id=user.id,
+            challenge="none",
+            selfie_photo_id=selfie_id,
+            status=ReviewStatus.APPROVED,
+        )
+    )
+    await db.flush()
+
+
+async def test_the_face_photo_goes_until_the_selfie_matched(
     db: AsyncSession,
     client: AsyncClient,
     make_user: MakeUser,
     fake_providers: FakeProviders,
 ) -> None:
-    user, token = await _at(db, make_user, OnboardingStep.INTERESTS)
-    last = await _photo(db, fake_providers, user, position=0)
+    """Removed as any photo before the match, `user_deleted`, no public copy
+    to remove; after it, refused, so the match never points at a photo that
+    is gone (T-4.12's plan, point 4; a change then is P-163's path)."""
+    user, token = await _at(db, make_user, OnboardingStep.DONE)
+    before = await _photo(
+        db, fake_providers, user, kind=PhotoKind.VERIFICATION, position=None
+    )
+    assert (await _delete(client, token, before.id)).status_code == 204
+    assert (await _fresh(db, before.id)).reject_reason == "user_deleted"
 
-    response = await _delete(client, token, last.id)
+    after = await _photo(
+        db, fake_providers, user, kind=PhotoKind.VERIFICATION, position=None
+    )
+    selfie = await _photo(
+        db, fake_providers, user, kind=PhotoKind.SELFIE, position=None
+    )
+    await _matched(db, user, selfie.id)
+
+    response = await _delete(client, token, after.id)
 
     assert response.status_code == 422
-    assert _error(response)["code"] == "NOT_ALLOWED"
-    assert (await _fresh(db, last.id)).status is ReviewStatus.APPROVED
+    assert _error(response) == {
+        "code": "NOT_ALLOWED",
+        "message": "Your face photo can't change once your selfie matched.",
+    }
+    assert (await _fresh(db, after.id)).status is ReviewStatus.APPROVED
+
+
+async def test_the_face_photo_stays_while_the_selfie_is_compared(
+    db: AsyncSession,
+    client: AsyncClient,
+    make_user: MakeUser,
+    fake_providers: FakeProviders,
+) -> None:
+    """The worker may be reading it this moment: a verification holding a
+    selfie and not yet decided keeps it where it is."""
+    user, token = await _at(db, make_user, OnboardingStep.SELFIE)
+    face = await _photo(
+        db, fake_providers, user, kind=PhotoKind.VERIFICATION, position=None
+    )
+    selfie = await _photo(
+        db, fake_providers, user, kind=PhotoKind.SELFIE, position=None
+    )
+    db.add(Verification(user_id=user.id, challenge="none", selfie_photo_id=selfie.id))
+    await db.flush()
+
+    response = await _delete(client, token, face.id)
+
+    assert response.status_code == 422
+    assert _error(response)["message"] == (
+        "Your face photo can't change while your selfie is compared."
+    )
 
 
 async def test_at_the_photos_step_the_last_one_can_go(
@@ -392,19 +507,21 @@ async def _upload_and_complete(
 @pytest.mark.parametrize(
     ("step", "kind", "position", "data", "after"),
     [
-        (OnboardingStep.PHOTOS, "public", 0, JPEG, OnboardingStep.INTERESTS),
+        (OnboardingStep.PHOTOS, "public", 0, JPEG, OnboardingStep.PHOTOS),
         (OnboardingStep.PHOTOS, "private", None, JPEG, OnboardingStep.PHOTOS),
+        (OnboardingStep.PHOTOS, "verification", None, JPEG, OnboardingStep.PHOTOS),
         (OnboardingStep.PHOTOS, "public", 0, HEIC, OnboardingStep.PHOTOS),
         (OnboardingStep.INTERESTS, "public", 0, JPEG, OnboardingStep.INTERESTS),
     ],
     ids=[
-        "public-completes-the-step",
+        "public-doesnt-complete-the-step",
         "private-doesnt",
+        "the-face-photo-doesnt",
         "a-refused-one-doesnt",
         "after-it-an-edit",
     ],
 )
-async def test_one_public_photo_completes_the_photos_step(
+async def test_no_photo_completes_the_photos_step(
     db: AsyncSession,
     client: AsyncClient,
     make_user: MakeUser,
@@ -415,7 +532,9 @@ async def test_one_public_photo_completes_the_photos_step(
     data: bytes,
     after: OnboardingStep,
 ) -> None:
-    """Pending is enough to go on; it stays invisible to others until approved."""
+    """D-392 (T-4.12): no photo moves the step on; `POST /me/photos/done` is
+    its exit (`tests/modules/onboarding/test_leave_photos.py`). Until T-4.12 a
+    public photo, pending or approved, did (T-4.3)."""
     user, token = await _at(db, make_user, step)
 
     await _upload_and_complete(

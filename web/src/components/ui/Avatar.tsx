@@ -1,4 +1,4 @@
-import { ScanFace } from "lucide-react";
+import { Check } from "lucide-react";
 
 import { t } from "@/i18n/t";
 
@@ -11,8 +11,11 @@ type AvatarProps = {
   /** Diameter in px; the prototype uses 46 in lists and 50 in chats. */
   size?: number;
   online?: boolean;
-  /** The selfie matched the profile's photos (`Me.is_verified`). Said as
-   * exactly that, with a face, never a shield or "Verified" (D-262). */
+  /** The badge (D-393, T-4.12): the selfie matched the face photo **and** a
+   * shown photo's face matched the selfie, as the server computes it (T-6.2's
+   * `Card`), never raw `is_verified`. A tick in `--accent` (the founder's
+   * choice, 7 October 2026); the words say only "Selfie matched", never
+   * "Verified" (D-262), and a shield stays rejected. */
   verified?: boolean;
 };
 
@@ -64,7 +67,7 @@ export function Avatar({
           aria-hidden
           className="rounded-pill bg-surface text-accent absolute -top-0.5 -right-0.5 flex size-[18px] items-center justify-center"
         >
-          <Icon icon={ScanFace} size={12} />
+          <Icon icon={Check} size={12} />
         </span>
       )}
     </span>

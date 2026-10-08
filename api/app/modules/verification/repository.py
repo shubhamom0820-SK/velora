@@ -6,7 +6,7 @@ from collections.abc import Sequence
 from datetime import datetime
 from uuid import UUID
 
-from sqlalchemy import func, select
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.enums import Gender, PhotoKind, ReviewStatus
@@ -96,9 +96,54 @@ async def selfies_submitted(
     return {photo_id for photo_id in rows if photo_id is not None}
 
 
-async def approved_public_photos(session: AsyncSession, user_id: UUID) -> list[Photo]:
-    """The photos a selfie is compared with: the user's approved public ones,
-    by place."""
+async def selfie_being_compared(session: AsyncSession, user_id: UUID) -> bool:
+    """Whether a verification of the user's holds a selfie and isn't decided:
+    the worker may be comparing it with the face photo right now."""
+    found = await session.scalar(
+        select(Verification.id)
+        .where(
+            Verification.user_id == user_id,
+            Verification.status == ReviewStatus.PENDING,
+            Verification.selfie_photo_id.is_not(None),
+        )
+        .limit(1)
+    )
+    return found is not None
+
+
+async def face_photo(session: AsyncSession, user_id: UUID) -> Photo | None:
+    """The photo a selfie is compared with (D-391): the user's approved face
+    photo. One live per person (`photos.service`), so at most one."""
+    photo: Photo | None = await session.scalar(
+        select(Photo)
+        .where(
+            Photo.user_id == user_id,
+            Photo.kind == PhotoKind.VERIFICATION,
+            Photo.status == ReviewStatus.APPROVED,
+        )
+        .order_by(Photo.created_at.desc())
+        .limit(1)
+    )
+    return photo
+
+
+async def face_photo_waiting(session: AsyncSession, user_id: UUID) -> bool:
+    """Whether the user's face photo is still being moderated."""
+    found = await session.scalar(
+        select(Photo.id)
+        .where(
+            Photo.user_id == user_id,
+            Photo.kind == PhotoKind.VERIFICATION,
+            Photo.status == ReviewStatus.PENDING,
+        )
+        .limit(1)
+    )
+    return found is not None
+
+
+async def shown_photos_with_a_face(session: AsyncSession, user_id: UUID) -> list[Photo]:
+    """The public photos the badge may rest on (D-393): the user's approved
+    ones whose moderation record found a real face, by place."""
     rows = await session.scalars(
         select(Photo)
         .where(
@@ -106,27 +151,55 @@ async def approved_public_photos(session: AsyncSession, user_id: UUID) -> list[P
             Photo.kind == PhotoKind.PUBLIC,
             Photo.status == ReviewStatus.APPROVED,
             Photo.public_key.is_not(None),
+            Photo.moderation["faces"].as_integer() >= 1,
         )
         .order_by(Photo.position, Photo.created_at)
     )
     return list(rows)
 
 
-async def public_photos_waiting(session: AsyncSession, user_id: UUID) -> int:
-    """How many of the user's public photos moderation hasn't decided yet."""
-    count: int = (
-        await session.scalar(
-            select(func.count())
-            .select_from(Photo)
+async def kept_selfie(
+    session: AsyncSession, user_id: UUID
+) -> tuple[Verification, Photo] | None:
+    """The user's approved verification and its selfie (the kept one, D-393),
+    or None: nothing to compare a shown photo with."""
+    row = (
+        await session.execute(
+            select(Verification, Photo)
+            .join(Photo, Photo.id == Verification.selfie_photo_id)
             .where(
-                Photo.user_id == user_id,
-                Photo.kind == PhotoKind.PUBLIC,
-                Photo.status == ReviewStatus.PENDING,
+                Verification.user_id == user_id,
+                Verification.status == ReviewStatus.APPROVED,
             )
+            .order_by(Verification.updated_at.desc())
+            .limit(1)
         )
-        or 0
+    ).first()
+    if row is None:
+        return None
+    verification, selfie = row.tuple()
+    return verification, selfie
+
+
+async def shows_badge(session: AsyncSession, user_id: UUID) -> bool:
+    """D-393's badge, the query T-6.2's `Card` carries: `is_verified` (the
+    selfie matched the face photo) and at least one approved public photo whose
+    record says its face matched that selfie. Never `is_verified` alone."""
+    matched = (
+        select(Photo.id)
+        .where(
+            Photo.user_id == User.id,
+            Photo.kind == PhotoKind.PUBLIC,
+            Photo.status == ReviewStatus.APPROVED,
+            Photo.public_key.is_not(None),
+            Photo.moderation["selfie_match"]["matched"].as_boolean().is_(True),
+        )
+        .exists()
     )
-    return count
+    found = await session.scalar(
+        select(User.id).where(User.id == user_id, User.is_verified.is_(True), matched)
+    )
+    return found is not None
 
 
 async def decided_since(

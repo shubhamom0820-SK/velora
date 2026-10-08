@@ -1,8 +1,8 @@
 """`verification.service.verify`, the comparison the `verify_selfie` job and a
 wake run (T-4.5): each outcome, the threshold's edge, what is compared with
-what, what is recorded, and what happens when things change meanwhile. The
-fake face match answers with the numbers a test gives it; the real one is
-`tests/core/test_facematch.py`'s."""
+what (the face photo alone, D-391, T-4.12), what is recorded, and what happens
+when things change meanwhile. The fake face match answers with the numbers a
+test gives it; the real one is `tests/core/test_facematch.py`'s."""
 
 from __future__ import annotations
 
@@ -17,6 +17,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.enums import PhotoKind, ReviewStatus
 from app.core.providers.facematch import FaceMatch, FakeFaceMatch
 from app.core.providers.storage import FakeStorage
+from app.core.queue import MATCH_PHOTO, FakeQueue
 from app.modules.photos.models import Photo
 from app.modules.users import service as users_service
 from app.modules.users.models import User
@@ -31,6 +32,7 @@ from tests.modules.verification.support import (
     approved_photo,
     at_selfie,
     bearer,
+    face_photo,
     fresh,
     jpeg,
     latest,
@@ -52,12 +54,14 @@ async def _verify(
     storage: FakeStorage,
     facematch: FakeFaceMatch,
     via: str = "queue",
+    queue: FakeQueue | None = None,
 ) -> str:
     return await service.verify(
         Sessions(db),
         verification.id,
         storage=storage,
         facematch=facematch,
+        queue=queue or FakeQueue(),
         settings=make_test_settings(),
         via=via,
     )
@@ -80,10 +84,9 @@ async def test_at_the_threshold_it_matches_and_records_the_numbers(
 ) -> None:
     storage, facematch = FakeStorage(), FakeFaceMatch()
     user, _ = await at_selfie(db, make_user)
-    first = await approved_photo(db, storage, user, position=0)
-    second = await approved_photo(db, storage, user, position=1)
+    face = await face_photo(db, storage, user)
     verification, selfie = await submitted(db, storage, user)
-    facematch.next = _match(0.1, rules.MATCH_THRESHOLD)
+    facematch.next = _match(rules.MATCH_THRESHOLD)
 
     assert await _verify(db, verification, storage, facematch, via="wake") == "approved"
 
@@ -100,10 +103,7 @@ async def test_at_the_threshold_it_matches_and_records_the_numbers(
         "provider": "fake",
         "faces": 1,
         "best": 0.363,
-        "compared": [
-            {"photo_id": str(first.id), "similarity": 0.1},
-            {"photo_id": str(second.id), "similarity": 0.363},
-        ],
+        "compared": [{"photo_id": str(face.id), "similarity": 0.363}],
     }
     # Nothing in the column that can't hold it (numeric(5,2), D-263).
     assert (await fresh(db, Verification, verification.id)).similarity is None
@@ -120,7 +120,7 @@ async def test_just_below_the_threshold_it_doesnt(
 ) -> None:
     storage, facematch = FakeStorage(), FakeFaceMatch()
     user, _ = await at_selfie(db, make_user)
-    await approved_photo(db, storage, user)
+    await face_photo(db, storage, user)
     verification, selfie = await submitted(db, storage, user)
     facematch.next = _match(0.3629)
 
@@ -134,19 +134,88 @@ async def test_just_below_the_threshold_it_doesnt(
     )
 
 
-async def test_the_best_photo_counts_wherever_it_is(
+async def test_the_selfie_is_compared_with_the_face_photo_alone(
     db: AsyncSession, make_user: MakeUser
 ) -> None:
-    """The plan's rule: each selfie against all the person's photos, the best
-    one counted. (That one photo can carry a whole profile is P-162.)"""
+    """D-391: three approved public photos with faces, and none of them is what
+    the selfie is compared with. The one reference is the face photo's private
+    copy; the record names it alone. (The public photos' own comparison with
+    the selfie is the badge's, D-393, and queued once this match is written.)"""
     storage, facematch = FakeStorage(), FakeFaceMatch()
+    queue = FakeQueue()
     user, _ = await at_selfie(db, make_user)
-    for position in range(3):
-        await approved_photo(db, storage, user, position=position)
-    verification, _ = await submitted(db, storage, user)
-    facematch.next = _match(0.05, 0.71, 0.2)
+    shown = [
+        await approved_photo(db, storage, user, position=n, data=jpeg("navy"))
+        for n in range(3)
+    ]
+    face = await face_photo(db, storage, user, data=jpeg("olive"))
+    verification, selfie = await submitted(db, storage, user)
+    facematch.next = _match(0.71)
 
-    assert await _verify(db, verification, storage, facematch) == "approved"
+    assert await _verify(db, verification, storage, facematch, queue=queue) == (
+        "approved"
+    )
+
+    [(_, references)] = facematch.compared
+    assert references == (storage.objects[(PRIVATE, face.raw_key)].data,)
+    for photo in shown:
+        assert storage.objects[(PUBLIC, f"p/{photo.id}.jpg")].data not in references
+    compared = (await fresh(db, Photo, selfie.id)).moderation["compared"]
+    assert [c["photo_id"] for c in compared] == [str(face.id)]
+    assert [job.kwargs["photo_id"] for job in queue.named(MATCH_PHOTO)] == [
+        str(photo.id) for photo in shown
+    ]
+
+
+async def test_a_match_queues_the_badges_comparison_for_each_shown_face(
+    db: AsyncSession, make_user: MakeUser
+) -> None:
+    """D-393, when the selfie is decided: every approved public photo whose
+    record found a face is queued, once each under its own id; one with no
+    face, a pending one and a private one aren't. A rejection queues nothing."""
+    storage, facematch = FakeStorage(), FakeFaceMatch()
+    queue = FakeQueue()
+    user, _ = await at_selfie(db, make_user)
+    with_face = await approved_photo(db, storage, user, position=0)
+    await approved_photo(db, storage, user, position=1, faces=0)
+    db.add(
+        Photo(
+            user_id=user.id,
+            kind=PhotoKind.PUBLIC,
+            position=2,
+            raw_key=f"raw/{user.id}/{uuid.uuid4()}",
+            moderation={"faces": 1},
+        )
+    )
+    db.add(
+        Photo(
+            user_id=user.id,
+            kind=PhotoKind.PRIVATE,
+            raw_key=f"raw/{user.id}/{uuid.uuid4()}",
+            status=ReviewStatus.APPROVED,
+            moderation={"faces": 1},
+        )
+    )
+    await db.flush()
+    await face_photo(db, storage, user)
+    verification, _ = await submitted(db, storage, user)
+    facematch.next = _match(0.2)
+
+    assert await _verify(db, verification, storage, facematch, queue=queue) == (
+        "no_match"
+    )
+    assert queue.jobs == []
+
+    facematch.next = _match(0.9)
+    verification, _ = await submitted(db, storage, user)
+    assert await _verify(db, verification, storage, facematch, queue=queue) == (
+        "approved"
+    )
+    [job] = queue.named(MATCH_PHOTO)
+    assert (job.job_id, job.kwargs) == (
+        f"match_photo:{with_face.id}",
+        {"photo_id": str(with_face.id)},
+    )
 
 
 @pytest.mark.parametrize(
@@ -157,7 +226,7 @@ async def test_the_selfie_must_hold_exactly_one_face(
 ) -> None:
     storage, facematch = FakeStorage(), FakeFaceMatch()
     user, _ = await at_selfie(db, make_user)
-    await approved_photo(db, storage, user)
+    await face_photo(db, storage, user)
     verification, selfie = await submitted(db, storage, user)
     # Many faces, one of them a perfect match: still refused.
     facematch.next = _match(None if faces == 0 else 0.99, faces=faces)
@@ -167,12 +236,15 @@ async def test_the_selfie_must_hold_exactly_one_face(
     assert (await _state(db, user, verification, selfie))[2:] == (reason, False)
 
 
-async def test_photos_with_no_face_found_are_no_photos(
+async def test_a_face_photo_with_no_face_found_is_no_photos(
     db: AsyncSession, make_user: MakeUser
 ) -> None:
+    """Moderation refuses a face photo with no face (D-101 amended); if the
+    face matcher still finds none, the selfie has nothing to be compared
+    with, and says so by the same name."""
     storage, facematch = FakeStorage(), FakeFaceMatch()
     user, _ = await at_selfie(db, make_user)
-    await approved_photo(db, storage, user)
+    await face_photo(db, storage, user)
     verification, _ = await submitted(db, storage, user)
     facematch.next = _match(None)
 
@@ -182,47 +254,44 @@ async def test_photos_with_no_face_found_are_no_photos(
 # --- What it is compared with ------------------------------------------------------
 
 
-async def test_it_compares_the_re_encoded_selfie_with_the_public_copies_only(
+async def test_it_compares_the_re_encoded_selfie_with_the_approved_face_photo_only(
     db: AsyncSession, make_user: MakeUser
 ) -> None:
-    """The public copy is the bytes moderation scored and wrote itself (T-4.4).
-    The private upload can be replaced by a second PUT within its URL's five
-    minutes (P-79), so it is never what the selfie is compared with. Private
-    and rejected photos aren't compared at all."""
+    """The reference is the approved face photo's private copy, the bytes
+    moderation scored and wrote back over the upload (T-4.4, D-092). A face
+    photo still pending or rejected, a public photo and a private one aren't
+    compared at all."""
     storage, facematch = FakeStorage(), FakeFaceMatch()
     user, _ = await at_selfie(db, make_user)
-    photo = await approved_photo(db, storage, user, data=jpeg("navy"))
-    await storage.put_bytes(PRIVATE, photo.raw_key, jpeg("red"), "image/jpeg")
-    for kind, status, position in (
-        (PhotoKind.PRIVATE, ReviewStatus.APPROVED, None),
-        (PhotoKind.PUBLIC, ReviewStatus.REJECTED, 1),
-    ):
-        other = Photo(
-            user_id=user.id,
-            kind=kind,
-            position=position,
-            raw_key=f"raw/{user.id}/{uuid.uuid4()}",
-            public_key=f"p/{uuid.uuid4()}.jpg",
-            status=status,
-        )
-        db.add(other)
-        await storage.put_bytes(PUBLIC, other.public_key or "", jpeg(), "image/jpeg")
+    face = await face_photo(db, storage, user, data=jpeg("olive"))
+    await face_photo(db, storage, user, status=ReviewStatus.REJECTED, data=jpeg("red"))
+    await approved_photo(db, storage, user, data=jpeg("navy"))
+    other = Photo(
+        user_id=user.id,
+        kind=PhotoKind.PRIVATE,
+        raw_key=f"raw/{user.id}/{uuid.uuid4()}",
+        status=ReviewStatus.APPROVED,
+    )
+    db.add(other)
     await db.flush()
+    await storage.put_bytes(PRIVATE, other.raw_key, jpeg("teal"), "image/jpeg")
     verification, selfie = await submitted(db, storage, user)
 
     await _verify(db, verification, storage, facematch)
 
     [(compared_selfie, references)] = facematch.compared
-    assert references == (storage.objects[(PUBLIC, f"p/{photo.id}.jpg")].data,)
+    assert references == (storage.objects[(PRIVATE, face.raw_key)].data,)
     assert compared_selfie == storage.objects[(PRIVATE, selfie.raw_key)].data
     assert compared_selfie[:3] == b"\xff\xd8\xff"  # the re-encoded JPEG, written back
 
 
-async def test_with_no_approved_photo_there_is_nothing_to_compare_with(
+async def test_with_no_face_photo_there_is_nothing_to_compare_with(
     db: AsyncSession, make_user: MakeUser
 ) -> None:
+    """Approved public photos with faces don't stand in for it (D-391)."""
     storage, facematch = FakeStorage(), FakeFaceMatch()
     user, _ = await at_selfie(db, make_user)
+    await approved_photo(db, storage, user)
     verification, selfie = await submitted(db, storage, user)
 
     assert await _verify(db, verification, storage, facematch) == "no_photos"
@@ -231,20 +300,12 @@ async def test_with_no_approved_photo_there_is_nothing_to_compare_with(
     assert (await _state(db, user, verification, selfie))[2] == "no_photos"
 
 
-async def test_while_photos_are_still_being_moderated_it_waits(
+async def test_while_the_face_photo_is_still_being_moderated_it_waits(
     db: AsyncSession, make_user: MakeUser
 ) -> None:
     storage, facematch = FakeStorage(), FakeFaceMatch()
     user, _ = await at_selfie(db, make_user)
-    db.add(
-        Photo(
-            user_id=user.id,
-            kind=PhotoKind.PUBLIC,
-            position=0,
-            raw_key=f"raw/{user.id}/{uuid.uuid4()}",
-        )
-    )
-    await db.flush()
+    await face_photo(db, storage, user, status=ReviewStatus.PENDING)
     verification, _ = await submitted(db, storage, user)
 
     with pytest.raises(service.TryAgain) as waiting:
@@ -259,20 +320,19 @@ async def test_while_photos_are_still_being_moderated_it_waits(
     )
 
 
-async def test_a_public_copy_gone_missing_is_left_out(
+async def test_a_face_photo_whose_file_is_gone_is_no_photos(
     db: AsyncSession, make_user: MakeUser
 ) -> None:
     storage, facematch = FakeStorage(), FakeFaceMatch()
     user, _ = await at_selfie(db, make_user)
-    gone = await approved_photo(db, storage, user, position=0)
-    kept = await approved_photo(db, storage, user, position=1)
-    await storage.delete(PUBLIC, f"p/{gone.id}.jpg")
+    gone = await face_photo(db, storage, user)
+    await storage.delete(PRIVATE, gone.raw_key)
     verification, selfie = await submitted(db, storage, user)
 
-    assert await _verify(db, verification, storage, facematch) == "approved"
+    assert await _verify(db, verification, storage, facematch) == "no_photos"
 
-    compared = (await fresh(db, Photo, selfie.id)).moderation["compared"]
-    assert [c["photo_id"] for c in compared] == [str(kept.id)]
+    assert facematch.compared == []
+    assert "compared" not in (await fresh(db, Photo, selfie.id)).moderation
 
 
 # --- The selfie itself ------------------------------------------------------------------
@@ -286,7 +346,7 @@ async def test_a_located_selfie_is_stored_with_no_location(
     bytes compared, carry none of it."""
     storage, facematch = FakeStorage(), FakeFaceMatch()
     user, _ = await at_selfie(db, make_user)
-    await approved_photo(db, storage, user)
+    await face_photo(db, storage, user)
     verification, selfie = await submitted(
         db, storage, user, data=LOCATED_JPEG.read_bytes()
     )
@@ -312,7 +372,7 @@ async def test_a_selfie_that_isnt_an_image_is_unreadable_and_its_file_goes(
 ) -> None:
     storage, facematch = FakeStorage(), FakeFaceMatch()
     user, _ = await at_selfie(db, make_user)
-    await approved_photo(db, storage, user)
+    await face_photo(db, storage, user)
     verification, selfie = await submitted(db, storage, user, data=data)
 
     assert await _verify(db, verification, storage, facematch) == "unreadable"
@@ -326,7 +386,7 @@ async def test_a_selfie_whose_file_is_gone_is_unreadable(
 ) -> None:
     storage, facematch = FakeStorage(), FakeFaceMatch()
     user, _ = await at_selfie(db, make_user)
-    await approved_photo(db, storage, user)
+    await face_photo(db, storage, user)
     verification, selfie = await submitted(db, storage, user)
     await storage.delete(PRIVATE, selfie.raw_key)
 
@@ -338,17 +398,20 @@ async def test_a_matched_selfie_is_never_public_and_never_shown(
     db: AsyncSession, client: AsyncClient, make_user: MakeUser, fake_providers: Any
 ) -> None:
     """Critical #14: approved, the selfie gets no public copy and no public
-    key; it isn't among its owner's photos, can't be read as one, and the
-    verification's answer carries no link, key or number."""
+    key, and neither does the face photo it matched; the selfie isn't among
+    its owner's photos, can't be read as one, and the verification's answer
+    carries no link, key or number."""
     storage = fake_providers.storage
     user, token = await at_selfie(db, make_user)
     photo = await approved_photo(db, storage, user)
+    face = await face_photo(db, storage, user)
     verification, selfie = await submitted(db, storage, user)
     selfie_id, raw_key = selfie.id, selfie.raw_key
 
     assert await _verify(db, verification, storage, FakeFaceMatch()) == "approved"
 
     assert (await fresh(db, Photo, selfie_id)).public_key is None
+    assert (await fresh(db, Photo, face.id)).public_key is None
     assert [key for bucket, key in storage.objects if bucket == PUBLIC] == [
         f"p/{photo.id}.jpg"
     ]
@@ -376,7 +439,7 @@ async def test_a_decided_one_is_left_as_it_is(
 ) -> None:
     storage, facematch = FakeStorage(), FakeFaceMatch()
     user, _ = await at_selfie(db, make_user)
-    await approved_photo(db, storage, user)
+    await face_photo(db, storage, user)
     verification, _ = await submitted(db, storage, user)
     await _verify(db, verification, storage, facematch)
 
@@ -412,7 +475,7 @@ async def test_a_user_refused_while_it_was_compared_leaves_no_selfie(
     reads as gone."""
     storage, facematch = FakeStorage(), FakeFaceMatch()
     user, _ = await at_selfie(db, make_user)
-    photo = await approved_photo(db, storage, user)
+    face = await face_photo(db, storage, user)
     verification, selfie = await submitted(db, storage, user)
 
     async def gone(session: AsyncSession, user_id: uuid.UUID) -> User:
@@ -423,7 +486,7 @@ async def test_a_user_refused_while_it_was_compared_leaves_no_selfie(
 
     assert result == "its user was refused while it was compared: its selfie removed"
     assert (PRIVATE, selfie.raw_key) not in storage.objects
-    assert (PUBLIC, f"p/{photo.id}.jpg") in storage.objects
+    assert (PRIVATE, face.raw_key) in storage.objects  # D-078's deletion takes it
 
 
 async def test_storage_down_is_tried_again(
@@ -431,7 +494,7 @@ async def test_storage_down_is_tried_again(
 ) -> None:
     storage, facematch = FakeStorage(), FakeFaceMatch()
     user, _ = await at_selfie(db, make_user)
-    await approved_photo(db, storage, user)
+    await face_photo(db, storage, user)
     verification, _ = await submitted(db, storage, user)
 
     async def down(*args: object, **kwargs: object) -> bytes:
@@ -482,12 +545,13 @@ async def test_no_key_or_url_in_any_log(
     storage, facematch = FakeStorage(), FakeFaceMatch()
     user, _ = await at_selfie(db, make_user)
     photo = await approved_photo(db, storage, user)
+    face = await face_photo(db, storage, user)
     verification, selfie = await submitted(db, storage, user)
 
     await _verify(db, verification, storage, facematch)
 
     logged = captured_logs.text
     assert "verification.decided" in logged
-    for leak in (selfie.raw_key, f"p/{photo.id}.jpg", "http"):
+    for leak in (selfie.raw_key, face.raw_key, f"p/{photo.id}.jpg", "http"):
         assert leak not in logged
     captured_logs.assert_listening()

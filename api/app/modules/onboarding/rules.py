@@ -1,5 +1,6 @@
 """What finishing onboarding asks (T-4.8, D-310): what a profile must hold to
-go from `selfie` to `done`, who may finish without a matched selfie, and the
+go from `selfie` to `done`, who may finish without a matched selfie, who may
+leave the `photos` step without a face photo (T-4.12, D-391), and the
 profile's completeness. No I/O: the service reads, these decide, and the dev
 seed holds its finished profiles to the same rules.
 """
@@ -14,7 +15,8 @@ from app.modules.profiles.service import INTERESTS_PER_PROFILE
 
 # Each thing a finished profile needs that this one lacks: `PROFILE_INCOMPLETE`'s
 # `details.missing`, in the order onboarding asks for them, so the first is the
-# earliest screen to go back to.
+# earliest screen to go back to. No photo is among them (D-392, T-4.12): nobody
+# needs a public photo, men included.
 Missing = Literal[
     "seeking",
     "intents",
@@ -24,7 +26,6 @@ Missing = Literal[
     "location",
     "username",
     "about",
-    "photo",
     "interests",
 ]
 
@@ -36,6 +37,12 @@ INTENTS_MIN, INTENTS_MAX = 1, 3
 # with no gender at all, needs the match. `users_done_needs_a_match` holds the
 # database to the same rule.
 MAY_FINISH_UNMATCHED: Final = frozenset({Gender.MALE})
+
+# Who may leave the `photos` step with no face photo: men only (D-391, D-008:
+# the selfie is optional for them, so the photo it is compared with is too).
+# An allowlist, as above: anyone else, a woman or someone with no gender, needs
+# one, pending or approved. The server's rule, not the screen's.
+MAY_LEAVE_PHOTOS_WITHOUT_A_FACE_PHOTO: Final = frozenset({Gender.MALE})
 
 # Completeness (D-310): every finished profile meets the requirements, so they
 # count 50; each approved public photo after the first adds 10, the five more
@@ -75,19 +82,25 @@ def missing(facts: Facts) -> list[Missing]:
         "location": facts.located,
         "username": bool(facts.username),
         "about": bool(facts.about),
-        "photo": facts.approved_photos >= 1,
         "interests": facts.interests == INTERESTS_PER_PROFILE,
     }
     return [requirement for requirement, ok in met.items() if not ok]
 
 
 def needs_a_match(gender: Gender | None) -> bool:
-    """Whether finishing needs a selfie that matched the profile's photos."""
+    """Whether finishing needs a selfie that matched the face photo."""
     return gender not in MAY_FINISH_UNMATCHED
+
+
+def needs_a_face_photo(gender: Gender | None) -> bool:
+    """Whether leaving the `photos` step needs a face photo, pending or
+    approved (T-4.12)."""
+    return gender not in MAY_LEAVE_PHOTOS_WITHOUT_A_FACE_PHOTO
 
 
 def completeness(approved_photos: int) -> int:
     """A finished profile's completeness, 50 to 100, from its approved public
-    photos."""
+    photos: 50 at none, the same as at one, so a profile that shows nothing
+    sits at the bottom of discovery's ranking (D-392, D-032), on purpose."""
     extra = max(0, approved_photos - 1)
     return min(COMPLETENESS_MAX, COMPLETENESS_BASE + COMPLETENESS_PER_PHOTO * extra)

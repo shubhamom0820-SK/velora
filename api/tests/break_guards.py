@@ -887,8 +887,8 @@ T44: list[tuple[Case, list[str]]] = [
             edits=[
                 (
                     "app/modules/photos/service.py",
-                    "        try:\n            await users_service.locked_user(session, photo.user_id)\n        except LookupError:\n            locked = None\n        else:\n            locked = await repository.photo_for_update(session, photo.user_id, photo.id)\n",
-                    "        locked = await repository.photo_for_update(session, photo.user_id, photo.id)\n",
+                    "        try:\n            user = await users_service.locked_user(session, photo.user_id)\n        except LookupError:\n            locked = None\n        else:\n            locked = await repository.photo_for_update(session, photo.user_id, photo.id)\n",
+                    "        user = await users_service.get_user(session, photo.user_id)\n        locked = await repository.photo_for_update(session, photo.user_id, photo.id)\n",
                 ),
             ],
             expect=["test_the_decision_and_a_reorder_take_turns"],
@@ -1349,7 +1349,7 @@ T46: list[tuple[Case, list[str]]] = [
             edits=[
                 (
                     "app/modules/photos/repository.py",
-                    "            Photo.user_id == user_id,\n            Photo.kind.in_((PhotoKind.PUBLIC, PhotoKind.PRIVATE)),\n        )\n    )\n    return photo\n",
+                    "            Photo.user_id == user_id,\n            Photo.kind.in_(OWNERS_KINDS),\n        )\n    )\n    return photo\n",
                     "            Photo.user_id == user_id,\n        )\n    )\n    return photo\n",
                 )
             ],
@@ -1975,31 +1975,16 @@ T45: list[tuple[Case, list[str]]] = [
                     "        return found[0] if found else None\n",
                 )
             ],
-            expect=[
-                "test_the_best_photo_counts_wherever_it_is",
-                "test_each_photo_is_compared_in_order_and_the_best_counts",
-            ],
+            # The selfie has one reference since T-4.12 (D-391), so only the
+            # provider's own test sees the best counted among several.
+            expect=["test_each_photo_is_compared_in_order_and_the_best_counts"],
         ),
-        [VER, FACE_TESTS],
+        [FACE_TESTS],
     ),
-    (
-        Case(
-            id="t45-04-compared-with-the-replaceable-upload",
-            what="photos compared from the private upload, not the public copy moderation scored",
-            edits=[
-                (
-                    SERVICE45,
-                    "            settings.R2_BUCKET_PUBLIC, photo.public_key, MAX_UPLOAD_BYTES + 1\n",
-                    "            settings.R2_BUCKET_PRIVATE, photo.raw_key, MAX_UPLOAD_BYTES + 1\n",
-                )
-            ],
-            expect=[
-                "test_it_compares_the_re_encoded_selfie_with_the_public_copies_only",
-                "test_a_public_copy_gone_missing_is_left_out",
-            ],
-        ),
-        [VER],
-    ),
+    # t45-04, "photos compared from the private upload, not the public copy",
+    # left with T-4.12: the selfie's one reference is the face photo, which
+    # has no public copy; its private copy is the scored bytes written back
+    # (D-092). The badge's comparison reads the public copy: `t412-` holds it.
     (
         Case(
             id="t45-05-the-original-selfie-kept",
@@ -2408,7 +2393,7 @@ T45: list[tuple[Case, list[str]]] = [
             ],
             expect=[
                 "test_the_last_failure_is_unavailable_so_she_can_start_again",
-                "test_photos_still_waiting_at_the_last_try_are_no_photos",
+                "test_a_face_photo_still_waiting_at_the_last_try_is_no_photos",
             ],
         ),
         [JOB_TESTS],
@@ -2561,19 +2546,7 @@ T48: list[tuple[Case, list[str]]] = [
         [ONBOARDING],
     ),
     (requirement_dropped("about", "bool(facts.about)", "no about"), [ONBOARDING]),
-    (
-        requirement_dropped(
-            "photo",
-            "facts.approved_photos >= 1",
-            "no photo",
-            "a photo still being checked",
-            "a photo rejected by moderation",
-            "a photo its owner removed",
-            "a private photo only",
-            "a selfie only",
-        ),
-        [ONBOARDING],
-    ),
+    # The photo requirement's case left with the requirement (D-392, T-4.12).
     (
         requirement_dropped(
             "interests", "facts.interests == INTERESTS_PER_PROFILE", "four interests"
@@ -2701,8 +2674,8 @@ T48: list[tuple[Case, list[str]]] = [
             edits=[
                 (
                     SERVICE48,
-                    "        user = await users_service.locked_user(session, user.id)\n",
-                    "        user = await users_service.get_user(session, user.id)\n",
+                    "        user = await users_service.locked_user(session, user.id)\n        if not users_service.at_step(user, OnboardingStep.SELFIE):\n",
+                    "        user = await users_service.get_user(session, user.id)\n        if not users_service.at_step(user, OnboardingStep.SELFIE):\n",
                 )
             ],
             expect=["test_finishing_waits_for_the_photos_decision"],
@@ -2951,6 +2924,393 @@ T411: list[Case] = [
     ),
 ]
 
+
+# --- T-4.12: the face photo, the badge, nobody needing a public photo (D-391 to D-393) --
+
+PHOTOS412 = "app/modules/photos/service.py"
+MODERATION412 = "app/modules/photos/moderation.py"
+PHOTOS_REPO412 = "app/modules/photos/repository.py"
+USERS_REPO412 = "app/modules/users/repository.py"
+MIGRATION412 = (
+    "alembic/versions/20261008_ed3028467a15_a_face_photo_for_the_selfie_check.py"
+)
+PHOTOS_TESTS412 = ["tests/modules/photos"]
+BADGE_TESTS = ["tests/modules/verification/test_badge.py"]
+MIGRATION_TESTS412 = [
+    "tests/modules/photos/test_face_photo_migration.py",
+    "tests/test_schema.py",
+]
+
+T412: list[tuple[Case, list[str]]] = [
+    (
+        Case(
+            id="t412-01-no-face-back-on-public-photos",
+            what="D-392: a public photo refused for showing no face",
+            edits=[
+                (
+                    MODERATION412,
+                    "    if kind is PhotoKind.VERIFICATION and not scores.minors:\n",
+                    "    if kind is not PhotoKind.PRIVATE and not scores.minors:\n",
+                )
+            ],
+            expect=[
+                "test_no_face_for_the_face_photo_never_a_public_one[public-None]",
+                "test_a_public_or_private_photo_needs_no_face[public]",
+            ],
+        ),
+        PHOTOS_TESTS412,
+    ),
+    (
+        Case(
+            id="t412-02-no-face-off-the-face-photo",
+            what="D-391: a face photo with no face approved, leaving the selfie to find out",
+            edits=[
+                (
+                    MODERATION412,
+                    "    if kind is PhotoKind.VERIFICATION and not scores.minors:\n",
+                    "    if kind is PhotoKind.SELFIE and not scores.minors:\n",
+                )
+            ],
+            expect=[
+                "test_no_face_for_the_face_photo_never_a_public_one[verification-no_face]",
+                "test_the_face_photo_needs_a_face_and_is_never_published",
+            ],
+        ),
+        PHOTOS_TESTS412,
+    ),
+    (
+        Case(
+            id="t412-03-the-selfie-compared-with-the-public-photos-again",
+            what="D-391: the selfie's references the shown photos, not the face photo",
+            edits=[
+                (
+                    SERVICE45,
+                    "            face = await repository.face_photo(session, verification.user_id)\n            references = [face] if face is not None else []\n",
+                    "            references = await repository.shown_photos_with_a_face(\n                session, verification.user_id\n            )\n",
+                )
+            ],
+            expect=[
+                "test_the_selfie_is_compared_with_the_face_photo_alone",
+                "test_with_no_face_photo_there_is_nothing_to_compare_with",
+            ],
+        ),
+        [VER],
+    ),
+    (
+        Case(
+            id="t412-04-the-reference-read-from-the-public-bucket",
+            what="the face photo read from the public bucket, where it never is",
+            edits=[
+                (
+                    SERVICE45,
+                    "            settings.R2_BUCKET_PRIVATE, photo.raw_key, MAX_UPLOAD_BYTES + 1\n",
+                    "            settings.R2_BUCKET_PUBLIC, photo.raw_key, MAX_UPLOAD_BYTES + 1\n",
+                )
+            ],
+            expect=[
+                "test_it_compares_the_re_encoded_selfie_with_the_approved_face_photo_only",
+                "test_at_the_threshold_it_matches_and_records_the_numbers",
+            ],
+        ),
+        [VER],
+    ),
+    (
+        Case(
+            id="t412-05-the-face-photo-replaceable-after-the-match",
+            what="point 4: a new face photo allowed once the selfie matched",
+            edits=[
+                (
+                    PHOTOS412,
+                    '    if user.is_verified:\n        raise AppError(\n            "NOT_ALLOWED", "Your face photo can\'t change once your selfie matched."\n        )\n',
+                    "",
+                )
+            ],
+            expect=[
+                "test_the_face_photo_cant_change_once_the_selfie_matched",
+                "test_the_face_photo_goes_until_the_selfie_matched",
+            ],
+        ),
+        PHOTOS_TESTS412,
+    ),
+    (
+        Case(
+            id="t412-06-the-face-photo-replaceable-mid-comparison",
+            what="point 4: a new face photo allowed while the worker compares the old",
+            edits=[
+                (
+                    PHOTOS412,
+                    '    if await verification_repository.selfie_being_compared(session, user.id):\n        raise AppError(\n            "NOT_ALLOWED", "Your face photo can\'t change while your selfie is compared."\n        )\n',
+                    "",
+                )
+            ],
+            expect=[
+                "test_nor_while_a_selfie_is_being_compared_with_it",
+                "test_the_face_photo_stays_while_the_selfie_is_compared",
+            ],
+        ),
+        PHOTOS_TESTS412,
+    ),
+    (
+        Case(
+            id="t412-07-the-face-photo-listed-to-anyone",
+            what="06-TESTING #14: the owner's list no longer the owner's",
+            edits=[
+                (
+                    PHOTOS_REPO412,
+                    "            Photo.user_id == user_id,\n            Photo.kind.in_(OWNERS_KINDS),\n            Photo.status != ReviewStatus.REJECTED,\n",
+                    "            Photo.kind.in_(OWNERS_KINDS),\n            Photo.status != ReviewStatus.REJECTED,\n",
+                )
+            ],
+            expect=["test_the_face_photo_is_its_owners_alone"],
+        ),
+        PHOTOS_TESTS412,
+    ),
+    (
+        Case(
+            id="t412-08-show-on-an-unapproved-face-photo",
+            what="the toggle on before moderation approved the face photo",
+            edits=[
+                (
+                    PHOTOS412,
+                    '        if face.status is not ReviewStatus.APPROVED:\n            raise AppError("NOT_ALLOWED", "Your face photo hasn\'t been approved yet.")\n',
+                    "",
+                )
+            ],
+            expect=["test_show_needs_an_approved_face_photo"],
+        ),
+        PHOTOS_TESTS412,
+    ),
+    (
+        Case(
+            id="t412-09-show-approved-at-once-from-the-private-copy",
+            what="the copy published without being scored (T-4.4's rule, P-79)",
+            edits=[
+                (
+                    PHOTOS412,
+                    "            raw_key=raw,\n            moderation={FROM_PHOTO_ID: str(face.id)},\n",
+                    "            raw_key=raw,\n            public_key=public_photo_key(copy_id),\n            status=ReviewStatus.APPROVED,\n            moderation={FROM_PHOTO_ID: str(face.id)},\n",
+                )
+            ],
+            expect=[
+                "test_show_makes_a_pending_public_copy_and_sends_it_through_moderation"
+            ],
+        ),
+        PHOTOS_TESTS412,
+    ),
+    (
+        Case(
+            id="t412-10-the-allowlist-a-blacklist",
+            what="rule 16: who needs a face photo named by who doesn't",
+            edits=[
+                (
+                    RULES48,
+                    "    return gender not in MAY_LEAVE_PHOTOS_WITHOUT_A_FACE_PHOTO\n",
+                    "    return gender is Gender.FEMALE\n",
+                )
+            ],
+            expect=[
+                "test_anyone_but_a_man_needs_a_face_photo[no gender]",
+                "test_only_a_man_leaves_the_photos_step_without_a_face_photo[no gender]",
+            ],
+        ),
+        [ONBOARDING],
+    ),
+    (
+        Case(
+            id="t412-11-the-face-photo-check-removed",
+            what="point 2: the photos step left without a face photo by anyone",
+            edits=[
+                (
+                    SERVICE48,
+                    "        if rules.needs_a_face_photo(\n            user.gender\n        ) and not await",
+                    "        if False and not await",
+                )
+            ],
+            expect=["test_anyone_but_a_man_needs_a_face_photo"],
+        ),
+        [ONBOARDING],
+    ),
+    (
+        Case(
+            id="t412-12-photo-back-in-the-requirements",
+            what="D-392: a public photo needed to finish again",
+            edits=[
+                (
+                    RULES48,
+                    '        "interests": facts.interests == INTERESTS_PER_PROFILE,\n',
+                    '        "photo": facts.approved_photos >= 1,\n        "interests": facts.interests == INTERESTS_PER_PROFILE,\n',
+                )
+            ],
+            expect=[
+                "test_zero_photos_finishes_at_completeness_50",
+                "test_no_photo_is_not_missing",
+            ],
+        ),
+        [ONBOARDING],
+    ),
+    (
+        Case(
+            id="t412-13-completeness-below-50-at-zero",
+            what="D-392: no photo ranked below the bottom",
+            edits=[
+                (
+                    RULES48,
+                    "    extra = max(0, approved_photos - 1)\n",
+                    "    extra = approved_photos - 1\n",
+                )
+            ],
+            expect=[
+                "test_completeness_is_50_and_10_for_each_photo_after_the_first[0-50]",
+                "test_zero_photos_finishes_at_completeness_50",
+            ],
+        ),
+        [ONBOARDING],
+    ),
+    (
+        Case(
+            id="t412-14-a-non-match-rejects-the-photo",
+            what="D-393 rule 3: her photo from behind taken down",
+            edits=[
+                (
+                    SERVICE45,
+                    "        locked.moderation = {\n            **(locked.moderation or {}),\n            SELFIE_MATCH: {\n",
+                    '        if not matched:\n            locked.status = ReviewStatus.REJECTED\n            locked.reject_reason = "no_match"\n        locked.moderation = {\n            **(locked.moderation or {}),\n            SELFIE_MATCH: {\n',
+                )
+            ],
+            expect=[
+                "test_a_shown_face_that_doesnt_match_isnt_rejected_and_doesnt_count"
+            ],
+        ),
+        BADGE_TESTS,
+    ),
+    (
+        Case(
+            id="t412-15-the-comparison-not-queued-on-approval",
+            what="D-393: a photo approved after the match never compared",
+            edits=[
+                (
+                    PHOTOS412,
+                    "        if locked.kind is PhotoKind.PUBLIC and scores.minors and user.is_verified:\n            await queue_match(queue, locked)\n",
+                    "",
+                )
+            ],
+            expect=[
+                "test_an_approved_public_photo_with_a_face_is_queued_for_the_badge[a-shown-face-with-a-selfie-kept]",
+                "test_shown_the_copy_is_compared_for_the_badge_once_approved",
+            ],
+        ),
+        PHOTOS_TESTS412,
+    ),
+    (
+        Case(
+            id="t412-16-the-comparison-not-queued-on-the-selfies-decision",
+            what="D-393: the photos already there never compared",
+            edits=[
+                (
+                    SERVICE45,
+                    "            to_compare = await repository.shown_photos_with_a_face(session, user.id)\n",
+                    "            to_compare = []\n",
+                )
+            ],
+            expect=[
+                "test_a_match_queues_the_badges_comparison_for_each_shown_face",
+                "test_the_selfie_is_compared_with_the_face_photo_alone",
+            ],
+        ),
+        [VER],
+    ),
+    (
+        Case(
+            id="t412-17-the-badge-on-is-verified-alone",
+            what="D-393 rule 4: the badge with no shown face that matched",
+            edits=[
+                (
+                    REPO45,
+                    "        select(User.id).where(User.id == user_id, User.is_verified.is_(True), matched)\n",
+                    "        select(User.id).where(User.id == user_id, User.is_verified.is_(True))\n",
+                )
+            ],
+            expect=["test_the_query_needs_is_verified_and_a_shown_face_that_matched"],
+        ),
+        BADGE_TESTS,
+    ),
+    (
+        Case(
+            id="t412-18-the-badge-counting-a-non-match",
+            what="D-393 rule 3: a comparison made, whatever it said",
+            edits=[
+                (
+                    REPO45,
+                    '            Photo.moderation["selfie_match"]["matched"].as_boolean().is_(True),\n',
+                    '            Photo.moderation["selfie_match"].is_not(None),\n',
+                )
+            ],
+            expect=[
+                "test_the_query_needs_is_verified_and_a_shown_face_that_matched",
+                "test_a_shown_face_that_doesnt_match_isnt_rejected_and_doesnt_count",
+            ],
+        ),
+        BADGE_TESTS,
+    ),
+    (
+        Case(
+            id="t412-19-the-migration-not-re-creating-the-indexes",
+            what="the rebuild leaving photos without its indexes",
+            edits=[
+                (
+                    MIGRATION412,
+                    "    for _, definition in indexes:\n        op.execute(definition)\n",
+                    "",
+                )
+            ],
+            expect=[
+                "test_the_rebuild_keeps_the_check_and_the_indexes",
+                "test_two_live_public_photos_cannot_share_a_slot",
+            ],
+        ),
+        MIGRATION_TESTS412,
+    ),
+    (
+        Case(
+            id="t412-20-the-downgrade-not-refusing",
+            what="the kind dropped from under the rows that use it",
+            edits=[
+                (
+                    MIGRATION412,
+                    "    if used:\n        raise RuntimeError(\n",
+                    "    if False:\n        raise RuntimeError(\n",
+                )
+            ],
+            expect=["test_the_downgrade_refuses_while_a_face_photo_exists"],
+        ),
+        MIGRATION_TESTS412,
+    ),
+    (
+        Case(
+            id="t412-21-the-seed-adding-a-second-face-photo",
+            what="the seed's re-run no longer changing nothing",
+            edits=[(SEED, "    if live is not None:\n        return\n", "")],
+            expect=["test_a_second_run_adds_no_photo"],
+        ),
+        ["tests/seed/test_seed.py"],
+    ),
+    (
+        Case(
+            id="t412-22-the-face-photo-kept-past-a-refusal",
+            what="D-078: a refusal's face photo file left in storage",
+            edits=[
+                (
+                    USERS_REPO412,
+                    "            select(column).where(file.model.user_id == user_id, column.is_not(None))\n",
+                    '            select(column).where(\n                file.model.user_id == user_id,\n                column.is_not(None),\n                file.model.kind != "verification",\n            )\n',
+                )
+            ],
+            expect=["test_a_refusals_face_photo_goes_with_it"],
+        ),
+        ["tests/modules/users/test_dob_gender.py"],
+    ),
+]
+
 CASES: list[tuple[Case, list[str]]] = (
     [(c, T51_SELECTION) for c in T51]
     + [(c, T54_SELECTION) for c in T54]
@@ -2964,6 +3324,7 @@ CASES: list[tuple[Case, list[str]]] = (
     + T45
     + T48
     + [(c, T411_SELECTION) for c in T411]
+    + T412
 )
 
 # The fifty-connection fixture's own message when Postgres refuses a connection.

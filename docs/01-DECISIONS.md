@@ -3279,6 +3279,9 @@ which would leave the selfie's `no_photos` to catch a faceless one, after the fa
 **Open:** the decision is the founder's; the words are the advisor's and Claude's. The founder can
 Lock this entry with one line saying so.
 
+**8 October 2026:** the toggle's mechanism, the face photo's name in copy and its replacement after
+a match are decided in D-400; this entry changes nowhere else.
+
 ### D-392 · Public photos need no face; nobody needs a public photo; completeness unchanged; the card with no photo — Open
 **The decision (the founder, 7 October 2026; written by the advisor, Claude in a separate chat,
 relayed by the founder):**
@@ -3309,6 +3312,9 @@ that opens onto nothing); `no_face` kept for public photos with an exemption she
 
 **Open:** the decision is the founder's; the words are the advisor's and Claude's. The founder can
 Lock this entry with one line saying so.
+
+**8 October 2026:** who may leave the photos step without a face photo, and the step's exit, are
+decided in D-400; this entry changes nowhere else.
 
 ### D-393 · The badge: the selfie matched the face photo, and a shown face matched the selfie; a red tick — Locked
 **The decision, in the founder's words, 7 October 2026:** "agar ladki photo nahi daal rahi to usko
@@ -3470,6 +3476,68 @@ complete, green, for the SHA. A required status check in place of the vouch: Git
 on this plan (D-280, P-180). The push's `before` on a branch: the cancel hole above. A job of its
 own for the e2e decision: a billed minute on every run, which is what the cut saves. Open until
 the first week of landings shows the deploys firing as before.
+
+### D-400 · T-4.12's four answers: the toggle's row, the photos step's allowlist and exit, "face photo", no change after a match — Locked
+**The decision (the founder, 8 October 2026, each answer on the advisor's recommendation, Claude in
+a separate chat, relayed by the founder; the four points T-4.12's plan left open, D-391, D-392):**
+1. **The toggle is a separate public row.** "Also show it on my profile" makes an ordinary public
+   photo from the face photo (`POST /photos/{id}/show`), in the first free place, carrying
+   `from_photo_id` in its record; every reader of "public photo" (discovery, completeness, T-6.3,
+   the badge's comparison) stays as it is, and turning it off is `DELETE /photos/{copy}`,
+   `user_deleted`, as for any photo. Rejected: giving the face row itself a place and a public
+   copy, which touches every one of those readers and makes "private unless she chooses" a status
+   rather than a fact about the row.
+2. **A woman can't leave the photos step without a face photo, pending or approved**, by an
+   allowlist: `MAY_LEAVE_PHOTOS_WITHOUT_A_FACE_PHOTO = {male}`, the same shape as D-310's
+   `MAY_FINISH_UNMATCHED`, so no gender is refused too. Pending counts, as a pending public photo
+   did under T-4.3: moderation takes seconds, and a `no_face` refusal sends her back from the
+   selfie step's `no_photos`. The step has an exit of its own, since a man may leave with nothing
+   uploaded at all: `POST /me/photos/done` → `Me`, beside `/me/photos/order` and after
+   `/me/pin/skip`'s pattern, a step's own exit under `/me/<step>` (the founder's suggestion, taken
+   by Claude; the plan had proposed `/me/onboarding/photos/done`). The refusal is
+   `FACE_PHOTO_REQUIRED` (403). No database trigger: a woman who slipped past is stopped at the
+   selfie by `no_photos` anyway, so the stake doesn't justify one (unlike D-310's `done`).
+3. **"face photo" in copy, everywhere.** It says what it is and claims nothing (D-262);
+   "selfie-check photo" reads as a claim about checking. The identifier stays `verification`
+   (`PhotoKind`), never in copy; `claims.test.ts` refuses `/verif/i` and a web breaking run
+   (`t412-copy-02`) proves it goes red on "verification photo".
+4. **The face photo can't change once the selfie matched, nor while one is being compared.** The
+   match would be left pointing at a photo that is gone; a change after a match is P-163's path.
+   Before either, a new face photo replaces the old (`replaced`, its file deleted after the
+   commit), one live per person, as a selfie never sent is replaced (D-263). Both `POST
+   /photos/upload-url` and `DELETE /photos/{id}` refuse with `NOT_ALLOWED`.
+
+**The five questions of the plan, answered the same day by the founder:** the badge's label and
+aria-label are "Selfie matched", D-393 item 7's words, for both genders (the canvas's "her photos"
+was wrong under rule 5 and the design canvas now says "Selfie matched" too); the seed sets the
+badge's record on the 15 seeded verified profiles' public photos on the seed's word (`decided_by:
+seed`, no number, no face claimed), so the badge shows on their cards in dev; this entry, one for
+the four answers; the names stay (`from_photo_id`, `FACE_PHOTO_REQUIRED`, `/photos/{id}/show`),
+the exit renamed as above; P-300 filed.
+
+**What the build changed from the plan, Claude's call, for the founder to confirm (8 October
+2026):** the plan said the copy `show` makes is "approved at once from the face photo's scored
+bytes". Built, it is **pending, and goes through moderation like any upload.** Why: a presigned
+PUT URL outlives `complete` by up to five minutes (P-79), so the face photo's private copy may not
+be the bytes moderation scored, and T-4.4's rule is that a public copy is only ever made from
+scored bytes. The copy therefore carries the face photo's `from_photo_id`, is scored and published
+from what was scored, and on approval `_record` queues `match_photo` for it with a selfie kept,
+exactly as for any approved public photo with a face: the gap the founder named (a woman whose only
+shown face is that copy) closes by the same path, with no special case in the badge query. Cost:
+one more Sightengine call per toggle-on, and "checking" for a few seconds instead of at once.
+The same five-minute window is why P-301 is filed for private photos.
+
+**Why:** D-391 and D-392 left these four to the build; each was decided as recommended, and the
+reasons are above beside each.
+
+**Rejected:** see each point.
+
+**Locked** on the founder's words, 8 October 2026, on the advisor's recommendation (Claude, in a
+separate chat), relayed by the founder: the four answers above; and the three things the build
+asked him to confirm, all three confirmed: `show`'s copy is pending and moderated, the same path
+as any public photo, one Sightengine call per toggle-on accepted; `replaced` reaches the owner by
+name; and the race test and the worker's wake test delete the photo and verification rows they
+commit. The mechanism's words are Claude's.
 
 ---
 

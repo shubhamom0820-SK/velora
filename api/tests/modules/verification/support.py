@@ -1,5 +1,6 @@
-"""What T-4.5's tests share: a person at the selfie step, their photos and
-selfie with files in the fake storage, and the three requests."""
+"""What T-4.5's tests share: a person at the selfie step, their face photo
+(T-4.12), their public photos and selfie with files in the fake storage, and
+the three requests."""
 
 from __future__ import annotations
 
@@ -55,9 +56,11 @@ async def approved_photo(
     *,
     position: int = 0,
     data: bytes | None = None,
+    faces: int = 1,
 ) -> Photo:
-    """An approved public photo, as moderation leaves one: a private copy and
-    the public one it scored."""
+    """An approved public photo, as moderation leaves one: a private copy, the
+    public one it scored, and a record saying how many real faces it found
+    (`faces`, which the badge's comparison reads, D-393)."""
     photo_id = uuid.uuid4()
     photo = Photo(
         id=photo_id,
@@ -67,12 +70,40 @@ async def approved_photo(
         raw_key=f"raw/{user.id}/{photo_id}",
         public_key=f"p/{photo_id}.jpg",
         status=ReviewStatus.APPROVED,
+        moderation={"provider": "sightengine", "faces": faces},
     )
     db.add(photo)
     await db.flush()
     body = data or jpeg("navy")
     await storage.put_bytes(PRIVATE, photo.raw_key, body, "image/jpeg")
     await storage.put_bytes(PUBLIC, f"p/{photo_id}.jpg", body, "image/jpeg")
+    return photo
+
+
+async def face_photo(
+    db: AsyncSession,
+    storage: FakeStorage,
+    user: User,
+    *,
+    status: ReviewStatus = ReviewStatus.APPROVED,
+    data: bytes | None = None,
+) -> Photo:
+    """The face photo (T-4.12, D-391) as moderation leaves one: approved, its
+    private copy the scored bytes written back, and no public copy."""
+    photo_id = uuid.uuid4()
+    photo = Photo(
+        id=photo_id,
+        user_id=user.id,
+        kind=PhotoKind.VERIFICATION,
+        raw_key=f"raw/{user.id}/{photo_id}",
+        status=status,
+        moderation={"provider": "sightengine", "faces": 1}
+        if status is ReviewStatus.APPROVED
+        else None,
+    )
+    db.add(photo)
+    await db.flush()
+    await storage.put_bytes(PRIVATE, photo.raw_key, data or jpeg("olive"), "image/jpeg")
     return photo
 
 

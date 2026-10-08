@@ -264,8 +264,8 @@ export const en = {
     // any reason not listed here (D-096).
     photos: {
       title: "Add your photos",
-      sub: "At least one to be visible. Every photo is checked before it goes live.",
-      needOne: "Add at least one photo",
+      // D-392 (T-4.12): nobody needs a public photo, and none needs a face.
+      sub: "Add as many as you like, or none. Nothing here has to show your face. Every photo is checked before it goes live.",
       grid: "Your photos",
       add: "Add a photo",
       slot: "Photo {n}",
@@ -282,6 +282,31 @@ export const en = {
       loadFailed: "We couldn't load your photos.",
       privateAlbum:
         "You can add a private album later. Nobody sees it unless you approve them, and you can take access back any time.",
+      // The face photo (T-4.12, D-391): the one the selfie is compared with,
+      // private unless she chooses to show it. "Face photo" says what it is
+      // and claims nothing (D-262; the advisor's recommendation, the
+      // founder's choice, 8 October 2026). Never the API's own word for it.
+      face: {
+        title: "Your face photo",
+        subWoman:
+          "Needed for the selfie check, and only for that. Nobody sees it unless you choose to show it.",
+        subMan:
+          "Optional, and only for the selfie check if you take it. Nobody sees it unless you choose to show it.",
+        slot: "Face photo",
+        add: "Add your face photo",
+        replace: "Change your face photo",
+        needOne: "Add your face photo to continue",
+        show: "Also show it on my profile",
+        showHint:
+          "It goes in the next free place and is checked like any photo. Switch it off to take it down.",
+        locked: "It can't change now that your selfie has matched it.",
+        checking: "Checking your face photo…",
+        approved: "Face photo approved",
+        // The toggle's refusals (`NOT_ALLOWED`): the six places are full, or
+        // the photo isn't approved yet.
+        noRoom: "Remove a photo to make room first.",
+        notYet: "Your face photo has to be approved first.",
+      },
       // Why a photo isn't on the profile: the API's `reject_reason`, or what
       // went wrong on the way up. Each says what to do next.
       reasons: {
@@ -290,6 +315,8 @@ export const en = {
         too_large: "This photo is over 8 MB — choose a smaller one",
         abandoned: "This upload didn't finish — try again",
         nudity: "This photo can't go on your profile — try a different one",
+        // Only the face photo is refused for this (D-392): a public photo
+        // needn't show a face.
         no_face:
           "We couldn't find a face in this photo — try one that shows yours clearly",
         text_overlay:
@@ -317,15 +344,14 @@ export const en = {
       answered: "Your PIN is set.",
     },
     // The selfie (T-4.7). D-262: it says what is done, the selfie compared
-    // with the profile's photos, and never that a person is verified, real or
-    // live; claims.test.ts holds every line here to that.
+    // with the face photo (D-391, T-4.12), and never that a person is
+    // verified, real or live; claims.test.ts holds every line here to that.
     selfie: {
       title: "Quick selfie check",
       // Women can't skip it (D-008); for men it's optional.
       subWoman:
-        "Needed before your profile goes live. We compare your selfie with the photos on your profile.",
-      subMan:
-        "Optional. We compare your selfie with the photos on your profile.",
+        "Needed before your profile goes live. We compare your selfie with your face photo.",
+      subMan: "Optional. We compare your selfie with your face photo.",
       // /privacy's words (D-262): "our team may look" is literally true
       // (D-264), and stays.
       private:
@@ -351,13 +377,13 @@ export const en = {
         "Your selfie didn't send — check your connection and try again.",
       // D-261: what is happening, never a bare spinner; after about 15
       // seconds, that it can take a minute and she can leave.
-      comparing: "Comparing your selfie with your photos…",
+      comparing: "Comparing your selfie with your face photo…",
       comparingLong:
         "This can take up to a minute. You can leave this page — your result will be here when you come back.",
       comparingStill:
         "Still comparing. Come back in a few minutes — your result will be waiting here.",
       checkAgain: "Check again",
-      matched: "Your selfie matches your photos.",
+      matched: "Your selfie matched your face photo.",
       // "Continue" and "Skip for now" finish sign-up (T-4.8, D-310); when the
       // server says something is still needed, the first thing it names, with
       // the way back to its screen.
@@ -368,13 +394,11 @@ export const en = {
           location: "Add your location first.",
           username: "Choose a username first.",
           about: "Write a few lines about yourself first.",
-          photos:
-            "Your profile needs at least one approved photo. One may still be being checked, or need replacing.",
           interests: "Pick your 5 interests first.",
         },
         incomplete: "Something on your profile isn't finished yet.",
         needsMatch:
-          "Your selfie has to match your photos before you can finish.",
+          "Your selfie has to match your face photo before you can finish.",
         goThere: "Take me there",
       },
       triesOne: "1 try left today.",
@@ -395,9 +419,9 @@ export const en = {
         many_faces:
           "We found more than one face. Take your selfie with only you in the frame.",
         no_match:
-          "Your selfie didn't match the photos on your profile closely enough. Try again facing the camera in good light, or add a clearer photo of your face.",
+          "Your selfie didn't match your face photo closely enough. Try again facing the camera in good light, or add a clearer face photo.",
         no_photos:
-          "None of your photos shows a face clearly enough to compare with. Add one that does, then take your selfie.",
+          "Your face photo isn't ready to compare with: it may still be being checked, or it was refused. Add one that shows your face clearly, then take your selfie.",
         unreadable: "We couldn't read that picture. Take your selfie again.",
         unavailable:
           "We couldn't compare your selfie just now. Try again in a few minutes.",
@@ -462,6 +486,8 @@ export const en = {
     contact: "Contact us",
     immutable: "This can't be changed now.",
     usernameTaken: "That username is taken.",
+    // The photos step's exit, refused (T-4.12): the server's rule, said here.
+    facePhotoRequired: "Add your face photo first.",
     fields: {
       phone: "Enter a 10-digit Indian mobile number.",
       otp: "Enter the 6-digit code.",
@@ -560,7 +586,7 @@ export const en = {
       // aren't named until removing someone on one is built (T-9.1, T-9.5).
       safety: {
         title: "Checked and moderated",
-        body: "Selfies compared with profile photos, and every photo checked.",
+        body: "Selfies compared with a face photo, and every photo checked.",
       },
     },
     // The waitlist box (T-2.3), for people outside the launch city. Its city is
@@ -649,8 +675,9 @@ export const en = {
       },
       profile: {
         title: "Your profile",
-        // D-008, D-012; the selfie in D-262's words: what is done, no guarantee.
-        body: "You choose your gender once, when you sign up, and you can't change it later. Before a woman's profile goes live, she takes a selfie, which we compare with her profile photos; for men it's optional. You can lock {app} on your device with a 4-digit PIN. After 5 wrong tries we sign you out, and you sign back in with your phone number.",
+        // D-008, D-012, D-391; the selfie in D-262's words: what is done, no
+        // guarantee.
+        body: "You choose your gender once, when you sign up, and you can't change it later. Before a woman's profile goes live, she adds a photo of her face that nobody sees unless she chooses, and takes a selfie, which we compare with it; for men both are optional. You can lock {app} on your device with a 4-digit PIN. After 5 wrong tries we sign you out, and you sign back in with your phone number.",
       },
       safety: {
         title: "Safety",
@@ -724,11 +751,14 @@ export const en = {
         // D-027, D-028; no hidden data: CLAUDE.md rule 15.
         photos:
           "Your photos. We re-encode every photo you upload, which removes hidden data such as where it was taken, and we check each one before it goes live.",
-        // D-008, D-262; never public: 06-TESTING's never-skip list. "Our team
-        // may look at it" is literally true and must stay: the founder looks at
-        // every comparison until it is measured (D-264, P-160).
+        // D-391 (T-4.12): the one photo kept for the check, and why.
+        facePhoto:
+          "A photo of your face, which we keep only for the selfie check. Nobody sees it unless you choose to show it on your profile. We keep it so that the photos other people see need not show your face.",
+        // D-008, D-262, D-393; never public: 06-TESTING's never-skip list. "Our
+        // team may look at it" is literally true and must stay: the founder
+        // looks at every comparison until it is measured (D-264, P-160).
         selfie:
-          "Your selfie, which we compare with the photos on your profile. Other people on {app} never see it; our team may look at it to check a comparison.",
+          "Your selfie, which we compare with your face photo, and with the photos on your profile that show a face. Other people on {app} never see it; our team may look at it to check a comparison.",
         // D-006, D-030. "first 20 messages" promises
         // app_config.mask_first_n_messages, seeded 20: change it with the setting.
         messages:
@@ -754,14 +784,14 @@ export const en = {
         servers:
           "Every request you make is handled by our servers in Singapore.",
         media:
-          "Your photos, selfie, voice notes and private album are stored by Cloudflare, outside India.",
+          "Your photos, face photo, selfie, voice notes and private album are stored by Cloudflare, outside India.",
         // Deleted after the check: Sightengine's default, which T-4.4 must
         // never leave (its constraint, and P-71's).
         moderation:
           "Photos are checked by Sightengine, on servers in the United States or Europe, and deleted there after the check.",
         // D-087, D-088: on our own servers, no third party.
         faceMatch:
-          "Your selfie is compared with your photos on our own servers, not by any other company.",
+          "Your selfie is compared with your face photo and your photos on our own servers, not by any other company.",
         phone:
           "Your phone number is also handled by Google, in the United States, as described above.",
       },
@@ -847,8 +877,10 @@ export const en = {
     remove: "Remove {label}",
     counter: "{count}/{max}",
     online: "Online",
-    // The badge (D-262): what was done, never "verified".
-    selfieMatched: "Selfie matches photos",
+    // The badge (D-262, D-393): what was done, never "verified". The selfie
+    // matched the face photo, and a shown face matched the selfie; one line
+    // for both genders (the founder, 8 October 2026).
+    selfieMatched: "Selfie matched",
     errorTitle: "Something went wrong",
     retry: "Try again",
     pinProgress: "{count} of {max} digits entered",

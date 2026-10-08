@@ -120,7 +120,7 @@ describe("/privacy", () => {
 
     expect(
       screen.getByText(
-        "Your photos, selfie, voice notes and private album are stored by Cloudflare, outside India.",
+        "Your photos, face photo, selfie, voice notes and private album are stored by Cloudflare, outside India.",
       ),
     ).toBeInTheDocument();
   });

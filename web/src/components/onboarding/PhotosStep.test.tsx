@@ -66,8 +66,20 @@ function photo(overrides: Partial<Photo> = {}): Photo {
     status: "approved",
     reject_reason: null,
     url: "https://cdn.test/p/p1.jpg",
+    from_photo_id: null,
     ...overrides,
   };
+}
+
+/** The face photo (T-4.12): kind `verification`, no place, a signed link. */
+function face(overrides: Partial<Photo> = {}): Photo {
+  return photo({
+    id: "f1",
+    kind: "verification",
+    position: null,
+    url: "https://storage.test/velora-private/raw/u1/f1?sig=s",
+    ...overrides,
+  });
 }
 
 /** `GET /me/photos` answering each list in turn, the last one for good. */
@@ -134,7 +146,7 @@ describe("loading, empty and error (CLAUDE.md rule 14)", () => {
     expect(screen.queryByRole("list")).toBeNull();
   });
 
-  it("with no photos: six empty slots, and no way on until there's one", async () => {
+  it("with no photos: six empty slots and the face slot; a man may go on with none (D-392)", async () => {
     fakeApi({ "GET /v1/me/photos": () => json(200, []) });
 
     renderStep();
@@ -143,12 +155,35 @@ describe("loading, empty and error (CLAUDE.md rule 14)", () => {
       await screen.findAllByRole("button", { name: "Add a photo" }),
     ).toHaveLength(6);
     expect(
-      screen.getByRole("button", { name: "Add at least one photo" }),
-    ).toBeDisabled();
+      screen.getByRole("button", { name: "Add your face photo" }),
+    ).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Continue" })).toBeEnabled();
     expect(screen.getByRole("link", { name: "Back" })).toHaveAttribute(
       "href",
       "/onboarding/about",
     );
+  });
+
+  it("a woman has no way on until her face photo is there, pending is enough (D-391)", async () => {
+    fakeApi({ "GET /v1/me/photos": () => json(200, []) });
+    const { unmount } = renderStep(me({ gender: "female" }));
+
+    expect(
+      await screen.findByText(/Needed for the selfie check/),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "Add your face photo to continue" }),
+    ).toBeDisabled();
+    unmount();
+
+    // Her face photo there, still being checked: enough to go on.
+    fakeApi({
+      "GET /v1/me/photos": () => json(200, [face({ status: "pending" })]),
+    });
+    renderStep(me({ gender: "female" }));
+    expect(
+      await screen.findByRole("button", { name: "Continue" }),
+    ).toBeEnabled();
   });
 
   it("says so when the photos can't load, and tries again", async () => {
@@ -605,10 +640,11 @@ describe("removing and reordering", () => {
 });
 
 describe("going on", () => {
-  it("goes where the API now says, the gaps closed first", async () => {
+  it("leaves by the step's own exit and goes where its Me says, the gaps closed first (T-4.12)", async () => {
     const api_ = fakeApi({
       "GET /v1/me/photos": () => json(200, [photo()]),
-      "GET /v1/me": () => json(200, me({ onboarding_step: "interests" })),
+      "POST /v1/me/photos/done": () =>
+        json(200, me({ onboarding_step: "interests" })),
     });
     renderStep();
 
@@ -622,8 +658,27 @@ describe("going on", () => {
     expect(api_.sent()).toEqual([
       "GET /v1/me/photos",
       "GET /v1/me/photos",
-      "GET /v1/me",
+      "POST /v1/me/photos/done",
     ]);
+  });
+
+  it("says so when the server refuses the exit, whatever this screen allowed", async () => {
+    // The rule is the server's (FACE_PHOTO_REQUIRED): a screen that let a
+    // woman tap Continue shows its answer, and nobody moves.
+    fakeApi({
+      "GET /v1/me/photos": () => json(200, []),
+      "POST /v1/me/photos/done": () => envelope(403, "FACE_PHOTO_REQUIRED"),
+    });
+    renderStep();
+
+    await userEvent.click(
+      await screen.findByRole("button", { name: "Continue" }),
+    );
+
+    expect(await screen.findByRole("alert")).toHaveTextContent(
+      "Add your face photo first.",
+    );
+    expect(nav.push).not.toHaveBeenCalled();
   });
 
   it("shows women the private-album note, and only women", async () => {
@@ -637,5 +692,188 @@ describe("going on", () => {
     renderStep(me({ gender: "male" }));
     await screen.findByRole("list");
     expect(screen.queryByText(note)).toBeNull();
+  });
+});
+
+describe("the face photo's slot (T-4.12, D-391)", () => {
+  function faceSlot(): HTMLElement {
+    return screen.getByRole("region", { name: "Your face photo" });
+  }
+
+  async function pickFace(
+    file = new File(["raw"], "face.jpg", { type: "image/jpeg" }),
+  ) {
+    await userEvent.click(
+      await screen.findByRole("button", { name: "Add your face photo" }),
+    );
+    const inputs =
+      document.querySelectorAll<HTMLInputElement>('input[type="file"]');
+    const input = inputs[inputs.length - 1];
+    if (!input) throw new Error("No file picker.");
+    await userEvent.upload(input, file);
+  }
+
+  it("uploads it as kind verification with no place, shows it checking, then approved", async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    const api_ = fakeApi({
+      "GET /v1/me/photos": lists(
+        [],
+        [face({ status: "pending" })],
+        [face({ status: "approved" })],
+      ),
+      "POST /v1/photos/upload-url": () =>
+        json(200, { photo_id: "f1", put_url: PUT_URL, headers: SIGNED }),
+      "POST /v1/photos/f1/complete": () =>
+        json(200, face({ status: "pending" })),
+    });
+    const xhr = fakeXhr();
+    renderStep(me({ gender: "female" }));
+    await screen.findByRole("list");
+
+    await pickFace();
+    await waitFor(() => expect(xhr.requests).toHaveLength(1));
+    xhr.last().respond(200);
+
+    await waitFor(() =>
+      expect(api_.sent()).toContain("POST /v1/photos/f1/complete"),
+    );
+    expect(
+      api_.calls.find((c) => c.path === "/v1/photos/upload-url")?.body,
+    ).toEqual({ kind: "verification", content_type: "image/jpeg" });
+    expect(
+      await within(faceSlot()).findByRole("status", {
+        name: "Checking your face photo…",
+      }),
+    ).toBeInTheDocument();
+    // Never in the grid: the six places are the public photos' alone; and
+    // nothing to show on the profile until it is approved.
+    expect(screen.getAllByRole("button", { name: "Add a photo" })).toHaveLength(
+      6,
+    );
+    expect(
+      within(faceSlot()).getByRole("switch", {
+        name: "Also show it on my profile",
+      }),
+    ).toBeDisabled();
+    await vi.advanceTimersByTimeAsync(PHOTO_POLL_MS);
+    expect(
+      await within(faceSlot()).findByText("Face photo approved"),
+    ).toBeInTheDocument();
+    expect(
+      within(faceSlot()).getByRole("switch", {
+        name: "Also show it on my profile",
+      }),
+    ).toBeEnabled();
+  });
+
+  it("says why it was refused, in its own slot, and offers another (D-096)", async () => {
+    fakeApi({
+      "GET /v1/me/photos": lists([face({ status: "pending" })], []),
+      "GET /v1/photos/f1": () =>
+        json(200, face({ status: "rejected", reject_reason: "no_face" })),
+    });
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    renderStep(me({ gender: "female" }));
+    await within(
+      await screen.findByRole("region", { name: "Your face photo" }),
+    ).findByRole("status", { name: "Checking your face photo…" });
+
+    await vi.advanceTimersByTimeAsync(PHOTO_POLL_MS);
+
+    expect(await within(faceSlot()).findByRole("alert")).toHaveTextContent(
+      "We couldn't find a face in this photo — try one that shows yours clearly",
+    );
+    expect(
+      within(faceSlot()).getByRole("button", { name: "Choose another" }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "Add your face photo to continue" }),
+    ).toBeDisabled();
+  });
+
+  it("the toggle shows it on the profile as a public copy, and takes it down again", async () => {
+    const api_ = fakeApi({
+      "GET /v1/me/photos": lists(
+        [face()],
+        [face(), photo({ id: "c1", status: "pending", from_photo_id: "f1" })],
+        [face()],
+      ),
+      "POST /v1/photos/f1/show": () =>
+        json(200, photo({ id: "c1", status: "pending", from_photo_id: "f1" })),
+      "DELETE /v1/photos/c1": () => json(204, null),
+    });
+    renderStep(me({ gender: "female" }));
+    const toggle = await screen.findByRole("switch", {
+      name: "Also show it on my profile",
+    });
+    expect(toggle).toHaveAttribute("aria-checked", "false");
+
+    await userEvent.click(toggle);
+
+    await waitFor(() =>
+      expect(screen.getByRole("switch")).toHaveAttribute(
+        "aria-checked",
+        "true",
+      ),
+    );
+    // The copy is a public photo like any other, checking in the grid.
+    expect(within(slot(1)).getByRole("status")).toHaveTextContent("Checking…");
+
+    await userEvent.click(screen.getByRole("switch"));
+
+    await waitFor(() =>
+      expect(screen.getByRole("switch")).toHaveAttribute(
+        "aria-checked",
+        "false",
+      ),
+    );
+    expect(api_.sent()).toContain("POST /v1/photos/f1/show");
+    expect(api_.sent()).toContain("DELETE /v1/photos/c1");
+  });
+
+  it("says when the toggle is refused, with the server's reason", async () => {
+    fakeApi({
+      "GET /v1/me/photos": () => json(200, [face()]),
+      "POST /v1/photos/f1/show": () => envelope(422, "NOT_ALLOWED", { max: 6 }),
+    });
+    renderStep(me({ gender: "female" }));
+
+    await userEvent.click(
+      await screen.findByRole("switch", { name: "Also show it on my profile" }),
+    );
+
+    expect(await within(faceSlot()).findByRole("alert")).toHaveTextContent(
+      "Remove a photo to make room first.",
+    );
+  });
+
+  it("can't change once the selfie matched, and says so", async () => {
+    fakeApi({ "GET /v1/me/photos": () => json(200, [face()]) });
+
+    renderStep(me({ gender: "female", is_verified: true }));
+
+    expect(
+      await within(
+        await screen.findByRole("region", { name: "Your face photo" }),
+      ).findByText("It can't change now that your selfie has matched it."),
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: "Change your face photo" }),
+    ).toBeNull();
+  });
+
+  it("tells a man it's optional, and a woman that it's needed", async () => {
+    fakeApi({ "GET /v1/me/photos": () => json(200, []) });
+
+    const { unmount } = renderStep(me({ gender: "male" }));
+    expect(
+      await screen.findByText(/Optional, and only for the selfie check/),
+    ).toBeInTheDocument();
+    unmount();
+
+    renderStep(me({ gender: "female" }));
+    expect(
+      await screen.findByText(/Needed for the selfie check/),
+    ).toBeInTheDocument();
   });
 });

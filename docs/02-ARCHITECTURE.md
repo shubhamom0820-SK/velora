@@ -229,6 +229,22 @@ ORDER BY rank_score(dist_m, u.last_active_at, u.is_verified, p.completeness) DES
 LIMIT :limit;
 ```
 
+**The `Card`'s badge (D-393, T-4.12)** is never raw `is_verified`. It is `is_verified` (the selfie
+matched the face photo, D-391) **and** at least one shown face that matched that selfie, an EXISTS
+on `photos`, which `verification.repository.shows_badge` holds and T-6.2's query carries:
+
+```sql
+u.is_verified AND EXISTS (
+  SELECT 1 FROM photos ph
+  WHERE ph.user_id = u.id AND ph.kind = 'public' AND ph.status = 'approved'
+    AND ph.public_key IS NOT NULL
+    AND (ph.moderation -> 'selfie_match' ->> 'matched')::boolean
+) AS badge
+```
+
+The `Card`'s main photo URL is null when there is no approved public photo (D-392); the web shows
+a grey silhouette with the name. The "verified" filter (T-6.9) filters on this badge.
+
 Indexes that make this fast are listed in `03-SCHEMA.md`. Target: p95 < 80 ms at 50k users.
 
 ## 9. Money flows
@@ -264,20 +280,28 @@ rule 3, T-8.2) or a duplicate charge (T-8.3).
 
 1. `POST /v1/photos/upload-url {kind, position?, content_type}` → `{photo_id, put_url, headers}` (5 min; JPEG, PNG or WebP; the declared type is signed in, a hint only, D-089).
 2. Browser PUTs directly to `velora-private/raw/{user_id}/{photo_id}`.
-3. `POST /v1/photos/{id}/complete` → the object's size (at most 8 MB) and its first bytes decide; status `pending`, enqueue `moderate_photo` (a selfie waits for its verification's submit, T-4.5).
+3. `POST /v1/photos/{id}/complete` → the object's size (at most 8 MB) and its first bytes decide; status `pending`, enqueue `moderate_photo` (a selfie waits for its verification's submit, T-4.5). The face photo (kind `verification`, D-391, T-4.12) goes the same way, one live per person.
 4. Worker (T-4.4): read at most 8 MB and judge the bytes again (the PUT URL outlives `complete`);
    decode with Pillow, only as that format, refusing more than 40 megapixels before decoding
    (D-092); turn it upright, longest side 1600, a new JPEG at quality 85 from the pixels alone
    (no EXIF, XMP, ICC or anything appended survives); **write it over the upload**, so no
    original with its location is kept; score it with Sightengine (`nudity-2.1`, `face-age`,
    `text`, the plain image API only, D-094). Approved → the bytes scored written to
-   `velora-public/p/{photo_id}.jpg`, status `approved`. Rejected → status `rejected` with a
-   reason (`nudity`, `no_face` for public photos, `text_overlay`; `other` or `too_large` if it
-   can't be read, its file deleted), the re-encoded copy kept privately for review. A possible
-   minor (`minor_suspected`, D-093) → rejected, a `fraud_events` score kept, every copy deleted
-   and read back as gone; what its owner reads names no minor (D-093, T-4.6). Sightengine or storage failing three
-   times leaves it `pending`, logged at error level. Notifying the user is T-9.4's.
-5. Only `approved` photos are ever returned to other users.
+   `velora-public/p/{photo_id}.jpg`, status `approved`; the face photo stays private, its
+   re-encoded copy the one the selfie is compared with. Rejected → status `rejected` with a
+   reason (`nudity`, `no_face` for the face photo only (D-392, T-4.12), `text_overlay`; `other`
+   or `too_large` if it can't be read, its file deleted), the re-encoded copy kept privately for
+   review. A possible minor (`minor_suspected`, D-093) → rejected, a `fraud_events` score kept,
+   every copy deleted and read back as gone; what its owner reads names no minor (D-093, T-4.6).
+   Sightengine or storage failing three times leaves it `pending`, logged at error level.
+   Notifying the user is T-9.4's.
+5. An approved public photo whose record found a face, with a selfie already kept, is queued as
+   `match_photo` (T-4.12, D-393): the worker compares it with that selfie and writes
+   `selfie_match` into the photo's record, never a rejection. The selfie's own approval queues the
+   same for every shown photo already there. `POST /v1/photos/{id}/show` makes a public copy of
+   the face photo through steps 3 to 5, never approved at once (T-4.4's rule, P-79).
+6. Only `approved` photos are ever returned to other users; the face photo and the selfie never
+   are.
 
 ## 11. Configuration (every env var)
 

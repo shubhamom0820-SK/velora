@@ -69,6 +69,7 @@ export function sendFailedCopy(error: unknown): string {
  * Each requirement `PROFILE_INCOMPLETE` may name (the API's
  * `onboarding.rules.Missing`, D-310), and the screen that fills it in. The API
  * names them in onboarding's order, so the first is the earliest to go back to.
+ * No photo is among them (D-392, T-4.12).
  */
 const MISSING_PLACE = {
   seeking: "seeking",
@@ -79,7 +80,6 @@ const MISSING_PLACE = {
   location: "location",
   username: "username",
   about: "about",
-  photo: "photos",
   interests: "interests",
 } as const satisfies Record<string, Place>;
 type Missing = keyof typeof MISSING_PLACE;

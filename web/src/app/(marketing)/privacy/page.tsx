@@ -20,6 +20,7 @@ const COLLECTED = [
   "profile",
   "location",
   "photos",
+  "facePhoto",
   "selfie",
   "messages",
   "payments",

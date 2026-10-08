@@ -9,12 +9,16 @@ import { resetSession } from "@/store/session";
 
 import { queryKeys } from "./keys";
 import {
+  facePhoto,
   PHOTO_POLL_MS,
   publicPhotos,
+  shownCopy,
   useDeletePhoto,
   useFinishPhotos,
   useMyPhotos,
   usePhotoOutcomes,
+  useShowFacePhoto,
+  useUploadFacePhoto,
   useUploadPhoto,
   type Photo,
 } from "./photos";
@@ -29,6 +33,7 @@ function photo(overrides: Partial<Photo> = {}): Photo {
     status: "approved",
     reject_reason: null,
     url: "https://cdn.test/p/p1.jpg",
+    from_photo_id: null,
     ...overrides,
   };
 }
@@ -188,11 +193,12 @@ describe("useDeletePhoto", () => {
 });
 
 describe("useFinishPhotos", () => {
-  it("closes a gap first, then hands back Me as the API now has it", async () => {
+  it("closes a gap first, then leaves the step by its own exit, which answers Me (T-4.12)", async () => {
     const api_ = fakeApi({
       "GET /v1/me/photos": () => json(200, [photo({ position: 3 })]),
       "PATCH /v1/me/photos/order": () => json(200, [photo()]),
-      "GET /v1/me": () => json(200, { onboarding_step: "interests" }),
+      "POST /v1/me/photos/done": () =>
+        json(200, { onboarding_step: "interests" }),
     });
     const { result } = renderHook(() => useFinishPhotos(), { wrapper });
 
@@ -202,8 +208,111 @@ describe("useFinishPhotos", () => {
     expect(api_.sent()).toEqual([
       "GET /v1/me/photos",
       "PATCH /v1/me/photos/order",
-      "GET /v1/me",
+      "POST /v1/me/photos/done",
     ]);
     expect(api_.calls[1]?.body).toEqual({ photo_ids: ["p1"] });
+    expect(client.getQueryData(["me"])).toEqual({
+      onboarding_step: "interests",
+    });
+  });
+
+  it("leaves with no photo at all, and hands on the server's refusal", async () => {
+    const api_ = fakeApi({
+      "GET /v1/me/photos": () => json(200, []),
+      "POST /v1/me/photos/done": () => envelope(403, "FACE_PHOTO_REQUIRED"),
+    });
+    const { result } = renderHook(() => useFinishPhotos(), { wrapper });
+
+    await expect(result.current.mutateAsync()).rejects.toMatchObject({
+      code: "FACE_PHOTO_REQUIRED",
+    });
+    expect(api_.sent()).toEqual([
+      "GET /v1/me/photos",
+      "POST /v1/me/photos/done",
+    ]);
+  });
+});
+
+describe("the face photo (T-4.12)", () => {
+  it("is the one of kind verification, and its shown copy the public one made from it", () => {
+    const face = photo({ id: "f1", kind: "verification", position: null });
+    const copy = photo({ id: "c1", position: 1, from_photo_id: "f1" });
+    const photos = [photo(), copy, face];
+
+    expect(facePhoto(photos)).toBe(face);
+    expect(facePhoto([photo()])).toBeNull();
+    expect(shownCopy(photos, "f1")).toBe(copy);
+    expect(shownCopy([photo(), face], "f1")).toBeNull();
+    expect(publicPhotos(photos).map((p) => p.id)).toEqual(["p1", "c1"]);
+  });
+
+  it("uploads it as kind verification with no place, PUTs, then completes, and asks for the list again", async () => {
+    const xhr = fakeXhr();
+    const api_ = fakeApi({
+      "POST /v1/photos/upload-url": () =>
+        json(200, {
+          photo_id: "f1",
+          put_url: PUT_URL,
+          headers: { "Content-Type": "image/jpeg" },
+        }),
+      "POST /v1/photos/f1/complete": () =>
+        json(
+          200,
+          photo({
+            id: "f1",
+            kind: "verification",
+            position: null,
+            status: "pending",
+          }),
+        ),
+      "GET /v1/me/photos": () => json(200, []),
+    });
+    const invalidated = vi.spyOn(client, "invalidateQueries");
+    const { result } = renderHook(() => useUploadFacePhoto(), { wrapper });
+    const body = new Blob(["jpeg"], { type: "image/jpeg" });
+
+    const sent = result.current.mutateAsync({ body });
+    await waitFor(() => expect(xhr.requests).toHaveLength(1));
+    xhr.requests[0]?.respond(200);
+    const uploaded = await sent;
+
+    expect(uploaded.kind).toBe("verification");
+    expect(api_.calls[0]?.body).toEqual({
+      kind: "verification",
+      content_type: "image/jpeg",
+    });
+    expect(api_.sent()).toEqual([
+      "POST /v1/photos/upload-url",
+      "POST /v1/photos/f1/complete",
+    ]);
+    expect(invalidated).toHaveBeenCalledWith({
+      queryKey: queryKeys.myPhotos(),
+    });
+  });
+
+  it("shows it on the profile by asking for the copy, then asks for the list again", async () => {
+    const api_ = fakeApi({
+      "POST /v1/photos/f1/show": () =>
+        json(
+          200,
+          photo({
+            id: "c1",
+            position: 0,
+            status: "pending",
+            from_photo_id: "f1",
+          }),
+        ),
+      "GET /v1/me/photos": () => json(200, []),
+    });
+    const invalidated = vi.spyOn(client, "invalidateQueries");
+    const { result } = renderHook(() => useShowFacePhoto(), { wrapper });
+
+    const copy = await result.current.mutateAsync("f1");
+
+    expect(copy.from_photo_id).toBe("f1");
+    expect(api_.sent()).toEqual(["POST /v1/photos/f1/show"]);
+    expect(invalidated).toHaveBeenCalledWith({
+      queryKey: queryKeys.myPhotos(),
+    });
   });
 });

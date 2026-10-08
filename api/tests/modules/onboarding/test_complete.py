@@ -1,7 +1,8 @@
 """`POST /v1/me/onboarding/complete` (T-4.8, D-310): the `selfie` step's way to
 `done`. Every requirement met, and a selfie that matched for anyone but a man;
 each requirement refused on its own, by name; D-068's step rule; and the
-completeness it leaves."""
+completeness it leaves. No photo is required (D-392, T-4.12): a man and a
+matched woman finish with none, at completeness 50."""
 
 from __future__ import annotations
 
@@ -170,6 +171,31 @@ async def test_a_woman_whose_selfie_matched_finishes(
     assert await _stored(db, user_id) == ("done", 50)
 
 
+@pytest.mark.parametrize(
+    ("gender", "verified"),
+    [(Gender.MALE, False), (Gender.FEMALE, True)],
+    ids=["a man", "a matched woman"],
+)
+async def test_zero_photos_finishes_at_completeness_50(
+    db: AsyncSession,
+    client: AsyncClient,
+    make_user: MakeUser,
+    gender: Gender,
+    verified: bool,
+) -> None:
+    """D-392: nobody needs a public photo, men included; D-310 amended:
+    completeness is 50 at none, the same as at one, so a profile that shows
+    nothing sits at the bottom of discovery's ranking, on purpose."""
+    _, token, user_id = await _at_selfie(db, make_user, gender, verified=verified)
+    await db.execute(delete(Photo).where(Photo.user_id == user_id))
+
+    response = await _complete(client, token)
+
+    assert response.status_code == 200, response.text
+    assert response.json()["onboarding_step"] == "done"
+    assert await _stored(db, user_id) == ("done", 50)
+
+
 async def test_completeness_counts_approved_public_photos_only(
     db: AsyncSession, client: AsyncClient, make_user: MakeUser
 ) -> None:
@@ -225,17 +251,6 @@ async def _four_interests(db: AsyncSession, user_id: uuid.UUID, _: uuid.UUID) ->
     )
 
 
-def _photo_as(**values: Any) -> Break:
-    async def change(db: AsyncSession, _: uuid.UUID, photo_id: uuid.UUID) -> None:
-        await db.execute(update(Photo).where(Photo.id == photo_id).values(**values))
-
-    return change
-
-
-async def _no_photo(db: AsyncSession, _: uuid.UUID, photo_id: uuid.UUID) -> None:
-    await db.execute(delete(Photo).where(Photo.id == photo_id))
-
-
 BREAKS: dict[str, tuple[Missing, Break]] = {
     "no seeking": ("seeking", _clear("seeking")),
     "no intent": ("intents", _no_intents),
@@ -246,37 +261,17 @@ BREAKS: dict[str, tuple[Missing, Break]] = {
     "no location": ("location", _clear("location")),
     "no username": ("username", _clear("username")),
     "no about": ("about", _clear("about")),
-    "no photo": ("photo", _no_photo),
-    "a photo still being checked": (
-        "photo",
-        _photo_as(status=ReviewStatus.PENDING, public_key=None),
-    ),
-    "a photo rejected by moderation": (
-        "photo",
-        _photo_as(
-            status=ReviewStatus.REJECTED, reject_reason="nudity", public_key=None
-        ),
-    ),
-    # As `DELETE /photos/{id}` leaves an approved one: rejected, its
-    # `public_key` kept though the public copy is gone (T-4.3).
-    "a photo its owner removed": (
-        "photo",
-        _photo_as(status=ReviewStatus.REJECTED, reject_reason="user_deleted"),
-    ),
-    "a private photo only": (
-        "photo",
-        _photo_as(kind=PhotoKind.PRIVATE, position=None, public_key=None),
-    ),
-    "a selfie only": (
-        "photo",
-        _photo_as(kind=PhotoKind.SELFIE, position=None, public_key=None),
-    ),
     "four interests": ("interests", _four_interests),
 }
 
 
 def test_every_requirement_has_a_case() -> None:
     assert {missing for missing, _ in BREAKS.values()} == set(get_args(Missing))
+
+
+def test_a_photo_is_no_longer_a_requirement() -> None:
+    """D-392, T-4.12: `photo` left `PROFILE_INCOMPLETE`'s list for good."""
+    assert "photo" not in get_args(Missing)
 
 
 @pytest.mark.parametrize("case", list(BREAKS))
@@ -402,16 +397,18 @@ async def test_no_gender_needs_a_match_too(
 async def test_a_profile_short_of_something_is_told_that_before_the_selfie(
     db: AsyncSession, client: AsyncClient, make_user: MakeUser
 ) -> None:
-    """The selfie is compared with the photos, so a missing photo comes first."""
+    """What is missing is named before the selfie is asked for."""
     _, token, user_id = await _at_selfie(db, make_user, Gender.FEMALE)
-    await db.execute(delete(Photo).where(Photo.user_id == user_id))
+    await db.execute(
+        update(Profile).where(Profile.user_id == user_id).values(username=None)
+    )
 
     response = await _complete(client, token)
 
     assert response.status_code == 403
     assert (_error(response)["code"], _error(response)["details"]) == (
         "PROFILE_INCOMPLETE",
-        {"missing": ["photo"]},
+        {"missing": ["username"]},
     )
 
 

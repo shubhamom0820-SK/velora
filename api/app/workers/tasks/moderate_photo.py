@@ -1,5 +1,6 @@
-"""`moderate_photo`: a public or private photo, re-encoded, scored and decided
-(T-4.4); `photos.service.moderate` does the work.
+"""`moderate_photo`: a public, private or face photo, re-encoded, scored and
+decided (T-4.4; the face photo from T-4.12); `photos.service.moderate` does the
+work.
 
 `photos.service.complete` queues it with the photo's id and `image_type`, the
 type its bytes were then, under the job id `moderate_photo:{id}`, so a photo
@@ -39,6 +40,7 @@ async def moderate_photo(
             UUID(photo_id),
             storage=ctx["storage"],
             moderation=ctx["moderation"],
+            queue=ctx["queue"],
             settings=ctx["settings"],
         )
     except photos_service.TryAgain as failure:

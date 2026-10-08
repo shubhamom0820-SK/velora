@@ -18,6 +18,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.enums import OnboardingStep, PhotoKind, ReviewStatus
 from app.core.providers.moderation import MINOR_MODEL, FakeModeration
 from app.core.providers.storage import FakeStorage, ObjectNotFound
+from app.core.queue import MATCH_PHOTO, FakeQueue
 from app.modules.photos import service
 from app.modules.photos.models import Photo
 from app.modules.safety.models import FraudEvent
@@ -87,12 +88,14 @@ async def _moderate(
     photo: Photo,
     storage: FakeStorage,
     moderation: FakeModeration,
+    queue: FakeQueue | None = None,
 ) -> str:
     return await service.moderate(
         Sessions(db),
         photo.id,
         storage=storage,
         moderation=moderation,
+        queue=queue or FakeQueue(),
         settings=make_test_settings(),
     )
 
@@ -187,10 +190,12 @@ async def test_the_public_copy_is_what_was_scored_even_if_the_upload_changed(
 async def test_a_rejected_photo_keeps_only_its_reencoded_copy_privately(
     db: AsyncSession, make_user: MakeUser, reason: str
 ) -> None:
+    """`no_face` on the face photo, the one kind it still applies to (D-392)."""
     storage, moderation = FakeStorage(), FakeModeration()
     moderation.next = f"reject:{reason}"
     user, _ = await make_user()
-    photo = await _pending(db, storage, user)
+    kind = PhotoKind.VERIFICATION if reason == "no_face" else PhotoKind.PUBLIC
+    photo = await _pending(db, storage, user, kind=kind)
 
     assert await _moderate(db, photo, storage, moderation) == reason
 
@@ -202,15 +207,113 @@ async def test_a_rejected_photo_keeps_only_its_reencoded_copy_privately(
     assert await _signals(db, user) == []
 
 
-async def test_a_private_photo_needs_no_face(
-    db: AsyncSession, make_user: MakeUser
+@pytest.mark.parametrize("kind", [PhotoKind.PUBLIC, PhotoKind.PRIVATE])
+async def test_a_public_or_private_photo_needs_no_face(
+    db: AsyncSession, make_user: MakeUser, kind: PhotoKind
 ) -> None:
+    """D-392 (D-101 amended): hair over the face, a mask, a photo from
+    behind, an emoji over it, a photo with no face at all: all approved, a
+    public one published as any other."""
     storage, moderation = FakeStorage(), FakeModeration()
     moderation.next = "reject:no_face"
     user, _ = await make_user()
-    photo = await _pending(db, storage, user, kind=PhotoKind.PRIVATE)
+    photo = await _pending(db, storage, user, kind=kind)
 
     assert await _moderate(db, photo, storage, moderation) == "approved"
+
+    decided = await _fresh(db, photo.id)
+    assert decided.moderation is not None
+    assert (decided.status, decided.moderation["faces"]) == (ReviewStatus.APPROVED, 0)
+    assert ((PUBLIC, f"p/{photo.id}.jpg") in storage.objects) is (
+        kind is PhotoKind.PUBLIC
+    )
+
+
+async def test_the_face_photo_needs_a_face_and_is_never_published(
+    db: AsyncSession, make_user: MakeUser
+) -> None:
+    """D-391: the face photo exists to be compared with the selfie, so a face
+    is the one thing it must show; approved, it stays in the private bucket,
+    the scored bytes written back over the upload, with no public copy."""
+    storage, moderation = FakeStorage(), FakeModeration()
+    user, _ = await make_user()
+    faceless = await _pending(db, storage, user, kind=PhotoKind.VERIFICATION)
+    moderation.next = "reject:no_face"
+    assert await _moderate(db, faceless, storage, moderation) == "no_face"
+    assert (await _fresh(db, faceless.id)).reject_reason == "no_face"
+
+    face = await _pending(db, storage, user, kind=PhotoKind.VERIFICATION)
+    assert await _moderate(db, face, storage, moderation) == "approved"
+
+    decided = await _fresh(db, face.id)
+    assert decided.moderation is not None
+    assert (decided.status, decided.public_key, decided.moderation["faces"]) == (
+        ReviewStatus.APPROVED,
+        None,
+        1,
+    )
+    assert [key for bucket, key in storage.objects if bucket == PUBLIC] == []
+    assert storage.objects[(PRIVATE, face.raw_key)].data[:3] == b"\xff\xd8\xff"
+
+
+@pytest.mark.parametrize(
+    ("kind", "outcome", "verified", "queued"),
+    [
+        (PhotoKind.PUBLIC, "approve", True, True),
+        (PhotoKind.PUBLIC, "reject:no_face", True, False),
+        (PhotoKind.PUBLIC, "approve", False, False),
+        (PhotoKind.PRIVATE, "approve", True, False),
+        (PhotoKind.VERIFICATION, "approve", True, False),
+    ],
+    ids=[
+        "a-shown-face-with-a-selfie-kept",
+        "a-shown-photo-with-no-face",
+        "no-selfie-kept",
+        "a-private-photo",
+        "the-face-photo",
+    ],
+)
+async def test_an_approved_public_photo_with_a_face_is_queued_for_the_badge(
+    db: AsyncSession,
+    make_user: MakeUser,
+    kind: PhotoKind,
+    outcome: str,
+    verified: bool,
+    queued: bool,
+) -> None:
+    """D-393: approved, with a face, and a selfie already kept (`is_verified`,
+    T-4.5's own word): compared with that selfie on the worker, under its own
+    job id. Nothing else is."""
+    storage, moderation, queue = FakeStorage(), FakeModeration(), FakeQueue()
+    user, _ = await make_user(verified=verified)
+    photo = await _pending(db, storage, user, kind=kind)
+    moderation.next = outcome
+
+    await _moderate(db, photo, storage, moderation, queue)
+
+    assert [(job.job_id, job.kwargs) for job in queue.named(MATCH_PHOTO)] == (
+        [(f"match_photo:{photo.id}", {"photo_id": str(photo.id)})] if queued else []
+    )
+
+
+async def test_a_shown_copy_keeps_which_face_photo_it_came_from(
+    db: AsyncSession, make_user: MakeUser
+) -> None:
+    """`show_face_photo` makes a pending public copy carrying `from_photo_id`
+    (T-4.12); the decision writes the scores beside it, never over it."""
+    storage, moderation = FakeStorage(), FakeModeration()
+    user, _ = await make_user()
+    source = uuid.uuid4()
+    photo = await _pending(db, storage, user)
+    photo.moderation = {"from_photo_id": str(source)}
+    await db.flush()
+
+    assert await _moderate(db, photo, storage, moderation) == "approved"
+
+    record = (await _fresh(db, photo.id)).moderation
+    assert record is not None
+    assert record["from_photo_id"] == str(source)
+    assert record["provider"] == "sightengine"
 
 
 # --- A possible minor (D-093) ----------------------------------------------------------

@@ -135,7 +135,12 @@ If any of these fails, nothing ships.
     is sent. From T-4.5: an approved selfie has no public copy or key, isn't among its owner's
     photos, can't be read as one, and `GET /verification/latest` carries no link, key or number;
     a selfie carrying a location is stored, and compared, with none; an under-18 refusal takes a
-    selfie's file and its verification with the rest.
+    selfie's file and its verification with the rest. From T-4.12: the face photo (D-391) joins
+    what is never public unless chosen: approved, it has no public copy or key, is listed to its
+    owner alone by a signed link and to nobody else (`GET /me/photos` and `GET /photos/{id}` are
+    the same `NOT_FOUND` as no photo), the selfie is compared with it alone, and an under-18
+    refusal takes its file too. Showing it on the profile is a public copy that goes through
+    moderation like any upload.
 15. **Refresh reuse** (T-3.4): replaying a refresh token rotated more than 10 seconds ago revokes
     the family; within 10 seconds it's refused without that (D-067).
 16. **Firebase token** (T-3.14): forged, expired, wrong-audience and already-used ID tokens are all
@@ -151,8 +156,8 @@ A test in this list is marked `@pytest.mark.critical`; CI runs them first and fa
 
 | # | Journey | Task |
 |---|---|---|
-| J1 | New man: phone → OTP → all onboarding → discover. T-3.13 ran it as far as the photos step; T-4.9 takes it the rest of the way: a photo the browser uploads to the local S3, checked by the worker (the fake moderation) and approved, 5 interests, a PIN set and confirmed, `/discover` barred until he's done, "Skip for now" at the selfie (D-008, through T-4.8's completion), Discover inside the shell, and the PIN lock after a reload, opened by his PIN. He shares a position in Phagwara, which the browser gives only under `geolocation=(self)`: the Permissions-Policy proved by its effect (T-4.10). Its twin, refused the position, picks an area from the API's 17 | T-3.13, T-4.10, T-4.9 |
-| J2 | New woman: the same to the selfie, the PIN skipped; no "Skip for now", and `/discover` barred; the camera opens under `camera=(self)` (T-4.7) on Chromium's fake camera, playing a committed portrait; the shot is checked, sent, and compared on the worker by the real models (D-088) with her photo, the same person's other portrait, and matched; "Continue" finishes sign-up (T-4.8) and a reload keeps her in | T-4.9 |
+| J1 | New man: phone → OTP → all onboarding → discover. T-3.13 ran it as far as the photos step; T-4.9 takes it the rest of the way: from T-4.12 he leaves the photos step with no photo at all (D-392), 5 interests, a PIN set and confirmed, `/discover` barred until he's done, "Skip for now" at the selfie (D-008, through T-4.8's completion), Discover inside the shell, and the PIN lock after a reload, opened by his PIN. He shares a position in Phagwara, which the browser gives only under `geolocation=(self)`: the Permissions-Policy proved by its effect (T-4.10). Its twin, refused the position, picks an area from the API's 17 | T-3.13, T-4.10, T-4.9, T-4.12 |
+| J2 | New woman: the same to the selfie, the PIN skipped; from T-4.12 her face photo (D-391) is what the browser uploads to the local S3, checked by the worker (the fake moderation) and approved, private, with no public photo; no "Skip for now", and `/discover` barred; the camera opens under `camera=(self)` (T-4.7) on Chromium's fake camera, playing a committed portrait; the shot is checked, sent, and compared on the worker by the real models (D-088) with her face photo, the same person's other portrait, and matched; "Continue" finishes sign-up (T-4.8) and a reload keeps her in | T-4.9, T-4.12 |
 | J3 | Under-18 refused, same number can't retry | T-3.13 |
 | J4 | Swipe → match → open thread (−5) → chat both ways live | T-7.13 |
 | J5 | Voice note from woman → man unlocks (−5) → plays | T-7.13 |

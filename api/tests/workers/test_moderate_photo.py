@@ -16,6 +16,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.enums import ReviewStatus
 from app.core.providers.moderation import FakeModeration
 from app.core.providers.storage import FakeStorage
+from app.core.queue import FakeQueue
 from app.workers.tasks import moderate_photo as job
 from tests.conftest import CapturedLogs, MakeUser, make_test_settings
 from tests.modules.photos.test_moderate import Sessions, _fresh, _pending
@@ -28,6 +29,7 @@ async def _ctx(
         "sessionmaker": Sessions(db),
         "storage": storage,
         "moderation": moderation,
+        "queue": FakeQueue(),
         "settings": make_test_settings(),
         "job_try": job_try,
     }

@@ -9,20 +9,21 @@ import asyncio
 import uuid
 from collections.abc import Sequence
 
-from sqlalchemy import update
+from sqlalchemy import delete, update
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession
 
 from app.core.db import build_sessionmaker
 from app.core.enums import OnboardingStep, PhotoKind, ReviewStatus
 from app.core.providers.facematch import FaceMatch, FakeFaceMatch
 from app.core.providers.storage import FakeStorage
+from app.core.queue import FakeQueue
 from app.modules.photos.models import Photo
 from app.modules.users.models import User
 from app.modules.verification import service
 from app.modules.verification.models import Verification
 from tests.committed import fresh_man
 from tests.conftest import CapturedLogs, make_test_settings
-from tests.modules.verification.support import PRIVATE, PUBLIC, jpeg
+from tests.modules.verification.support import PRIVATE, jpeg
 
 
 class BothInside(FakeFaceMatch):
@@ -54,14 +55,14 @@ async def _committed_selfie(
         )
         session.add_all(
             [
+                # His face photo (T-4.12), approved, in the private bucket.
                 Photo(
                     id=photo_id,
                     user_id=man,
-                    kind=PhotoKind.PUBLIC,
-                    position=0,
+                    kind=PhotoKind.VERIFICATION,
                     raw_key=f"raw/{man}/{photo_id}",
-                    public_key=f"p/{photo_id}.jpg",
                     status=ReviewStatus.APPROVED,
+                    moderation={"faces": 1},
                 ),
                 Photo(
                     id=selfie_id,
@@ -80,7 +81,9 @@ async def _committed_selfie(
                 selfie_photo_id=selfie_id,
             )
         )
-    await storage.put_bytes(PUBLIC, f"p/{photo_id}.jpg", jpeg("navy"), "image/jpeg")
+    await storage.put_bytes(
+        PRIVATE, f"raw/{man}/{photo_id}", jpeg("navy"), "image/jpeg"
+    )
     await storage.put_bytes(PRIVATE, f"raw/{man}/{selfie_id}", jpeg(), "image/jpeg")
     return man, verification_id
 
@@ -98,6 +101,7 @@ async def test_a_wake_and_the_job_at_once_decide_it_once(
             verification_id,
             storage=storage,
             facematch=facematch,
+            queue=FakeQueue(),
             settings=make_test_settings(),
             via=via,
         )
@@ -117,3 +121,17 @@ async def test_a_wake_and_the_job_at_once_decide_it_once(
         user = await session.get(User, man)
     assert verification is not None and user is not None
     assert (verification.status, user.is_verified) == (ReviewStatus.APPROVED, True)
+    await forget_photos(test_engine, man)
+
+
+async def forget_photos(engine: AsyncEngine, user_id: uuid.UUID) -> None:
+    """Take a committed man's verifications and photos back out (the man
+    himself stays, `tests/committed.py`). A committed face photo would refuse
+    every later downgrade in this run (`ed3028467a15` keeps the kind while a
+    row uses it), and a committed decision would be listed by the review
+    tool's tests as one of theirs."""
+    async with AsyncSession(engine) as session, session.begin():
+        await session.execute(
+            delete(Verification).where(Verification.user_id == user_id)
+        )
+        await session.execute(delete(Photo).where(Photo.user_id == user_id))

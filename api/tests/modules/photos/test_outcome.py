@@ -93,6 +93,7 @@ async def test_a_rejected_photo_left_the_list_but_still_says_why(
         "status": "rejected",
         "reject_reason": "no_face",
         "url": None,
+        "from_photo_id": None,
     }
 
 
@@ -124,6 +125,7 @@ async def test_a_live_photo_reads_as_the_list_shows_it(
         "too_large",
         "unsupported_format",
         "user_deleted",
+        "replaced",
         "nudity",
         "no_face",
         "text_overlay",

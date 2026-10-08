@@ -129,6 +129,8 @@ export function errorCopy(error: unknown): ErrorCopy {
       return { ...plain(t("apiErrors.cantSignIn")), contact: true };
     case "IMMUTABLE_FIELD":
       return plain(t("apiErrors.immutable"));
+    case "FACE_PHOTO_REQUIRED":
+      return plain(t("apiErrors.facePhotoRequired"));
     case "USERNAME_TAKEN":
       return {
         ...plain(t("apiErrors.usernameTaken")),

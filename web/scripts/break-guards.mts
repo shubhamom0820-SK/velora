@@ -237,7 +237,7 @@ export const CASES: BreakCase[] = [
   {
     id: "t46-upload-04-a-failed-put-keeps-its-place",
     file: "src/lib/queries/photos.ts",
-    old: '        await api\n          .delete("/v1/photos/{photo_id}", { params: { photo_id } })\n          .catch(() => undefined);\n',
+    old: '    await api\n      .delete("/v1/photos/{photo_id}", { params: { photo_id } })\n      .catch(() => undefined);\n',
     new: "",
     run: [HOOKS_TEST, STEP_TEST],
     expect: ["gives the place back when the PUT fails"],
@@ -271,7 +271,7 @@ export const CASES: BreakCase[] = [
   {
     id: "t45-copy-01-the-badge-says-verified",
     file: "src/i18n/en.ts",
-    old: '    selfieMatched: "Selfie matches photos",',
+    old: '    selfieMatched: "Selfie matched",',
     new: '    selfieMatched: "Verified",',
     run: [CLAIMS_TEST],
     expect: ["says none of the claims anywhere but the two named keys"],
@@ -279,7 +279,7 @@ export const CASES: BreakCase[] = [
   {
     id: "t45-copy-02-the-landing-page-says-verification",
     file: "src/i18n/en.ts",
-    old: '        body: "Selfies compared with profile photos, and every photo checked.",',
+    old: '        body: "Selfies compared with a face photo, and every photo checked.",',
     new: '        body: "Selfie verification, and every photo checked.",',
     run: [CLAIMS_TEST],
     expect: ["says none of the claims anywhere but the two named keys"],
@@ -295,10 +295,10 @@ export const CASES: BreakCase[] = [
   {
     id: "t45-badge-01-a-shield-again",
     file: "src/components/ui/Avatar.tsx",
-    old: 'import { ScanFace } from "lucide-react";',
-    new: 'import { Shield as ScanFace } from "lucide-react";',
+    old: 'import { Check } from "lucide-react";',
+    new: 'import { Shield as Check } from "lucide-react";',
     run: ["src/components/ui/Avatar.test.tsx"],
-    expect: ["marks a matched selfie with a face, never a shield"],
+    expect: ["marks the badge with a tick in the accent, never a shield"],
   },
 
   // --- T-4.7: the selfie step ---
@@ -429,7 +429,7 @@ export const CASES: BreakCase[] = [
   {
     id: "t47-copy-01-a-match-says-verified",
     file: "src/i18n/en.ts",
-    old: '      matched: "Your selfie matches your photos.",',
+    old: '      matched: "Your selfie matched your face photo.",',
     new: '      matched: "You\'re verified.",',
     run: [CLAIMS_TEST],
     expect: ["says none of the claims anywhere but the two named keys"],
@@ -542,6 +542,77 @@ export const CASES: BreakCase[] = [
     new: "  if (false) {\n",
     run: [SELFIE_TEST],
     expect: ["a match the server doesn't know of"],
+  },
+
+  // --- T-4.12: the face photo, and the words that say what it is (D-391) ---
+  {
+    id: "t412-copy-01-the-selfie-compared-with-your-photos-again",
+    file: "src/i18n/en.ts",
+    old: '        "Needed before your profile goes live. We compare your selfie with your face photo.",',
+    new: '        "Needed before your profile goes live. We compare your selfie with the photos on your profile.",',
+    run: [SELFIE_TEST],
+    expect: ["says the selfie is compared with the face photo"],
+  },
+  {
+    id: "t412-copy-02-the-face-photo-called-a-verification-photo",
+    file: "src/i18n/en.ts",
+    old: '        title: "Your face photo",',
+    new: '        title: "Your verification photo",',
+    run: [CLAIMS_TEST],
+    expect: ["says none of the claims anywhere but the two named keys"],
+  },
+  {
+    id: "t412-badge-01-the-badge-says-matches-photos",
+    file: "src/i18n/en.ts",
+    old: '    selfieMatched: "Selfie matched",',
+    new: '    selfieMatched: "Selfie matches photos",',
+    run: ["src/components/ui/Avatar.test.tsx"],
+    expect: ["the badge as 'Selfie matched'"],
+  },
+  {
+    id: "t412-step-01-a-woman-let-on-without-a-face-photo",
+    file: "src/components/onboarding/PhotosStep.tsx",
+    old: "  const mayGo = optional || face.hasOne;",
+    new: "  const mayGo = true;",
+    run: [STEP_TEST],
+    expect: ["a woman has no way on until her face photo is there"],
+  },
+  {
+    id: "t412-step-02-the-face-photo-sent-as-public",
+    file: "src/lib/queries/photos.ts",
+    old: 'uploadPhoto(body, "verification", undefined, onProgress)',
+    new: 'uploadPhoto(body, "public", 0, onProgress)',
+    run: [HOOKS_TEST, STEP_TEST],
+    expect: ["uploads it as kind verification with no place"],
+  },
+  {
+    id: "t412-step-03-the-exit-back-to-reading-me",
+    file: "src/lib/queries/photos.ts",
+    old: '      return api.post("/v1/me/photos/done");',
+    new: '      return api.get("/v1/me");',
+    run: [HOOKS_TEST, STEP_TEST],
+    expect: [
+      "leaves the step by its own exit",
+      "leaves by the step's own exit",
+    ],
+  },
+  {
+    id: "t412-slot-01-the-toggle-before-approval",
+    file: "src/components/onboarding/FaceSlot.tsx",
+    old: 'disabled={view.kind !== "approved" || slot.toggling}',
+    new: "disabled={slot.toggling}",
+    run: [STEP_TEST],
+    expect: [
+      "uploads it as kind verification with no place, shows it checking, then approved",
+    ],
+  },
+  {
+    id: "t412-slot-02-the-face-photo-changeable-after-the-match",
+    file: "src/components/onboarding/FaceSlot.tsx",
+    old: "{live && !locked && (",
+    new: "{live && (",
+    run: [STEP_TEST],
+    expect: ["can't change once the selfie matched"],
   },
 ];
 

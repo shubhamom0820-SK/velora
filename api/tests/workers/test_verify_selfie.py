@@ -14,14 +14,15 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.enums import ReviewStatus
 from app.core.providers.facematch import FakeFaceMatch
 from app.core.providers.storage import FakeStorage
+from app.core.queue import FakeQueue
 from app.modules.photos.models import Photo
 from app.modules.verification.models import Verification
 from app.workers.tasks import verify_selfie as job
 from tests.conftest import CapturedLogs, MakeUser, make_test_settings
 from tests.modules.photos.test_moderate import Sessions
 from tests.modules.verification.support import (
-    approved_photo,
     at_selfie,
+    face_photo,
     fresh,
     submitted,
 )
@@ -34,6 +35,7 @@ def _ctx(
         "sessionmaker": Sessions(db),
         "storage": storage,
         "facematch": facematch,
+        "queue": FakeQueue(),
         "settings": make_test_settings(),
         "job_try": job_try,
     }
@@ -44,7 +46,7 @@ async def test_it_decides_through_the_queue(
 ) -> None:
     storage, facematch = FakeStorage(), FakeFaceMatch()
     user, _ = await at_selfie(db, make_user)
-    await approved_photo(db, storage, user)
+    await face_photo(db, storage, user)
     verification, selfie = await submitted(db, storage, user)
 
     result = await job.verify_selfie(
@@ -61,7 +63,7 @@ async def test_a_failure_is_tried_again(
 ) -> None:
     storage, facematch = FakeStorage(), FakeFaceMatch()
     user, _ = await at_selfie(db, make_user)
-    await approved_photo(db, storage, user)
+    await face_photo(db, storage, user)
     verification, _ = await submitted(db, storage, user)
     facematch.next = "fail"
 
@@ -82,7 +84,7 @@ async def test_the_last_failure_is_unavailable_so_she_can_start_again(
 ) -> None:
     storage, facematch = FakeStorage(), FakeFaceMatch()
     user, _ = await at_selfie(db, make_user)
-    await approved_photo(db, storage, user)
+    await face_photo(db, storage, user)
     verification, selfie = await submitted(db, storage, user)
     facematch.next = "fail"
 
@@ -103,20 +105,12 @@ async def test_the_last_failure_is_unavailable_so_she_can_start_again(
     captured_logs.assert_listening()
 
 
-async def test_photos_still_waiting_at_the_last_try_are_no_photos(
+async def test_a_face_photo_still_waiting_at_the_last_try_is_no_photos(
     db: AsyncSession, make_user: MakeUser
 ) -> None:
     storage, facematch = FakeStorage(), FakeFaceMatch()
     user, _ = await at_selfie(db, make_user)
-    db.add(
-        Photo(
-            user_id=user.id,
-            kind="public",
-            position=0,
-            raw_key=f"raw/{user.id}/waiting",
-        )
-    )
-    await db.flush()
+    await face_photo(db, storage, user, status=ReviewStatus.PENDING)
     verification, selfie = await submitted(db, storage, user)
 
     with pytest.raises(Retry) as retry:

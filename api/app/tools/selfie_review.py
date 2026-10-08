@@ -133,24 +133,32 @@ async def _show(
         settings.R2_BUCKET_PRIVATE, item.selfie_key, ttl=LINK_TTL_S
     )
     out.write(f"  selfie:  {selfie}\n")
-    for place, compared in enumerate(item.compared):
-        similarity = (
-            "no face found"
-            if compared.similarity is None
-            else f"{compared.similarity:.5f}"
-        )
+    # The face photo (D-391), private, by a signed link; then each shown photo
+    # compared with the selfie for the badge (D-393), by its public link.
+    if item.face is None:
+        out.write("  face photo: none\n")
+    else:
         where = (
             "gone"
-            if compared.public_key is None
-            else public_url(settings, compared.public_key)
+            if item.face.key is None
+            else await storage.presign_get(
+                settings.R2_BUCKET_PRIVATE, item.face.key, ttl=LINK_TTL_S
+            )
         )
-        out.write(f"  photo {place}: {similarity}  {where}\n")
+        out.write(f"  face photo: {_similarity(item.face.similarity)}  {where}\n")
+    for place, compared in enumerate(item.shown):
+        where = "gone" if compared.key is None else public_url(settings, compared.key)
+        out.write(f"  shown {place}: {_similarity(compared.similarity)}  {where}\n")
     if item.verdict is None:
         out.write(
             f"  verdict: none yet  (--verdict {item.verification_id} same|different)\n"
         )
     else:
         out.write(f"  verdict: {item.verdict}\n")
+
+
+def _similarity(value: float | None) -> str:
+    return "no face found" if value is None else f"{value:.5f}"
 
 
 async def main(argv: Sequence[str], out: TextIO = sys.stdout) -> int:

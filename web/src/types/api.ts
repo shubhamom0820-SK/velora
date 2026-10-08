@@ -368,6 +368,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/me/photos/done": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Leave Photos */
+        post: operations["leave_photos_v1_me_photos_done_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/me/onboarding/complete": {
         parameters: {
             query?: never;
@@ -466,6 +483,23 @@ export interface paths {
         post?: never;
         /** Delete Photo */
         delete: operations["delete_photo_v1_photos__photo_id__delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/photos/{photo_id}/show": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Show Face Photo */
+        post: operations["show_face_photo_v1_photos__photo_id__show_post"];
+        delete?: never;
         options?: never;
         head?: never;
         patch?: never;
@@ -879,12 +913,14 @@ export interface components {
             reject_reason: string | null;
             /** Url */
             url: string | null;
+            /** From Photo Id */
+            from_photo_id?: string | null;
         };
         /**
          * PhotoKind
          * @enum {string}
          */
-        PhotoKind: "public" | "private" | "selfie";
+        PhotoKind: "public" | "private" | "selfie" | "verification";
         /**
          * PhotoOrder
          * @description Every live public photo, in the order wanted: the first is the main one.
@@ -1660,6 +1696,26 @@ export interface operations {
             };
         };
     };
+    leave_photos_v1_me_photos_done_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Me"];
+                };
+            };
+        };
+    };
     complete_onboarding_v1_me_onboarding_complete_post: {
         parameters: {
             query?: never;
@@ -1845,6 +1901,37 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    show_face_photo_v1_photos__photo_id__show_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                photo_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Photo"];
+                };
             };
             /** @description Validation Error */
             422: {

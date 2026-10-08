@@ -38,6 +38,9 @@ class Photo(BaseModel):
     status: ReviewStatus
     reject_reason: str | None
     url: str | None
+    # A public photo made from the face photo by `POST /photos/{id}/show`
+    # (T-4.12): that face photo's id. Null for every other photo.
+    from_photo_id: UUID | None = None
 
 
 class PhotoOrder(BaseModel):

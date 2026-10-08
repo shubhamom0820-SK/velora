@@ -2181,9 +2181,9 @@ exists; and one task is one commit series and one break-guard sweep. Each task t
 its box and carries one pointer line to here. **Where it sits:** on T-6.2's Needs line, since the
 `Card`'s badge and its photo-less fallback are this task's rules; and on REL-1's conditional list,
 "if the tag includes T-4.6", as the advisor's recommendation for the founder to confirm.
-- [ ] **Needs:** T-4.5, T-4.8, T-4.9 (all built); D-390 to D-393 (filed, below); and this task's
+- [x] **Needs:** T-4.5, T-4.8, T-4.9 (all built); D-390 to D-393 (filed, below); and this task's
   own plan, answering its four open points (below) before any code.
-- [ ] **What changes, in one place:**
+- [x] **What changes, in one place:**
   1. **Gender isn't verified, and now that is deliberate (D-390).** Nothing is built for it; D-264's
      human review is what stands against a man who picks "Woman" and matches his own face.
   2. **A face photo for the selfie check (D-391).** `PhotoKind` gains `verification` (the
@@ -2222,7 +2222,7 @@ its box and carries one pointer line to here. **Where it sits:** on T-6.2's Need
      never raw `is_verified`, and a null main photo when there is none, which the web shows as a
      grey silhouette with the name. This task gives T-6.2 the rule and the query; the `Card`
      itself stays T-6.2's.
-- [ ] **Web:** the photos step gets a slot of its own for the face photo ("this is only for the
+- [x] **Web:** the photos step gets a slot of its own for the face photo ("this is only for the
   check; nobody sees it") and the toggle that also shows it on the profile; the step's "At least
   one to be visible" and "Add at least one photo" go; the selfie step's lines that say "your
   photos" (`subWoman`, `subMan`, `comparing`, `matched`, `finish.needsMatch`, `finish.missing.photos`,
@@ -2232,20 +2232,22 @@ its box and carries one pointer line to here. **Where it sits:** on T-6.2's Need
   `/terms`' `profile.body` and the landing's `safety.body` ("Selfies compared with profile
   photos") rewritten inside D-262's rule; `Avatar`'s badge a red tick; every new string under
   `claims.test.ts`.
-- [ ] **Seed:** a face-photo row (a placeholder, private) for every seeded user marked verified,
+- [x] **Seed:** a face-photo row (a placeholder, private) for every seeded user marked verified,
   and for the three women at the selfie step, who verify against it from then on; seeded public
   photos get a `moderation` record with `faces`, or carry none and show no badge, decided in the
   plan. A re-run adds nothing twice.
-- [ ] **E2E (T-4.9):** J2 uploads the portrait as her face photo and finishes with no public
+- [x] **E2E (T-4.9):** J2 uploads the portrait as her face photo and finishes with no public
   photo; J1 finishes with none; 06-TESTING's J1/J2 rows follow.
-- [ ] **Contracts, changed with the code and not before:** 03-SCHEMA (`photo_kind_t`, `photos`,
+- [x] **Contracts, changed with the code and not before:** 03-SCHEMA (`photo_kind_t`, `photos`,
   the note on `users.is_verified`), 04-API (`/photos/upload-url`'s kinds, `/me/photos`,
   `/photos/{id}`, `DELETE`, `PROFILE_INCOMPLETE`, `Verification`'s description, the step's exit),
   02-ARCHITECTURE §8 (the `Card`'s badge, an EXISTS on `photos`), 06-TESTING #14 (the face photo
   joins what is never public unless chosen) and J1/J2, 08-DESIGN §4's Avatar row; `make types`
   (`PhotoKind` changes).
-- [ ] **Four points this task's plan decides, Claude's recommendation beside each, none decided
-  today** (the founder, 7 October 2026):
+- [x] **Four points this task's plan decides, Claude's recommendation beside each, none decided
+  today** (the founder, 7 October 2026). **Decided 8 October 2026 (D-400):** each as recommended,
+  the step's exit `POST /me/photos/done`; the toggle's copy goes through moderation rather than
+  approved at once, Claude's change for the founder to confirm (D-400).
   1. **The toggle's mechanism.** A separate `public` row made from the face photo's scored bytes,
      with a place of its own, so every reader of "public photo" (discovery, completeness, T-6.3,
      the badge's comparison) stays as it is, and turning it off is `user_deleted` on that row; or
@@ -2259,7 +2261,7 @@ its box and carries one pointer line to here. **Where it sits:** on T-6.2's Need
   4. **Replacing the face photo after a match** (found filing): refused while a verification is
      approved, as a selfie's removal is refused today, so the match can't be left pointing at a
      photo that is gone; a change then goes through P-163's path. Recommended: refused.
-- [ ] **Tests, and every guard broken once,** as T-4.5 to T-4.9 did (`tests.break_guards`,
+- [x] **Tests, and every guard broken once,** as T-4.5 to T-4.9 did (`tests.break_guards`,
   `scripts/break-guards.mts`, each file restored by SHA-256, the log kept): `tests/modules/photos/`
   (the kind, its one-at-a-time rule, `no_face` on the face photo and never on a public one, the
   last public photo removable), `tests/modules/verification/` (the selfie against the face photo
@@ -2269,17 +2271,31 @@ its box and carries one pointer line to here. **Where it sits:** on T-6.2's Need
   `PhotosStep.test.tsx`, `SelfieStep.test.tsx`, `Avatar.test.tsx`, `claims.test.ts`,
   `e2e/signup.spec.ts`. A photo with no face approved as public and refused as a face photo,
   each at D-101's edge.
-- [ ] **Done when, on a per-run database (P-55):** a fresh woman finishes with zero public photos,
+  **Done, 8 October 2026:** `tests.break_guards t412-`, 22 cases, 22 of 22 red, every file
+  restored by SHA-256, the tree byte for byte as before; the web's
+  `scripts/break-guards.mts`, T-4.12's 8 cases and the 7 whose anchors this task moved, 15 of 15
+  red. Logs in `out/t-4.12/` (git-ignored). Two older cases left with their guards: `t45-04` (the
+  selfie no longer reads a public copy) and T-4.8's `photo` requirement.
+- [x] **Done when, on a per-run database (P-55):** a fresh woman finishes with zero public photos,
   her selfie matched against her face photo alone, `is_verified` true and **no badge**; she adds a
   public photo with a face that matches, and the badge appears; a public photo of hers with no
   face is approved; her face photo appears in no public response and in nobody else's (06-TESTING
   #14, extended); a man finishes with no photo and no selfie; `claims.test.ts` is green with every
   new string; `make lint test`, then CI, on the commit that lands.
-- [ ] **The trade-off, weighed, and written down so nobody later thinks it was missed** (the
+  **Seen, 8 October 2026, each on a per-run database:** zero photos to `done` for a man and a
+  matched woman at completeness 50 (`test_zero_photos_finishes_at_completeness_50`); the selfie
+  against the face photo alone (`test_the_selfie_is_compared_with_the_face_photo_alone`); no badge
+  with `is_verified` alone, the badge once a shown face matched
+  (`test_the_query_needs_is_verified_and_a_shown_face_that_matched`,
+  `test_shown_the_copy_is_compared_for_the_badge_once_approved`); a public photo with no face
+  approved (`test_a_public_or_private_photo_needs_no_face`); the face photo in nobody else's
+  response (`test_the_face_photo_is_its_owners_alone`); J1 and J2 through the browser, 14 of 14;
+  `claims.test.ts` green. `make lint test` on the commit that lands, then CI, are /done's.
+- [x] **The trade-off, weighed, and written down so nobody later thinks it was missed** (the
   founder, 7 October 2026): on a dating app a card with no face gets far fewer swipes. The woman
   this change is for may arrive, show nothing, receive nothing, and conclude the app doesn't work.
   The founder weighed that and chose to let her in rather than stop her at the door.
-- [ ] **Commit:** `feat(photos): face photo for the selfie check; public photos need no face; nobody needs one [T-4.12]`
+- [x] **Commit:** `feat(photos): face photo for the selfie check; public photos need no face; nobody needs one [T-4.12]`
 
 ---
 
@@ -4741,7 +4757,7 @@ The number comes from the session's own block, given in its brief, from P-100 up
   most 1 in 1,000 such pairs, with the false-reject rate there (T-4.5's original standard; above 5%,
   stop and tell the founder). Filed from T-4.5's block (P-160 to P-169), at the direction of the
   advisor directing T-4.5 (Claude, in a separate chat), relayed by the founder, 5 October 2026.
-- [ ] P-161 · Compare a public photo added after a verification with the selfie, or say the match
+- [x] P-161 · Compare a public photo added after a verification with the selfie, or say the match
   no longer holds. **Before T-6.2's `Card` carries `is_verified` to anyone.** Worst case: a woman's
   badge says "Selfie matches photos" while every photo on her profile was replaced, after the
   check, with someone else's; the comparison ran once, against the photos she had then. Options:
@@ -5152,3 +5168,24 @@ The number comes from the session's own block, given in its brief, from P-100 up
   (`get_message(ignore_subscribe_messages=False)` until a `subscribe` message arrives), and a test
   that publishes the instant the event is set, many times over, and never sees 0. Filed by Claude
   landing P-57, P-150 and D-253, 8 October 2026; its session's block, P-330 to P-339.
+- [ ] P-300 · Retry, or sweep for, a shown photo's badge comparison that failed its last try.
+  **Before REL-1's tag, if it includes T-6.2** (the badge on cards). Worst case: a real woman's
+  only shown face is approved while storage hiccups three times in a row (`match_photo`'s three
+  tries over 30 seconds), the comparison is never made, and her card carries no badge though her
+  selfie matched and her face is shown, until she removes and re-adds the photo. T-4.12 logs the
+  last failure at error level and leaves the photo as it is: the badge rests only on comparisons
+  that were made. Options: a periodic sweep on the worker for approved public photos with
+  `faces >= 1`, a kept selfie and no `selfie_match` for its verification, queued one at a time
+  (P-281); or `match_photo` with more tries, spaced wider. Filed by Claude while building T-4.12,
+  8 October 2026; its session's block, P-300 to P-309.
+- [ ] P-301 · Make a private photo's served copy the bytes moderation scored, as a public photo's
+  is. **Before T-8.4 serves private photos to anyone.** Worst case: a presigned PUT URL lasts five
+  minutes and outlives `complete` (P-79); for a public photo T-4.4 publishes the scored bytes, so
+  a second PUT over the raw key changes nothing anyone sees, but a private photo has no second
+  copy: its raw key is what T-8.4 would sign a link to, so a PUT after approval, inside the window,
+  shows a chosen viewer bytes nobody scored. The face photo met the same window in T-4.12, which
+  is why its shown copy goes through moderation rather than being approved from the private copy
+  (D-400). Options: the worker writes an approved private photo's scored bytes to a key no PUT
+  URL ever covered and the row points there; or `complete` revokes the window by moving the
+  object. Found building T-4.12; filed by Claude, 8 October 2026; its session's block, P-300 to
+  P-309.

@@ -270,13 +270,16 @@ describe("who may skip it (D-008)", () => {
 });
 
 describe("the words claim the comparison only (D-262)", () => {
-  it("says the selfie is compared with the photos, and never 'verified'", async () => {
+  it("says the selfie is compared with the face photo (D-391), and never 'verified'", async () => {
     fakeApi({ "GET /v1/verification/latest": NONE });
     const { container } = renderStep();
     await screen.findByRole("button", { name: "Open camera" });
 
     expect(container.textContent).toMatch(
-      /We compare your selfie with the photos on your profile\./,
+      /We compare your selfie with your face photo\./,
+    );
+    expect(container.textContent).not.toMatch(
+      /your photos|photos on your profile/,
     );
     expect(container.textContent).not.toMatch(/verif|real person|live person/i);
   });
@@ -505,7 +508,7 @@ describe("sending (T-4.2's flow, kind=selfie)", () => {
     act(() => put.respond(200));
 
     expect(
-      await screen.findByText("Comparing your selfie with your photos…"),
+      await screen.findByText("Comparing your selfie with your face photo…"),
     ).toBeInTheDocument();
     const submit = api.calls.find(
       (call) => call.path === "/v1/verification/v1/submit",
@@ -625,7 +628,7 @@ describe("sending (T-4.2's flow, kind=selfie)", () => {
     );
 
     expect(
-      await screen.findByText("Comparing your selfie with your photos…"),
+      await screen.findByText("Comparing your selfie with your face photo…"),
     ).toBeInTheDocument();
     expect(camera.getUserMedia).not.toHaveBeenCalled();
   });
@@ -657,7 +660,7 @@ describe("while it's compared (D-261): never a bare spinner", () => {
     renderStep();
 
     expect(
-      await screen.findByText("Comparing your selfie with your photos…"),
+      await screen.findByText("Comparing your selfie with your face photo…"),
     ).toBeInTheDocument();
     expect(screen.queryByText(/This can take up to a minute/)).toBeNull();
 
@@ -678,7 +681,7 @@ describe("while it's compared (D-261): never a bare spinner", () => {
     vi.useFakeTimers({ shouldAdvanceTime: true });
     const api = fakeApi({ "GET /v1/verification/latest": latests(COMPARING) });
     renderStep();
-    await screen.findByText("Comparing your selfie with your photos…");
+    await screen.findByText("Comparing your selfie with your face photo…");
 
     await vi.advanceTimersByTimeAsync(VERIFICATION_POLL_FOR_MS + 100);
     expect(
@@ -705,7 +708,7 @@ describe("while it's compared (D-261): never a bare spinner", () => {
       ),
     );
     expect(
-      screen.getByText("Comparing your selfie with your photos…"),
+      screen.getByText("Comparing your selfie with your face photo…"),
     ).toBeInTheDocument();
     // The second minute says from the start that she can leave.
     expect(screen.getByText(/You can leave this page/)).toBeInTheDocument();
@@ -716,7 +719,7 @@ describe("while it's compared (D-261): never a bare spinner", () => {
     renderStep();
 
     expect(
-      await screen.findByText("Comparing your selfie with your photos…"),
+      await screen.findByText("Comparing your selfie with your face photo…"),
     ).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Open camera" })).toBeNull();
   });
@@ -733,12 +736,12 @@ describe("while it's compared (D-261): never a bare spinner", () => {
         json(200, me({ is_verified: true, onboarding_step: "done" })),
     });
     renderStep();
-    await screen.findByText("Comparing your selfie with your photos…");
+    await screen.findByText("Comparing your selfie with your face photo…");
 
     await vi.advanceTimersByTimeAsync(VERIFICATION_POLL_MS);
 
     expect(
-      await screen.findByText("Your selfie matches your photos."),
+      await screen.findByText("Your selfie matched your face photo."),
     ).toBeInTheDocument();
     await waitFor(() =>
       expect(client.getQueryState(["me"])?.isInvalidated).toBe(true),
@@ -753,7 +756,7 @@ describe("while it's compared (D-261): never a bare spinner", () => {
     renderStep(me({ is_verified: true }));
 
     expect(
-      await screen.findByText("Your selfie matches your photos."),
+      await screen.findByText("Your selfie matched your face photo."),
     ).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Open camera" })).toBeNull();
   });
@@ -771,7 +774,7 @@ describe("a rejection says what to change, and how many tries are left (D-263)",
     ],
     [
       "no_match",
-      "Your selfie didn't match the photos on your profile closely enough. Try again facing the camera in good light, or add a clearer photo of your face.",
+      "Your selfie didn't match your face photo closely enough. Try again facing the camera in good light, or add a clearer face photo.",
     ],
     ["unreadable", "We couldn't read that picture. Take your selfie again."],
     [
@@ -814,7 +817,7 @@ describe("a rejection says what to change, and how many tries are left (D-263)",
     renderStep();
 
     expect(await screen.findByRole("alert")).toHaveTextContent(
-      "None of your photos shows a face clearly enough to compare with. Add one that does, then take your selfie.",
+      "Your face photo isn't ready to compare with: it may still be being checked, or it was refused. Add one that shows your face clearly, then take your selfie.",
     );
     expect(
       screen.getByRole("link", { name: "Go to your photos" }),
@@ -878,11 +881,6 @@ describe("finishing sign-up: the server says what's still needed (T-4.8, D-310)"
   }
 
   it.each([
-    [
-      ["photo"],
-      "Your profile needs at least one approved photo. One may still be being checked, or need replacing.",
-      "/onboarding/photos",
-    ],
     [["location"], "Add your location first.", "/onboarding/location"],
     [
       ["seeking", "about"],
@@ -947,7 +945,7 @@ describe("finishing sign-up: the server says what's still needed (T-4.8, D-310)"
     );
 
     expect(await screen.findByRole("alert")).toHaveTextContent(
-      "Your selfie has to match your photos before you can finish.",
+      "Your selfie has to match your face photo before you can finish.",
     );
     await waitFor(() =>
       expect(calls(api, "GET /v1/verification/latest")).toBe(2),

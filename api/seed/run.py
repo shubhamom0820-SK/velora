@@ -20,6 +20,10 @@ the prototype's gradient, re-encoded like any upload and stored through
 marked verified gets an approved verification with a placeholder selfie in the
 private bucket (T-4.5) if they have no approved verification yet: never
 compared with anything, and its record says so (`{"decided_by": "seed"}`).
+From T-4.12 they, and the three women at the selfie step, get a placeholder
+face photo in the private bucket (D-391), approved by the seed's word, and the
+verified ones' public photo carries the badge's record on the seed's word too
+(D-393): no number, no face claimed, so the badge shows on their cards in dev.
 And every finished profile's completeness is what finishing would have made it
 (T-4.8, D-310), read from what the seed wrote, since signup leaves it 0: set
 only where it differs, so a second run sets nothing.
@@ -338,6 +342,8 @@ class SeedReport:
     already_credited: list[str] = field(default_factory=list)
     photos_added: list[str] = field(default_factory=list)
     verifications_added: list[str] = field(default_factory=list)
+    face_photos_added: list[str] = field(default_factory=list)
+    badges_set: list[str] = field(default_factory=list)
     completeness_set: list[str] = field(default_factory=list)
 
 
@@ -488,9 +494,26 @@ async def write_seed(
                 session, settings, storage, person, user_ids[person.key], report
             )
     for person in people:
+        if has_face_photo(person):
+            await _face_photo(
+                session, settings, storage, person, user_ids[person.key], report
+            )
+    for person in people:
+        if person.verified and person.gradient is not None:
+            await _badge(session, person, user_ids[person.key], report)
+    for person in people:
         if person.step is OnboardingStep.DONE:
             await _completeness(session, person, user_ids[person.key], report)
     return report
+
+
+def has_face_photo(person: Person) -> bool:
+    """Who has a face photo (T-4.12, D-391): everyone marked verified, whose
+    selfie is recorded as matched against it, and the women at the selfie
+    step, who verify against it from then on."""
+    return person.gradient is not None and (
+        person.verified or person.step is OnboardingStep.SELFIE
+    )
 
 
 async def _photo(
@@ -606,6 +629,77 @@ async def _verification(
     report.verifications_added.append(person.key)
 
 
+async def _face_photo(
+    session: AsyncSession,
+    settings: Settings,
+    storage: StorageProvider,
+    person: Person,
+    user_id: UUID,
+    report: SeedReport,
+) -> None:
+    """The face photo (T-4.12, D-391), unless a live one is there: the
+    gradient turned round, as the selfie is, approved by the seed's word, in
+    the private bucket only, with no public copy. A face nobody has: a selfie
+    taken locally against it ends `no_photos`, as it did against the public
+    gradient before T-4.12. Recorded as the seed's, never as scored (D-263)."""
+    live = await session.scalar(
+        select(Photo.id).where(
+            Photo.user_id == user_id,
+            Photo.kind == PhotoKind.VERIFICATION,
+            Photo.status != ReviewStatus.REJECTED,
+        )
+    )
+    if live is not None:
+        return
+    assert person.gradient is not None
+    c1, c2 = person.gradient
+    clean = placeholder(c2, c1)
+    photo_id = uuid4()
+    key = raw_key(user_id, photo_id)
+    await storage.put_bytes(settings.R2_BUCKET_PRIVATE, key, clean.data, "image/jpeg")
+    session.add(
+        Photo(
+            id=photo_id,
+            user_id=user_id,
+            kind=PhotoKind.VERIFICATION,
+            raw_key=key,
+            status=ReviewStatus.APPROVED,
+            moderation={"decided_by": "seed"},
+            width=clean.width,
+            height=clean.height,
+        )
+    )
+    await session.flush()
+    report.face_photos_added.append(person.key)
+
+
+async def _badge(
+    session: AsyncSession, person: Person, user_id: UUID, report: SeedReport
+) -> None:
+    """The badge on a seeded verified profile (D-393, T-4.12): its approved
+    public photo's record says its face matched the selfie, on the seed's word,
+    with no number and no face claimed, as the seed's verification is approved
+    and never compared (the founder, 8 October 2026). Set once: a record that
+    says anything about the match is left as it is."""
+    photo = await session.scalar(
+        select(Photo).where(
+            Photo.user_id == user_id,
+            Photo.kind == PhotoKind.PUBLIC,
+            Photo.position == 0,
+            Photo.status == ReviewStatus.APPROVED,
+        )
+    )
+    if photo is None or "selfie_match" in (photo.moderation or {}):
+        return
+    photo.moderation = {
+        **(photo.moderation or {}),
+        "decided_by": "seed",
+        "selfie_match": {"matched": True, "decided_by": "seed"},
+    }
+    await session.flush()
+    report.badges_set.append(person.key)
+
+
 async def _grant(
     session: AsyncSession, person: Person, user_id: UUID, report: SeedReport
 ) -> None:
@@ -678,6 +772,16 @@ def summary(report: SeedReport) -> str:
             "  Placeholder selfies, approved, added for "
             f"{len(report.verifications_added)} people."
         )
+    if report.face_photos_added:
+        lines.append(
+            "  Placeholder face photos, private, added for "
+            f"{len(report.face_photos_added)} people."
+        )
+    if report.badges_set:
+        lines.append(
+            f"  The badge's record set, on the seed's word, for {len(report.badges_set)} "
+            "verified profiles (D-393)."
+        )
     if report.completeness_set:
         lines.append(
             "  Completeness set for "
@@ -687,8 +791,8 @@ def summary(report: SeedReport) -> str:
         lines.append(
             "  Anyone already there was left as they are, even if seed/data.py "
             "changed since, except that seeded credits are granted once, a "
-            "missing placeholder photo or selfie added once, and a finished "
-            "profile's completeness set by D-310's rule"
+            "missing placeholder photo, selfie, face photo or badge record added "
+            "once, and a finished profile's completeness set by D-310's rule"
             + (
                 f" ({', '.join(report.already_credited)} had them already)."
                 if report.already_credited

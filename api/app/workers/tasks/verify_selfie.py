@@ -1,5 +1,5 @@
-"""`verify_selfie`: a submitted selfie compared with the profile's photos and
-decided (T-4.5); `verification.service.verify` does the work.
+"""`verify_selfie`: a submitted selfie compared with the face photo and
+decided (T-4.5, D-391); `verification.service.verify` does the work.
 
 `verification.service.submit` queues it under the job id
 `verify_selfie:{id}` and then wakes the worker (D-261), which runs the same
@@ -8,8 +8,8 @@ run: when the wake decided it first, it finds the verification decided and
 does nothing.
 
 Until it can decide, it tries again: a selfie whose submit hasn't committed
-yet, profile photos still being moderated, storage down. Its last try records
-the reason it was waiting for (photos still waiting: `no_photos`; anything
+yet, the face photo still being moderated, storage down. Its last try records
+the reason it was waiting for (the face photo still waiting: `no_photos`; anything
 failing: `unavailable`) rather than leave the person waiting on a comparison
 that won't come; a selfie never submitted is left alone. Logs name the
 verification by its id, never a key or a URL (rule 15).
@@ -70,6 +70,7 @@ async def run(ctx: Mapping[str, Any], verification_id: UUID, *, via: str) -> str
         verification_id,
         storage=ctx["storage"],
         facematch=ctx["facematch"],
+        queue=ctx["queue"],
         settings=ctx["settings"],
         via=via,
     )

@@ -58,30 +58,36 @@ discipline).
 ## Photos & verification
 | Method | Path | Auth | Body → Response | Task |
 |---|---|---|---|---|
-| POST | /photos/upload-url | 🔐 | `{kind, position?, content_type}` → `{photo_id, put_url, headers}`. `content_type` is `image/jpeg`, `image/png` or `image/webp`, signed into the PUT, so send `headers` with it; a hint, never what decides (D-089). Public: `position` 0–5, one per place; private: up to 6; selfie: one being compared, and one never sent to a verification is replaced, as `replaced`, its file deleted (D-263). Each at its step or after (D-068). 30 an hour per user | T-4.2 |
-| POST | /photos/{id}/complete | 🔐 | → `Photo` (pending). The object's bytes decide: a JPEG, PNG or WebP is queued for moderation (a selfie waits for its verification's submit, T-4.5); anything else is `UNSUPPORTED_IMAGE`, over 8 MB `IMAGE_TOO_LARGE`, each rejecting the photo and removing its file. Saying it twice is harmless | T-4.2 |
-| GET | /me/photos | 🔐 | → `Photo[]`: the owner's live public photos by place, then private; never selfies, rejected photos or anyone else's | T-4.3 |
+| POST | /photos/upload-url | 🔐 | `{kind, position?, content_type}` → `{photo_id, put_url, headers}`. `content_type` is `image/jpeg`, `image/png` or `image/webp`, signed into the PUT, so send `headers` with it; a hint, never what decides (D-089). Public: `position` 0–5, one per place; private: up to 6; selfie: one being compared, and one never sent to a verification is replaced, as `replaced`, its file deleted (D-263); `verification`, the face photo (D-391, T-4.12): one live per person, a new one replacing the old as `replaced`, `NOT_ALLOWED` once the selfie matched or while one is being compared. Each at its step or after (D-068). 30 an hour per user | T-4.2 |
+| POST | /photos/{id}/complete | 🔐 | → `Photo` (pending). The object's bytes decide: a JPEG, PNG or WebP is queued for moderation (a selfie waits for its verification's submit, T-4.5); anything else is `UNSUPPORTED_IMAGE`, over 8 MB `IMAGE_TOO_LARGE`, each rejecting the photo and removing its file. Saying it twice is harmless. No photo moves the `photos` step on (T-4.12): `/me/photos/done` does | T-4.2 |
+| GET | /me/photos | 🔐 | → `Photo[]`: the owner's live public photos by place, then private, then the face photo (T-4.12); never selfies, rejected photos or anyone else's | T-4.3 |
 | PATCH | /me/photos/order | 🔐 | `{photo_ids[]}`, exactly the live public photos, each once, the first the main one → `Photo[]`, places 0 onwards | T-4.3 |
-| DELETE | /photos/{id} | 🔐 | → 204 (soft): rejected as `user_deleted`, its public copy removed; twice is once. A selfie, or the last public photo once past the `photos` step, is `NOT_ALLOWED` | T-4.3 |
-| GET | /photos/{id} | 🔐 | → `Photo`: one of the owner's public or private photos, in any status, rejected included, so the photos step can say why one left `/me/photos` (D-096). Someone else's, a selfie, or none: the same `NOT_FOUND` | T-4.6 |
+| POST | /me/photos/done | 🔐 | → `Me`, moving `photos` → `interests`: the step's exit, with or without a public photo (D-392). Anyone but a man needs a face photo, pending or approved (D-391, an allowlist), or `FACE_PHOTO_REQUIRED`. Before `photos`, `ONBOARDING_INCOMPLETE`; once past, `Me` unchanged (D-068) | T-4.12 |
+| DELETE | /photos/{id} | 🔐 | → 204 (soft): rejected as `user_deleted`, its public copy removed; twice is once. The last public photo may go, past the `photos` step too (D-392, T-4.12). A selfie is `NOT_ALLOWED`; the face photo too once the selfie matched or while one is being compared | T-4.3 |
+| GET | /photos/{id} | 🔐 | → `Photo`: one of the owner's public, private or face photos, in any status, rejected included, so the photos step can say why one left `/me/photos` (D-096). Someone else's, a selfie, or none: the same `NOT_FOUND` | T-4.6 |
+| POST | /photos/{id}/show | 🔐 | → `Photo`: also show the face photo on the profile (D-391, T-4.12). An ordinary public photo made from its private copy, in the first free place, pending and queued through moderation as any upload is, carrying `from_photo_id`; twice is the same copy. Hiding it again is `DELETE /photos/{copy}`. The face photo not approved, or no free place (`details.max`): `NOT_ALLOWED`; someone else's, a public photo, or none: `NOT_FOUND`. 30 an hour per user | T-4.12 |
 | POST | /verification/start | 🔐 | → `Verification`, waiting for its selfie: the one already open, or a new one. No pose (D-263). At the `selfie` step or after (D-068). Once matched, or while one is being compared, `NOT_ALLOWED`; 5 selfies sent in a rolling 24 hours, `RATE_LIMITED` with `retry_after_s`. 20 an hour per user | T-4.5 |
 | POST | /verification/{id}/submit | 🔐 | `{photo_id}`, a selfie uploaded through `/photos/upload-url` → `Verification` (pending, `submitted`), its comparison queued, then the worker woken (D-261). Someone else's verification or selfie, or none: `NOT_FOUND`; a selfie decided, held by another verification or never uploaded, or another selfie for one already sent: `NOT_ALLOWED`; the day's five: `RATE_LIMITED`. The same selfie twice is once. 20 an hour per user | T-4.5 |
 | GET | /verification/latest | 🔐 | → `Verification`, the newest; none: `NOT_FOUND` | T-4.5 |
 
-`Photo` (T-4.2, T-4.3): `id`, `kind`, `position`, `status`, `reject_reason`, and `url`: an approved
-public photo at `PUBLIC_CDN_URL`, any other live one by a 10-minute signed link to its private copy,
-`null` for a rejected one. A pending public photo completes the `photos` step (T-4.3).
-`reject_reason` names only `abandoned`, `too_large`, `unsupported_format`, `user_deleted`, `nudity`,
-`no_face` and `text_overlay`; any other reason, a possible minor's included, reads `other` (D-096,
-D-093).
+`Photo` (T-4.2, T-4.3, T-4.12): `id`, `kind`, `position`, `status`, `reject_reason`, `url`: an
+approved public photo at `PUBLIC_CDN_URL`, any other live one by a 10-minute signed link to its
+private copy, `null` for a rejected one; and `from_photo_id`, the face photo a public copy was made
+from by `/photos/{id}/show`, `null` for every other photo. No photo completes the `photos` step
+(T-4.12; until then a pending public one did, T-4.3). `reject_reason` names only `abandoned`,
+`too_large`, `unsupported_format`, `user_deleted`, `replaced`, `nudity`, `no_face` (the face photo
+only, D-392) and `text_overlay`; any other reason, a possible minor's included, reads `other`
+(D-096, D-093).
 
 `Verification` (T-4.5, D-263): `id`, `status` (`pending`, `approved`, `rejected`), `submitted`
 (a selfie is attached: pending and submitted means being compared), `reject_reason` and
 `attempts_left` (selfies that may still be sent in the next 24 hours). Never a similarity, a link or
-the selfie. `reject_reason` names only `no_face`, `many_faces`, `no_match`, `no_photos`,
-`unreadable` and `unavailable`; anything else reads `other`. `approved` means the selfie's face
-matched one of the profile's approved photos at SFace's published threshold (D-260), and nothing
-more: no published word calls it verification (D-262).
+the selfie. `reject_reason` names only `no_face`, `many_faces`, `no_match`, `no_photos` (no approved face
+photo, or no face found in it), `unreadable` and `unavailable`; anything else reads `other`.
+`approved` means the selfie's face matched the face photo's at SFace's published threshold (D-260,
+D-391), and nothing more: no published word calls it verification (D-262). The badge (D-393) is a
+further rule, computed from the shown photos' records, never `is_verified` alone (02-ARCHITECTURE
+§8).
 
 ## Discovery
 | Method | Path | Auth | Body → Response | Task |
@@ -216,7 +222,8 @@ API sent nothing to (D-073) gets `null`, as its phone would. The E2E is its only
 | `ACCOUNT_FROZEN` / `ACCOUNT_BANNED` | 403 | |
 | `BLOCKED` | 403 | either side blocked |
 | `ONBOARDING_INCOMPLETE` | 403 | `details.step`, the user's current step (D-068) |
-| `PROFILE_INCOMPLETE` | 403 | finishing onboarding with something missing; `details.missing`, every one, in onboarding's order: `seeking`, `intents`, `first_name`, `hometown`, `city`, `location`, `username`, `about`, `photo` (an approved public one), `interests` (D-310) |
+| `PROFILE_INCOMPLETE` | 403 | finishing onboarding with something missing; `details.missing`, every one, in onboarding's order: `seeking`, `intents`, `first_name`, `hometown`, `city`, `location`, `username`, `about`, `interests` (D-310; no photo since T-4.12, D-392) |
+| `FACE_PHOTO_REQUIRED` | 403 | leaving the `photos` step with no face photo, pending or approved, by anyone but a man (D-391, T-4.12) |
 | `VERIFICATION_REQUIRED` | 403 | anyone but a man without a matched selfie: a woman, or someone with no gender (D-310) |
 | `NOT_FOUND` | 404 | also used when a blocked user is looked up |
 | `USERNAME_TAKEN` | 409 | |

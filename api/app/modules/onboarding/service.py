@@ -1,4 +1,5 @@
-"""Finishing onboarding (T-4.8, D-310): the `selfie` step's way to `done`.
+"""Finishing onboarding (T-4.8, D-310): the `selfie` step's way to `done`;
+and, from T-4.12, the `photos` step's way on (`leave_photos`).
 
 A man's "Skip for now" and a match's "Continue" both end here, and this, not
 the screen, decides: every requirement met, and a selfie that matched for
@@ -12,9 +13,10 @@ from __future__ import annotations
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.enums import OnboardingStep
+from app.core.enums import OnboardingStep, PhotoKind
 from app.core.errors import AppError
 from app.modules.onboarding import repository, rules
+from app.modules.photos import repository as photos_repository
 from app.modules.profiles.models import Profile
 from app.modules.users import service as users_service
 from app.modules.users.models import User
@@ -41,11 +43,34 @@ async def complete(session: AsyncSession, user: User) -> Me:
         if rules.needs_a_match(user.gender) and not user.is_verified:
             raise AppError(
                 "VERIFICATION_REQUIRED",
-                "Your selfie has to match your photos first.",
+                "Your selfie has to match your face photo first.",
                 status=403,
             )
         profile.completeness = rules.completeness(facts.approved_photos)
         users_service.advance_past(user, OnboardingStep.SELFIE)
+        return await users_service.me(session, user)
+
+
+async def leave_photos(session: AsyncSession, user: User) -> Me:
+    """The `photos` step's exit (T-4.12, D-392): on, with or without a public
+    photo; for anyone but a man, only with a face photo, pending or approved
+    (D-391), or `FACE_PHOTO_REQUIRED`. D-068's rule: before `photos`,
+    `ONBOARDING_INCOMPLETE`; at it, it moves on; once past, `Me` unchanged."""
+    async with session.begin():
+        user = await users_service.locked_user(session, user.id)
+        if not users_service.at_step(user, OnboardingStep.PHOTOS):
+            return await users_service.me(session, user)
+        if rules.needs_a_face_photo(
+            user.gender
+        ) and not await photos_repository.live_photos(
+            session, user.id, PhotoKind.VERIFICATION
+        ):
+            raise AppError(
+                "FACE_PHOTO_REQUIRED",
+                "Add a photo of your face for the selfie check first.",
+                status=403,
+            )
+        users_service.advance_past(user, OnboardingStep.PHOTOS)
         return await users_service.me(session, user)
 
 

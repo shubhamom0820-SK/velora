@@ -19,7 +19,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm.attributes import set_committed_value
 
 from app.core import clock as clock_module
-from app.core.enums import BanKind, Gender, OnboardingStep, PhotoKind
+from app.core.enums import BanKind, Gender, OnboardingStep, PhotoKind, ReviewStatus
 from app.core.errors import AppError
 from app.core.providers import FakeProviders
 from app.core.queue import DELETE_FILES, FakeQueue
@@ -1005,6 +1005,43 @@ async def test_a_refusals_selfie_and_its_verification_go_with_it(
 
     assert _error(response)["code"] == "UNDERAGE"
     assert await _count(db, Verification, user_id=minor_id) == 0
+    assert await _count(db, Photo, user_id=minor_id) == 0
+    [job] = fake_queue.named(DELETE_FILES)
+    assert job.kwargs["objects"] == [["velora-private", raw]]
+
+
+@pytest.mark.critical
+async def test_a_refusals_face_photo_goes_with_it(
+    db: AsyncSession,
+    client: AsyncClient,
+    new_account: NewAccount,
+    fake_providers: FakeProviders,
+    fake_queue: FakeQueue,
+    clock: ModuleType,
+) -> None:
+    """D-078, as T-4.12 inherits it: the face photo is a photo row (kind
+    `verification`), so its key is read before the rows go and its file queued
+    for deletion with the rest (06-TESTING #14, extended)."""
+    clock.freeze(NOON_IST)
+    minor, token = await new_account()
+    minor_id = minor.id
+    face_id = uuid.uuid4()
+    raw = f"raw/{minor_id}/{face_id}"
+    db.add(
+        Photo(
+            id=face_id,
+            user_id=minor_id,
+            kind=PhotoKind.VERIFICATION,
+            raw_key=raw,
+            status=ReviewStatus.APPROVED,
+        )
+    )
+    await db.flush()
+    await fake_providers.storage.put_bytes("velora-private", raw, b"x", "image/jpeg")
+
+    response = await _post_dob(client, token, "2010-01-01")
+
+    assert _error(response)["code"] == "UNDERAGE"
     assert await _count(db, Photo, user_id=minor_id) == 0
     [job] = fake_queue.named(DELETE_FILES)
     assert job.kwargs["objects"] == [["velora-private", raw]]

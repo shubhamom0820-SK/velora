@@ -1,6 +1,6 @@
 """`POST /v1/photos/upload-url` and `POST /v1/photos/{id}/complete` (T-4.2);
 `GET /v1/me/photos`, `PATCH /v1/me/photos/order`, `DELETE /v1/photos/{id}` (T-4.3);
-`GET /v1/photos/{id}` (T-4.6, D-096)."""
+`GET /v1/photos/{id}` (T-4.6, D-096); `POST /v1/photos/{id}/show` (T-4.12, D-391)."""
 
 from __future__ import annotations
 
@@ -24,6 +24,8 @@ router = APIRouter(tags=["photos"])
 # Each URL makes a row and a place held for 5 minutes: generous for anyone
 # filling 6 public and 6 private places, with retries, and no more.
 UPLOAD_URLS_PER_HOUR = 30
+# Showing the face photo copies two files: a tap on a toggle, never a loop.
+SHOWS_PER_HOUR = 30
 
 
 @router.post(
@@ -108,6 +110,30 @@ async def delete_photo(
         session, user, photo_id, storage=providers.storage, settings=settings
     )
     return Response(status_code=204)
+
+
+@router.post(
+    "/photos/{photo_id}/show",
+    dependencies=[
+        Depends(user_rate_limit("photo_show", limit=SHOWS_PER_HOUR, window_s=3600))
+    ],
+)
+async def show_face_photo(
+    photo_id: UUID,
+    user: Annotated[User, Depends(current_user)],
+    session: Annotated[AsyncSession, Depends(get_session)],
+    providers: Annotated[Providers, Depends(get_providers)],
+    queue: Annotated[Queue, Depends(get_queue)],
+    settings: Annotated[Settings, Depends(app_settings)],
+) -> Photo:
+    return await service.show_face_photo(
+        session,
+        user,
+        photo_id,
+        storage=providers.storage,
+        queue=queue,
+        settings=settings,
+    )
 
 
 @router.get("/photos/{photo_id}")

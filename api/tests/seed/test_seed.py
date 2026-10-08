@@ -979,12 +979,20 @@ async def test_a_second_run_adds_no_photo(db: AsyncSession) -> None:
 
     again = await write_seed(db, make_test_settings(), storage=storage)
 
-    assert (again.photos_added, again.verifications_added) == ([], [])
+    assert (
+        again.photos_added,
+        again.verifications_added,
+        again.face_photos_added,
+        again.badges_set,
+    ) == ([], [], [], [])
     assert storage.objects == before
     for person in PEOPLE:
         assert len(await _photos_of(db, person)) == (1 if person.gradient else 0)
         assert len(await _photos_of(db, person, PhotoKind.SELFIE)) == (
             1 if person.verified else 0
+        )
+        assert len(await _photos_of(db, person, PhotoKind.VERIFICATION)) == (
+            1 if run.has_face_photo(person) else 0
         )
 
 
@@ -1000,8 +1008,14 @@ async def test_someone_seeded_before_photos_gets_one_once(db: AsyncSession) -> N
     assert second.created == []
     assert len(second.photos_added) == 22
     assert len(second.verifications_added) == 15
+    assert len(second.face_photos_added) == 18
+    assert len(second.badges_set) == 15
     assert "Placeholder photos added for 22 people." in summary(second)
     assert "Placeholder selfies, approved, added for 15 people." in summary(second)
+    assert "Placeholder face photos, private, added for 18 people." in summary(second)
+    assert "The badge's record set, on the seed's word, for 15 verified" in summary(
+        second
+    )
 
 
 # --- Placeholder selfies (T-4.5) -----------------------------------------------------
@@ -1055,6 +1069,74 @@ async def test_everyone_marked_verified_has_an_approved_selfie_never_compared(
         assert not any(
             k.endswith(str(selfie.id)) for b, k in storage.objects if b == PUBLIC
         )
+
+
+# --- Placeholder face photos and the badge's record (T-4.12) ----------------------------
+
+
+async def test_the_verified_and_the_selfie_step_women_have_a_private_face_photo(
+    db: AsyncSession,
+) -> None:
+    """18: the 15 marked verified, whose selfie is recorded as matched against
+    it, and Ishita, Riya and Pooja, who verify against it from the selfie step
+    (D-391). Each is approved by the seed's word, in the private bucket only,
+    with no public copy, and the gradient turned round as the selfie is."""
+    storage = FakeStorage()
+
+    report = await write_seed(db, make_test_settings(), storage=storage)
+
+    with_one = [p.key for p in PEOPLE if run.has_face_photo(p)]
+    assert report.face_photos_added == with_one
+    assert len(with_one) == 18
+    assert {"ishita", "riya", "pooja"} <= set(with_one)
+    assert all(
+        BY_KEY[k].verified for k in with_one if k not in {"ishita", "riya", "pooja"}
+    )
+    for person in PEOPLE:
+        faces = await _photos_of(db, person, PhotoKind.VERIFICATION)
+        if person.key not in with_one:
+            assert faces == []
+            continue
+        [face] = faces
+        assert (face.status, face.public_key, face.moderation) == (
+            ReviewStatus.APPROVED,
+            None,
+            {"decided_by": "seed"},
+        )
+        assert face.raw_key == f"raw/{face.user_id}/{face.id}"
+        assert (PRIVATE, face.raw_key) in storage.objects
+        assert not any(
+            k.endswith(str(face.id)) for b, k in storage.objects if b == PUBLIC
+        )
+
+
+async def test_the_badges_record_is_the_seeds_word_on_the_verified_ones_photos(
+    db: AsyncSession,
+) -> None:
+    """D-393, in dev: the 15 verified profiles' public photos say their face
+    matched the selfie on the seed's word, with no number and no face claimed
+    (the founder, 8 October 2026), so the badge shows on their cards; nobody
+    else's photo says anything about a match."""
+    from app.modules.verification import repository as verification_repository
+
+    report = await write_seed(db, make_test_settings())
+
+    verified = [p.key for p in PEOPLE if p.verified]
+    assert report.badges_set == verified
+    for person in PEOPLE:
+        user = await _user(db, person.phone)
+        shown = await _photos_of(db, person)
+        record = shown[0].moderation if shown else None
+        if person.verified:
+            assert record == {
+                "decided_by": "seed",
+                "selfie_match": {"matched": True, "decided_by": "seed"},
+            }
+            assert "faces" not in record
+            assert await verification_repository.shows_badge(db, user.id)
+        else:
+            assert record is None
+            assert not await verification_repository.shows_badge(db, user.id)
 
 
 async def test_a_place_0_that_already_holds_a_live_photo_gets_none(

@@ -57,6 +57,10 @@ class PhotoKind(StrEnum):
     PUBLIC = "public"
     PRIVATE = "private"
     SELFIE = "selfie"
+    # The face photo the selfie is compared with (D-391, T-4.12): private unless
+    # its owner chooses to show it, one live per person. An identifier only: in
+    # copy it is "face photo", never a word that claims a check (D-262).
+    VERIFICATION = "verification"
 
 
 class ReviewStatus(StrEnum):

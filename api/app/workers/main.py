@@ -44,9 +44,16 @@ from app.core.config import Settings, get_settings
 from app.core.db import build_engine, build_sessionmaker
 from app.core.logging import configure_logging
 from app.core.providers import Providers, build_providers
-from app.core.queue import DELETE_FILES, MODERATE_PHOTO, VERIFY_SELFIE, ArqQueue
+from app.core.queue import (
+    DELETE_FILES,
+    MATCH_PHOTO,
+    MODERATE_PHOTO,
+    VERIFY_SELFIE,
+    ArqQueue,
+)
 from app.workers.tasks import verify_selfie as verify_selfie_job
 from app.workers.tasks.delete_files import delete_files
+from app.workers.tasks.match_photo import MATCH_TRIES, match_photo
 from app.workers.tasks.moderate_photo import MODERATE_TRIES, moderate_photo
 from app.workers.wake import WakeListener, connect_to
 
@@ -60,6 +67,8 @@ JOBS: Final[Sequence[Function]] = (
         name=VERIFY_SELFIE,
         max_tries=verify_selfie_job.VERIFY_TRIES,
     ),
+    # T-4.12, D-393: a shown photo's face against the kept selfie, for the badge.
+    func(match_photo, name=MATCH_PHOTO, max_tries=MATCH_TRIES),
 )
 # Jobs at once. Decoding is synchronous on the event loop, so only one image is
 # ever decoded at a time, whatever this says (D-092, D-088's 1 GB); the others

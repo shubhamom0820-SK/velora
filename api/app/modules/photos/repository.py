@@ -50,30 +50,35 @@ async def photo_for_update(
     return photo
 
 
+# What the owner is shown: every kind but the selfie, which is T-4.5's.
+OWNERS_KINDS = (PhotoKind.PUBLIC, PhotoKind.PRIVATE, PhotoKind.VERIFICATION)
+
+
 async def owners_photo(
     session: AsyncSession, user_id: UUID, photo_id: UUID
 ) -> Photo | None:
-    """One public or private photo of the user's, in any status; None if
+    """One public, private or face photo of the user's, in any status; None if
     there's none, it's someone else's, or it's a selfie: the same answer for
     each, so ids can't be probed."""
     photo: Photo | None = await session.scalar(
         select(Photo).where(
             Photo.id == photo_id,
             Photo.user_id == user_id,
-            Photo.kind.in_((PhotoKind.PUBLIC, PhotoKind.PRIVATE)),
+            Photo.kind.in_(OWNERS_KINDS),
         )
     )
     return photo
 
 
 async def owners_view(session: AsyncSession, user_id: UUID) -> list[Photo]:
-    """The user's live public and private photos, public first by place, then
-    private oldest first. Selfies are T-4.5's, never listed here."""
+    """The user's live public, private and face photos: public first by
+    place, then private oldest first, then the face photo (T-4.12). Selfies
+    are T-4.5's, never listed here."""
     rows = await session.scalars(
         select(Photo)
         .where(
             Photo.user_id == user_id,
-            Photo.kind.in_((PhotoKind.PUBLIC, PhotoKind.PRIVATE)),
+            Photo.kind.in_(OWNERS_KINDS),
             Photo.status != ReviewStatus.REJECTED,
         )
         .order_by(Photo.kind, Photo.position, Photo.created_at)
@@ -82,6 +87,21 @@ async def owners_view(session: AsyncSession, user_id: UUID) -> list[Photo]:
         .execution_options(populate_existing=True)
     )
     return list(rows)
+
+
+async def shown_from(
+    session: AsyncSession, user_id: UUID, face_photo_id: UUID
+) -> Photo | None:
+    """The live public photo made from this face photo (T-4.12), if any."""
+    photo: Photo | None = await session.scalar(
+        select(Photo).where(
+            Photo.user_id == user_id,
+            Photo.kind == PhotoKind.PUBLIC,
+            Photo.status != ReviewStatus.REJECTED,
+            Photo.moderation["from_photo_id"].astext == str(face_photo_id),
+        )
+    )
+    return photo
 
 
 async def set_positions(

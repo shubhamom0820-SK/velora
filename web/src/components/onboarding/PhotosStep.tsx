@@ -13,11 +13,22 @@ import type { Me } from "@/lib/queries/me";
 import { useFinishPhotos } from "@/lib/queries/photos";
 
 import { errorCopy } from "./errorCopy";
+import { FaceSlot } from "./FaceSlot";
 import { FormError } from "./FormError";
 import { PhotoSlot } from "./PhotoSlot";
 import { StepFrame } from "./StepFrame";
 import { useAdvance } from "./useAdvance";
+import { useFaceSlot } from "./useFaceSlot";
 import { PHOTO_SLOTS, usePhotoSlots, type SlotView } from "./usePhotoSlots";
+
+/**
+ * Who may leave the photos step with no face photo: men only (D-391, D-008).
+ * An allowlist, as the selfie step's "Skip for now" is; the server holds the
+ * same rule (`FACE_PHOTO_REQUIRED`), whatever this screen shows.
+ */
+const MAY_LEAVE_WITHOUT_A_FACE_PHOTO: ReadonlySet<Me["gender"]> = new Set([
+  "male",
+]);
 
 /**
  * A slot's identity: a live photo's own, so a new photo, or its approval,
@@ -33,19 +44,23 @@ function slotKey(view: SlotView, place: number): string {
 /**
  * Photos (T-4.6), the `photos` step: six slots, as the prototype's. Tapping an
  * empty one opens the picker, never forcing the camera, and the photo goes in
- * the first free place, so the places run 0 onwards. The step is done on one
- * public photo, pending or approved, which the API decides at upload (T-4.3).
+ * the first free place, so the places run 0 onwards. From T-4.12 (D-392)
+ * nobody needs a public photo, and none needs to show a face: the step is left
+ * by `POST /me/photos/done`, which a woman may call once her face photo
+ * (D-391, the slot below the grid) is there, pending or approved.
  */
 export function PhotosStep({ me }: { me: Me }) {
   const advance = useAdvance();
   const grid = usePhotoSlots();
+  const face = useFaceSlot();
   const finish = useFinishPhotos();
   const picker = useRef<HTMLInputElement>(null);
   const target = useRef<number | null>(null);
   const [dragged, setDragged] = useState<string | null>(null);
   const failure = finish.error ?? grid.error;
   const copy = failure ? errorCopy(failure) : null;
-  const hasPhoto = grid.live.length > 0;
+  const optional = MAY_LEAVE_WITHOUT_A_FACE_PHOTO.has(me.gender);
+  const mayGo = optional || face.hasOne;
   const firstFree = grid.slots.findIndex((slot) => slot.kind === "empty");
   // A delete or reorder is rewriting places: an upload can't pick one now.
   const locked = grid.busy && !grid.uploading;
@@ -65,11 +80,13 @@ export function PhotosStep({ me }: { me: Me }) {
       footer={
         <Button
           fullWidth
-          disabled={!hasPhoto || grid.busy}
+          disabled={!mayGo || grid.busy}
           loading={finish.isPending}
           onClick={() => finish.mutate(undefined, { onSuccess: advance })}
         >
-          {hasPhoto ? t("onboarding.continue") : t("onboarding.photos.needOne")}
+          {mayGo
+            ? t("onboarding.continue")
+            : t("onboarding.photos.face.needOne")}
         </Button>
       }
     >
@@ -136,6 +153,9 @@ export function PhotosStep({ me }: { me: Me }) {
             <Skeleton key={n} className="rounded-input aspect-[3/4]" />
           ))}
         </div>
+      )}
+      {grid.photos.data && (
+        <FaceSlot slot={face} optional={optional} locked={me.is_verified} />
       )}
       <FormError copy={copy} />
       {me.gender === "female" && (

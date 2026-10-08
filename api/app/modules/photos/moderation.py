@@ -17,9 +17,13 @@ deciding:
    0.5 or more. Swimwear, a bare chest and other merely suggestive photos pass:
    ordinary on dating profiles, and turning them away would reject many real
    ones.
-3. **No face, public photos only:** no real face at all (drawings, statues and
-   masks don't count). Others see a public photo as the person; a private one
-   is shown only to people its owner chose (T-8.4).
+3. **No face, the face photo only** (D-391, D-392; D-101 amended, T-4.12): no
+   real face at all (drawings, statues and masks don't count). The face photo
+   exists to be compared with the selfie, so it must show one. A public photo
+   needn't: hair over the face, a mask, a crop, a photo from behind, an emoji
+   over the face all pass, since nobody need show their face to strangers to be
+   on the app; and a private one is shown only to people its owner chose
+   (T-8.4).
 4. **Text drawn on:** embedded text at 0.8 or more. Phone numbers and handles
    overlaid on a photo would get round the chat's contact masking (T-7.3);
    text in the scene, a sign or a T-shirt, is natural text and passes, and
@@ -54,7 +58,7 @@ def verdict(scores: Scores, kind: PhotoKind) -> Reason | None:
         return "minor_suspected"
     if max(scores.nudity[name] for name in EXPLICIT) >= NUDITY_AT:
         return "nudity"
-    if kind is PhotoKind.PUBLIC and not scores.minors:
+    if kind is PhotoKind.VERIFICATION and not scores.minors:
         return "no_face"
     if scores.text_artificial >= TEXT_AT:
         return "text_overlay"

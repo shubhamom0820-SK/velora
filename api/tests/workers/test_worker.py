@@ -36,7 +36,13 @@ from app.core.config import Settings
 from app.core.db import build_engine
 from app.core.enums import OnboardingStep, PhotoKind, ReviewStatus
 from app.core.providers import FakeProviders
-from app.core.queue import DELETE_FILES, MODERATE_PHOTO, VERIFY_SELFIE, ArqQueue
+from app.core.queue import (
+    DELETE_FILES,
+    MATCH_PHOTO,
+    MODERATE_PHOTO,
+    VERIFY_SELFIE,
+    ArqQueue,
+)
 from app.core.redis import build_redis
 from app.modules.photos import service as photos_service
 from app.modules.photos.models import Photo
@@ -48,6 +54,7 @@ from tests.committed import fresh_man
 from tests.conftest import CapturedLogs, make_test_settings
 from tests.infra import TEST_DATABASE_URL, TEST_REDIS_URL, require_models
 from tests.keys import random_keys
+from tests.modules.verification.test_race import forget_photos
 
 PUBLIC, PRIVATE = "velora-public", "velora-private"
 
@@ -85,9 +92,10 @@ def _settings(**values: Any) -> Settings:
 def test_it_runs_exactly_the_jobs_the_api_queues() -> None:
     jobs = {job.name: job for job in worker.JOBS}
 
-    assert set(jobs) == {MODERATE_PHOTO, DELETE_FILES, VERIFY_SELFIE}
+    assert set(jobs) == {MODERATE_PHOTO, DELETE_FILES, VERIFY_SELFIE, MATCH_PHOTO}
     assert jobs[MODERATE_PHOTO].max_tries == 3
     assert jobs[VERIFY_SELFIE].max_tries == 5
+    assert jobs[MATCH_PHOTO].max_tries == 3
 
 
 def test_it_polls_every_10_seconds_which_is_d091s_sum() -> None:
@@ -350,14 +358,14 @@ async def test_a_submitted_selfie_is_decided_by_the_wake_and_the_job_finds_it_do
             )
             session.add_all(
                 [
+                    # His face photo (T-4.12), approved, in the private bucket.
                     Photo(
                         id=photo_id,
                         user_id=man,
-                        kind=PhotoKind.PUBLIC,
-                        position=0,
+                        kind=PhotoKind.VERIFICATION,
                         raw_key=f"raw/{man}/{photo_id}",
-                        public_key=f"p/{photo_id}.jpg",
                         status=ReviewStatus.APPROVED,
+                        moderation={"faces": 1},
                     ),
                     Photo(
                         id=selfie_id,
@@ -367,7 +375,9 @@ async def test_a_submitted_selfie_is_decided_by_the_wake_and_the_job_finds_it_do
                     ),
                 ]
             )
-        await fake.storage.put_bytes(PUBLIC, f"p/{photo_id}.jpg", _jpeg(), "image/jpeg")
+        await fake.storage.put_bytes(
+            PRIVATE, f"raw/{man}/{photo_id}", _jpeg(), "image/jpeg"
+        )
         await fake.storage.put_bytes(
             PRIVATE, f"raw/{man}/{selfie_id}", _jpeg(), "image/jpeg"
         )
@@ -427,6 +437,7 @@ async def test_a_submitted_selfie_is_decided_by_the_wake_and_the_job_finds_it_do
         selfie = await session.get(Photo, selfie_id)
     assert selfie is not None and selfie.moderation is not None
     assert selfie.moderation["decided_by"] == "wake"
+    await forget_photos(test_engine, man)
 
 
 async def test_arq_never_logs_a_jobs_arguments_which_can_be_storage_keys(

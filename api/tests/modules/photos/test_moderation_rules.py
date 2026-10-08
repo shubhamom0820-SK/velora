@@ -54,10 +54,19 @@ def test_the_merely_suggestive_classes_decide_nothing() -> None:
 
 
 @pytest.mark.parametrize(
-    ("kind", "expected"), [(PhotoKind.PUBLIC, "no_face"), (PhotoKind.PRIVATE, None)]
+    ("kind", "expected"),
+    [
+        (PhotoKind.VERIFICATION, "no_face"),
+        (PhotoKind.PUBLIC, None),
+        (PhotoKind.PRIVATE, None),
+    ],
 )
-def test_no_face_only_for_public_photos(kind: PhotoKind, expected: str | None) -> None:
-    """An artificial face is nobody's: no real face is no face."""
+def test_no_face_for_the_face_photo_never_a_public_one(
+    kind: PhotoKind, expected: str | None
+) -> None:
+    """D-391, D-392 (D-101 amended, T-4.12): the face photo must show a face;
+    a public or private one needn't. An artificial face is nobody's: no real
+    face is no face."""
     assert verdict(_scores(minors=(), artificial_faces=1), kind) == expected
 
 

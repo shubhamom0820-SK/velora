@@ -28,7 +28,7 @@ seeking_t         ('women','men','everyone')
 onboarding_t      ('dob','gender','seeking','profile','username','about','photos','interests','pin','selfie','done')
 user_status_t     ('active','paused','frozen','banned','deleted')
 role_t            ('user','moderator','admin')
-photo_kind_t      ('public','private','selfie')
+photo_kind_t      ('public','private','selfie','verification')   -- verification: the face photo (D-391, T-4.12)
 review_status_t   ('pending','approved','rejected')
 swipe_dir_t       ('like','pass','super')
 thread_status_t   ('active','expired','knotted')
@@ -65,7 +65,7 @@ Intent is not an enum: it is the `intents` catalogue, picked 1 to 3 per user (D-
 | role | role_t not null default 'user' | |
 | status | user_status_t not null default 'active' | |
 | onboarding_step | onboarding_t not null default 'dob' | moves to `done` only for a man or `is_verified` (trigger `users_done_needs_a_match`, D-310) |
-| is_verified | boolean not null default false | the selfie matched the profile's photos (T-4.5, D-260); never "verified" in copy (D-262) |
+| is_verified | boolean not null default false | the selfie matched the face photo (T-4.5, D-391); never "verified" in copy (D-262). Not the badge: that is D-393's rule, computed from `photos` (02-ARCHITECTURE §8) |
 | pin_hash | text null | argon2id over a pepper kept off the database (D-062) |
 | pin_failed | smallint not null default 0 | |
 | referral_code | citext unique not null | generated at creation |
@@ -157,13 +157,13 @@ enforced in the service. Index `(intent_id)`: discovery filters on intent, match
 |---|---|---|
 | id | uuid pk | |
 | user_id | uuid fk users | |
-| kind | photo_kind_t | |
+| kind | photo_kind_t | `verification` is the face photo (D-391, T-4.12): one live per person, private unless a public copy is made from it by `POST /photos/{id}/show`; it can't change once the selfie matched or while one is compared |
 | position | smallint | 0–5 for public; 0 = main |
 | raw_key | text | private bucket key |
 | public_key | text null | set when approved (public kind only) |
 | status | review_status_t default 'pending' | |
 | reject_reason | text null | |
-| moderation | jsonb | every score the decision read (T-4.4): provider, models, `minor` (the highest face's, kept below the threshold too, so D-101's is revisited from real scores), `explicit`, `faces`, `artificial_faces`, `text_artificial`; never the image or the request. A selfie's (T-4.5, D-263): `threshold`, `decided_by` (`wake`, `queue`, or `seed`), `provider`, `faces`, `best`, and `compared` (each photo's id and cosine similarity, exactly); later `review` (the founder's `same`/`different`, D-264) |
+| moderation | jsonb | every score the decision read (T-4.4): provider, models, `minor` (the highest face's, kept below the threshold too, so D-101's is revisited from real scores), `explicit`, `faces`, `artificial_faces`, `text_artificial`; never the image or the request. A selfie's (T-4.5, D-263): `threshold`, `decided_by` (`wake`, `queue`, or `seed`), `provider`, `faces`, `best`, and `compared` (the face photo's id and cosine similarity, exactly; D-391); later `review` (the founder's `same`/`different`, D-264). A public photo's, from T-4.12: `from_photo_id` when it was made from the face photo, and `selfie_match` (D-393: `verification_id`, `provider`, `similarity`, `threshold`, `matched`, `decided_by`, `at`; the seed's says only `matched` and `decided_by: seed`), which the badge reads and never a rejection |
 | width, height | int null | |
 
 Indexes: `(user_id, kind, position)`, `(status) where status='pending'`.

@@ -25,6 +25,7 @@ from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession
 from app.core.enums import OnboardingStep, PhotoKind, ReviewStatus
 from app.core.providers.moderation import FakeModeration
 from app.core.providers.storage import FakeStorage
+from app.core.queue import FakeQueue
 from app.modules.photos import repository, service
 from app.modules.photos.models import Photo
 from app.modules.users.models import User
@@ -110,6 +111,7 @@ async def test_the_decision_and_a_reorder_take_turns(
             pending,
             storage=storage,
             moderation=FakeModeration(),
+            queue=FakeQueue(),
             settings=settings,
         )
 
