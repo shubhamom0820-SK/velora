@@ -27,7 +27,7 @@ import os
 import socket
 import threading
 from collections.abc import AsyncIterator, Callable, Coroutine, Sequence
-from contextlib import asynccontextmanager
+from contextlib import AbstractAsyncContextManager, asynccontextmanager
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, ClassVar, Literal, TypeVar
@@ -46,6 +46,7 @@ from sqlalchemy.ext.asyncio import (
     create_async_engine,
 )
 from sqlalchemy.pool import NullPool
+from starlette.requests import HTTPConnection
 
 # Events only: it reads no settings, so importing it here is safe before
 # conftest makes the environment safe.
@@ -357,6 +358,22 @@ async def session_for_the_app(request: Request) -> AsyncIterator[AsyncSession]:
     transactions queued, to the app's Redis, as `get_session` does (P-64), and
     keeps them for the `published` fixture. What the test itself committed
     before the request is no request's, and is never published."""
+    async with _the_tests_session(request) as session:
+        yield session
+
+
+def session_opener_for_the_app(
+    connection: HTTPConnection,
+) -> Callable[[], AbstractAsyncContextManager[AsyncSession]]:
+    """Stands in for `session_opener` (the socket's, T-7.5): each session it
+    opens is the `db` fixture's, published as `session_for_the_app`'s are."""
+    return lambda: _the_tests_session(connection)
+
+
+@asynccontextmanager
+async def _the_tests_session(
+    connection: HTTPConnection,
+) -> AsyncIterator[AsyncSession]:
     session = ActiveSession.session
     if session is None:
         raise RuntimeError(
@@ -376,7 +393,7 @@ async def session_for_the_app(request: Request) -> AsyncIterator[AsyncSession]:
     finally:
         committed = events.take_committed(session)
         ActiveSession.published.extend(committed)
-        await events.publish(committed, request.app.state.redis)
+        await events.publish(committed, connection.app.state.redis)
 
 
 API_DIR = Path(__file__).resolve().parent.parent

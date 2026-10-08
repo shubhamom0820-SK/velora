@@ -1,4 +1,4 @@
-"""SQL for messages (T-7.1, T-7.3). No rules here: the services decide."""
+"""SQL for messages (T-7.1, T-7.3, T-7.5). No rules here: the services decide."""
 
 from __future__ import annotations
 
@@ -7,7 +7,7 @@ from datetime import datetime
 from typing import Any
 from uuid import UUID
 
-from sqlalchemy import Row, case, exists, insert, or_, select, tuple_
+from sqlalchemy import Row, case, exists, insert, or_, select, tuple_, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.enums import Gender, MessageKind, UserStatus
@@ -145,3 +145,42 @@ async def gender_of(session: AsyncSession, user_id: UUID) -> Gender | None:
         select(User.gender).where(User.id == user_id)
     )
     return gender
+
+
+async def message_in(
+    session: AsyncSession, thread_id: UUID, message_id: UUID
+) -> Message | None:
+    found: Message | None = await session.scalar(
+        select(Message).where(Message.id == message_id, Message.thread_id == thread_id)
+    )
+    return found
+
+
+async def mark_read(
+    session: AsyncSession,
+    thread_id: UUID,
+    reader_id: UUID,
+    *,
+    up_to: tuple[datetime, UUID],
+    since: datetime | None,
+    at: datetime,
+) -> list[tuple[datetime, UUID]]:
+    """Set `read_at = at` on the other person's messages in the Thread not yet
+    read, up to and including `up_to` by `(created_at, id)`, newer than
+    `since` (the reader's clearing). Each marked row's `(created_at, id)`, so
+    the caller can name the newest."""
+    conditions = [
+        Message.thread_id == thread_id,
+        Message.sender_id != reader_id,
+        Message.read_at.is_(None),
+        tuple_(Message.created_at, Message.id) <= up_to,
+    ]
+    if since is not None:
+        conditions.append(Message.created_at > since)
+    rows = await session.execute(
+        update(Message)
+        .where(*conditions)
+        .values(read_at=at)
+        .returning(Message.created_at, Message.id)
+    )
+    return [(row.created_at, row.id) for row in rows]

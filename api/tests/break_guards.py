@@ -6785,7 +6785,7 @@ P64: list[Case] = [
         edits=[
             (
                 INFRA,
-                "        await events.publish(committed, request.app.state.redis)\n",
+                "        await events.publish(committed, connection.app.state.redis)\n",
                 "        pass\n",
             )
         ],
@@ -6891,7 +6891,7 @@ T74: list[Case] = [
         edits=[
             (
                 REALTIME,
-                '        if _type_of(message.get("text")) == PING:\n',
+                "        if type_ == PING:\n",
                 "        if False:\n",
             )
         ],
@@ -7915,6 +7915,288 @@ T68: list[tuple[Case, list[str]]] = [
     ),
 ]
 
+# --- T-7.5: read receipts and typing (D-670) -----------------------------------------
+
+T75_SELECTION = [
+    "tests/modules/messages/test_read.py",
+    "tests/modules/realtime",
+]
+OPENER = "app/core/db.py"
+READ_ANCHOR = (
+    "        thread = await repository.thread_of(session, thread_id, user_id)\n"
+    "        if thread is None:\n"
+    "            raise _not_found()\n"
+    "        since = await repository.cleared_at(session, thread_id, user_id)\n"
+)
+TYPING_ANCHOR = (
+    "        thread = await repository.thread_of(session, thread_id, user_id)\n"
+    "    return None if thread is None else _other_of(thread, user_id)\n"
+)
+CEILING = (
+    "        ceiling = await ratelimit.hit(\n"
+    '            self._redis, "ws_typing", user, limit=TYPING_PER_MINUTE, window_s=60\n'
+    "        )\n"
+    "        if not ceiling.allowed:\n"
+    "            return\n"
+)
+
+T75: list[Case] = [
+    Case(
+        id="t75-01-read-across-a-block",
+        what="a read across a block marks and tells",
+        edits=[
+            (
+                MESSAGES_SERVICE,
+                READ_ANCHOR,
+                READ_ANCHOR.replace(
+                    "repository.thread_of(session, thread_id, user_id)",
+                    "session.get(Thread, thread_id)",
+                ).replace(
+                    "        if thread is None:\n",
+                    "        if thread is None or user_id not in (\n"
+                    "            thread.user_low, thread.user_high\n"
+                    "        ):\n",
+                ),
+            )
+        ],
+        expect=["test_across_a_block_nothing_is_read_and_nobody_told"],
+    ),
+    Case(
+        id="t75-02-read-anyones-thread",
+        what="anyone marks any Thread read",
+        edits=[
+            (
+                MESSAGES_SERVICE,
+                READ_ANCHOR,
+                READ_ANCHOR.replace(
+                    "repository.thread_of(session, thread_id, user_id)",
+                    "session.get(Thread, thread_id)",
+                ),
+            )
+        ],
+        expect=["test_someone_elses_thread_is_not_found"],
+    ),
+    Case(
+        id="t75-03-read-marks-mine",
+        what="a read marks the reader's own messages",
+        edits=[(MESSAGES_REPOSITORY, "        Message.sender_id != reader_id,\n", "")],
+        expect=["test_my_own_messages_are_never_marked"],
+    ),
+    Case(
+        id="t75-04-read-at-moves",
+        what="a second read moves read_at on",
+        edits=[(MESSAGES_REPOSITORY, "        Message.read_at.is_(None),\n", "")],
+        expect=["test_a_read_at_once_set_never_moves_and_a_second_read_tells_nobody"],
+    ),
+    Case(
+        id="t75-05-read-past-the-one-named",
+        what="a read marks messages after the one named",
+        edits=[
+            (
+                MESSAGES_REPOSITORY,
+                "        tuple_(Message.created_at, Message.id) <= up_to,\n",
+                "",
+            )
+        ],
+        expect=["test_their_messages_up_to_the_one_named_are_read_and_they_alone_told"],
+    ),
+    Case(
+        id="t75-06-read-before-the-clearing",
+        what="a read marks what the reader's clearing hid",
+        edits=[
+            (
+                MESSAGES_REPOSITORY,
+                "        conditions.append(Message.created_at > since)\n",
+                "        pass\n",
+            )
+        ],
+        expect=["test_nothing_before_my_clearing_is_marked"],
+    ),
+    Case(
+        id="t75-07-read-up-to-a-hidden-message",
+        what="a read names a message the clearing hid",
+        edits=[
+            (
+                MESSAGES_SERVICE,
+                "        if target is None or (since is not None and target.created_at <= since):\n",
+                "        if target is None:\n",
+            )
+        ],
+        expect=["test_a_message_before_my_clearing_is_not_found"],
+    ),
+    Case(
+        id="t75-08-read-up-to-another-threads-message",
+        what="a read names a message from another Thread",
+        edits=[
+            (
+                MESSAGES_REPOSITORY,
+                "        select(Message).where(Message.id == message_id, Message.thread_id == thread_id)\n",
+                "        select(Message).where(Message.id == message_id)\n",
+            )
+        ],
+        expect=["test_a_message_from_another_thread_or_none_is_not_found"],
+    ),
+    Case(
+        id="t75-09-receipt-to-the-reader",
+        what="message.read told to the reader, not the sender",
+        edits=[
+            (
+                MESSAGES_SERVICE,
+                "            _other_of(thread, user_id),\n            MESSAGE_READ,\n",
+                "            user_id,\n            MESSAGE_READ,\n",
+            )
+        ],
+        expect=[
+            "test_their_messages_up_to_the_one_named_are_read_and_they_alone_told",
+            "test_the_receipt_reaches_his_socket",
+        ],
+    ),
+    Case(
+        id="t75-10-receipt-for-nothing",
+        what="a read that marks nothing still tells",
+        edits=[
+            (
+                MESSAGES_SERVICE,
+                "        if not marked:\n            return\n        _, newest = max(marked)\n",
+                "        newest = max(marked)[1] if marked else request.up_to_message_id\n",
+            )
+        ],
+        expect=["test_my_own_messages_are_never_marked"],
+    ),
+    Case(
+        id="t75-11-receipt-carries-the-hour",
+        what="message.read carries the Thread's expiry (D-554)",
+        edits=[
+            (
+                MESSAGES_SERVICE,
+                '                "up_to_message_id": str(newest),\n',
+                (
+                    '                "up_to_message_id": str(newest),\n'
+                    '                "expires_at": str(thread.expires_at),\n'
+                ),
+            )
+        ],
+        expect=["test_their_messages_up_to_the_one_named_are_read_and_they_alone_told"],
+    ),
+    Case(
+        id="t75-12-typing-across-a-block",
+        what="typing heard across a block",
+        edits=[
+            (
+                MESSAGES_SERVICE,
+                TYPING_ANCHOR,
+                (
+                    "        thread = await session.get(Thread, thread_id)\n"
+                    "    if thread is None or user_id not in (thread.user_low, thread.user_high):\n"
+                    "        return None\n"
+                    "    return _other_of(thread, user_id)\n"
+                ),
+            )
+        ],
+        expect=["test_nothing_is_heard_across_a_block"],
+    ),
+    Case(
+        id="t75-13-typing-in-anyones-thread",
+        what="typing relayed in a Thread that isn't the typist's",
+        edits=[
+            (
+                MESSAGES_SERVICE,
+                TYPING_ANCHOR,
+                (
+                    "        thread = await session.get(Thread, thread_id)\n"
+                    "    return None if thread is None else _other_of(thread, user_id)\n"
+                ),
+            )
+        ],
+        expect=["test_anything_else_is_dropped_and_the_socket_stays_open"],
+    ),
+    Case(
+        id="t75-14-typing-unthrottled",
+        what="every typing relayed, no 3 s throttle",
+        edits=[
+            (
+                REALTIME,
+                "        if not throttle.allowed:\n            return\n",
+                "",
+            )
+        ],
+        expect=["test_one_a_thread_every_three_seconds"],
+    ),
+    Case(
+        id="t75-15-typing-no-ceiling",
+        what="no ceiling across Threads",
+        edits=[(REALTIME, CEILING, "")],
+        expect=["test_forty_a_minute_in_all_then_nothing_is_read"],
+    ),
+    Case(
+        id="t75-16-typing-ceiling-after-the-read",
+        what="the ceiling counted only after the database said yes",
+        edits=[
+            (REALTIME, CEILING, ""),
+            (
+                REALTIME,
+                "        if other is None:\n            return\n",
+                "        if other is None:\n            return\n" + CEILING,
+            ),
+        ],
+        expect=["test_forty_a_minute_in_all_then_nothing_is_read"],
+    ),
+    Case(
+        id="t75-17-typing-echoed",
+        what="typing echoed to the typist's own sockets",
+        edits=[
+            (
+                REALTIME,
+                '            [events.Event(other, TYPING, {"thread_id": str(thread_id)})], self._redis\n',
+                (
+                    "            [\n"
+                    '                events.Event(u, TYPING, {"thread_id": str(thread_id)})\n'
+                    "                for u in (other, self._user_id)\n"
+                    "            ],\n"
+                    "            self._redis,\n"
+                ),
+            )
+        ],
+        expect=["test_the_other_person_hears_it_and_the_typist_doesnt"],
+    ),
+    Case(
+        id="t75-18-typing-names-the-typist",
+        what="typing carries more than its Thread",
+        edits=[
+            (
+                REALTIME,
+                '[events.Event(other, TYPING, {"thread_id": str(thread_id)})]',
+                '[events.Event(other, TYPING, {"thread_id": str(thread_id), "user_id": user})]',
+            )
+        ],
+        expect=["test_the_other_person_hears_it_and_the_typist_doesnt"],
+    ),
+    Case(
+        id="t75-19-opener-publishes-nothing",
+        what="the socket's session drops its committed events",
+        edits=[
+            (
+                OPENER,
+                "            await events.publish(committed, app.state.redis)\n",
+                "            pass\n",
+            )
+        ],
+        expect=["test_the_opener_hands_its_connection_back_and_publishes_after"],
+    ),
+    Case(
+        id="t75-20-opener-keeps-its-connection",
+        what="the socket's session never closed, its connection held (D-557)",
+        edits=[
+            (
+                OPENER,
+                "            async with sessionmaker() as session:\n",
+                "            session = sessionmaker()\n            if True:\n",
+            )
+        ],
+        expect=["test_the_opener_hands_its_connection_back_and_publishes_after"],
+    ),
+]
+
 CASES: list[tuple[Case, list[str]]] = (
     [(c, T51_SELECTION) for c in T51]
     + [(c, T54_SELECTION) for c in T54]
@@ -7952,6 +8234,7 @@ CASES: list[tuple[Case, list[str]]] = (
     + T67
     + [(c, T78_SELECTION) for c in T78]
     + T68
+    + [(c, T75_SELECTION) for c in T75]
 )
 
 # The fifty-connection fixture's own message when Postgres refuses a connection.

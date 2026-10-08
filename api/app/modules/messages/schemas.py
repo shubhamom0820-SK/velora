@@ -1,4 +1,4 @@
-"""Messages — the requests and responses (04-API.md, T-7.1 and T-7.3)."""
+"""Messages — the requests and responses (04-API.md, T-7.1, T-7.3, T-7.5)."""
 
 from __future__ import annotations
 
@@ -70,3 +70,12 @@ class SendMessageRequest(BaseModel):
             if self.media_key is not None or self.duration_s is not None:
                 raise ValueError("a text message has no media")
         return self
+
+
+class ReadRequest(BaseModel):
+    """`{up_to_message_id}`: the other person's messages are read up to this
+    one, which must be one I can see in the Thread (T-7.5)."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    up_to_message_id: UUID

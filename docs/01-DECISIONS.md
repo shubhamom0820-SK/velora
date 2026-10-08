@@ -4494,6 +4494,10 @@ imports it; the API's own sockets are Starlette's. The tests use no client libra
   120 MB idle, 137 to 210 MB with every socket open, and 170 to 198 MB after the events. Under
   256 MB in every run, the worst by about 46 MB. A local measure, never Fly's.
 
+**Amended 8 October 2026 by D-670 (T-7.5):** a relayed `typing` reads the database once, in a
+short session closed before the next frame is read, after two checks in Redis. Between events a
+socket still holds no connection.
+
 **Corrected in planning:** Claude's plan (Q10) said Fly caps a machine at about 25 connections
 unless `[http_service.concurrency]` says otherwise. Fly's own reference (read 8 October 2026)
 says the default is `type = "connections"`, a `soft_limit` of 20, a load-balancing preference,
@@ -4742,6 +4746,38 @@ id reaches a hidden profile its matches may open, D-493).
 
 Agreed between T-6.5's and T-6.8's sessions, 8 October 2026, under the founder's rule; written up
 by Claude.
+
+### D-670 · Typing reads the database once a relay, in a short session; read receipts to the other person alone — Locked
+**The decision (T-7.5; the founder, 8 October 2026, on the advisor's recommendation (Claude, in a
+separate chat), relayed by the founder; the shape Claude's, in T-7.5's plan):**
+- **Typing** (02-ARCHITECTURE §6): the client's `{type: "typing", data: {thread_id}}` reaches the
+  other person in that Thread as `{thread_id}` and nothing more, never the typist's own sockets.
+  Two checks in Redis come first, both through `core/ratelimit.py`: **one a Thread every 3
+  seconds** (§6's throttle) and **40 a minute in all**, so a client naming Thread after Thread
+  can't turn typing into a stream of database reads. Only then does the gateway open **one short
+  session** (`core/db.py`'s `session_opener`) to ask whether the typist is one of the Thread's two
+  with no block either way (T-7.3's `thread_of`), and close it before it publishes. Anything
+  else (a malformed envelope, someone else's Thread, a block, a throttled or capped one) is
+  dropped quietly, and the socket stays open: §6 has no error frame. A relay waits at most 1
+  second; a failure is logged and never ends the socket.
+- **This amends D-557's "the gateway reads no database".** The socket still holds no
+  connection between events: each relay's session takes one from the pool and hands it back
+  before the next frame is read. At most 40 reads a minute a user.
+- **Read receipts:** `POST /v1/threads/{id}/read {up_to_message_id}` → 204 marks the other
+  person's messages not yet read, up to and including the one named, after the reader's
+  clearing, with `clock.now()`. A `read_at` once set never moves. `message.read`
+  (`{thread_id, up_to_message_id, read_at}`, naming the newest message it marked) goes to **the
+  other person alone**, and only when something was marked; the reader's other devices read
+  their counts from the list. Neither event carries an expiry or a price, whoever reads or types
+  (D-554). A message from before the reader's clearing is never marked (they never saw it, so
+  her "Not seen yet" stays true), and naming one is `NOT_FOUND`, as is anyone else's Thread, one
+  across a block, or another Thread's message. Clearing itself never touches `read_at` (T-7.8).
+  The route keeps `current_user`'s 300 a minute: a read that marks nothing tells nobody.
+
+**Rejected:** a REST `POST /threads/{id}/typing` (§6 puts typing on the socket, and a request a
+keystroke is heavier than a frame); caching who may hear whom in Redis (a block would go unseen
+until the entry expired); a session held for the socket's life (P-52, D-557); `message.read` to
+the reader's own sockets too (§6 names the other person).
 
 ## Adding a decision
 

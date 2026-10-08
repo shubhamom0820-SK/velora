@@ -7,6 +7,7 @@ from typing import Annotated
 from fastapi import APIRouter, Depends, WebSocket
 from redis.asyncio import Redis
 
+from app.core.db import SessionOpener, session_opener
 from app.core.deps import app_redis, onboarded_user, user_rate_limit
 from app.modules.realtime import service
 from app.modules.realtime.schemas import WsTicket
@@ -34,5 +35,8 @@ async def ticket(
 
 
 @gateway.websocket("/ws")
-async def socket(websocket: WebSocket) -> None:
-    await service.serve(websocket)
+async def socket(
+    websocket: WebSocket,
+    open_session: Annotated[SessionOpener, Depends(session_opener)],
+) -> None:
+    await service.serve(websocket, open_session)

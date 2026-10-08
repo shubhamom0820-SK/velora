@@ -172,8 +172,8 @@ Envelope, both directions: `{ "type": "…", "id": "<uuid>", "data": { … } }`
 | Server → client | When |
 |---|---|
 | `message.new` | new message in a thread you're in |
-| `message.read` | the other person read up to a message |
-| `typing` | other person typing (throttled 1/3 s) |
+| `message.read` | the other person read up to a message: `{thread_id, up_to_message_id, read_at}`, the newest of yours they marked (T-7.5, D-670) |
+| `typing` | other person typing: `{thread_id}` alone (T-7.5, D-670) |
 | `thread.opened` | someone opened a thread with you |
 | `thread.expiring` | `thread_warn_minutes` (10) left; to him only, never her (T-7.6) |
 | `thread.expired` | expired; to him only (T-7.6) |
@@ -184,7 +184,7 @@ Envelope, both directions: `{ "type": "…", "id": "<uuid>", "data": { … } }`
 
 | Client → server | Effect |
 |---|---|
-| `typing` | relayed to the other participant |
+| `typing` | `{thread_id}`: relayed to the other participant, never the typist's own sockets, nor across a block. One a Thread every 3 s and 40 a minute in all, both in Redis before one short database read; anything else dropped quietly, the socket left open (T-7.5, D-670) |
 | `ping` | server replies `pong`; client reconnects if no pong in 10 s. Ping well inside 60 s: a socket silent that long is closed (4408) |
 
 Sending messages is **REST** (`POST /v1/threads/{id}/messages`) so it goes through validation,
@@ -487,6 +487,8 @@ secret is left empty. Real secret values are never committed.
 | PIN set and verify | 10 / min / user (D-069) |
 | Swipes | 120 / min (plus daily cap 50 for men, from `app_config`) |
 | Send message | 30 / min / user |
+| `POST /threads/{id}/read` | `current_user`'s 300 / min (T-7.5): a read that marks nothing tells nobody, and what one can tell is bounded by the other person's messages |
+| `typing` on the socket | 1 a Thread every 3 s and 40 / min / user, dropped quietly past either (T-7.5, D-670): both before the database is read |
 | Reports | 10 / day / user |
 | Username check | 30 / min / user |
 | `GET /search` | 60 / min / user (T-6.6): `@` search walks usernames by their start; a person typing fits, a script listing them doesn't (D-540) |

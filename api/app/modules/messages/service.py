@@ -1,4 +1,5 @@
-"""Messages (T-7.1 writes the first; T-7.3 reads them and sends the rest).
+"""Messages (T-7.1 writes the first; T-7.3 reads them and sends the rest;
+T-7.5 marks them read and says who hears a typing).
 
 Every text passes `filters` first: refused for abuse or asking for money
 (`MESSAGE_REJECTED`, a `message_rejected` signal kept), then masked in the
@@ -13,7 +14,7 @@ from dataclasses import dataclass
 from datetime import datetime, timedelta
 from uuid import UUID
 
-from pydantic import AwareDatetime
+from pydantic import AwareDatetime, TypeAdapter
 from redis.asyncio import Redis
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -24,7 +25,12 @@ from app.core.pagination import Cursor, PageParams
 from app.modules.admin import service as admin_service
 from app.modules.messages import filters, limits, repository, rules
 from app.modules.messages.models import Message as MessageRow
-from app.modules.messages.schemas import Message, MessagePage, SendMessageRequest
+from app.modules.messages.schemas import (
+    Message,
+    MessagePage,
+    ReadRequest,
+    SendMessageRequest,
+)
 from app.modules.pricing import service as pricing_service
 from app.modules.safety import service as safety_service
 from app.modules.threads import rules as threads_rules
@@ -34,6 +40,7 @@ from app.modules.wallet.rules import Ref, RefType
 
 MASK_KEY = "mask_first_n_messages"
 MESSAGE_NEW = "message.new"
+MESSAGE_READ = "message.read"
 
 
 def _rejected(rule: str) -> AppError:
@@ -326,3 +333,67 @@ async def _send_in(
             thread.expiry_warned_at = None
     announce(session, row, other_id)
     return _Sent(view_of(row, user.id), new=True)
+
+
+# --- Read receipts and typing (T-7.5) -----------------------------------------------
+
+# `read_at` in the event as `Message.read_at` is in a response.
+_AS_JSON: TypeAdapter[datetime] = TypeAdapter(datetime)
+
+
+async def mark_read(
+    session: AsyncSession, user: User, thread_id: UUID, request: ReadRequest
+) -> None:
+    """The other person's messages read by `user`, up to the one named.
+
+    The message named must be one `user` can see: in this Thread, after their
+    clearing. Only the other person's, only those not read yet, and only those
+    after the clearing (a message hidden from them was never seen): a read_at
+    once set never moves. `message.read` goes to the other person alone, naming
+    the newest message it marked, and only if it marked one. It carries no
+    countdown and no price, whoever reads (D-554). Anyone else's Thread, or one
+    across a block, is `NOT_FOUND`, and so is a message they can't see.
+    """
+    user_id = user.id
+    async with session.begin():
+        thread = await repository.thread_of(session, thread_id, user_id)
+        if thread is None:
+            raise _not_found()
+        since = await repository.cleared_at(session, thread_id, user_id)
+        target = await repository.message_in(
+            session, thread_id, request.up_to_message_id
+        )
+        if target is None or (since is not None and target.created_at <= since):
+            raise _not_found()
+        at = clock.now()
+        marked = await repository.mark_read(
+            session,
+            thread_id,
+            user_id,
+            up_to=(target.created_at, target.id),
+            since=since,
+            at=at,
+        )
+        if not marked:
+            return
+        _, newest = max(marked)
+        events.queue(
+            session,
+            _other_of(thread, user_id),
+            MESSAGE_READ,
+            {
+                "thread_id": str(thread_id),
+                "up_to_message_id": str(newest),
+                "read_at": _AS_JSON.dump_python(at, mode="json"),
+            },
+        )
+
+
+async def typing_recipient(
+    session: AsyncSession, user_id: UUID, thread_id: UUID
+) -> UUID | None:
+    """Who hears that `user_id` is typing in the Thread: the other person, if
+    `user_id` is one of its two and no block stands between them; else nobody."""
+    async with session.begin():
+        thread = await repository.thread_of(session, thread_id, user_id)
+    return None if thread is None else _other_of(thread, user_id)

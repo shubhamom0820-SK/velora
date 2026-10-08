@@ -1041,6 +1041,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/threads/{thread_id}/read": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Mark Read */
+        post: operations["mark_read_v1_threads__thread_id__read_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/ws/ticket": {
         parameters: {
             query?: never;
@@ -1891,6 +1908,18 @@ export interface components {
             /** Match Id */
             match_id: string | null;
             thread: components["schemas"]["ThreadWithMe"] | null;
+        };
+        /**
+         * ReadRequest
+         * @description `{up_to_message_id}`: the other person's messages are read up to this
+         *     one, which must be one I can see in the Thread (T-7.5).
+         */
+        ReadRequest: {
+            /**
+             * Up To Message Id
+             * Format: uuid
+             */
+            up_to_message_id: string;
         };
         /** ReadinessChecks */
         ReadinessChecks: {
@@ -4242,6 +4271,39 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["Message"];
                 };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    mark_read_v1_threads__thread_id__read_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                thread_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ReadRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
             /** @description Validation Error */
             422: {

@@ -18,12 +18,13 @@ from __future__ import annotations
 import importlib.util
 import pkgutil
 import uuid
-from collections.abc import AsyncIterator
+from collections.abc import AsyncIterator, Callable
+from contextlib import AbstractAsyncContextManager, asynccontextmanager
 from datetime import datetime, timedelta
 from enum import StrEnum
 from typing import Any
 
-from fastapi import Request
+from fastapi import FastAPI, Request
 from sqlalchemy import DateTime, ForeignKey, MetaData, event, exc, func, text
 from sqlalchemy.dialects.postgresql import ENUM, UUID
 from sqlalchemy.engine import Connection, Engine
@@ -41,6 +42,7 @@ from sqlalchemy.orm import (
     mapped_column,
 )
 from sqlalchemy.pool import ConnectionPoolEntry, PoolProxiedConnection
+from starlette.requests import HTTPConnection
 
 from app.core import clock, events
 from app.core.enums import PG_ENUMS
@@ -293,6 +295,35 @@ async def get_session(request: Request) -> AsyncIterator[AsyncSession]:
                 committed = events.take_committed(session)
     finally:
         await events.publish(committed, request.app.state.redis)
+
+
+# Opens one short session, as `session_opener` hands it out.
+SessionOpener = Callable[[], AbstractAsyncContextManager[AsyncSession]]
+
+
+def session_opener(connection: HTTPConnection) -> SessionOpener:
+    """FastAPI dependency for what reaches the database outside a request's own
+    session: the socket, which reads it once a relayed `typing` (T-7.5, D-670).
+
+    Each call opens a short session, as `get_session` does: one connection
+    while it lives, handed back when it closes, its committed events published
+    after that. A socket holds none between them (D-557)."""
+    app: FastAPI = connection.app
+
+    @asynccontextmanager
+    async def opened() -> AsyncIterator[AsyncSession]:
+        sessionmaker: async_sessionmaker[AsyncSession] = app.state.sessionmaker
+        committed: list[events.Event] = []
+        try:
+            async with sessionmaker() as session:
+                try:
+                    yield session
+                finally:
+                    committed = events.take_committed(session)
+        finally:
+            await events.publish(committed, app.state.redis)
+
+    return opened
 
 
 async def check_database(engine: AsyncEngine) -> None:

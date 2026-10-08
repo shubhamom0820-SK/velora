@@ -49,6 +49,7 @@ from tests.infra import (
     infra_policy,
     run_alembic,
     session_for_the_app,
+    session_opener_for_the_app,
     transactional_session,
 )
 
@@ -73,7 +74,7 @@ from app.core import clock as core_clock
 from app.core import events
 from app.core.clock import today_ist
 from app.core.config import Settings
-from app.core.db import build_engine, get_session
+from app.core.db import build_engine, get_session, session_opener
 from app.core.enums import (
     Gender,
     LedgerReason,
@@ -233,6 +234,7 @@ async def app(
     request publishes reaches Redis, as in the app, and `published` (P-64)."""
     application = create_app(make_test_settings())
     application.dependency_overrides[get_session] = session_for_the_app
+    application.dependency_overrides[session_opener] = session_opener_for_the_app
     application.state.providers = fake_providers.as_providers()
     application.state.queue = fake_queue
     try:

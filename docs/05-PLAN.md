@@ -2947,9 +2947,23 @@ prices don't depend on the web photos step, and the hold is lifted.
 - [x] **Commit:** `feat(realtime): websocket gateway [T-7.4]`
 
 ### T-7.5 · Read receipts and typing
-- [ ] **Needs:** T-7.4
-- [ ] `POST /threads/{id}/read` sets `read_at` up to a message, publishes `message.read`. Client `typing` relay throttled.
-- [ ] **Commit:** `feat(realtime): read receipts and typing [T-7.5]`
+- [x] **Needs:** T-7.4
+- [x] `POST /threads/{id}/read` sets `read_at` up to a message, publishes `message.read`. Client `typing` relay throttled.
+  **Built as D-670, 8 October 2026** (the founder, on the advisor's recommendation, relayed):
+  a read marks the other person's messages not yet read, up to and including the one named and
+  after the reader's clearing; a `read_at` once set never moves; `message.read`
+  (`{thread_id, up_to_message_id, read_at}`) goes to them alone, only when something was marked,
+  and neither event carries an expiry or a price (D-554), so her "Not seen yet" (08-DESIGN §8)
+  is her message's `read_at` still null. `NOT_FOUND` for anyone else's Thread, a block either
+  way, another Thread's message and one before the clearing. **Typing** reaches the other person
+  as `{thread_id}` alone, never the typist's own sockets: one a Thread every 3 s and 40 a minute
+  in all, both in Redis, before one short session (`core/db.py`'s `session_opener`) asks
+  whether they are its two with no block; anything else is dropped quietly, the socket left
+  open. This amends D-557's "the gateway reads no database". **Broken once each** (`uv run
+  python -m tests.break_guards t75-`): twenty cases, each red in 1 of 1, every file restored
+  and none differing by SHA-256 after. Three older cases anchored on code this task moved
+  (`t73-20`, `p64-01`, `t74-06`) were re-anchored and each went red again.
+- [x] **Commit:** `feat(realtime): read receipts and typing [T-7.5]`
 
 ### T-7.6 · The 1-hour Thread: expiry, re-open, Extend
 - [ ] **Needs:** T-7.4 (and through it T-7.3, whose send path this task changes)
