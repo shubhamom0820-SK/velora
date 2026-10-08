@@ -52,7 +52,12 @@ class Card(BaseModel):
 
 
 class CardPage(Page[Card]):
-    """`Page<Card>`: by score, best first, then by id (D-491)."""
+    """`Page<Card>`: by score, best first, then by id (D-491); and how many of
+    today's swipes a man has left, so the deck can say it before his first
+    swipe (T-6.5): the same number `POST /swipes` returns, null for anyone
+    uncapped, a woman."""
+
+    swipes_left: int | None = None
 
 
 class KudosCounts(BaseModel):

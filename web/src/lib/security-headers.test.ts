@@ -288,6 +288,7 @@ describe("the nonce routes' CSP (T-6.6, D-541)", () => {
     "/chats",
     "/wallet",
     "/you",
+    "/people/5f0c2b9e-0d1a-4c55-9a43-0c1a2b3c4d5e",
   ];
   const STATIC = [
     "/",
@@ -297,6 +298,7 @@ describe("the nonce routes' CSP (T-6.6, D-541)", () => {
     "/admin",
     "/discoverx",
     "/youth",
+    "/peoples",
     "/logins",
     "/robots.txt",
   ];

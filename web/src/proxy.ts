@@ -31,5 +31,6 @@ export const config = {
     "/chats/:path*",
     "/wallet/:path*",
     "/you/:path*",
+    "/people/:path*",
   ],
 };

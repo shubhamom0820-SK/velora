@@ -15,6 +15,7 @@ from typing import Any
 from uuid import UUID
 
 from pydantic import AwareDatetime
+from redis.asyncio import Redis
 from sqlalchemy import Row
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -39,6 +40,8 @@ from app.modules.discovery.schemas import (
 )
 from app.modules.profiles import repository as profiles_repository
 from app.modules.profiles import rules as profiles_rules
+from app.modules.swipes import counter as swipe_counter
+from app.modules.swipes import rules as swipe_rules
 from app.modules.users import service as users_service
 from app.modules.users.models import User
 
@@ -63,6 +66,7 @@ async def viewer_of(session: AsyncSession, user: User) -> repository.Viewer:
 
 async def discover(
     session: AsyncSession,
+    redis: Redis,
     user: User,
     *,
     feed: Feed,
@@ -73,7 +77,50 @@ async def discover(
     config: admin_service.ConfigCache | None = None,
 ) -> CardPage:
     """One page of `feed` for `user`. `intent_ids` keeps those sharing any of
-    them (D-041); `verified`, those showing the badge (D-393)."""
+    them (D-041); `verified`, those showing the badge (D-393). With it, a
+    man's swipes left today (T-6.5), as `POST /swipes` counts them."""
+    page = await _feed_page(
+        session,
+        user,
+        feed=feed,
+        intent_ids=intent_ids,
+        verified=verified,
+        params=params,
+        settings=settings,
+        config=config,
+    )
+    return page.model_copy(
+        update={"swipes_left": await _swipes_left(session, redis, user, config)}
+    )
+
+
+async def _swipes_left(
+    session: AsyncSession,
+    redis: Redis,
+    user: User,
+    config: admin_service.ConfigCache | None,
+) -> int | None:
+    """A man's places left in today's count (D-492); None for anyone uncapped."""
+    if not swipe_rules.capped(user.gender):
+        return None
+    async with session.begin():
+        limit = await admin_service.config_int(
+            session, swipe_rules.DAILY_CAP_KEY, cache=config
+        )
+    return await swipe_counter.left(redis, user.id, clock.today_ist(), limit)
+
+
+async def _feed_page(
+    session: AsyncSession,
+    user: User,
+    *,
+    feed: Feed,
+    intent_ids: Collection[int],
+    verified: bool,
+    params: PageParams,
+    settings: Settings,
+    config: admin_service.ConfigCache | None,
+) -> CardPage:
     as_of, after = clock.now(), None
     if params.cursor is not None:
         as_of, score, last = FEED_CURSOR.decode(params.cursor)

@@ -1158,13 +1158,18 @@ export interface components {
         };
         /**
          * CardPage
-         * @description `Page<Card>`: by score, best first, then by id (D-491).
+         * @description `Page<Card>`: by score, best first, then by id (D-491); and how many of
+         *     today's swipes a man has left, so the deck can say it before his first
+         *     swipe (T-6.5): the same number `POST /swipes` returns, null for anyone
+         *     uncapped, a woman.
          */
         CardPage: {
             /** Items */
             items: components["schemas"]["Card"][];
             /** Next Cursor */
             next_cursor: string | null;
+            /** Swipes Left */
+            swipes_left?: number | null;
         };
         /**
          * ClaimAction

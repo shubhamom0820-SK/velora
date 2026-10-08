@@ -43,6 +43,15 @@ const CAMERA_TEST = "src/lib/camera.test.ts";
 const VERIFICATION_TEST = "src/lib/queries/verification.test.tsx";
 const SEARCH_TEST = "src/components/search/SearchScreen.test.tsx";
 const PROXY_TEST = "src/proxy.test.ts";
+const DECK_TEST = "src/components/discover/DiscoverScreen.test.tsx";
+const PROVIDER_TEST = "src/lib/queries/QueryProvider.test.tsx";
+const DECK = "src/components/discover/DiscoverScreen.tsx";
+const SHOWN =
+  "shows Super's price from /prices as a number, and sends exactly it";
+const HER_DECK = "shows no price anywhere and sends 0 with her Super Like";
+const HIS_THREAD =
+  "offers him the Thread at /prices' price and sends exactly it";
+const HER_THREAD = "offers her the Thread free, sending 0";
 
 const HEADERS = "src/lib/security-headers.ts";
 const CONNECT = "connect: ` ${storage.privateBucket}`,";
@@ -715,6 +724,155 @@ export const CASES: BreakCase[] = [
       "never serves a nonce route under no policy",
       "refuses to serve a page when the build has no nonce policy",
     ],
+  },
+  // --- T-6.5: the deck. The price shown is the price sent (P-56) ---
+  {
+    id: "t65-01-super-sends-a-literal",
+    file: DECK,
+    old: 'void send(card, dir, dir === "super" ? (superPrice ?? 0) : 0);',
+    new: 'void send(card, dir, dir === "super" ? 5 : 0);',
+    run: [DECK_TEST],
+    expect: [SHOWN, HER_DECK],
+  },
+  {
+    id: "t65-02-super-badge-a-literal",
+    file: "src/components/discover/ActionRow.tsx",
+    old: "<PriceTag credits={superPrice} />",
+    new: "<PriceTag credits={5} />",
+    run: [DECK_TEST],
+    expect: [SHOWN, "says the new price and asks /prices again"],
+  },
+  {
+    id: "t65-03-a-woman-shown-prices",
+    file: DECK,
+    old: "    if (!isMan) return null;\n",
+    new: "",
+    run: [DECK_TEST],
+    expect: [HER_DECK, HER_THREAD],
+  },
+  {
+    id: "t65-04-thread-sends-a-literal",
+    file: "src/components/discover/MatchSheet.tsx",
+    old: "shown_price: openPrice ?? 0,",
+    new: "shown_price: 5,",
+    run: [DECK_TEST],
+    expect: [HIS_THREAD, HER_THREAD],
+  },
+  {
+    id: "t65-05-price-changed-not-asked-again",
+    file: "src/lib/queries/QueryProvider.tsx",
+    old: "          void client.invalidateQueries({ queryKey: queryKeys.prices() });\n",
+    new: "",
+    run: [PROVIDER_TEST, DECK_TEST],
+    expect: [
+      "asks for /prices again when a mutation is refused with PRICE_CHANGED",
+      "says the new price and asks /prices again",
+    ],
+  },
+  // --- The optimistic swipe ---
+  {
+    id: "t65-06-never-put-back",
+    file: DECK,
+    old: "        putBack(card.id);\n",
+    new: "",
+    run: [DECK_TEST],
+    expect: [
+      "puts the card back with a toast after a network failure",
+      "puts the card back with a toast after a 500",
+      "opens the store when he is out of Velas",
+      "says the new price and asks /prices again",
+      "at the cap",
+    ],
+  },
+  {
+    id: "t65-07-put-back-when-gone-anyway",
+    file: DECK,
+    old: '  "ALREADY_EXISTS",\n  "NOT_FOUND",\n]);',
+    new: "]);",
+    run: [DECK_TEST],
+    expect: ["leaves the card gone after ALREADY_EXISTS", "after NOT_FOUND"],
+  },
+  {
+    id: "t65-08-the-cap-not-held",
+    file: DECK,
+    old: 'if (isMan && dir !== "super" && swipesLeft === 0) {',
+    new: "if (false) {",
+    run: [DECK_TEST],
+    expect: ["at the cap"],
+  },
+  // --- What is drawn and asked for ---
+  {
+    id: "t65-09-every-card-drawn",
+    file: "src/components/discover/Deck.tsx",
+    old: "export const RENDERED = 3;",
+    new: "export const RENDERED = 30;",
+    run: [DECK_TEST],
+    expect: ["draws three cards at most"],
+  },
+  {
+    id: "t65-10-next-page-asked-early",
+    file: DECK,
+    old: "export const PREFETCH_AT = 5;",
+    new: "export const PREFETCH_AT = 6;",
+    run: [DECK_TEST],
+    expect: ["asks for the next page when 5 cards are left"],
+  },
+  {
+    id: "t65-11-next-page-never-asked",
+    file: DECK,
+    old: "if (cards.length <= PREFETCH_AT && hasNextPage && !isFetchingNextPage) {",
+    new: "if (cards.length < 0 && hasNextPage && !isFetchingNextPage) {",
+    run: [DECK_TEST],
+    expect: ["asks for the next page when 5 cards are left"],
+  },
+  {
+    id: "t65-12-super-like-not-spending",
+    file: "src/lib/queries/discover.ts",
+    old: '      api.post("/v1/swipes", { body: variables }),\n    meta: { touchesWallet: true },\n',
+    new: '      api.post("/v1/swipes", { body: variables }),\n',
+    run: [DECK_TEST],
+    expect: ["marks a Super Like as spending Velas"],
+  },
+  {
+    id: "t65-13-thread-not-spending",
+    file: "src/lib/queries/discover.ts",
+    old: '      api.post("/v1/threads", { body: variables }),\n    meta: { touchesWallet: true },\n',
+    new: '      api.post("/v1/threads", { body: variables }),\n',
+    run: [DECK_TEST],
+    expect: [HIS_THREAD],
+  },
+  // --- The badge (D-393) and the keys ---
+  {
+    id: "t65-14-tick-on-a-silhouette",
+    file: "src/components/discover/SwipeCard.tsx",
+    old: "const badge = card.shows_badge && photo !== null;",
+    new: "const badge = card.shows_badge;",
+    run: [DECK_TEST],
+    expect: ["with no photo"],
+  },
+  {
+    id: "t65-15-tick-unearned",
+    file: "src/components/discover/SwipeCard.tsx",
+    old: "const badge = card.shows_badge && photo !== null;",
+    new: "const badge = photo !== null;",
+    run: [DECK_TEST],
+    expect: ["no tick"],
+  },
+  {
+    id: "t65-16-keys-taken-from-a-field",
+    file: DECK,
+    old: "      if (typing(event.target)) return;\n",
+    new: "",
+    run: [DECK_TEST],
+    expect: ["leaves the keys alone"],
+  },
+  {
+    id: "t65-17-profile-left-to-the-static-csp",
+    file: HEADERS,
+    old: '  "people",\n',
+    new: "",
+    run: [CSP_TEST],
+    expect: ["has the proxy match exactly NONCE_ROUTES", "leaves /people/"],
   },
 ];
 

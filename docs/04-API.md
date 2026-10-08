@@ -100,13 +100,17 @@ further rule, computed from the shown photos' records, never `is_verified` alone
 ## Discovery
 | Method | Path | Auth | Body → Response | Task |
 |---|---|---|---|---|
-| GET | /discover | ✅ | `?feed=foryou|new|online&intent_ids=&verified=&cursor=&limit=` → `Page<Card>` (`intent_ids`: any overlap, D-041, 1 to 10 known ids, repeated as `intent_ids=1&intent_ids=2`; `verified=true`: the badge, D-393) | T-6.2 |
+| GET | /discover | ✅ | `?feed=foryou|new|online&intent_ids=&verified=&cursor=&limit=` → `Page<Card>` with `swipes_left` (T-6.5; `intent_ids`: any overlap, D-041, 1 to 10 known ids, repeated as `intent_ids=1&intent_ids=2`; `verified=true`: the badge, D-393) | T-6.2 |
 | POST | /swipes | ✅ | `{target_id, dir, shown_price?}` (`like`, `pass`, `super`) → `{matched, match_id, swipes_left}` (`swipes_left` null for anyone uncapped, a woman). Once per pair: `ALREADY_EXISTS`. Only someone the feed could show you, the radius aside: else `NOT_FOUND` (D-492). A man's like and pass count toward `swipe_daily_limit_men` by the IST day, a Super Like doesn't: `SWIPE_LIMIT_REACHED`. A Super Like is 5 Velas for a man (402 if he can't), free for a woman; `PRICE_CHANGED` unless `shown_price` is its price (D-600). 120 a minute | T-6.4 |
 | GET | /users/{id} | ✅ | → `PublicProfile`; `NOT_FOUND` for nobody and every refusal alike (D-493) | T-6.3 |
 | GET | /users/by-username/{u} | ✅ | → `PublicProfile`, in any case, by exactly `GET /users/{id}`'s rule (D-493); a name nobody holds, an erased one's included (D-505), the same `NOT_FOUND` | T-6.6 |
 | GET | /search | ✅ | `?q=&cursor=&limit=` → `Page<SearchResult>` (D-540). `@` and 1 to 20 of `[A-Za-z0-9._]`: usernames starting with it, the exact one first, across India and past seeking, never a hidden profile. Otherwise 2 to 50 characters: within the radius, mutual, by name or username (trigram or prefix), city (prefix), or an intent or interest label. Swiped or not; active accounts only. Anything else `VALIDATION_ERROR` on `q`. 60 a minute | T-6.6 |
 | GET | /likes | ✅ | `?cursor=&limit=` → `Page<LikeCard>` (blurred unless revealed; free for women) | T-6.7 |
 | POST | /likes/{user_id}/reveal | ✅ | → `PublicProfile` (`liked_you_reveal`'s price: 1 Vela from 8 October 2026, the founder; 20 before; P-370 moves the row) | T-6.7 |
+
+The feed's page is `Page<Card>` with one more field, `swipes_left`: a man's swipes left today,
+the same number `POST /swipes` answers with, null for anyone uncapped (a woman), so the deck can
+say it before his first swipe (T-6.5, the founder, 8 October 2026).
 
 `Card` (T-6.2, D-494): `id`, `first_name`, `age` (null if hidden), `username`, `city`, `hometown`,
 `distance_km` (whole km between grid points, at least 1, D-034 and D-490; null if hidden),

@@ -21,4 +21,15 @@ export const queryKeys = {
   walletLedger: () => ["wallet", "ledger"] as const,
   prices: () => ["prices"] as const,
   search: (q: string) => ["search", q] as const,
+  // Each feed and filter set is its own scroll, ranked at its first instant
+  // (D-491).
+  discover: (
+    feed: string,
+    filters: { intentIds: readonly number[]; verified: boolean },
+  ) =>
+    [
+      "discover",
+      feed,
+      { intentIds: [...filters.intentIds].sort(), verified: filters.verified },
+    ] as const,
 };

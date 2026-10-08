@@ -83,11 +83,7 @@ async def swipe(
         if took:
             await counter.give_back(redis, user_id, day)
         raise
-    left = (
-        None
-        if limit is None
-        else max(0, limit - await counter.used(redis, user_id, day))
-    )
+    left = None if limit is None else await counter.left(redis, user_id, day, limit)
     return SwipeResult(
         matched=match_id is not None, match_id=match_id, swipes_left=left
     )

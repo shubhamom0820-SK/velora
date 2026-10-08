@@ -22,6 +22,7 @@ from tests.conftest import MakeUser
 from tests.modules.discovery.support import (
     HERE,
     banded,
+    bearer,
     block,
     discover,
     error,
@@ -502,3 +503,58 @@ async def test_before_onboarding_is_done_it_is_onboarding_incomplete(
         "message": None,
         "details": {"step": "seeking"},
     }
+
+
+# --- Swipes left today (T-6.5) ---------------------------------------------------------
+
+
+async def _cap(db: AsyncSession, limit: int) -> None:
+    await db.execute(
+        text(
+            "UPDATE app_config SET value = CAST(:v AS jsonb)"
+            " WHERE key = 'swipe_daily_limit_men'"
+        ),
+        {"v": str(limit)},
+    )
+
+
+async def test_a_mans_feed_says_his_swipes_left_before_and_after_a_swipe(
+    db: AsyncSession, client: AsyncClient, make_user: MakeUser
+) -> None:
+    """The deck says it before his first swipe (the founder, 8 October 2026):
+    the cap from `app_config`, less what `POST /swipes` counted today."""
+    await _cap(db, 3)
+    _, token = await person(db, make_user, Gender.MALE)
+    her, _ = await person(db, make_user, at=north(1))
+
+    before = await discover(client, token)
+    assert set(before.json()) == {"items", "next_cursor", "swipes_left"}
+    assert before.json()["swipes_left"] == 3
+
+    await swipe_by_api(client, token, her.id, "like")
+
+    assert (await discover(client, token)).json()["swipes_left"] == 2
+
+
+async def test_a_womans_feed_has_no_count(
+    db: AsyncSession, client: AsyncClient, make_user: MakeUser
+) -> None:
+    """Women have no cap (D-492): null, never a number."""
+    _, token = await person(db, make_user)
+    await person(db, make_user, Gender.MALE, at=north(1))
+
+    response = await discover(client, token)
+
+    assert response.status_code == 200
+    assert response.json()["swipes_left"] is None
+
+
+async def swipe_by_api(
+    client: AsyncClient, token: str, target: object, direction: str
+) -> None:
+    response = await client.post(
+        "/v1/swipes",
+        json={"target_id": str(target), "dir": direction},
+        headers=bearer(token),
+    )
+    assert response.status_code == 200, response.text

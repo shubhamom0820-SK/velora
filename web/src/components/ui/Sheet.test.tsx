@@ -119,3 +119,31 @@ describe("Sheet", () => {
     expect(reason).toHaveValue("Rude in chat");
   });
 });
+
+describe("Sheet, chrome (the match sheet, 08-DESIGN §8)", () => {
+  it("draws its lead above its title, still named by the title, and still closes", async () => {
+    const onClose = vi.fn();
+    render(
+      <Sheet
+        open
+        onClose={onClose}
+        title="You and Priya liked each other"
+        tone="chrome"
+        lead={<span data-testid="pair">P · S</span>}
+      >
+        <p>body</p>
+      </Sheet>,
+    );
+
+    const dialog = screen.getByRole("dialog");
+    expect(dialog).toHaveAccessibleName("You and Priya liked each other");
+    expect(dialog).toHaveClass("bg-chrome");
+    const heading = screen.getByRole("heading", { level: 2 });
+    expect(
+      screen.getByTestId("pair").compareDocumentPosition(heading) &
+        Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
+    await userEvent.click(screen.getByRole("button", { name: t("ui.close") }));
+    expect(onClose).toHaveBeenCalledOnce();
+  });
+});

@@ -13,7 +13,7 @@ import { fakeApi, json } from "@/lib/testing/fakeApi";
 import { useStoreSheet } from "@/store/store-sheet";
 
 import { makeQueryClient, shouldRetry } from "./QueryProvider";
-import { useLedger, useWallet } from "./wallet";
+import { useLedger, usePrices, useWallet } from "./wallet";
 
 function apiError(status: number) {
   return new ApiError({ code: "X", message: "x", status });
@@ -154,6 +154,34 @@ describe("the mutation cache (T-5.5)", () => {
       await act(() => result.current.mutation.mutateAsync().catch(() => {}));
 
       await waitFor(() => expect(walletReads(api.sent())).toHaveLength(4));
+      expect(useStoreSheet.getState().open).toBe(false);
+    },
+  );
+
+  it.each([
+    ["PRICE_CHANGED", refused("PRICE_CHANGED", 409), 2],
+    ["another refusal", refused("NOT_ALLOWED", 422), 1],
+  ])(
+    "asks for /prices again when a mutation is refused with %s (P-56), and never opens the store",
+    async (_, error, reads) => {
+      const api = fakeApi({
+        "GET /v1/prices": () => json(200, { super_like: 6 }),
+      });
+      const { result } = renderHook(
+        () => ({
+          prices: usePrices(),
+          mutation: useMutation({ mutationFn: () => Promise.reject(error) }),
+        }),
+        { wrapper },
+      );
+      await waitFor(() => expect(result.current.prices.isSuccess).toBe(true));
+
+      await act(() => result.current.mutation.mutateAsync().catch(() => {}));
+
+      await settle();
+      expect(api.sent().filter((r) => r === "GET /v1/prices")).toHaveLength(
+        reads,
+      );
       expect(useStoreSheet.getState().open).toBe(false);
     },
   );

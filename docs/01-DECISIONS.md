@@ -4528,6 +4528,20 @@ measured slow).
 Extend, T-7.9's unlock, the album request and T-8.9's gifts, which debit outside `charge()` and
 so compare by hand. Built with T-6.5, the first screen where a man taps a price.
 
+### D-601 · The deck's gestures: `@use-gesture/react` and `@react-spring/web` — Locked
+**The decision (T-6.5; the founder, 8 October 2026):** the two libraries CLAUDE.md's pinned stack
+names for the swipe, added now that the deck exists, pinned exactly as every web dependency is
+(D-042, D-043): `@use-gesture/react` 10.3.1 and `@react-spring/web` 10.1.2, both runtime
+`dependencies`. The gesture library measures the drag (movement, velocity, direction, and a tap
+told apart from a drag); the spring library moves the card by writing its transform straight to
+the element, never through a React render, which is what keeps a drag at the display's rate.
+Both are used only in `web/src/components/discover/Deck.tsx`.
+
+**Rejected:** a drag written by hand on pointer events (velocity, taps, pointer capture and
+springs are each a small library's worth, and the stack already names these two); CSS
+transitions alone (a release can't continue the finger's velocity); Framer Motion (not the
+pinned stack, and larger).
+
 ## Adding a decision
 
 Append `D-0NN · Title — Locked|Open`, with Decision, Why, Rejected. Never edit a Locked entry —

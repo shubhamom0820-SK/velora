@@ -5,17 +5,18 @@ import { describe, expect, it } from "vitest";
 import { t } from "@/i18n/t";
 
 import ChatsPage from "./chats/page";
-import DiscoverPage from "./discover/page";
+import PersonPage from "./people/[id]/page";
 import YouPage from "./you/page";
 
 // One route per place in the shell's nav, each a placeholder until its task
-// (T-5.6); Wallet's is built (T-5.5). They render inside the shell's <main>,
-// so none brings its own.
+// (T-5.6); Wallet's is built (T-5.5), Discover's too (T-6.5). A person's
+// profile waits for T-6.8. They render inside the shell's <main>, so none
+// brings its own.
 describe("the app's placeholder routes", () => {
   it.each<[string, ComponentType]>([
-    ["Discover", DiscoverPage],
     ["Chats", ChatsPage],
     ["You", YouPage],
+    ["Profile", PersonPage],
   ])("%s says what it is and that it's coming", (name, Page) => {
     render(<Page />);
 

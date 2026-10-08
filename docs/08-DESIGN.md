@@ -163,6 +163,11 @@ T-1.19 built Button, Chip, Field, TextArea, Toggle, Sheet, Toast, Avatar, Skelet
 EmptyState and ErrorState; `/dev/ui` (under `next dev` only) shows each in every state. The rest
 arrive with the first task that needs them: PinPad with T-3.10, OtpInput with T-3.11, IconButton and PriceTag with
 T-6.5's action row, Badge with T-6.7 and T-6.9, Countdown with T-7.10, GiftGrid with T-8.10.
+**Built by T-6.5:** `IconButton` (40, 46 and 56 px; `ink`, `accent` and `filled`; a badge slot)
+and `PriceTag`, which draws the number alone, "5", hidden from screen readers, the button saying
+the price in words. It never says "free": a woman's buttons carry no tag at all (§8, D-002), so
+the row above is superseded there. `Sheet` gained a `chrome` tone and a `lead` above its title for
+the match sheet ✦.
 
 Feature components live in `src/components/<feature>/` (discover, chat, wallet, profile, admin).
 
@@ -337,6 +342,18 @@ Super, 46 px, `--accent`, with its price badge, "5", for a man; Like, 56 px, fil
 `--mute` (the cap is `swipe_daily_limit_men`, T-6.4). The feed row: For you, New and Online as
 pills, the active one filled `--ink` with `--chrome-ink` text; Search and Filters as 40 px icon
 buttons at the row's end, Filters carrying the count of active filters as an `--accent` badge.
+
+**The deck as T-6.5 built it** (8 October 2026). The card is the design's 560 px where the screen
+has room, and shorter on a short phone (`min(35rem, 100dvh − 17rem)`, never under 384 px), its
+photo keeping three fifths of it, as 336 of 560. The New pill, the Online pill and the chips are
+drawn in the card itself. Dragged, the card tilts up to 15° (none under reduced motion, where a
+swiped card fades in place) and shows LIKE, PASS or SUPER, each by the distance dragged. The two
+cards behind it are drawn smaller and lower, out of reach. The feed row has Search, to T-6.6's
+screen (P-443); Filters joins it with T-6.9's sheet, and Liked you with T-6.7's screen and its
+count. The empty state is `EmptyState` inside a dashed card-shaped outline, its action filled
+`--accent`; its body stays `small`, as `EmptyState` has it everywhere. The match sheet's two
+people are initials, never photos, as the canvas draws them; its footer says "Threads last a
+day" until T-7.6 sets the hour (§8's Words).
 
 **The match sheet ✦ (T-6.5).** `--chrome` under `--chrome-glow`. Two initials in 96 px
 `--chrome-line` circles; the one whose like was already there (the match forms on the second like,

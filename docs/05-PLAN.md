@@ -2730,21 +2730,49 @@ prices don't depend on the web photos step, and the hold is lifted.
 
 
 ### T-6.5 · Web discover deck
-- [ ] **Needs:** T-6.2, T-6.4, and P-57, answered 7 October 2026 (08-DESIGN §8): the app's visual design, which this task builds from, never the prototype; and P-82 and P-83: its design pass changes the shell's values, so first the shell is checked where a browser draws it, and its look guard fails anything not on an allowed list; and P-220: its match sheet is the app's first sheet after T-5.5's store sheet, so a sheet left open behind the PIN lock stops being reachable first; and **P-56, built by T-6.5 as its first commit** (the founder, 8 October 2026): the API refuses a charge whose price changed after it was shown, on every paid endpoint on `main`, and then this task's web sends the price it showed
-- [ ] `useDiscover(feed, filters)` infinite query; keep 3 cards rendered; prefetch next page at 5 left.
-- [ ] Card with `@use-gesture/react` + `@react-spring/web`: drag with rotation, LIKE/PASS overlays by drag distance, fling threshold 100 px or velocity, up = super. Tap = open profile. Keyboard ← → ↑ on desktop.
-- [ ] Optimistic swipe: advance immediately, rollback + toast on error.
-- [ ] Action row: pass, super (price tag for men), like. Swipes-left counter for men.
-- [ ] Match celebration sheet → "Open thread · 5 Velas" / "Keep swiping".
-- [ ] Empty states: no one nearby / filters too narrow (clear button).
+- [x] **Needs:** T-6.2, T-6.4, and P-57, answered 7 October 2026 (08-DESIGN §8): the app's visual design, which this task builds from, never the prototype; and P-82 and P-83: its design pass changes the shell's values, so first the shell is checked where a browser draws it, and its look guard fails anything not on an allowed list; and P-220: its match sheet is the app's first sheet after T-5.5's store sheet, so a sheet left open behind the PIN lock stops being reachable first; and **P-56, built by T-6.5 as its first commit** (the founder, 8 October 2026): the API refuses a charge whose price changed after it was shown, on every paid endpoint on `main`, and then this task's web sends the price it showed
+- [x] `useDiscover(feed, filters)` infinite query; keep 3 cards rendered; prefetch next page at 5 left.
+  **Built:** the filters are read from the URL (`intent_ids`, `verified`), where T-6.9's sheet will
+  write them. The feed is never asked again on focus: a refetch would re-rank the scroll mid-swipe.
+  **The feed's page carries `swipes_left`** (a man's number, null for a woman), so the counter shows
+  before his first swipe: the founder's answer, 8 October 2026, instead of a new endpoint.
+- [x] Card with `@use-gesture/react` + `@react-spring/web`: drag with rotation, LIKE/PASS overlays by drag distance, fling threshold 100 px or velocity, up = super. Tap = open profile. Keyboard ← → ↑ on desktop.
+- [x] Optimistic swipe: advance immediately, rollback + toast on error.
+  **Built:** `ALREADY_EXISTS` and `NOT_FOUND` leave the card gone (it is gone anyway);
+  `INSUFFICIENT_CREDITS` puts it back and opens the store sheet; `PRICE_CHANGED` puts it back, says
+  the new price and asks `/prices` again; `SWIPE_LIMIT_REACHED` puts it back and holds the counter
+  at 0. **Tap opens `/people/{id}`**, the one route a profile has, agreed with T-6.8's session
+  (a placeholder page until T-6.8), and a nonce route (`NONCE_ROUTES`).
+- [x] Action row: pass, super (price tag for men), like. Swipes-left counter for men.
+  **The price shown is the price sent (P-56, D-600):** Super's number and the match sheet's are
+  read from `/prices` and sent as `shown_price`; a woman sees no price and sends 0 (D-002).
+- [x] Match celebration sheet → "Open thread · 5 Velas" / "Keep swiping".
+- [x] Empty states: no one nearby / filters too narrow (clear button).
+  **Broken once each, 8 October 2026:** web `node scripts/break-guards.mts t65-` (17 cases) and
+  API `uv run python -m tests.break_guards t65-` (2 cases), every one red in 1 of 1, every file
+  restored. **One stayed green at first and was a finding:** `t65-10` (the next page asked for at
+  6 left) passed, because the test built its page from the `PREFETCH_AT` constant and moved with
+  it; the test now says 5 itself, and the case went red.
 - [ ] 60 fps on the test phone (check Chrome performance panel).
+  **Open for the founder's reading on the test phone (P-500).** The desktop stand-in, measured 8
+  October 2026 (`web/bench/deck-fps.spec.ts`, run by hand: a production build, a 412 × 915
+  screen at 2.625×, DevTools' CPU throttling, ten runs at each rate, interleaved; each run a
+  200 px drag and the fly-off, its swipe request and the card's movement required):
+  **4×:** the drag never dropped a frame (longest 16.8 ms in all ten runs); the flight
+  **57.7 to 60 fps**; 5 of 1,089 frames over 25 ms. **6×:** the flight **55.4 to 57.7 fps**; the
+  drag's longest frame 16.7 to 33.3 ms; 14 of 1,080 frames over 25 ms. The dip is one long frame
+  as the flight starts, when the next card mounts. **Caveat: not an idle machine** (load average
+  4.5 to 5.8, other sessions' tests running), and not a phone's GPU. A first draft of the bench
+  counted every frame the page painted, which an idle page also paints at 60; it was discarded.
 - [x] **Re-examine the CSP's `'unsafe-inline'` here (D-059's trigger, amended 3 October 2026):** the first screen planned to render another user's text, their names and about. If any screen gets there sooner, the re-examination moves to it. T-3.11 kept the allowance for the user's own text; here the threat is someone else's input on your page. Nonces scoped to the signed-in routes by Next's proxy leave the marketing pages static (the amendment).
   **Moved to T-6.6 and done there (D-541, 8 October 2026):** its search rows got there first. The
   deck's routes are already nonce routes (`/discover` and beneath); a new place this task adds
   outside them joins `NONCE_ROUTES` in `web/src/lib/security-headers.ts`.
-- [ ] **The feed row's Search button links to `/discover/search`** (T-6.6) and a Liked you entry
+- [x] **The feed row's Search button links to `/discover/search`** (T-6.6) and a Liked you entry
   to `/discover/likes` (T-6.7): P-443.
-- [ ] **Commit:** `feat(web): discover deck [T-6.5]`
+  **Search is built; Liked you's entry moved to T-6.7, on its line:** its screen and count didn't
+  exist yet, and a link to a 404 is worse than none.
+- [x] **Commit:** `feat(web): discover deck [T-6.5]`
 
 ### T-6.6 · Search and @username
 - [x] **Needs:** T-6.3
@@ -2770,6 +2798,9 @@ prices don't depend on the web photos step, and the hold is lifted.
 - [ ] `GET /likes`: people who liked/super-liked me and whom I haven't swiped; for men, unrevealed entries return only a blurred thumbnail URL (server-generated blur, not CSS) and no name. `POST /likes/{id}/reveal` debits the `liked_you_reveal` row's price, through `pricing.service`, never a literal (1 Vela from 8 October 2026, the founder; this line said "debits 20" until then), and records `liked_you_reveals`.
 - [ ] Web "Liked you" tab: grid, count badge, reveal flow.
 - [ ] **The price shown (P-56, D-600):** `POST /likes/{id}/reveal` takes `shown_price` and passes it to `pricing.service.charge(..., shown=)`, which compares it, never charges it (the check came with T-6.5's first commit, before this task was on main). Test `PRICE_CHANGED` with nothing charged or written, and its web sends the price it displayed, from `/prices`.
+- [ ] **Liked you's entry on the deck (P-443):** T-6.5's feed row holds Search; this task adds
+  Liked you, with its count from `GET /likes/count`, in `web/src/components/discover/FeedRow.tsx`,
+  linking to `/discover/likes`. A revealed tile links to the profile at `/people/{id}` (T-6.8).
 - [ ] **Commit:** `feat(discovery): liked you with paid reveal [T-6.7]`
 
 ### T-6.8 · Profile pages
@@ -2961,6 +2992,9 @@ prices don't depend on the web photos step, and the hold is lifted.
   racing the cron, the overlap forced, never leaves an active Thread with an expiry in the past;
   one warning per expiry, never to her.
 - [ ] **The price shown (P-56, D-600):** re-open and Extend take `shown_price` and pass it to `charge(..., shown=)`; Extend from expired compares its 10, never 2 + 10. Test `PRICE_CHANGED` with nothing charged or written, and its web sends the price it displayed, from `/prices`.
+- [ ] **The match sheet's footer too** (T-6.5): `discover.match.footer` in `en.ts` says "Threads
+  last a day. Knots last." while `thread_hours` is 24; with this task it takes 08-DESIGN §8's
+  "Threads last an hour. Knots last." in the same commit.
 - [ ] **Commit:** `feat(threads): the 1-hour Thread, expiry, re-open and Extend [T-7.6]`
 
 ### T-7.7 · Tie the knot
@@ -5774,13 +5808,17 @@ The number comes from the session's own block, given in its brief, from P-100 up
   no list of his own claims, so this task adds `GET /refund-requests` (his own, D-270) if it
   shows one. Found building T-8.3; filed by Claude, 8 October 2026; its session's block, P-480
   to P-489.
-- [ ] P-443 · Link search and Liked you from the deck. **In T-6.5.** Worst case: both screens
+- [x] P-443 · Link search and Liked you from the deck. **In T-6.5.** Worst case: both screens
   exist from T-6.6 and T-6.7 at `/discover/search` and `/discover/likes`, and nothing in the app
   leads to either, so nobody finds them but by typing the address. T-6.5's feed row holds a Search
   icon button (08-DESIGN §8) and is the deck's own file, `web/src/app/(app)/discover/page.tsx`,
   which neither task touches while T-6.5 is unbuilt. Liked you's entry, with its count (`GET
   /likes/count`, T-6.7), is T-6.5's to place. Filed by Claude building T-6.6, 8 October 2026; its
   session's block, P-440 to P-449.
+  **Done in T-6.5 for Search** (the feed row's Search links to `/discover/search`). **Liked you's
+  entry moved to T-6.7, on its line:** neither `/discover/likes` nor `GET /likes/count` existed
+  when T-6.5 landed, and a link to a page that 404s is worse than none. T-6.7 places it in
+  `web/src/components/discover/FeedRow.tsx`.
 - [x] P-490 · File the 8 October 2026 audit's findings. The audit was run by the advisor (Claude, in
   a separate chat) at the founder's request, and approved by the founder on the advisor's
   recommendation. Docs only. It ticked boxes whose work had landed (T-1.22's Supabase, Upstash and
@@ -5789,3 +5827,12 @@ The number comes from the session's own block, given in its brief, from P-100 up
   they gate, and dated every missed deadline: P-49, P-50, P-68 and P-200 with a new one, P-06, P-34,
   P-60, P-62 and P-122 as passed. It also fixed `/done` as P-261 asked. Filed from this session's
   block (P-490 to P-499, D-590 to D-599).
+- [ ] P-500 · The deck at 60 fps on the test phone, read by the founder. **Before beta.** Worst
+  case: the deck drags at 60 fps on a desktop slowed six times and stutters on the phones men in
+  Phagwara actually carry, where a GPU, a thermal limit and a real display are what count, and
+  the first screen of the paid product feels broken. T-6.5's reading is a desktop stand-in
+  (`web/bench/deck-fps.spec.ts`, run by hand: a production build, a phone's screen, DevTools' CPU
+  throttling at 4× and 6×, ten runs each); the box on its line waits for this one: Chrome's
+  performance panel, remote-debugging the test phone over USB, a card dragged and flung ten
+  times, the frame track's range recorded in the tick. Filed by Claude building T-6.5, 8 October
+  2026, at the founder's direction; its session's block, P-500 to P-509.

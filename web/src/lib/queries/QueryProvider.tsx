@@ -45,6 +45,12 @@ export function makeQueryClient(): QueryClient {
     mutationCache: new MutationCache({
       onError: (error) => {
         if (!(error instanceof ApiError)) return;
+        if (error.code === "PRICE_CHANGED") {
+          // The price shown wasn't the price (P-56, D-600): ask again, so
+          // every button says the new one before anyone taps it twice.
+          void client.invalidateQueries({ queryKey: queryKeys.prices() });
+          return;
+        }
         if (error.code !== "INSUFFICIENT_CREDITS") return;
         // The balance shown was more than the API holds: ask again.
         void client.invalidateQueries({ queryKey: queryKeys.wallet() });

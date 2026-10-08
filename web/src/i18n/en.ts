@@ -54,10 +54,10 @@ export const en = {
   placeholder: {
     comingSoon: "Coming soon.",
     login: "Sign in",
-    discover: "Discover",
     chats: "Chats",
     you: "You",
     admin: "Admin",
+    profile: "Profile",
   },
   // Restoring and ending a session (T-3.10).
   session: {
@@ -96,6 +96,74 @@ export const en = {
     // "@simran.k · Phagwara", or "@simran.k" without a city.
     usernameCity: "@{username} · {city}",
     usernameOnly: "@{username}",
+  },
+  // The discover deck (T-6.5), drawn from 08-DESIGN §8. Prices are never
+  // written here: they come from /prices, as a number ("5") on a button and in
+  // words ("5 Velas", wallet.velas) elsewhere. A woman sees no price (D-002).
+  // Drafted by Claude, for the founder's review.
+  discover: {
+    title: "Discover",
+    feeds: {
+      label: "Feeds",
+      foryou: "For you",
+      new: "New",
+      online: "Online",
+    },
+    search: "Search",
+    deck: "People nearby",
+    card: {
+      // "Simran, 24", or "Simran" when she hides her age.
+      nameAge: "{name}, {age}",
+      openProfile: "Open {name}'s profile",
+      // "Phagwara · 3 km": the city, the distance, each left out when hidden.
+      km: "{km} km",
+      online: "Online now",
+      new: "New",
+      noPhoto: "Prefers not to show photos yet",
+      // The words stamped on the card as it is dragged.
+      like: "Like",
+      pass: "Pass",
+      super: "Super",
+    },
+    actions: {
+      label: "Swipe",
+      pass: "Pass",
+      like: "Like",
+      super: "Super Like",
+      // A man's Super Like, read out with its price: "Super Like, 5 Velas".
+      superPriced: "Super Like, {velas}",
+    },
+    swipesLeft: {
+      one: "1 swipe left today",
+      other: "{count} swipes left today",
+    },
+    match: {
+      title: "You and {name} liked each other",
+      // "Open thread · 5 Velas" for him, the number from /prices.
+      open: "Open thread · {velas}",
+      openFree: "Open thread · Free",
+      // His, while the price loads: never a number guessed.
+      openPlain: "Open thread",
+      keepSwiping: "Keep swiping",
+      // Copy follows app_config.thread_hours, seeded 24 (P-14): "an hour" when
+      // T-7.6 sets it to 1, with 08-DESIGN §8's words.
+      footer: "Threads last a day. Knots last.",
+    },
+    empty: {
+      nobodyTitle: "No one new nearby",
+      nobodyBody: "New people join every day. Check back soon.",
+      checkAgain: "Check again",
+      filtersTitle: "No one matches these filters",
+      filtersBody: "Try fewer filters to see more people.",
+      clear: "Clear filters",
+    },
+    failed: "We couldn't load people nearby",
+    errors: {
+      limit: "That's today's swipes. More at midnight.",
+      priceChanged: "The price changed. It's {velas} now.",
+      failed: "That didn't go through. Try again.",
+      openFailed: "We couldn't open the thread. Try again.",
+    },
   },
   // The balance pill, the wallet screen and the store sheet (T-5.5). Users see
   // Velas, never "credits" (D-049). Drafted by Claude, for the founder's review.

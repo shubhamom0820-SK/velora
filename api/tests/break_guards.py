@@ -7153,6 +7153,38 @@ P56: list[Case] = [
     ),
 ]
 
+# --- T-6.5: a man's swipes left on the feed ------------------------------------------
+
+T65_SELECTION = ["tests/modules/discovery/test_feed.py"]
+DISCOVERY_SERVICE = "app/modules/discovery/service.py"
+
+T65: list[Case] = [
+    Case(
+        id="t65-01-a-woman-given-a-count",
+        what="D-492: the feed giving a woman, who has no cap, a number",
+        edits=[
+            (
+                DISCOVERY_SERVICE,
+                "    if not swipe_rules.capped(user.gender):\n        return None\n",
+                "",
+            )
+        ],
+        expect=["test_a_womans_feed_has_no_count"],
+    ),
+    Case(
+        id="t65-02-the-count-never-taken",
+        what="the feed saying the whole cap, whatever was swiped today",
+        edits=[
+            (
+                DISCOVERY_SERVICE,
+                "    return await swipe_counter.left(redis, user.id, clock.today_ist(), limit)\n",
+                "    return limit\n",
+            )
+        ],
+        expect=["test_a_mans_feed_says_his_swipes_left_before_and_after_a_swipe"],
+    ),
+]
+
 CASES: list[tuple[Case, list[str]]] = (
     [(c, T51_SELECTION) for c in T51]
     + [(c, T54_SELECTION) for c in T54]
@@ -7185,6 +7217,7 @@ CASES: list[tuple[Case, list[str]]] = (
     + [(c, P64_SELECTION) for c in P64]
     + [(c, T74_SELECTION) for c in T74]
     + [(c, P56_SELECTION) for c in P56]
+    + [(c, T65_SELECTION) for c in T65]
 )
 
 # The fifty-connection fixture's own message when Postgres refuses a connection.

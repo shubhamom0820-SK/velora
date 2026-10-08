@@ -14,12 +14,14 @@ from typing import Annotated
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, Query
+from redis.asyncio import Redis
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import Settings
 from app.core.db import get_session
 from app.core.deps import (
     app_config_cache,
+    app_redis,
     app_settings,
     onboarded_user,
     user_rate_limit,
@@ -47,6 +49,7 @@ SEARCHES_PER_MINUTE = 60
 async def discover(
     user: Annotated[User, Depends(onboarded_user)],
     session: Annotated[AsyncSession, Depends(get_session)],
+    redis: Annotated[Redis, Depends(app_redis)],
     settings: Annotated[Settings, Depends(app_settings)],
     config: Annotated[ConfigCache, Depends(app_config_cache)],
     params: Annotated[PageParams, Depends(page_params)],
@@ -59,6 +62,7 @@ async def discover(
 ) -> CardPage:
     return await service.discover(
         session,
+        redis,
         user,
         feed=feed,
         intent_ids=intent_ids,

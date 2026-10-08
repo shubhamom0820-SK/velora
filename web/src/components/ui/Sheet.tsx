@@ -11,6 +11,7 @@ import {
 import { createPortal } from "react-dom";
 
 import { t } from "@/i18n/t";
+import { cx } from "@/lib/cx";
 import { useSession } from "@/store/session";
 
 import { Icon } from "./Icon";
@@ -24,7 +25,35 @@ type SheetProps = {
   children: ReactNode;
   /** Stays put below the body, e.g. the confirm button. */
   footer?: ReactNode;
+  /**
+   * `surface` (the default) or `chrome`: the black ✦ sheet, `--chrome` under
+   * `--chrome-glow`, its title centred in `title-1` (the match sheet, 08-DESIGN
+   * §8). Filled buttons inside stay `--accent` (§1).
+   */
+  tone?: "surface" | "chrome";
+  /** Drawn above the title, e.g. the match sheet's two people. */
+  lead?: ReactNode;
 };
+
+const TONES = {
+  surface: {
+    panel: "border-line bg-surface",
+    handle: "bg-line",
+    header: "pt-2 pr-2 pl-5 md:pt-4",
+    title: "text-title-2 text-ink flex-1",
+    close: "text-mute",
+    footer: "border-line border-t",
+  },
+  chrome: {
+    panel:
+      "border-chrome-line bg-chrome bg-[image:var(--chrome-glow)] text-chrome-ink",
+    handle: "bg-chrome-line",
+    header: "relative flex-col px-12 pt-6 text-center",
+    title: "text-title-1 text-chrome-ink",
+    close: "text-chrome-mute absolute top-1 right-2",
+    footer: "",
+  },
+} as const;
 
 const FOCUSABLE =
   'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])';
@@ -39,7 +68,16 @@ const FOCUSABLE =
  * reach of Tab, clicks and screen readers, and still holding whatever was
  * being written in it when the lock lifts.
  */
-export function Sheet({ open, onClose, title, children, footer }: SheetProps) {
+export function Sheet({
+  open,
+  onClose,
+  title,
+  children,
+  footer,
+  tone = "surface",
+  lead,
+}: SheetProps) {
+  const look = TONES[tone];
   const titleId = useId();
   const panel = useRef<HTMLDivElement>(null);
   const locked = useSession((state) => state.locked);
@@ -104,28 +142,38 @@ export function Sheet({ open, onClose, title, children, footer }: SheetProps) {
         aria-labelledby={titleId}
         tabIndex={-1}
         onKeyDown={handleKeyDown}
-        className="rounded-t-sheet border-line bg-surface animate-sheet-up md:rounded-sheet relative mx-auto flex max-h-[88dvh] w-full max-w-130 flex-col border-t outline-none motion-reduce:animate-fade-in md:animate-fade-in md:border"
+        className={cx(
+          "rounded-t-sheet animate-sheet-up md:rounded-sheet relative mx-auto flex max-h-[88dvh] w-full max-w-130 flex-col border-t outline-none motion-reduce:animate-fade-in md:animate-fade-in md:border",
+          look.panel,
+        )}
       >
         <div
           aria-hidden
-          className="rounded-pill bg-line mx-auto mt-4 h-1 w-9 shrink-0 md:hidden"
+          className={cx(
+            "rounded-pill mx-auto mt-4 h-1 w-9 shrink-0 md:hidden",
+            look.handle,
+          )}
         />
-        <div className="flex items-center gap-3 pt-2 pr-2 pl-5 md:pt-4">
-          <h2 id={titleId} className="text-title-2 text-ink flex-1">
+        <div className={cx("flex items-center gap-3", look.header)}>
+          {lead}
+          <h2 id={titleId} className={look.title}>
             {title}
           </h2>
           <button
             type="button"
             aria-label={t("ui.close")}
             onClick={onClose}
-            className="rounded-pill text-mute focus-visible:outline-accent flex size-11 items-center justify-center focus-visible:outline-2"
+            className={cx(
+              "rounded-pill focus-visible:outline-accent flex size-11 items-center justify-center focus-visible:outline-2",
+              look.close,
+            )}
           >
             <Icon icon={X} size={20} />
           </button>
         </div>
         <div className="flex-1 overflow-y-auto px-5 pt-2 pb-6">{children}</div>
         {footer && (
-          <div className="border-line border-t px-5 pt-4 pb-6">{footer}</div>
+          <div className={cx("px-5 pt-4 pb-6", look.footer)}>{footer}</div>
         )}
       </div>
     </div>,

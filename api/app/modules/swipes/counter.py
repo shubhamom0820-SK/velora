@@ -43,3 +43,8 @@ async def give_back(redis: Redis, user_id: UUID, day: date) -> None:
 async def used(redis: Redis, user_id: UUID, day: date) -> int:
     value = await redis.get(key_for(user_id, day))
     return 0 if value is None else int(value)
+
+
+async def left(redis: Redis, user_id: UUID, day: date, limit: int) -> int:
+    """How many of today's `limit` places are still free."""
+    return max(0, limit - await used(redis, user_id, day))

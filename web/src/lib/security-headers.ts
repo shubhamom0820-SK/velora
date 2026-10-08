@@ -152,6 +152,8 @@ export const NONCE_ROUTES = [
   "chats",
   "wallet",
   "you",
+  // A person's profile (T-6.5's tap, T-6.8's screen): their text.
+  "people",
 ] as const;
 
 /** Where a build's nonce goes in `policyWithNonceSlot()`'s policy. */

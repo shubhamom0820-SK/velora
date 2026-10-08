@@ -6,7 +6,10 @@ import {
   Heart,
   Inbox,
   MapPin,
+  Search,
   Sparkles,
+  Star,
+  X,
 } from "lucide-react";
 import { useState, type ReactNode } from "react";
 
@@ -19,8 +22,10 @@ import { EmptyState } from "@/components/ui/EmptyState";
 import { ErrorState } from "@/components/ui/ErrorState";
 import { Field } from "@/components/ui/Field";
 import { Icon } from "@/components/ui/Icon";
+import { IconButton } from "@/components/ui/IconButton";
 import { OtpInput } from "@/components/ui/OtpInput";
 import { PinPad } from "@/components/ui/PinPad";
+import { PriceTag } from "@/components/ui/PriceTag";
 import { Sheet } from "@/components/ui/Sheet";
 import { Skeleton } from "@/components/ui/Skeleton";
 import { Spinner } from "@/components/ui/Spinner";
@@ -55,6 +60,7 @@ export function UiGallery() {
   const [matches, setMatches] = useState(true);
   const [messages, setMessages] = useState(false);
   const [sheetOpen, setSheetOpen] = useState(false);
+  const [chromeSheetOpen, setChromeSheetOpen] = useState(false);
   const [pin, setPin] = useState("");
   const [otp, setOtp] = useState("");
   const [chromePin, setChromePin] = useState("48");
@@ -128,6 +134,22 @@ export function UiGallery() {
             Chrome link
           </ButtonLink>
         </div>
+      </Section>
+
+      <Section title="IconButton and PriceTag">
+        <Row>
+          <IconButton icon={X} label="Pass" />
+          <IconButton
+            icon={Star}
+            label="Super Like, 5 Velas"
+            tone="accent"
+            badge={<PriceTag credits={5} />}
+          />
+          <IconButton icon={Star} label="Super Like" tone="accent" />
+          <IconButton icon={Heart} label="Like" size={56} tone="filled" />
+          <IconButton icon={Search} label="Search" size={40} />
+          <IconButton icon={Heart} label="Like" tone="filled" disabled />
+        </Row>
       </Section>
 
       <Section title="Badge">
@@ -394,6 +416,34 @@ export function UiGallery() {
                 footer stay put.
               </p>
             ))}
+          </div>
+        </Sheet>
+        <Button variant="ghost" onClick={() => setChromeSheetOpen(true)}>
+          Open a chrome sheet
+        </Button>
+        <Sheet
+          open={chromeSheetOpen}
+          onClose={() => setChromeSheetOpen(false)}
+          tone="chrome"
+          title="You and Priya liked each other"
+          lead={
+            <div aria-hidden className="flex gap-4">
+              <Avatar name="Sam" size={72} />
+              <Avatar name="Priya" size={72} />
+            </div>
+          }
+        >
+          <div className="flex flex-col gap-3 pt-4">
+            <Button fullWidth onClick={() => setChromeSheetOpen(false)}>
+              Open thread · 5 Velas
+            </Button>
+            <Button
+              variant="chrome"
+              fullWidth
+              onClick={() => setChromeSheetOpen(false)}
+            >
+              Keep swiping
+            </Button>
           </div>
         </Sheet>
       </Section>
