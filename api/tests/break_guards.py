@@ -5762,6 +5762,187 @@ T811: list[Case] = [
     ),
 ]
 
+# --- T-7.2: the Thread list ---------------------------------------------------------
+
+T72_SELECTION = ["tests/modules/threads/test_list.py"]
+THREADS_REPOSITORY = "app/modules/threads/repository.py"
+
+T72: list[Case] = [
+    Case(
+        id="t72-01-anyones-threads",
+        what="the list not asking whose Threads",
+        edits=[
+            (
+                THREADS_REPOSITORY,
+                (
+                    "            or_(Thread.user_low == viewer_id, Thread.user_high == viewer_id),\n"
+                    "            Thread.status.in_(statuses),\n"
+                ),
+                "            Thread.status.in_(statuses),\n",
+            )
+        ],
+        expect=["test_my_threads_newest_first_with_their_preview_and_unread"],
+    ),
+    Case(
+        id="t72-02-cleared-shown",
+        what="a cleared Thread shown with nothing newer",
+        edits=[
+            (
+                THREADS_REPOSITORY,
+                "            or_(cleared.is_(None), Thread.last_message_at > cleared),\n",
+                "            true(),\n",
+            )
+        ],
+        expect=["test_a_cleared_thread_hides_for_me_alone_until_something_newer"],
+    ),
+    Case(
+        id="t72-03-blocked-listed",
+        what="a blocked Thread listed",
+        edits=[
+            (
+                THREADS_REPOSITORY,
+                "            ~blocked_either_way(viewer_id, other.id),\n",
+                "            true(),\n",
+            )
+        ],
+        expect=["test_a_block_either_way_hides_the_thread"],
+    ),
+    Case(
+        id="t72-04-blocked-read",
+        what="a blocked Thread read by its id",
+        edits=[
+            (
+                THREADS_REPOSITORY,
+                "            ~blocked_either_way(viewer_id, _other(viewer_id)),\n",
+                "            true(),\n",
+            )
+        ],
+        expect=["test_a_block_either_way_hides_the_thread"],
+    ),
+    Case(
+        id="t72-05-my-own-unread",
+        what="my own messages counted as unread",
+        edits=[
+            (THREADS_REPOSITORY, "            Message.sender_id != viewer_id,\n", "")
+        ],
+        expect=[
+            "test_my_threads_newest_first_with_their_preview_and_unread",
+            "test_unread_keeps_those_with_something_unread",
+        ],
+    ),
+    Case(
+        id="t72-06-unread-before-clearing",
+        what="messages before my clearing counted as unread",
+        edits=[
+            (
+                THREADS_REPOSITORY,
+                "            or_(cleared.is_(None), Message.created_at > cleared),\n",
+                "",
+            )
+        ],
+        expect=["test_a_cleared_thread_hides_for_me_alone_until_something_newer"],
+    ),
+    Case(
+        id="t72-07-deleted-named",
+        what="a deleted account's name shown",
+        edits=[
+            (
+                "app/modules/threads/service.py",
+                "        first_name=None if deleted else row.other_first_name,\n",
+                "        first_name=row.other_first_name,\n",
+            )
+        ],
+        expect=["test_a_deleted_account_is_named_as_one_and_nothing_more"],
+    ),
+    Case(
+        id="t72-08-deleted-searchable",
+        what="a deleted account found by its old name",
+        edits=[
+            (
+                THREADS_REPOSITORY,
+                "            other.status != UserStatus.DELETED,\n",
+                "",
+            )
+        ],
+        expect=["test_a_deleted_account_is_named_as_one_and_nothing_more"],
+    ),
+    Case(
+        id="t72-09-q-a-pattern",
+        what="q read as an ILIKE pattern",
+        edits=[
+            (
+                THREADS_REPOSITORY,
+                '    return f"%{escaped}%"\n',
+                '    return f"%{text_}%"\n',
+            )
+        ],
+        expect=["test_q_finds_their_name_or_username_anywhere_in_it"],
+    ),
+    Case(
+        id="t72-10-recent-four-days",
+        what="recent stretched past three days",
+        edits=[
+            (
+                "app/modules/threads/rules.py",
+                "RECENT_FOR: Final = timedelta(days=3)\n",
+                "RECENT_FOR: Final = timedelta(days=4)\n",
+            )
+        ],
+        expect=["test_recent_is_a_message_in_the_last_three_days"],
+    ),
+    Case(
+        id="t72-11-whole-preview",
+        what="a preview of the whole message",
+        edits=[
+            (
+                "app/modules/threads/rules.py",
+                "PREVIEW_CHARS: Final = 100\n",
+                "PREVIEW_CHARS: Final = 1000\n",
+            )
+        ],
+        expect=["test_a_preview_is_a_texts_first_hundred_characters"],
+    ),
+    Case(
+        id="t72-12-knots-with-threads",
+        what="the Knots tier holding Threads",
+        edits=[
+            (
+                THREADS_REPOSITORY,
+                "        [ThreadStatus.KNOTTED]\n",
+                "        [ThreadStatus.KNOTTED, ThreadStatus.ACTIVE]\n",
+            )
+        ],
+        expect=["test_threads_and_knots_are_separate_tiers"],
+    ),
+    Case(
+        id="t72-13-anyones-thread-read",
+        what="anyone's Thread read by its id",
+        edits=[
+            (
+                THREADS_REPOSITORY,
+                (
+                    "            Thread.id == thread_id,\n"
+                    "            or_(Thread.user_low == viewer_id, Thread.user_high == viewer_id),\n"
+                ),
+                "            Thread.id == thread_id,\n",
+            )
+        ],
+        expect=["test_one_thread_is_mine_to_read_and_nobody_elses"],
+    ),
+    Case(
+        id="t72-14-cursor-ignored",
+        what="the cursor never applied",
+        edits=[
+            (
+                THREADS_REPOSITORY,
+                "        query = query.where(tuple_(key, Thread.id) < after)\n",
+                "        pass\n",
+            )
+        ],
+        expect=["test_pages_follow_the_cursor"],
+    ),
+]
+
 CASES: list[tuple[Case, list[str]]] = (
     [(c, T51_SELECTION) for c in T51]
     + [(c, T54_SELECTION) for c in T54]
@@ -5787,6 +5968,7 @@ CASES: list[tuple[Case, list[str]]] = (
     + [(c, T82_SELECTION) for c in T82]
     + [(c, T71_SELECTION) for c in T71]
     + [(c, T811_SELECTION) for c in T811]
+    + [(c, T72_SELECTION) for c in T72]
 )
 
 # The fifty-connection fixture's own message when Postgres refuses a connection.

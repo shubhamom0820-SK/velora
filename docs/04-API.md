@@ -130,9 +130,9 @@ counted, never for your own profile or a refusal.
 ## Threads & messages
 | Method | Path | Auth | Body → Response | Task |
 |---|---|---|---|---|
-| GET | /threads | ✅ | `?tier=threads|knots&filter=all|unread|recent&q=&cursor=&limit=` → `Page<ThreadRow>` | T-7.2 |
+| GET | /threads | ✅ | `?tier=threads|knots&filter=all|unread|recent&q=&cursor=&limit=` → `Page<ThreadRow>`: `threads` is active and expired, `knots` knotted; `unread`, something of theirs unread; `recent`, a message in the last 3 days; `q` (1–50), their first name or username, anywhere in it. Newest first by the last message, or the opening before any. Never one I cleared with nothing newer (D-006), never one with a block either way | T-7.2 |
 | POST | /threads | ✅ | `{match_id}` or `{user_id, first_message}` (1–500) → `Thread` (5 Velas from a match; 8 for a private message, D-231). One per pair: an existing one is returned, nothing charged; an expired one is `THREAD_EXPIRED` for him and returned to her (D-097). Every refusal of whom is `NOT_FOUND` (D-550). A woman past her daily limits: `RATE_LIMITED` (D-553). 20 a minute | T-7.1 |
-| GET | /threads/{id} | ✅ | → `Thread` | T-7.2 |
+| GET | /threads/{id} | ✅ | → `Thread`; `NOT_FOUND` unless it is yours, and across a block | T-7.2 |
 | GET | /threads/{id}/messages | ✅ | `?cursor=&limit=` → `Page<Message>` | T-7.3 |
 | POST | /threads/{id}/messages | ✅ | `{client_msg_id, kind, body?, media_key?, duration_s?}` → `Message` | T-7.3 |
 | POST | /threads/{id}/read | ✅ | `{up_to_message_id}` → 204 | T-7.5 |
@@ -150,6 +150,16 @@ counted, never for your own profile or a refusal.
 `Thread` (T-7.1): `id`, `origin` (`match`, `dm`), `status`, `other_user_id`, `expires_at` (a
 man's alone, D-554: null for a woman, once knotted, and for a private message, which never
 expires, D-550), `knotted_at`, `i_tied`, `last_message_at`, `created_at`.
+
+`ThreadRow` (T-7.2): `id`, `origin`, `status`, `expires_at` (a man's alone, D-554), `knotted_at`,
+`i_tied`, `unread` (their messages I haven't read, after my clearing), `last_message`
+(`{kind, text, mine, at}`: `text` a text's first 100 characters as shown; a voice note has none,
+and the web names it), `last_message_at`, and `other`, a `CardLite`.
+
+`CardLite` (T-7.2): `id`, `first_name`, `username`, `main_photo_url`, `shows_badge` (D-393),
+`is_online`, `deleted`. A deleted account (D-051, D-500) is `deleted: true` and nothing else: no
+name, username, photo, badge or presence, from the moment they delete; its Thread stays, as the
+messages do, and `q` never finds it.
 
 `Message` (T-7.1, T-7.3): `id`, `thread_id`, `kind`, `body` (the text shown, masked where it had
 to be; never the original, D-030), `masked`, `duration_s`, `mine`, `from_deleted_account`

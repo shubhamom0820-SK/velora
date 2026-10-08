@@ -804,10 +804,28 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        get?: never;
+        /** List Threads */
+        get: operations["list_threads_v1_threads_get"];
         put?: never;
         /** Open Thread */
         post: operations["open_thread_v1_threads_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/threads/{thread_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Thread */
+        get: operations["get_thread_v1_threads__thread_id__get"];
+        put?: never;
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -941,6 +959,31 @@ export interface components {
             is_online: boolean;
             /** Is New */
             is_new: boolean;
+        };
+        /**
+         * CardLite
+         * @description The other person, as a row in the chats list. A deleted account is
+         *     `deleted`, with no name, username or photo, from the moment they delete
+         *     (D-051, D-500); the Thread and its messages stay.
+         */
+        CardLite: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** First Name */
+            first_name: string | null;
+            /** Username */
+            username: string | null;
+            /** Main Photo Url */
+            main_photo_url: string | null;
+            /** Shows Badge */
+            shows_badge: boolean;
+            /** Is Online */
+            is_online: boolean;
+            /** Deleted */
+            deleted: boolean;
         };
         /**
          * CardPage
@@ -1081,6 +1124,23 @@ export interface components {
             really_thoughtful: number;
         };
         /**
+         * LastMessage
+         * @description A row's preview. `text` is a text message's first 100 characters, as
+         *     shown (masked); a voice note has none, and the web names it.
+         */
+        LastMessage: {
+            kind: components["schemas"]["MessageKind"];
+            /** Text */
+            text: string | null;
+            /** Mine */
+            mine: boolean;
+            /**
+             * At
+             * Format: date-time
+             */
+            at: string;
+        };
+        /**
          * LedgerEntry
          * @description One change to the balance, as its owner sees it. Never its ref or its
          *     key: what an entry was for is named by `reason`, which the web turns into
@@ -1178,6 +1238,11 @@ export interface components {
              */
             location: "none" | "fresh" | "stale";
         };
+        /**
+         * MessageKind
+         * @enum {string}
+         */
+        MessageKind: "text" | "voice" | "system";
         /**
          * OnboardingStep
          * @enum {string}
@@ -1559,6 +1624,42 @@ export interface components {
          * @enum {string}
          */
         ThreadOrigin: "match" | "dm";
+        /**
+         * ThreadRow
+         * @description One Thread in the chats list. `expires_at` is a man's alone (D-554).
+         */
+        ThreadRow: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            origin: components["schemas"]["ThreadOrigin"];
+            status: components["schemas"]["ThreadStatus"];
+            /** Expires At */
+            expires_at: string | null;
+            /** Knotted At */
+            knotted_at: string | null;
+            /** I Tied */
+            i_tied: boolean;
+            /** Unread */
+            unread: number;
+            last_message: components["schemas"]["LastMessage"] | null;
+            /** Last Message At */
+            last_message_at: string | null;
+            other: components["schemas"]["CardLite"];
+        };
+        /**
+         * ThreadRowPage
+         * @description `Page<ThreadRow>`: newest first, by the last message or, before any,
+         *     the opening, then id.
+         */
+        ThreadRowPage: {
+            /** Items */
+            items: components["schemas"]["ThreadRow"][];
+            /** Next Cursor */
+            next_cursor: string | null;
+        };
         /**
          * ThreadStatus
          * @enum {string}
@@ -3040,6 +3141,41 @@ export interface operations {
             };
         };
     };
+    list_threads_v1_threads_get: {
+        parameters: {
+            query?: {
+                tier?: "threads" | "knots";
+                filter?: "all" | "unread" | "recent";
+                q?: string | null;
+                cursor?: string | null;
+                limit?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ThreadRowPage"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     open_thread_v1_threads_post: {
         parameters: {
             query?: never;
@@ -3052,6 +3188,37 @@ export interface operations {
                 "application/json": components["schemas"]["OpenThreadRequest"];
             };
         };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Thread"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_thread_v1_threads__thread_id__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                thread_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
         responses: {
             /** @description Successful Response */
             200: {

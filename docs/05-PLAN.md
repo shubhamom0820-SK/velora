@@ -2801,12 +2801,23 @@ prices don't depend on the web photos step, and the hold is lifted.
   default, and went red.
 
 ### T-7.2 · Thread list
-- [ ] **Needs:** T-7.1
-- [ ] `GET /threads?tier=threads|knots&filter=&q=`: excludes cleared (unless newer message), blocked; each row has other person's card-lite, last message preview (voice → "Voice note"), unread count, status, `expires_at`, whether I've tapped tie.
-- [ ] **The other person deleted their account** (T-9.6, D-051, D-500): their row's card-lite is
+- [x] **Needs:** T-7.1
+- [x] `GET /threads?tier=threads|knots&filter=&q=`: excludes cleared (unless newer message), blocked; each row has other person's card-lite, last message preview (voice → "Voice note"), unread count, status, `expires_at`, whether I've tapped tie.
+- [x] **The other person deleted their account** (T-9.6, D-051, D-500): their row's card-lite is
   "Deleted account", no name or photo, from the moment they delete; once erased they have no
   profile row at all. The thread stays, as the messages do.
-- [ ] **Commit:** `feat(threads): list [T-7.2]`
+  **Built 8 October 2026:** `recent` is a message in the last three days, the prototype's Knots
+  filter; a voice note's preview carries no text and the web names it, so no copy lives in the
+  API; `q` matches anywhere in the first name or username, `%` and `_` taken literally; a deleted
+  account is `deleted: true` with no name, photo, badge or presence, and `q` never finds it; her
+  rows carry no `expires_at` (D-554). `GET /threads/{id}` is the participants' alone, and a block
+  hides it as it hides the row. **Broken once each** (`uv run python -m tests.break_guards
+  t72-`): fourteen cases, each red in 1 of 1, every file restored and none differing by SHA-256.
+  **Two stayed green at first, and were findings in the tests:** `t72-05` (my own messages
+  counted unread) and `t72-06` (messages before my clearing counted) passed, because the message
+  each guard leaves out was already marked read in its test, so the count never leaned on the
+  guard. Both messages were made unread, and both cases went red.
+- [x] **Commit:** `feat(threads): list [T-7.2]`
 
 ### T-7.3 · Messages
 - [ ] **Needs:** T-7.2

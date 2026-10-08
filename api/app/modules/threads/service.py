@@ -22,16 +22,24 @@ before it and given back if nothing is written.
 from __future__ import annotations
 
 import uuid
+from collections.abc import Sequence
 from dataclasses import dataclass
+from datetime import datetime
+from typing import Any, Literal
 from uuid import UUID
 
+from pydantic import AwareDatetime
 from redis.asyncio import Redis
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core import clock, events
-from app.core.enums import ThreadOrigin, ThreadStatus
+from app.core.config import Settings
+from app.core.enums import MessageKind, ThreadOrigin, ThreadStatus, UserStatus
 from app.core.errors import AppError
+from app.core.pagination import Cursor, PageParams
+from app.core.storage_keys import public_url
 from app.modules.admin import service as admin_service
+from app.modules.discovery import rules as discovery_rules
 from app.modules.discovery import service as discovery_service
 from app.modules.messages import limits
 from app.modules.messages import service as messages_service
@@ -209,3 +217,109 @@ async def _open_in(
         )
         messages_service.announce(session, row, other_id)
     return _Opened(view_of(thread, user), created=True)
+
+
+# --- The list (T-7.2) ---------------------------------------------------------------
+
+# `(sort_key, id)`: the last message's time, or the opening's before any.
+LIST_CURSOR: Cursor[tuple[datetime, UUID]] = Cursor(tuple[AwareDatetime, UUID])
+
+Tier = Literal["threads", "knots"]
+Filter = Literal["all", "unread", "recent"]
+
+
+async def list_threads(
+    session: AsyncSession,
+    user: User,
+    *,
+    tier: Tier,
+    filter_: Filter,
+    q: str | None,
+    params: PageParams,
+    settings: Settings,
+) -> schemas.ThreadRowPage:
+    """`user`'s Threads (`threads`: active and expired) or Knots, newest first:
+    never one they cleared with nothing newer, never one with a block either
+    way (T-7.2). `unread` keeps those with a message they haven't read;
+    `recent`, those with one in the last three days; `q`, the other person's
+    first name or username, anywhere in it."""
+    after = None if params.cursor is None else LIST_CURSOR.decode(params.cursor)
+    now = clock.now()
+    which = repository.ListFilter(
+        knots=tier == "knots",
+        unread_only=filter_ == "unread",
+        since=now - rules.RECENT_FOR if filter_ == "recent" else None,
+        q=q,
+    )
+    async with session.begin():
+        rows = await repository.rows_for(
+            session, user.id, which, after=after, limit=params.fetch
+        )
+    keys = {row.Thread.id: row.sort_key for row in rows}
+    return schemas.ThreadRowPage.of(
+        _rows(rows, user, now, settings),
+        params,
+        lambda item: LIST_CURSOR.encode((keys[item.id], item.id)),
+    )
+
+
+def _rows(
+    rows: Sequence[Any], user: User, now: datetime, settings: Settings
+) -> list[schemas.ThreadRow]:
+    return [_row_of(row, user, now, settings) for row in rows]
+
+
+def _row_of(
+    row: Any, user: User, now: datetime, settings: Settings
+) -> schemas.ThreadRow:
+    thread = view_of(row.Thread, user)
+    deleted = row.other_status is UserStatus.DELETED
+    other = schemas.CardLite(
+        id=row.other_id,
+        first_name=None if deleted else row.other_first_name,
+        username=None if deleted else row.other_username,
+        main_photo_url=None
+        if deleted or row.other_photo_key is None
+        else public_url(settings, row.other_photo_key),
+        shows_badge=not deleted and bool(row.other_badge),
+        is_online=not deleted
+        and row.other_last_active_at is not None
+        and row.other_last_active_at >= now - discovery_rules.ONLINE_FOR,
+        deleted=deleted,
+    )
+    last = (
+        None
+        if row.last_kind is None
+        else schemas.LastMessage(
+            kind=row.last_kind,
+            text=row.last_body[: rules.PREVIEW_CHARS]
+            if row.last_kind is MessageKind.TEXT and row.last_body is not None
+            else None,
+            mine=row.last_sender_id == user.id,
+            at=row.last_at,
+        )
+    )
+    return schemas.ThreadRow(
+        id=thread.id,
+        origin=thread.origin,
+        status=thread.status,
+        expires_at=thread.expires_at,
+        knotted_at=thread.knotted_at,
+        i_tied=thread.i_tied,
+        unread=row.unread,
+        last_message=last,
+        last_message_at=thread.last_message_at,
+        other=other,
+    )
+
+
+async def get_thread(
+    session: AsyncSession, user: User, thread_id: UUID
+) -> schemas.Thread:
+    """One of `user`'s Threads; anyone else's, or one a block stands across,
+    is `NOT_FOUND`."""
+    async with session.begin():
+        thread = await repository.my_thread(session, thread_id, user.id)
+        if thread is None:
+            raise _not_found()
+        return view_of(thread, user)

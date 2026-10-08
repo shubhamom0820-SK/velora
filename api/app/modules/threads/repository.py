@@ -1,17 +1,40 @@
-"""SQL for threads (T-7.1). No rules here: the service decides."""
+"""SQL for threads (T-7.1, T-7.2). No rules here: the service decides."""
 
 from __future__ import annotations
 
+from collections.abc import Sequence
+from dataclasses import dataclass
 from datetime import datetime
+from typing import Any
 from uuid import UUID
 
-from sqlalchemy import Uuid, func, insert, literal, or_, select, text, update
+from sqlalchemy import (
+    Row,
+    Text,
+    Uuid,
+    case,
+    cast,
+    func,
+    insert,
+    literal,
+    or_,
+    select,
+    text,
+    true,
+    tuple_,
+    update,
+)
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import aliased
 
-from app.core.enums import Gender, ThreadOrigin
+from app.core.enums import Gender, ThreadOrigin, ThreadStatus, UserStatus
+from app.modules.discovery.repository import blocked_either_way, main_photo_key
 from app.modules.matches.models import Match
-from app.modules.threads.models import Thread
+from app.modules.messages.models import Message
+from app.modules.profiles.models import Profile
+from app.modules.threads.models import Thread, ThreadClear
 from app.modules.users.models import User
+from app.modules.verification.repository import badge_of
 
 # The advisory lock's first key, meaning "a Thread's pair"; the second is the
 # ordered pair's hash. Swipes' pairs lock on 64, P-55's slots on 55.
@@ -104,3 +127,153 @@ async def gender_of(session: AsyncSession, user_id: UUID) -> Gender | None:
         select(User.gender).where(User.id == user_id)
     )
     return gender
+
+
+# --- The list (T-7.2) ---------------------------------------------------------------
+
+
+def _other(viewer_id: UUID) -> Any:
+    """The other person of each Thread row, as the viewer is one of its two."""
+    return case((Thread.user_low == viewer_id, Thread.user_high), else_=Thread.user_low)
+
+
+def sort_key() -> Any:
+    """A Thread's place in the list: its last message, or when it opened."""
+    return func.coalesce(Thread.last_message_at, Thread.created_at)
+
+
+def _cleared_at(viewer_id: UUID) -> Any:
+    return (
+        select(ThreadClear.cleared_at)
+        .where(ThreadClear.user_id == viewer_id, ThreadClear.thread_id == Thread.id)
+        .scalar_subquery()
+    )
+
+
+def _unread(viewer_id: UUID) -> Any:
+    """The other person's messages I haven't read, newer than my clearing."""
+    cleared = _cleared_at(viewer_id)
+    return (
+        select(func.count())
+        .select_from(Message)
+        .where(
+            Message.thread_id == Thread.id,
+            Message.sender_id != viewer_id,
+            Message.read_at.is_(None),
+            or_(cleared.is_(None), Message.created_at > cleared),
+        )
+        .scalar_subquery()
+    )
+
+
+def _like(text_: str) -> str:
+    """`text_` as an ILIKE pattern that matches it anywhere, literally."""
+    escaped = text_.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
+    return f"%{escaped}%"
+
+
+@dataclass(frozen=True)
+class ListFilter:
+    knots: bool
+    unread_only: bool = False
+    # Only Threads with a message at or after this instant.
+    since: datetime | None = None
+    q: str | None = None
+
+
+async def rows_for(
+    session: AsyncSession,
+    viewer_id: UUID,
+    which: ListFilter,
+    *,
+    after: tuple[datetime, UUID] | None,
+    limit: int,
+) -> Sequence[Row[Any]]:
+    """Up to `limit` of the viewer's Threads, newest first by `(sort_key, id)`,
+    from just after `after`: never one they cleared with nothing newer, never
+    one with a block either way. Each row: the Thread, the other person's
+    card-lite columns, the unread count and the last message."""
+    other_id = _other(viewer_id)
+    other = aliased(User)
+    profile = aliased(Profile)
+    last = (
+        select(
+            Message.kind.label("last_kind"),
+            Message.body.label("last_body"),
+            Message.sender_id.label("last_sender_id"),
+            Message.created_at.label("last_at"),
+        )
+        .where(Message.thread_id == Thread.id)
+        .order_by(Message.created_at.desc(), Message.id.desc())
+        .limit(1)
+        .lateral()
+    )
+    cleared = _cleared_at(viewer_id)
+    unread = _unread(viewer_id)
+    statuses = (
+        [ThreadStatus.KNOTTED]
+        if which.knots
+        else [ThreadStatus.ACTIVE, ThreadStatus.EXPIRED]
+    )
+    key = sort_key()
+    query = (
+        select(
+            Thread,
+            other.id.label("other_id"),
+            other.status.label("other_status"),
+            other.last_active_at.label("other_last_active_at"),
+            profile.first_name.label("other_first_name"),
+            profile.username.label("other_username"),
+            main_photo_key(other.id).label("other_photo_key"),
+            badge_of(other.id, other.is_verified).label("other_badge"),
+            unread.label("unread"),
+            last.c.last_kind,
+            last.c.last_body,
+            last.c.last_sender_id,
+            last.c.last_at,
+            key.label("sort_key"),
+        )
+        .select_from(Thread)
+        .join(other, other.id == other_id)
+        .join(profile, profile.user_id == other.id)
+        .outerjoin(last, true())
+        .where(
+            or_(Thread.user_low == viewer_id, Thread.user_high == viewer_id),
+            Thread.status.in_(statuses),
+            or_(cleared.is_(None), Thread.last_message_at > cleared),
+            ~blocked_either_way(viewer_id, other.id),
+        )
+        .order_by(key.desc(), Thread.id.desc())
+        .limit(limit)
+    )
+    if which.unread_only:
+        query = query.where(unread > 0)
+    if which.since is not None:
+        query = query.where(Thread.last_message_at >= which.since)
+    if which.q:
+        pattern = _like(which.q)
+        query = query.where(
+            other.status != UserStatus.DELETED,
+            or_(
+                profile.first_name.ilike(pattern, escape="\\"),
+                cast(profile.username, Text).ilike(pattern, escape="\\"),
+            ),
+        )
+    if after is not None:
+        query = query.where(tuple_(key, Thread.id) < after)
+    return (await session.execute(query)).all()
+
+
+async def my_thread(
+    session: AsyncSession, thread_id: UUID, viewer_id: UUID
+) -> Thread | None:
+    """The Thread, if the viewer is one of its two and no block stands between
+    them."""
+    found: Thread | None = await session.scalar(
+        select(Thread).where(
+            Thread.id == thread_id,
+            or_(Thread.user_low == viewer_id, Thread.user_high == viewer_id),
+            ~blocked_either_way(viewer_id, _other(viewer_id)),
+        )
+    )
+    return found

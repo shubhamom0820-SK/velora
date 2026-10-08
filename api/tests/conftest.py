@@ -420,6 +420,9 @@ def make_thread(db: AsyncSession) -> MakeThread:
                     kind=MessageKind.TEXT,
                     body=f"Message {n + 1}",
                     client_msg_id=uuid.uuid4(),
+                    # A second apart, the last at `now`: one test's rows share
+                    # a transaction, so `now()` alone would tie them all.
+                    created_at=now - timedelta(seconds=messages - 1 - n),
                 )
             )
         if messages:

@@ -22,6 +22,12 @@ from app.core.enums import Gender, LedgerReason, ThreadOrigin
 
 THREAD_HOURS_KEY: Final = "thread_hours"
 
+# The chats list (T-7.2): "Recent" is a message in the last three days, as the
+# prototype's Knots filter has it; a row's preview is a text's first 100
+# characters.
+RECENT_FOR: Final = timedelta(days=3)
+PREVIEW_CHARS: Final = 100
+
 OPEN_PRICE: Final = {
     ThreadOrigin.MATCH: LedgerReason.THREAD_OPEN,
     ThreadOrigin.DM: LedgerReason.DM_OPEN,
