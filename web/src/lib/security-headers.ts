@@ -40,7 +40,14 @@
  *   T-7.11  Voice notes: microphone=(self); media-src for voice notes and
  *           blob: previews.
  *   T-7.12  Real time: connect-src for wss:// on the API.
- *   T-8.7   Checkout: Razorpay's script, frame and connect hosts.
+ *   T-8.7   Done: checkout, on Razorpay builds' nonce routes only (D-761):
+ *           Razorpay publishes no CSP list, so RAZORPAY below is what its
+ *           Checkout asked of the page in Chrome, under this policy, read 9
+ *           October 2026 (web/bench/razorpay-csp.spec.ts holds each source
+ *           to a violation without it). Its frame, its logging host, its two
+ *           script hosts, and inline styles, which its window's mobile layout
+ *           needs. Static pages and local and CI builds keep the policy as it
+ *           was. A real payment's check with test keys is P-661.
  *   T-9.12  Sentry: its connect host, and CSP reporting wired to it, so a
  *           violation in production is seen instead of silent.
  *   T-10.2  Analytics: its script and connect hosts.
@@ -53,6 +60,7 @@
  * local http.
  */
 
+import { checkoutPathFor } from "./checkout-path";
 import { signInPathFor } from "./sign-in-path";
 import { photoStorageFor } from "./storage-origins";
 
@@ -104,6 +112,40 @@ const FIREBASE = {
     "https://securetoken.googleapis.com",
   ],
 } as const;
+
+/**
+ * Razorpay Checkout's sources (T-8.7, D-761), on builds that pay by Razorpay
+ * (checkout-path.ts), and on the nonce routes only, where the store sheet
+ * lives. Razorpay publishes no CSP list; this is what its Checkout asked of
+ * the page in Chrome on 9 October 2026, run under this policy by
+ * web/bench/razorpay-csp.spec.ts, which also shows each one refused without
+ * it. Everything inside its frame runs under Razorpay's own policy, not ours.
+ * A CSP error at checkout is this list, not a Razorpay bug.
+ */
+const RAZORPAY = {
+  // Checkout's script, and the risk-detection script it loads. 'strict-dynamic'
+  // admits both in a browser that knows it; the hosts are for one that doesn't.
+  script: [
+    "https://checkout.razorpay.com/v1/",
+    "https://cdn.razorpay.com/static/",
+  ],
+  // Its window. The whole host: a payment's steps (3-D Secure, UPI) move the
+  // frame between its pages, unseen with a fake key (P-661).
+  frame: ["https://api.razorpay.com"],
+  // Its event logging, from the page (XHR and ping).
+  connect: ["https://lumberjack.razorpay.com"],
+} as const;
+
+/**
+ * Inline styles, which Checkout injects (a `<style>` with its mobile layout,
+ * and style attributes): refused, its window loses its phone layout. Granted
+ * only where its script may run (D-762, the founder's; P-661 re-checks it).
+ */
+const INLINE_STYLES = "style-src 'self' 'unsafe-inline'";
+
+function paysByRazorpay(env: BuildEnv): boolean {
+  return checkoutPathFor(env, { dev: isDev(env) }) === "razorpay";
+}
 
 function signsInByFirebase(env: BuildEnv): boolean {
   return signInPathFor(env, { dev: isDev(env) }) === "firebase";
@@ -213,8 +255,12 @@ export function contentSecurityPolicy(
   const api = apiOrigin(env);
   const firebase = signsInByFirebase(env);
   const photos = photoSources(env);
+  // Checkout lives in the store sheet, on the app's routes: the nonce routes.
+  const razorpay = nonce !== undefined && paysByRazorpay(env);
   const extra = (sources: readonly string[]) =>
     firebase ? ` ${sources.join(" ")}` : "";
+  const pay = (sources: readonly string[]) =>
+    razorpay ? ` ${sources.join(" ")}` : "";
   return [
     "default-src 'self'",
     // Static pages: 'unsafe-inline'. Next writes its page data as inline
@@ -225,16 +271,19 @@ export function contentSecurityPolicy(
     // Firebase's reCAPTCHA) runs and nothing injected does. 'self' and the
     // hosts stay for a browser without 'strict-dynamic', which ignores them
     // otherwise.
-    `script-src 'self' ${nonce ? `'nonce-${nonce}' 'strict-dynamic'` : "'unsafe-inline'"}${dev ? " 'unsafe-eval'" : ""}${extra(FIREBASE.script)}`,
-    ...(dev ? ["style-src 'self' 'unsafe-inline'"] : []),
+    `script-src 'self' ${nonce ? `'nonce-${nonce}' 'strict-dynamic'` : "'unsafe-inline'"}${dev ? " 'unsafe-eval'" : ""}${extra(FIREBASE.script)}${pay(RAZORPAY.script)}`,
+    ...(dev || razorpay ? [INLINE_STYLES] : []),
     // Images fall back to default-src 'self' on a build without photos.
     ...(dev || photos.img
       ? [`img-src 'self'${dev ? " data:" : ""}${photos.img}`]
       : []),
-    `connect-src 'self'${api ? ` ${api}` : ""}${photos.connect}${extra(FIREBASE.connect)}`,
+    `connect-src 'self'${api ? ` ${api}` : ""}${photos.connect}${extra(FIREBASE.connect)}${pay(RAZORPAY.connect)}`,
     // Frames fall back to default-src 'self' everywhere else; a Firebase build
-    // keeps that and adds reCAPTCHA's.
-    ...(firebase ? [`frame-src 'self'${extra(FIREBASE.frame)}`] : []),
+    // keeps that and adds reCAPTCHA's, and a Razorpay build's nonce routes
+    // Checkout's.
+    ...(firebase || razorpay
+      ? [`frame-src 'self'${extra(FIREBASE.frame)}${pay(RAZORPAY.frame)}`]
+      : []),
     "object-src 'none'",
     "base-uri 'none'",
     "form-action 'self'",

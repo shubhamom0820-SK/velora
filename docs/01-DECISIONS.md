@@ -2588,6 +2588,7 @@ decision, and now says ₹250.
 **Still open, on T-5.2's Needs line:** whether a Super Like is swiping; the "Most popular" tag on
 day one; T-10.4's price test, which these answers didn't reach; and four things about how a Thread
 lives (D-097). **Answered or moved 4 October 2026 by D-250.**
+**The "Most popular" tag on day one: answered 9 October 2026 by D-760** ("Best value" instead).
 
 The answers are the founder's decision, 4 October 2026. The words are the advisor's write-up
 (Claude, in a separate chat), relayed by the founder.
@@ -5145,6 +5146,100 @@ The pause is the founder's own decision, in the words above, relayed by the advi
 separate chat). Points 1 to 5 and the `NOT_ALLOWED` shape: approved by the founder on the advisor's
 recommendation, relayed by the advisor, 9 October 2026; the options and the corrections to the
 advisor's brief were Claude's, in P-740's plan.
+
+### D-760 · At launch the store says "Best value", never "Most popular" — Locked
+**The decision (T-8.7; the founder, 9 October 2026, answering T-8.7's Needs line, relayed with the
+advisor's brief, Claude in a separate chat):**
+- **No pack says "Most popular" at launch.** On day one nobody has bought anything, so the words
+  aren't true of the world (D-231's open question). They come back only when real purchases make
+  them true: P-660.
+- **"Best value" instead, on the pack whose Vela costs the least**, today the ₹10,000 pack at
+  ₹22.22 a Vela (D-099). True from the first day, because it is arithmetic on the packs. **Worked
+  out from the rows `GET /packs` sends, never a pack named in the code** (`web/src/lib/store-math.ts`,
+  compared by cross-multiplying, so no rounding decides it): reprice the packs and the tag moves.
+  Two packs tied for the cheapest Vela: no tag, since neither is the best.
+- **The ₹4,500 pack stays dominated, knowingly** (D-099, D-231). It carries no tag now. That is the
+  consequence of this answer, not a change to the pack.
+
+**Why:** a tag that claims what buyers did, shown before any have bought, is a claim we can't
+stand behind. "Best value" says something checkable about the price alone.
+
+**Rejected:** "Most popular" on day one (untrue then); no tag at all (the cheapest Vela is a fact
+worth showing); a tag column on `credit_packs` (a schema change for a word the rows already
+decide).
+
+### D-761 · Checkout: Razorpay on staging and production, a stand-in locally, one order per tap — Locked
+**The decision (T-8.7; the shape Claude's, in T-8.7's plan, approved by the founder on the
+advisor's recommendation, Claude in a separate chat, relayed, 9 October 2026):**
+- **How a build takes payment is fixed at build time from `APP_ENV`**, an allowlist
+  (`web/src/lib/checkout-path.ts`, `CHECKOUT_PATH` from `next.config`): `razorpay` on staging and
+  production, `standin` on local and CI, none on anything else. **An order opens a window only
+  when the build and the order's key agree**: Razorpay's for a real key on a Razorpay build, the
+  stand-in for the fake gateway's key (`rzp_fake_local_only`) on a stand-in build. Anything else
+  says payments aren't available. So staging never opens the stand-in, whatever the API answers.
+  The stand-in is a sheet of ours ("Test checkout") that says no money moves: it stands in for
+  Razorpay's window only, and the order is paid or failed by T-8.1's local-only webhook, as J8 and
+  J9 do. The web reads no Razorpay key of its own: Checkout opens with the order's `key_id`.
+- **One order per tap, and "Try again" reopens it.** A tap makes an order under a fresh
+  Idempotency-Key. Closed without paying, "Try again" opens the same order again and asks the
+  API for nothing. Razorpay takes one successful payment per order ("No further payment
+  requests are allowed once the order moves to the `paid` state", its Orders docs, read 9 October
+  2026), so a retry can't buy a second pack by accident. A new order per retry could.
+- **The shown price is checked before any window opens.** The order carries no `shown_price`
+  (D-600): its body is the pack's id alone (rule 6). Instead the web compares the order's
+  `amount_paise` with the price it showed. If they differ, no window opens, the packs are asked
+  for again, and it says nothing was charged.
+- **Only `paid` ends the wait.** After Checkout says it went through, `GET /payments/{id}` every
+  1.5 s, for 60 s at most. `failed` doesn't end it: one order can fail and then be captured
+  (T-8.2), and Razorpay lets a man try another method inside its window. No `paid` in 60 s:
+  "still confirming", which says paying again buys a second pack, and offers "Check again" and the
+  claim (P-481, D-580). Paid: a toast with the Velas and the bonus, and the wallet, the history
+  and the packs asked for again.
+- **The CSP is what Razorpay's Checkout asked of the page, and nothing more** (its inline styles
+  accepted by D-762). Razorpay publishes
+  no CSP list. On 9 October 2026 its live `checkout.js` (SHA-256 `566672f9…eb2b` as fetched that
+  day) was opened in Chrome on a key and an order that don't exist, under production's
+  nonce-route policy. It asked for its frame (`https://api.razorpay.com`), its event logging
+  (`https://lumberjack.razorpay.com`), two scripts (`checkout.razorpay.com/v1/` and
+  `cdn.razorpay.com/static/`, admitted by `'strict-dynamic'` and listed for browsers without
+  it), and **inline styles**: a `<style>` carrying its phone layout (`max-width: 450px; height:
+  90vh`) and its spinner, and style attributes. Its positioning is set through the CSSOM, which no
+  CSP blocks, so without the styles the window still works but loses its phone layout. All of
+  it is on Razorpay builds' nonce routes only, where the store sheet lives. Static pages and
+  local and CI builds have none of it, so the E2E still catches an inline style of ours (P-41).
+  `web/bench/razorpay-csp.spec.ts` holds it, by hand: nothing refused under the policy as
+  served, and each source refused without it. What a real payment asks beyond a page that hasn't
+  paid (3-D Secure, UPI) is P-661's, with test keys on staging.
+
+**Why:** the money moves only by the verified webhook (T-8.2). Everything here keeps the browser
+from making a second payment, opening a window the build shouldn't, or charging a price it didn't
+show. The CSP is the part a mistake would hide: a refused source looks like a broken checkout.
+
+**Rejected:** the stand-in chosen by the order's key alone (a staging API misconfigured to the fake
+would open it; the build decides first); a new order on retry (above); `failed` ending the wait (a
+second attempt in the same window would read as a failure); the CSP from a third-party list or
+from guesses; `'unsafe-inline'` styles on every page (only where Checkout can run); hashing
+Razorpay's injected `<style>` (it changes with each of their releases, and checkout would break
+silently the day it did).
+
+### D-762 · Inline styles on staging's and production's app routes, for Razorpay's Checkout — Locked
+**The decision (T-8.7; the founder, 9 October 2026, on the advisor's recommendation, Claude in a
+separate chat, relayed by the founder):** `style-src 'self' 'unsafe-inline'` is accepted on the
+nonce routes (the app's and sign-in's) of builds that pay by Razorpay, staging and production,
+and nowhere else. Static pages, and local and CI builds, keep no `style-src` at all (D-059).
+
+**Why:** scripts stay nonce-only (`'strict-dynamic'`, D-541), so the widening is for styles alone,
+and inline styles are the lower risk. Without them Razorpay's Checkout loses its phone layout,
+which T-8.7 saw in Chrome (D-761): its injected `<style>` carries the window's mobile rules, and
+the browser refused it. A checkout broken on phones, where most men will pay, costs more than
+the styles risk.
+
+**Kept under watch:** P-661 re-checks on staging, with test keys, whether Razorpay still needs it.
+If it no longer does, the allowance goes.
+
+**Rejected:** hashing Razorpay's `<style>` (it changes with their releases, and checkout would
+break silently the day it did; D-761); the allowance on every page or every build (only where
+Checkout can run).
 
 ## Adding a decision
 

@@ -13,6 +13,8 @@ export const API = "http://127.0.0.1:8199";
 
 export default defineConfig({
   testDir: ".",
+  // Razorpay's CSP check has its own config: it needs no build (T-8.7).
+  testIgnore: "razorpay-csp.spec.ts",
   workers: 1,
   retries: 0,
   reporter: "list",

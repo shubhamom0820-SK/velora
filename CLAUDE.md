@@ -88,7 +88,8 @@ so local and ci builds can't reach Firebase (D-085). `src/components/ui/` holds 
 each with a vitest test beside it; `/dev/ui` shows them all under `next dev` and 404s everywhere
 else. Feature components go in `src/components/<feature>/`. A person's profile has one route,
 `/people/[id]` (the deck's tap, T-6.5; T-6.8's screen). `web/bench/` holds benchmarks run by
-hand, never in `make test`: T-6.5's deck frame rate (`pnpm exec playwright test -c bench`). The app's header and bottom nav are
+hand, never in `make test`: T-6.5's deck frame rate (`pnpm exec playwright test -c bench`), and
+T-8.7's Razorpay CSP against its live Checkout (`-c bench/razorpay-csp.config.ts`). The app's header and bottom nav are
 `src/components/shell/AppShell.tsx`, inside `(app)`'s gate and PIN lock (T-5.6): its sizes are the
 `--shell-*` tokens and its shape is that one file, which `look.test.ts` holds. Server data (T-1.18):
 `src/lib/api.ts` is the only code that calls `fetch`, and `src/lib/upload.ts` the only
@@ -100,7 +101,9 @@ says whether the store sheet is open: the balance pill, "Buy Velas" and any muta
 `INSUFFICIENT_CREDITS` open it (the query client's mutation cache; queries never). **A mutation
 that spends or credits Velas sets `meta: { touchesWallet: true }`**, so the balance and history
 are asked again when it settles (T-5.5). **And it sends `shown_price`, the price it displayed from `/prices`:**
-the API compares it and refuses a different one with `PRICE_CHANGED` (P-56, D-600). The WebSocket client arrives with T-7.12. Next.js 16 ships its own docs in `web/node_modules/next/dist/docs/` — the
+the API compares it and refuses a different one with `PRICE_CHANGED` (P-56, D-600). The store (T-8.7)
+pays by `src/lib/razorpay.ts`, the only code that loads Razorpay's script, on Razorpay builds, and
+by a stand-in on local and CI ones (`src/lib/checkout-path.ts`, from `APP_ENV`, D-761). The WebSocket client arrives with T-7.12. Next.js 16 ships its own docs in `web/node_modules/next/dist/docs/` — the
 reference for its APIs, which differ from older versions.
 
 ## Commands

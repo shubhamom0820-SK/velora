@@ -363,12 +363,80 @@ export const en = {
     womenTitle: "Everything is free for you",
     womenBody:
       "Threads, knots, voice notes and your private album cost you nothing, and never will.",
-    // Until T-8.7 builds the store. Says plainly that buying hasn't started,
-    // with no promise of when (the advisor directing T-5.5, relayed by the
-    // founder, 5 October 2026).
+    // The store and its checkout (T-8.7). Drafted by Claude, for the founder's
+    // review. Never "GST", in any case, anywhere a man looks while Velora is
+    // unregistered (D-450, D-482; StoreSheet.test.tsx reads every string), and
+    // never "Most popular" until purchases make it true (D-760, P-660).
     store: {
       title: "Buy Velas",
-      body: "Buying Velas hasn't started on {app} yet. Until it does, there's no way to add Velas to your balance.",
+      loading: "Loading packs",
+      failed: "We couldn't load the packs",
+      emptyTitle: "Nothing to buy right now",
+      emptyBody: "There are no packs on sale at the moment.",
+      firstPurchase: "Your first purchase comes with bonus Velas",
+      bonus: "+{count} bonus",
+      rate: "{perVela} a Vela · {perThread} a Thread",
+      rateVelaOnly: "{perVela} a Vela",
+      // The cheapest Vela, worked out from the packs (D-760): true on day one.
+      bestValue: "Best value",
+      final: "Purchases are final. A payment that goes wrong is ours to fix.",
+      refunds: "Refund policy",
+      opening: "Opening the payment window",
+      // Before any payment window opens, so nothing was charged.
+      priceChanged:
+        "This pack's price just changed. Here are the packs again; nothing was charged.",
+      packGone:
+        "That pack isn't on sale any more. Here are the packs again; nothing was charged.",
+      unavailable:
+        "Payments aren't working right now, and nothing was charged. Try again in a little while.",
+      tooMany:
+        "That's a lot of tries in an hour. Wait a while, then try again. Nothing was charged.",
+      orderFailed: "We couldn't start that payment. Nothing was charged.",
+      windowFailed: "The payment window didn't open. Nothing was charged.",
+      notHere: "Payments aren't available here. Nothing was charged.",
+      // Local and CI builds only (D-761): stands in for Razorpay's window, and
+      // the fake gateway's webhook pays the order. No money moves anywhere.
+      standin: {
+        title: "Test checkout",
+        body: "This build never takes money. The fake payment gateway pays this order or fails it.",
+        pay: "Payment went through",
+        close: "Close without paying",
+      },
+      confirming: {
+        title: "Confirming your payment",
+        body: "This takes a few seconds.",
+      },
+      paid: "{velas} added to your balance",
+      notPaid: {
+        title: "Payment didn't go through",
+        body: "The payment window closed before the payment finished. If money left your account anyway, report it below.",
+        retry: "Try again",
+        packs: "Choose another pack",
+      },
+      waiting: {
+        title: "Still confirming your payment",
+        body: "The payment gateway hasn't told us yet. If your payment went through, the Velas arrive as soon as it does, so there's no need to pay again: paying again buys a second pack.",
+        check: "Check again",
+      },
+      close: "Close",
+      // The man's claim (P-481, D-580): a broken payment only, the two kinds.
+      claim: {
+        open: "Report a problem with this payment",
+        reasons: "What went wrong with this payment",
+        missing_velas: "The money went through, but no Velas came",
+        duplicate_charge: "I was charged twice for this purchase",
+        final: "Changing your mind isn't one of these: purchases are final.",
+        send: "Send",
+        sentTitle: "We've got your report",
+        sentBody:
+          "We check what the payment gateway recorded, then add the missing Velas or refund the extra charge to the way you paid.",
+        already:
+          "You've already reported this payment, and we're looking at it.",
+        granted: "The Velas for this payment are already in your balance.",
+        notFound: "We couldn't find this payment.",
+        tooMany: "You've sent a lot of reports today. Try again tomorrow.",
+        failed: "We couldn't send your report. Try again.",
+      },
     },
   },
   // Sign-in and onboarding (T-3.11, T-3.12). Drafted by Claude from the

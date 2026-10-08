@@ -77,6 +77,15 @@ const PROFILE_TEST = "src/components/profile/ProfileScreen.test.tsx";
 const REDIRECT_TEST = "src/components/share/SignedInProfileRedirect.test.tsx";
 const SHARE_LAYOUT_TEST = "src/app/(share)/layout.test.ts";
 const ROUTES_TEST = "src/app/routes.test.ts";
+const STORE_SHEET = "src/components/wallet/StoreSheet.tsx";
+const STORE_TEST = "src/components/wallet/StoreSheet.test.tsx";
+const PACKS_TEST = "src/components/wallet/PackList.test.tsx";
+const STORE_MATH = "src/lib/store-math.ts";
+const STORE_MATH_TEST = "src/lib/store-math.test.ts";
+const STORE_QUERIES = "src/lib/queries/store.ts";
+const STORE_QUERIES_TEST = "src/lib/queries/store.test.tsx";
+const CHECKOUT_PATH = "src/lib/checkout-path.ts";
+const CHECKOUT_PATH_TEST = "src/lib/checkout-path.test.ts";
 
 const HEADERS = "src/lib/security-headers.ts";
 const CONNECT = "connect: ` ${storage.privateBucket}`,";
@@ -1229,6 +1238,155 @@ export const CASES: BreakCase[] = [
     new: "more: false",
     run: [CHATS_TEST],
     expect: [COUNTS],
+  },
+  // --- T-8.7: the store and its checkout ---
+  {
+    id: "t87-01-a-woman-sees-the-store",
+    file: STORE_SHEET,
+    old: "  if (!isMan) return null;\n",
+    new: "",
+    run: [STORE_TEST],
+    expect: ["opened anyway, nothing shows"],
+  },
+  {
+    id: "t87-02-a-womans-browser-asks-for-packs",
+    file: STORE_SHEET,
+    old: "usePacks({ enabled: open && isMan })",
+    new: "usePacks({ enabled: open })",
+    run: [STORE_TEST],
+    expect: ["opened anyway, nothing shows"],
+  },
+  {
+    id: "t87-03-best-value-is-the-first-pack",
+    file: STORE_MATH,
+    old: "return tied || best === null ? null : best.id;",
+    new: "return packs[0]?.id ?? null;",
+    run: [STORE_MATH_TEST, PACKS_TEST],
+    expect: [
+      "is the ₹10,000 pack today",
+      '"Best value" is on the cheapest Vela alone',
+    ],
+  },
+  {
+    id: "t87-04-best-value-on-a-tie",
+    file: STORE_MATH,
+    old: "tied = true;",
+    new: "tied = false;",
+    run: [STORE_MATH_TEST],
+    expect: ["is none when two packs tie"],
+  },
+  {
+    id: "t87-05-try-again-makes-a-second-order",
+    file: STORE_SHEET,
+    old: "onRetry={() => openWindow(paying)}",
+    new: "onRetry={() => buy(paying.pack)}",
+    run: [STORE_TEST],
+    expect: [
+      "Try again reopens the same order, never a second",
+      "Try again opens the same order again",
+    ],
+  },
+  {
+    id: "t87-06-no-sixty-second-cap",
+    file: STORE_QUERIES,
+    old: "export const POLL_FOR_MS = 60_000;",
+    new: "export const POLL_FOR_MS = 600_000;",
+    run: [STORE_QUERIES_TEST, STORE_TEST],
+    expect: ["polls every 1.5 s, for 60 s at most", "stops at 60 s"],
+  },
+  {
+    id: "t87-07-polls-every-second",
+    file: STORE_QUERIES,
+    old: "export const POLL_EVERY_MS = 1_500;",
+    new: "export const POLL_EVERY_MS = 1_000;",
+    run: [STORE_QUERIES_TEST, STORE_TEST],
+    expect: ["polls every 1.5 s, for 60 s at most", "asks every 1.5 s"],
+  },
+  {
+    id: "t87-08-the-shown-price-unchecked",
+    file: STORE_SHEET,
+    old: "if (order.amount_paise !== pack.price_paise) {",
+    new: "if (order.amount_paise < 0) {",
+    run: [STORE_TEST],
+    expect: ["a price other than the one shown"],
+  },
+  {
+    id: "t87-09-razorpay-on-static-pages",
+    file: HEADERS,
+    old: "const razorpay = nonce !== undefined && paysByRazorpay(env);",
+    new: "const razorpay = paysByRazorpay(env);",
+    run: [CSP_TEST],
+    expect: ["never on the static pages"],
+  },
+  {
+    id: "t87-10-local-pays-by-razorpay",
+    file: CHECKOUT_PATH,
+    old: '["local", "standin"],',
+    new: '["local", "razorpay"],',
+    run: [CHECKOUT_PATH_TEST, CSP_TEST],
+    expect: ["local pays by standin", "never on a stand-in build"],
+  },
+  {
+    id: "t87-11-the-stand-in-on-a-razorpay-build",
+    file: CHECKOUT_PATH,
+    old: 'if (path === "razorpay") return keyId === FAKE_KEY_ID ? null : "razorpay";',
+    new: 'if (path === "razorpay") return keyId === FAKE_KEY_ID ? "standin" : "razorpay";',
+    run: [CHECKOUT_PATH_TEST, STORE_TEST],
+    expect: [
+      "a Razorpay build never opens the stand-in, even for the fake's key",
+      "a Razorpay build never opens the stand-in, even for the fake's order",
+    ],
+  },
+  {
+    id: "t87-12-gst-in-the-store",
+    file: "src/i18n/en.ts",
+    old: 'final: "Purchases are final. A payment that goes wrong is ours to fix.",',
+    new: 'final: "Purchases are final. Prices include GST.",',
+    run: [STORE_TEST],
+    expect: ['never "GST"'],
+  },
+  {
+    id: "t87-13-most-popular-on-day-one",
+    file: "src/i18n/en.ts",
+    old: 'bestValue: "Best value",',
+    new: 'bestValue: "Most popular",',
+    run: [STORE_TEST, PACKS_TEST],
+    expect: [
+      'never "Most popular"',
+      '"Best value" is on the cheapest Vela alone',
+    ],
+  },
+  {
+    id: "t87-14-a-claim-refusal-unsaid",
+    file: "src/components/wallet/ClaimForm.tsx",
+    old: 'case "ALREADY_EXISTS":\n      return "wallet.store.claim.already";',
+    new: 'case "ALREADY_EXISTS":\n      return "wallet.store.claim.failed";',
+    run: ["src/components/wallet/ClaimForm.test.tsx"],
+    expect: ["refused with ALREADY_EXISTS"],
+  },
+  {
+    id: "t87-15-the-order-not-touches-wallet",
+    file: STORE_QUERIES,
+    old: "    meta: { touchesWallet: true },\n    mutationFn: ({ packId, key }",
+    new: "    mutationFn: ({ packId, key }",
+    run: [STORE_QUERIES_TEST],
+    expect: ["is marked touchesWallet"],
+  },
+  {
+    id: "t87-16-paid-refreshes-nothing",
+    file: STORE_QUERIES,
+    old: "    void queryClient.invalidateQueries({ queryKey: queryKeys.wallet() });\n    void queryClient.invalidateQueries({ queryKey: queryKeys.packs() });\n  }, [paid, queryClient]);",
+    new: "  }, [paid, queryClient]);",
+    run: [STORE_QUERIES_TEST],
+    expect: ["the balance and the packs asked again"],
+  },
+  {
+    id: "t87-17-a-dismissal-after-paying",
+    file: "src/lib/razorpay.ts",
+    old: "if (!paid) onDismiss();",
+    new: "onDismiss();",
+    run: ["src/lib/razorpay.test.ts"],
+    expect: ["closing the window afterwards isn't a dismissal"],
   },
 ];
 

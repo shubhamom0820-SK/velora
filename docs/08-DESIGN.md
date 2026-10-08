@@ -214,7 +214,9 @@ screens is §8. T-6.5 builds from it and no longer stops to ask. The shell stays
 packs are ₹1,500 → 30, ₹4,500 → 100, ₹6,000 → 250 and ₹10,000 → 450, not its 30, 100, 150 and
 250. Its "Most popular" tag stays on the ₹4,500 pack, chosen knowingly though that pack is the
 dominated one; whether the words can show before anyone has bought is the founder's to settle
-(on T-8.7's Needs line, moved from T-5.2's on 4 October 2026). The gifts are four at 5, 10, 15 and 20 Velas, with fifteen free
+(on T-8.7's Needs line, moved from T-5.2's on 4 October 2026). **Settled 9 October 2026 (D-760):
+they can't.** At launch the store says "Best value" on the cheapest Vela instead, and no pack
+says "Most popular" until purchases make it true (P-660). The gifts are four at 5, 10, 15 and 20 Velas, with fifteen free
 sends a week, not its five at 20 to 500. Its price list's re-open (3), direct message (5) and
 album request (5) are D-098's and D-231's 2, 8 and 1. Its "liked you" reveal (`likedMe`, 20) is 1
 Vela from 8 October 2026 (the founder; D-004's note). The prototype itself isn't edited (P-22).
@@ -246,6 +248,24 @@ of the advisor directing T-5.5 (Claude, in a separate chat), relayed by the foun
 `--chrome-accent` border, not the prototype's red text: red on its own soft red measures 4.15:1,
 under the 4.5:1 its `micro` text needs (13.93:1 as built). The pill's sizes are the
 `--shell-pill-*` tokens, and its tap area reaches 8 px past it, to 44 px (§3).
+
+**The store sheet and checkout as T-8.7 built them** (9 October 2026). Neither has a design (§8);
+the founder approved building them from existing parts only, nothing invented, as the Location
+step was. A `Sheet` titled "Buy Velas". A first-purchase banner while any pack carries a bonus:
+`--accent-soft` with an `--accent` border, `small`, a `Sparkles` icon. Then each pack as one
+button row, `--surface` with a `--line` border and `--corner-card`: a 32 px `--accent` circle with
+a filled `Zap`, the Velas in `ui` semibold with "+6 bonus" in `--accent` beside them, "₹50 a Vela
+· ₹250 a Thread" in `small` `--mute` (the Thread's price from `/prices`), and the price at the
+row's end. "Best value" is a `soft` `Badge` on the cheapest Vela (D-760). Under the packs, in
+`small` `--mute`: "Purchases are final. A payment that goes wrong is ours to fix." and the
+"Refund policy" link. The checkout states are the same sheet re-titled: "Confirming your
+payment" (a `Spinner`); "Payment didn't go through" (a `CircleAlert` in `--accent`, then "Try
+again", "Choose another pack" and "Report a problem with this payment"); "Still confirming your
+payment" (a `Clock`, "Check again", the claim, "Close"). The claim is radio rows like Gender's.
+Razorpay's own window replaces the sheet while it's up; on local and CI builds a "Test checkout"
+sheet stands in for it (D-761). Left out of the prototype's store: "Watch an ad", "Auto top-up"
+and "billed discreetly as KT Technologies" (no task builds them), and its failure sheet's "No
+money was taken", since a UPI debit can still land after the window closes.
 
 Where the wallet screen departs from the prototype:
 - No "Request a refund on unspent credits" and no "Unspent credits refundable within 7 days": the
@@ -318,7 +338,8 @@ an hour shows; her Thread is drawn on its own (D-097), her chats list isn't. The
 balance pill stay as T-5.5 built them (§5), the lock screen and onboarding as T-3.10 to T-3.13 and
 T-4.10 built them. You, Settings, Notifications, the store sheet, Checkout and admin have no
 design yet: the prototype shows they exist, no more, and the task that builds one asks before
-designing it, as T-6.5 was to (P-57).
+designing it, as T-6.5 was to (P-57). **T-8.7 asked:** the store sheet and Checkout are built
+from existing parts only (§5), at the founder's word.
 
 **One concept, the thread.** A thin red line, `--accent`, 2 to 3 px, is the one thread through the
 whole app: on the card, between the photo and the text; on the match sheet, joining the two

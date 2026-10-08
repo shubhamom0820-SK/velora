@@ -176,8 +176,8 @@ A test in this list is marked `@pytest.mark.critical`; CI runs them first and fa
 | J5 | Voice note from woman → man unlocks (−5) → plays | T-7.13 |
 | J6 | Both tie the knot → Knots tab, no countdown | T-7.13 |
 | J7 | Thread expires → read-only → re-open (−2) | T-7.13 |
-| J8 | Buy Velas (fake gateway) → balance updates | T-8.7 |
-| J9 | Payment fails → retry sheet → success | T-8.7 |
+| J8 | Buy Velas (fake gateway) → balance updates. As built (`e2e/store.spec.ts`): a man signs up through the screens (5 welcome Velas), opens the store from the wallet, taps 30 Velas; the fake gateway's webhook captures it, asked from Node as Razorpay would; the stand-in's "Payment went through" starts the poll; "36 Velas added to your balance", and the card and the pill say 41 | T-8.7 |
+| J9 | Payment fails → retry sheet → success. As built: the webhook fails it, the stand-in closes, "Payment didn't go through"; "Try again" reopens the same order (one `POST /payments/orders` in all, D-761), the webhook captures it, and the balance is 41 | T-8.7 |
 | J10 | Report with also-block → confirmation shown → person gone everywhere | T-9.1 |
 | J11 | Moderator resolves a report and freezes the account | T-9.5 |
 | J12 | Clear chat → undo → restore from You tab | T-7.10 |

@@ -321,7 +321,10 @@ on a shared CI runner fails at random), its numbers in T-6.2's tick.
    row, creates the Razorpay order, stores the `payments` row (`created`, `gst_paise` 0), returns
    `order_id` + public key. The same key again is the same order (D-481); a woman is refused
    first (D-076).
-2. Browser opens Razorpay Checkout.
+2. Browser checks the order's amount is the price it showed (else the packs again, nothing
+   charged), then opens Razorpay Checkout, its script loaded on demand; on local and CI builds a
+   stand-in of our own instead, and the fake gateway's local-only webhook pays (T-8.7, D-761).
+   Closed without paying, "Try again" reopens the same order, never a second one.
 3. Razorpay → `POST /v1/payments/webhook` (`payment.captured`), T-8.2 (D-520 to D-524). Verify
    the signature over the raw body, or `400`. In one transaction: lock the row by its order
    (`FOR UPDATE`); none → `200`, logged. Anchor (`provider_payment_id`) already this payment's →
@@ -332,7 +335,10 @@ on a shared CI runner fails at random), its numbers in T-6.2's tick.
    bonus only if no other payment of his is `paid` or `refunded`, else `bonus_credits` 0 (D-522).
    A `payment.failed` makes a `created` row `failed` and never sets the anchor, so a later capture
    on the order still credits (D-523).
-4. Browser polls `GET /v1/payments/{id}` until `paid`, then refreshes wallet.
+4. Browser polls `GET /v1/payments/{id}` every 1.5 s until `paid`, for 60 s at most, then
+   refreshes the wallet and the packs (the bonus is gone after a first purchase). `failed` doesn't
+   end it: one order can fail and then be captured. No `paid` in 60 s: "still confirming", with
+   "Check again" and the claim (T-8.7, D-761).
 
 **Money back (D-076 rule 3, D-520):** a refund or chargeback made in Razorpay's dashboard reaches
 the same webhook, one transaction per event, the row locked by the payment (or its order):
@@ -429,7 +435,7 @@ rule 3, T-8.2) or a charge no Velas were granted for (T-8.3, D-580).
 | `PUSH_PROVIDER` | api, worker | `webpush` \| `fake` |
 | `VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY`, `VAPID_SUBJECT` | api, worker | public key also in web |
 | `SENTRY_DSN` | all | |
-| `NEXT_PUBLIC_API_URL`, `NEXT_PUBLIC_WS_URL`, `NEXT_PUBLIC_VAPID_PUBLIC_KEY`, `NEXT_PUBLIC_RAZORPAY_KEY_ID`, `NEXT_PUBLIC_SENTRY_DSN` | web | public by definition |
+| `NEXT_PUBLIC_API_URL`, `NEXT_PUBLIC_WS_URL`, `NEXT_PUBLIC_VAPID_PUBLIC_KEY`, `NEXT_PUBLIC_SENTRY_DSN` | web | public by definition. No Razorpay key: Checkout opens with the `key_id` the order returns (T-8.7, D-761) |
 
 The four keys above are checked for shape at startup, everywhere, and the repo's public test keys
 (`PUBLIC_TEST_KEYS` in `core/config.py`) are refused unless `ENV` is `local` (D-060).
@@ -473,9 +479,16 @@ secret is left empty. Real secret values are never committed.
   'nonce-<a fresh 128-bit nonce per response>' 'strict-dynamic'`, never `'unsafe-inline'`, set by
   `web/src/proxy.ts`, and their pages render per request (`force-dynamic` in the `(auth)` and
   `(app)` layouts). Every other page, the marketing pages among them, keeps the static policy above
-  and stays static. Each task that needs more widens it there, deliberately: App Check (P-68), the microphone
-  (T-7.11), WebSockets (T-7.12), Razorpay (T-8.7), Sentry (T-9.12) and analytics (T-10.2). This
-  line changes with each.
+  and stays static. **Razorpay (T-8.7, D-761)**: on builds that pay by Razorpay (staging and production,
+  `web/src/lib/checkout-path.ts`) and on the nonce routes only, where the store sheet lives,
+  `script-src` adds `https://checkout.razorpay.com/v1/` and `https://cdn.razorpay.com/static/`,
+  `connect-src` `https://lumberjack.razorpay.com`, `frame-src` `https://api.razorpay.com`, and a
+  `style-src 'self' 'unsafe-inline'` for the `<style>` and style attributes its window injects
+  (its phone layout). Razorpay publishes no CSP list: this is what its Checkout asked of the page
+  in Chrome, held to it by `web/bench/razorpay-csp.spec.ts`, each source refused without it. Local
+  and CI builds and the static pages have none of it. Each task that needs more widens it there,
+  deliberately: App Check (P-68), the microphone (T-7.11), WebSockets (T-7.12), Sentry (T-9.12)
+  and analytics (T-10.2). This line changes with each.
 - API headers (`app/core/headers.py`, P-42): `X-Content-Type-Options: nosniff` on every
   response and `Cache-Control: no-store` on every `/v1` response, 500s and CORS preflights
   included: a sign-in carries an access token, and `/me` on, one person's data.

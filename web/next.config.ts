@@ -6,6 +6,7 @@ import {
 
 import { authCookieSuffix } from "./src/lib/auth-cookies";
 import { assertKnownAppEnv } from "./src/lib/build-env";
+import { checkoutPathFor } from "./src/lib/checkout-path";
 import { firebaseConfigFor } from "./src/lib/firebase-config";
 import { signInPathFor } from "./src/lib/sign-in-path";
 import {
@@ -80,6 +81,8 @@ export function configFor(
       AUTH_COOKIE_SUFFIX: authCookieSuffix(env, { dev }) ?? "",
       // D-081: which way this build signs people in, from APP_ENV too.
       SIGN_IN_PATH: signInPathFor(env, { dev }) ?? "",
+      // D-761: how this build takes a payment, from APP_ENV too.
+      CHECKOUT_PATH: checkoutPathFor(env, { dev }) ?? "",
       // D-085: the Firebase project a Firebase build signs in with, as JSON;
       // empty for local and ci, which never reach Firebase.
       FIREBASE_WEB_CONFIG: firebase ? JSON.stringify(firebase) : "",

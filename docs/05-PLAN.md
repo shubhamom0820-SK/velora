@@ -3325,15 +3325,30 @@ prices don't depend on the web photos step, and the hold is lifted.
 - [x] **Commit:** `feat(referrals): codes and rewards [T-8.6]`
 
 ### T-8.7 · Web store and checkout
-- [ ] **Needs:** T-8.2, T-5.5, and the founder's answer: **can "Most popular" show when nobody has
+- [x] **Needs:** T-8.2, T-5.5, and the founder's answer: **can "Most popular" show when nobody has
   bought anything yet?** At launch the words aren't true of the world. Moved here from T-5.2's
   Needs line (item 8), 4 October 2026 (the founder), since this screen holds the tag:
   `credit_packs` has no column for it. Separate from the value question, which is settled (D-231).
-- [ ] Store sheet from the prototype (packs, per-Vela and per-thread price, first-purchase banner), with D-099's packs, not the prototype's (08-DESIGN §5). **"Most popular" stays on the ₹4,500 pack, the dominated one, chosen knowingly (D-231); whether the words can be shown when nobody has bought anything yet is the founder's to settle (on this task's Needs line).** The 20% first-purchase bonus stays. Load Razorpay Checkout script on demand. On success callback → poll `/payments/{id}` every 1.5 s (max 60 s) → toast + wallet refresh. Failure/dismiss → "Payment didn't go through" sheet with retry.
-- [ ] **Widen the CSP here (D-059):** Razorpay Checkout's script, frame and connect hosts, exactly as Razorpay documents them. The CSP has been enforced since T-2.5, so checkout fails with a CSP error until this lands.
-- [ ] **The man's claim form (P-481):** `POST /refund-requests` from a payment that broke, the two
-  kinds only (D-580).
-- [ ] **Commit:** `feat(web): store and razorpay checkout [T-8.7]`
+  **Answered 9 October 2026 (the founder): no.** "Best value" on the cheapest Vela at launch
+  (D-760); "Most popular" when real purchases make it true (P-660).
+- [x] Store sheet from the prototype (packs, per-Vela and per-thread price, first-purchase banner), with D-099's packs, not the prototype's (08-DESIGN §5). **"Most popular" stays on the ₹4,500 pack, the dominated one, chosen knowingly (D-231); whether the words can be shown when nobody has bought anything yet is the founder's to settle (on this task's Needs line).** The 20% first-purchase bonus stays. Load Razorpay Checkout script on demand. On success callback → poll `/payments/{id}` every 1.5 s (max 60 s) → toast + wallet refresh. Failure/dismiss → "Payment didn't go through" sheet with retry.
+  **As built (D-760, D-761):** "Best value", worked out from the packs, and no "Most popular".
+  The design is existing parts only (08-DESIGN §5, the founder's approval). Packs and the Thread's
+  price come from `GET /packs` and `GET /prices`, never the web. A woman never sees it and never
+  asks for packs. "Try again" reopens the same order. The order's amount is checked against the
+  price shown before any window opens. Only `paid` ends the poll, and at 60 s "still confirming"
+  takes over. Local and CI builds pay by a stand-in and the fake gateway (J8, J9, both passing).
+- [x] **Widen the CSP here (D-059):** Razorpay Checkout's script, frame and connect hosts, exactly as Razorpay documents them. The CSP has been enforced since T-2.5, so checkout fails with a CSP error until this lands.
+  **Razorpay documents none** (its security pages list API and IP whitelisting only, read 9
+  October 2026). So the list is what its live Checkout asked of the page in Chrome, under
+  production's policy, plus inline styles for its phone layout. It applies on Razorpay builds'
+  nonce routes only (D-761), and `web/bench/razorpay-csp.spec.ts` holds each source to a
+  violation without it (6 of 6, `out/t-8.7-razorpay-csp.log`). A real payment's steps on staging
+  with test keys: P-661.
+- [x] **The man's claim form (P-481):** `POST /refund-requests` from a payment that broke, the two
+  kinds only (D-580). **On the checkout's "didn't go through" and "still confirming" sheets**,
+  where the payment's id is known. From the history, and a claim's outcome: P-662, before beta.
+- [x] **Commit:** `feat(web): store and razorpay checkout [T-8.7]`
 
 ### T-8.8 · Web album, kudos, referral UI
 - [ ] **Needs:** T-8.4, T-8.5, T-8.6
@@ -6035,7 +6050,8 @@ The number comes from the session's own block, given in its brief, from P-100 up
   what the API already decides (D-580). Until it exists, nothing tells the founder a claim was
   filed. Found building T-8.3; filed by Claude, 8 October 2026; its session's block, P-480 to
   P-489.
-- [ ] P-481 · The man's claim form. **In T-8.7** (on its line). Worst case without it: a man whose
+- [x] P-481 · The man's claim form. **In T-8.7** (on its line). **Done there, on the checkout's
+  sheets; the history's half is P-662.** Worst case without it: a man whose
   payment broke has no way in the product to say so, only the support email `/refunds` names,
   and the claim never reaches the queue T-8.3 built. A "Report a problem with this payment" on
   a payment (the checkout's failure sheet and T-5.5's history), with the two kinds and their
@@ -6224,3 +6240,34 @@ The number comes from the session's own block, given in its brief, from P-100 up
   `referrals/service.py`, before every other; `tests/modules/referrals/test_paused.py`; five
   breaking cases (`p740-`), each red with its guard gone (`out/p-740-break-guards.log`). The
   referrals tests run at 5 through their `conftest.py`.
+- [ ] P-660 · "Most popular" once purchases make it true. **After launch, when there are
+  purchases to count.** Worst case without it: none. The store says "Best value" on the cheapest
+  Vela (D-760) and no pack says "Most popular". What's missing is only the tag the founder kept on
+  the ₹4,500 pack (D-231), which needs a rule over real purchases: which pack, over what window,
+  and how many sales before the words are true. Filed by Claude building T-8.7, 9 October 2026;
+  its session's block, P-660 to P-669.
+- [ ] P-661 · Razorpay's CSP, checked on staging with test keys. **Before the first real sale.**
+  Worst case: a step of a real payment (3-D Secure, a UPI intent, a bank's page) asks the page for
+  a source T-8.7's list lacks, the browser refuses it, and the checkout fails in a way that looks
+  like Razorpay's bug, silently until T-9.12 reports CSP violations. T-8.7's list is what
+  Checkout asked of a page with a key and an order that don't exist (D-761,
+  `web/bench/razorpay-csp.spec.ts`). Razorpay's window never showed, so nothing past it was seen.
+  Needs Razorpay test keys on staging (P-0.8's account), set by the founder, never asked for:
+  then a test payment by card and by UPI, with the browser's violations read, as T-3.14 did for
+  Firebase. **And re-check whether Razorpay still needs inline styles** (D-762, the founder,
+  9 October 2026): run the payment with `style-src 'self' 'unsafe-inline'` removed. If its window
+  keeps its phone layout, drop the allowance. Filed by Claude building T-8.7, 9 October 2026.
+- [ ] P-662 · A claim from the wallet's history, and a claim's outcome. **Before beta** (the
+  founder, 9 October 2026). Worst case: a man who closes the app inside the checkout's 60 s, or
+  finds a duplicate charge on his bank statement next week, has no way in the product to claim:
+  T-8.7's claim form (P-481) lives only on the checkout's sheets, where the payment's id is known,
+  and a ledger entry carries no payment id (04-API). He is left with the support email `/refunds`
+  names. Needs `GET /payments` (his own, a page at a time, D-270) so the history can offer "Report
+  a problem" on a payment, including one that granted nothing; and `GET /refund-requests` (his
+  own) if a claim's status is to be shown. Filed by Claude building T-8.7, 9 October 2026.
+- [ ] P-663 · One sign-up helper for the E2E. **Whenever the next journey needs a signed-up
+  man.** Worst case: a change to an onboarding screen is fixed in J1's steps and not in J8's and
+  J9's copy, which then fail for a reason that isn't theirs. `web/e2e/store.spec.ts` signs a man up
+  through the screens in steps of its own, shortened from J1's helpers in `signup.spec.ts`, which
+  aren't exported, and moving them would have reshaped T-3.13's file mid-task. Fix: move them to
+  `e2e/onboarding.ts`, used by both. Filed by Claude building T-8.7, 9 October 2026.

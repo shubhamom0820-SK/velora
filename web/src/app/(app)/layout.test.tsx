@@ -2,6 +2,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
+import { ToastProvider } from "@/components/ui/ToastProvider";
 import { t } from "@/i18n/t";
 import {
   clearCookies,
@@ -29,10 +30,14 @@ function renderApp() {
     defaultOptions: { queries: { retry: false } },
   });
   return render(
+    // The root layout's providers: queries, and toasts, which the store
+    // sheet shows (T-8.7).
     <QueryClientProvider client={client}>
-      <AppGroupLayout>
-        <p>A screen</p>
-      </AppGroupLayout>
+      <ToastProvider>
+        <AppGroupLayout>
+          <p>A screen</p>
+        </AppGroupLayout>
+      </ToastProvider>
     </QueryClientProvider>,
   );
 }
@@ -84,7 +89,9 @@ describe("the app's layout (T-3.10, T-5.6)", () => {
 
     renderApp();
 
-    expect(await screen.findByRole("status")).toBeInTheDocument();
+    // The restore's spinner, "Loading": the toasts' empty live region is a
+    // status too.
+    expect(await screen.findByText(t("ui.loading"))).toBeInTheDocument();
     expect(shellNav()).not.toBeInTheDocument();
 
     answer(envelope(401, "AUTH_REQUIRED"));

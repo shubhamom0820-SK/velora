@@ -87,12 +87,13 @@ describe("next.config runs the check for builds only", () => {
     "phase-test",
   ])("leaves %s alone, so next dev and next start need no APP_ENV", (phase) => {
     // Nothing refused; only the values for the browser's code (T-3.10, D-081,
-    // D-085) and the proxy's CSP (D-541) are added.
+    // D-761, D-085) and the proxy's CSP (D-541) are added.
     const { env, ...rest } = configFor(phase, {});
     expect(rest).toEqual(nextConfig);
     expect(Object.keys(env ?? {})).toEqual([
       "AUTH_COOKIE_SUFFIX",
       "SIGN_IN_PATH",
+      "CHECKOUT_PATH",
       "FIREBASE_WEB_CONFIG",
       "CSP_WITH_NONCE",
     ]);

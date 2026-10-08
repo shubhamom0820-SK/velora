@@ -27,7 +27,10 @@ describe("the proxy (T-6.6, D-541)", () => {
 
     const policy = first.headers.get("Content-Security-Policy");
     expect(policy).toContain("'strict-dynamic'");
-    expect(policy).not.toContain("'unsafe-inline'");
+    // Never for scripts. Styles may be, on a Razorpay build (D-762).
+    expect(policy?.match(/script-src [^;]*/)?.[0]).not.toContain(
+      "'unsafe-inline'",
+    );
     const nonce = nonceOf(policy);
     expect(nonce).toBeDefined();
     expect(nonceOf(second.headers.get("Content-Security-Policy"))).not.toBe(

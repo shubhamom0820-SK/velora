@@ -280,6 +280,20 @@ function covers(source: string, path: string): boolean {
   return getPathMatch(source, { strict: true })(path) !== false;
 }
 
+/** A policy with T-8.7's Razorpay sources taken out, exactly as they're added. */
+function withoutRazorpay(policy: string): string {
+  // next dev has inline styles of its own; only a Razorpay policy loses them.
+  if (!policy.includes("razorpay")) return policy;
+  return policy
+    .replace(
+      " https://checkout.razorpay.com/v1/ https://cdn.razorpay.com/static/",
+      "",
+    )
+    .replace(" https://lumberjack.razorpay.com", "")
+    .replace(" https://api.razorpay.com", "")
+    .replace("style-src 'self' 'unsafe-inline'; ", "");
+}
+
 describe("the nonce routes' CSP (T-6.6, D-541)", () => {
   const NONCED = [
     "/login",
@@ -338,11 +352,12 @@ describe("the nonce routes' CSP (T-6.6, D-541)", () => {
     ["staging", { ...STAGING, APP_ENV: "staging" }],
     ["production", { ...STAGING, APP_ENV: "production" }],
   ])(
-    "differs from the static one in script-src alone: a nonce and 'strict-dynamic', never 'unsafe-inline' (%s)",
+    "differs from the static one in script-src, a nonce and 'strict-dynamic', never 'unsafe-inline', and in Razorpay's checkout alone (%s)",
     (_, env) => {
       const nonced = policyWithNonce(policyWithNonceSlot(env), "Tm9uY2U=");
       const before = contentSecurityPolicy(env).split("; ");
-      const after = nonced.split("; ");
+      // Razorpay's sources are the nonce routes' alone (T-8.7, below).
+      const after = withoutRazorpay(nonced).split("; ");
 
       expect(after).toHaveLength(before.length);
       after.forEach((directive, i) => {
@@ -382,5 +397,68 @@ describe("the nonce routes' CSP (T-6.6, D-541)", () => {
     for (const nonce of nonces) {
       expect(nonce).toMatch(/^[A-Za-z0-9+/]{22}==$/);
     }
+  });
+});
+
+describe("Razorpay's checkout (T-8.7, D-761): on a Razorpay build's nonce routes, exactly what it asked for", () => {
+  it.each(["staging", "production"] as const)(
+    "the nonce routes' policy on APP_ENV=%s is exactly this",
+    (appEnv) => {
+      expect(
+        policyWithNonce(
+          policyWithNonceSlot({ ...STAGING, APP_ENV: appEnv }),
+          "Tm9uY2U=",
+        ),
+      ).toBe(
+        [
+          "default-src 'self'",
+          "script-src 'self' 'nonce-Tm9uY2U=' 'strict-dynamic' https://www.google.com/recaptcha/ https://www.gstatic.com/recaptcha/ https://checkout.razorpay.com/v1/ https://cdn.razorpay.com/static/",
+          "style-src 'self' 'unsafe-inline'",
+          R2_FOR[appEnv].img,
+          `connect-src 'self' https://api.staging.veloraapp.co.in ${R2_FOR[appEnv].upload} https://www.google.com/recaptcha/ https://identitytoolkit.googleapis.com https://securetoken.googleapis.com https://lumberjack.razorpay.com`,
+          "frame-src 'self' https://www.google.com/recaptcha/ https://recaptcha.google.com/recaptcha/ https://api.razorpay.com",
+          "object-src 'none'",
+          "base-uri 'none'",
+          "form-action 'self'",
+          "frame-ancestors 'none'",
+        ].join("; "),
+      );
+    },
+  );
+
+  it.each(["staging", "production"])(
+    "never on the static pages, APP_ENV=%s: nothing there opens a checkout",
+    (appEnv) => {
+      const csp = contentSecurityPolicy({ ...STAGING, APP_ENV: appEnv });
+
+      expect(csp).not.toContain("razorpay");
+      expect(csp).not.toContain("style-src");
+    },
+  );
+
+  it.each(["local", "ci"])(
+    "never on a stand-in build, APP_ENV=%s, nonce routes included: the fake gateway needs nothing",
+    (appEnv) => {
+      const csp = policyWithNonceSlot({ ...STAGING, APP_ENV: appEnv });
+
+      expect(csp).not.toContain("razorpay");
+      expect(csp).not.toContain("style-src");
+    },
+  );
+
+  it("never on a build with no checkout path", () => {
+    expect(policyWithNonceSlot(STAGING)).not.toContain("razorpay");
+  });
+
+  it("names Razorpay's hosts, never a wildcard", () => {
+    const csp = policyWithNonceSlot({ ...STAGING, APP_ENV: "production" });
+
+    expect(csp).not.toContain("*");
+    expect(csp.match(/https:\/\/[a-z.-]*razorpay\.com[^ ;]*/g)).toEqual([
+      "https://checkout.razorpay.com/v1/",
+      "https://cdn.razorpay.com/static/",
+      "https://lumberjack.razorpay.com",
+      "https://api.razorpay.com",
+    ]);
   });
 });

@@ -20,6 +20,10 @@ export const queryKeys = {
   wallet: () => ["wallet"] as const,
   walletLedger: () => ["wallet", "ledger"] as const,
   prices: () => ["prices"] as const,
+  // The store (T-8.7): asked again when a purchase lands, since the
+  // first-purchase bonus is gone after one.
+  packs: () => ["packs"] as const,
+  payment: (id: string) => ["payments", id] as const,
   search: (q: string) => ["search", q] as const,
   // Each feed and filter set is its own scroll, ranked at its first instant
   // (D-491).

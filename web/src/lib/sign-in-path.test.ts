@@ -48,7 +48,7 @@ describe("whether anyone can sign in: one flag for /login and the waitlist box",
 // velora-ic's, as firebase-config.ts holds it (D-065, D-085).
 const VELORA_IC = JSON.stringify(firebaseConfigFor({ APP_ENV: "production" }));
 
-// Three for the browser's code, and the nonce routes' CSP for src/proxy.ts
+// Four for the browser's code, and the nonce routes' CSP for src/proxy.ts
 // (D-541): public, the policy every such response sends, and inlined only
 // where code reads it, which is the proxy alone.
 describe("next.config builds exactly these values into the code", () => {
@@ -58,6 +58,7 @@ describe("next.config builds exactly these values into the code", () => {
       {
         AUTH_COOKIE_SUFFIX: "prod",
         SIGN_IN_PATH: "firebase",
+        CHECKOUT_PATH: "razorpay",
         FIREBASE_WEB_CONFIG: VELORA_IC,
       },
     ],
@@ -66,6 +67,7 @@ describe("next.config builds exactly these values into the code", () => {
       {
         AUTH_COOKIE_SUFFIX: "staging",
         SIGN_IN_PATH: "firebase",
+        CHECKOUT_PATH: "razorpay",
         FIREBASE_WEB_CONFIG: VELORA_IC,
       },
     ],
@@ -74,6 +76,7 @@ describe("next.config builds exactly these values into the code", () => {
       {
         AUTH_COOKIE_SUFFIX: "local",
         SIGN_IN_PATH: "otp",
+        CHECKOUT_PATH: "standin",
         FIREBASE_WEB_CONFIG: "",
       },
     ],
@@ -82,6 +85,7 @@ describe("next.config builds exactly these values into the code", () => {
       {
         AUTH_COOKIE_SUFFIX: "local",
         SIGN_IN_PATH: "otp",
+        CHECKOUT_PATH: "standin",
         FIREBASE_WEB_CONFIG: "",
       },
     ],
