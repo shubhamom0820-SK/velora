@@ -50,7 +50,7 @@ Prices live in the `action_prices` table, not in code, so they can change withou
 | Unlock a voice note | 5 |
 | Request private album | 5 (refunded if declined) |
 | Super Like | 5 |
-| Reveal one "liked you" | 20 |
+| Reveal one "liked you" | 20; **1 from 8 October 2026 (the founder)** |
 | Tie the knot / message in a knot | Free |
 
 Women pay nothing for any action.
@@ -60,6 +60,10 @@ open, on T-5.2's Needs line.
 **Superseded in part, 4 October 2026, by D-231:** the direct message above is the private message,
 now 8 and then 2; the album request is viewing private pictures, now 1, and a decline returns
 nothing (D-230). The voice-note unlock, Super Like and "liked you" reveal stay, by default.
+**Noted 8 October 2026: the "liked you" reveal is 1 Vela,** the founder's word ("koi like kiya
+reveal karne ka ek vela"). A value change, since the values are tunable (D-098): the row changes
+and no decision reopens. The database holds 20 until P-370's data migration moves the row, before
+T-6.7 charges it.
 
 ### D-005 · Credit packs — Locked
 | Credits | Price | Per credit | Cost of one thread (5 cr) |
@@ -685,6 +689,9 @@ not be a route around a ban.
 The Privacy page says this plainly (T-2.2): users deserve to know what survives, including Google's
 copy of the phone number, which is outside our control (D-048). Decided by the founder on
 1 October 2026.
+**Noted 8 October 2026, D-470:** a man's hashed number is also kept so his number gets welcome
+Velas once, ever: a later account on it gets none. `/privacy` says why the hash is kept ("so that
+deleting an account can't be used to escape a ban or a report"), and T-8.11 adds this reason there.
 
 ### D-052 · Terms we can stand behind — Locked
 **Law and courts:** Indian law, and the courts with jurisdiction over the registered office in
@@ -2410,6 +2417,9 @@ D-004's other rows, what a private message is, viewing private pictures, and the
 supersedes only what it names, so until the founder rules, D-004 and D-016 still say the rest.
 **Answered 4 October 2026 by D-231,** all but whether a Super Like counts as swiping.
 **And that by D-250:** it doesn't, and keeps 5 Velas, by default.
+**Noted 8 October 2026: welcome 5 + reveal 1 = a new man can reveal five people who liked him for
+nothing.** Every new man gets 5 Velas when he finishes sign-up (D-470), and a "liked you" reveal is
+now 1 Vela (D-004's note). The founder chose this knowing it.
 
 The prices and the rules are the founder's decision, 4 October 2026. The reasoning beside them
 (re-open and Extend moving together) is the advisor's write-up (Claude, in a separate chat),
@@ -2544,6 +2554,8 @@ of the world on day one. That is not the value question, and it is open on T-5.2
 **Carried by default, not by decision:** unlocking a voice note (5), a Super Like (5) and
 revealing one "liked you" (20) stay at D-004's prices. The founder had no preference, so they
 survived because nobody said to remove them; recorded so it is visible to anyone revisiting.
+**The reveal is 1 Vela from 8 October 2026 (the founder),** a value change, not this entry
+reopened (D-004's note); P-370 moves the row.
 Whether a Super Like counts as "swiping", free under D-098, is still open.
 
 **Supersedes** D-004's direct-message row (5) and album-request row (5, refunded if declined);
@@ -3538,6 +3550,64 @@ asked him to confirm, all three confirmed: `show`'s copy is pending and moderate
 as any public photo, one Sightengine call per toggle-on accepted; `replaced` reaches the owner by
 name; and the race test and the worker's wake test delete the photo and verification rows they
 commit. The mechanism's words are Claude's.
+
+### D-470 · Welcome Velas: 5 for every new man at sign-up, once per number — Locked
+**The decision (the founder, 8 October 2026: "5 velas free new registration pe add karo"):** every
+man gets 5 Velas when he finishes sign-up. Built by T-8.11. The shape:
+- **When:** at onboarding `done` (T-4.8's `onboarding.complete()`), in the transaction that moves
+  him there. Never at sign-in, when his gender and date of birth aren't known yet.
+- **Who:** men only, gender `male`, an allowlist the service checks before it credits. **Never a
+  woman** (D-076). The database refuses her a ledger row anyway, but a service that left it to
+  the database would abort her whole sign-up, so the service skips her and her sign-up completes.
+- **How much:** `app_config.welcome_velas`, 5, tunable like the prices (D-005, D-098). At 0
+  there is no grant and no ledger row.
+- **How:** always `wallet.service.credit()`, with a new ledger reason, `welcome` (rule 5);
+  `ledger_reason_t` is rebuilt both ways, as T-5.2's `4a7e20790605` did (D-251). Never a default
+  balance on `wallets` (rules 5 and 6).
+- **Once per phone number, ever** (the founder, 8 October 2026, answering P-371). Once per account
+  by the ledger, and a hash of every number that received a grant is kept, as D-072 keeps one,
+  and survives T-9.6's anonymisation: a later account on that number gets no grant. D-051's kept
+  hash gains this reason, and `/privacy` says so (T-8.11).
+
+**The ledger's shape for `welcome`** (Claude's, by D-077's rules): a credit; `ref_type` `user`,
+naming the man himself; his id is the event, so the key is `{user_id}:welcome:{user_id}`; inside
+the one-per-event index, so one account never holds two, however the key is built. The ledger
+can't see a second account, which is a new `user_id`: the number's hash is what stops that.
+
+**What 5 Velas are.** One Thread (D-098), ₹250 at the entry pack (D-099), or five "liked you"
+reveals at 1 Vela each (D-098's note). They are unpaid, like the first-purchase bonus: no payment,
+nothing in T-8.1's turnover counter, and not the paid Velas that D-450's point 4 calls a
+liability. How unpaid Velas are counted when spent beside paid ones is a question for the CA, as
+it already is for the bonus.
+
+**The worst case, accepted (P-371):** a fresh number is a fresh account, and each gets its 5: one
+free Thread with a woman per number, a first message that paid Velas otherwise stand in front of
+(09-RESEARCH's R1: "it is what keeps the inbox clean for women"). Nothing here stops it. D-072's
+hash is written only when a date of birth is refused, and `users.phone_hash` is unique per
+number, not per person. Velas can't move between accounts (D-076), so a man with many numbers
+holds many single Threads, never one large balance. The founder chose this knowing it.
+
+**Under-18 (D-078).** The grant is at `done`, and `dob` is onboarding's first step (D-068), so a
+date refused as under-18 is refused before any grant could happen: no under-18 account holds a
+`welcome` row, and D-078's premise, that a user at the dob step has no ledger row, holds. If a bug
+ever wrote one, D-078's deletion fails whole, a 500, as it says, and the row is kept (rule 12).
+
+**R1 and T-10.7.** 5 Velas is one Thread, so this is R1's candidate fix, "the first thread free,
+once per account", given to every new man as Velas he spends as he chooses. T-10.7 now tests this
+grant, not a free Thread.
+
+**Rejected:**
+- **A default balance of 5 on `wallets`:** no ledger row behind it (rule 5), and a wallet exists
+  from sign-in, a woman's too, where D-076's trigger refuses a balance anyway.
+- **A grant at sign-in:** before the gender is set, when the database refuses any credit, and
+  before the date of birth, when an under-18 account could come to hold a ledger row.
+- **Once per account only:** a man could delete his account, wait out T-9.6's 30 days and sign up
+  again for another 5 (P-371, closed by the founder).
+- **Women:** never (D-076).
+
+The grant is the founder's decision, 8 October 2026, in the words above. Its shape is the
+advisor's (Claude, in a separate chat), relayed by the founder; the ledger's shape is Claude's.
+P-371's answers are the founder's, on the advisor's recommendation, relayed the same day.
 
 ---
 

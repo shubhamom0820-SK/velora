@@ -2489,6 +2489,8 @@ prices don't depend on the web photos step, and the hold is lifted.
      prices **by default, not by decision**: the founder had no preference. **Answered: a Super
      Like is not swiping** (D-250). Free swiping is an ordinary left or right swipe; a Super Like is
      its own action and keeps D-004's 5, which survived by default and was never decided.
+     **The reveal is 1 Vela from 8 October 2026 (the founder),** a value change (D-004's note);
+     P-370 moves the row.
   4. **Answered: a private message is sent from a profile directly, with no swipe and no match**
      (D-231): 8 Velas for the first, 2 for each after, and it never expires. It is D-004's direct
      message (`dm_open`, the `dm` origin), whose 5 is dead. How it is kept beside 03-SCHEMA's rule
@@ -2552,7 +2554,8 @@ prices don't depend on the web photos step, and the hold is lifted.
   0 for a woman, for every action:
   - open a Thread 5 · re-open an expired Thread 2, every time · Extend, 24 hours, 10 · first
     private message 8 · each private message after it 2 · view private pictures 1 · unlock a voice
-    note 5 · Super Like 5 · reveal one "liked you" 20 (these three by default, D-231) · a gift 5,
+    note 5 · Super Like 5 · reveal one "liked you" 20 (these three by default, D-231; the reveal
+    is 1 from 8 October 2026, the founder, and P-370 moves the row) · a gift 5,
     10, 15 or 20, and fifteen free sends a week · swiping free · tying the knot, and a Knot's
     messages, free. Private messages never expire.
   - packs: ₹1,500 → 30 · ₹4,500 → 100 · ₹6,000 → 250 · ₹10,000 → 450, with the 20% first-purchase
@@ -2722,8 +2725,9 @@ prices don't depend on the web photos step, and the hold is lifted.
 - [ ] **Commit:** `feat(search): search and username lookup [T-6.6]`
 
 ### T-6.7 · Liked you
-- [ ] **Needs:** T-6.4, T-5.1
-- [ ] `GET /likes`: people who liked/super-liked me and whom I haven't swiped; for men, unrevealed entries return only a blurred thumbnail URL (server-generated blur, not CSS) and no name. `POST /likes/{id}/reveal` debits 20 and records `liked_you_reveals`.
+- [ ] **Needs:** T-6.4, T-5.1, and **P-370**: the `liked_you_reveal` row holds 1, not 20, before
+  anything charges it (the founder, 8 October 2026)
+- [ ] `GET /likes`: people who liked/super-liked me and whom I haven't swiped; for men, unrevealed entries return only a blurred thumbnail URL (server-generated blur, not CSS) and no name. `POST /likes/{id}/reveal` debits the `liked_you_reveal` row's price, through `pricing.service`, never a literal (1 Vela from 8 October 2026, the founder; this line said "debits 20" until then), and records `liked_you_reveals`.
 - [ ] Web "Liked you" tab: grid, count badge, reveal flow.
 - [ ] **Commit:** `feat(discovery): liked you with paid reveal [T-6.7]`
 
@@ -2969,6 +2973,57 @@ prices don't depend on the web photos step, and the hold is lifted.
 - [ ] Album section on profile (locked / pending / granted with watermark note); incoming requests list for women with grant/decline; kudos prompt in chat after the threshold; referral code field in onboarding (optional) and share card in You tab.
 - [ ] **Commit:** `feat(web): album, kudos, referrals [T-8.8]`
 
+### T-8.11 · Welcome Velas
+**Filed 8 October 2026 (D-470):** every man gets 5 Velas when he finishes sign-up, once per phone
+number, ever. The founder's decision; the shape is the advisor's (Claude, in a separate chat),
+relayed by the founder.
+**Worst case first: one number, account after account.** What stops it: `users.phone_hash` is
+unique, so a number holds one account at a time, and the ledger's one-per-event index gives an
+account one grant. D-072's hash does nothing here: it is written only when a date of birth is
+refused. What that leaves is P-371, answered by the founder on 8 October 2026:
+**re-registering** on the same number once T-9.6 has anonymised the old account would grant again,
+and is **closed** here, by a kept hash of every number that received a grant (below); **a fresh
+number** per account gets its 5 each, one Thread's worth, and is **accepted**, knowingly (D-470).
+- [ ] **Needs:** T-5.1, T-4.8
+- [ ] **Config:** `app_config.welcome_velas`, 5, by a data migration of this task's own (rule
+  11), `ON CONFLICT DO NOTHING` like T-1.14's. 03-SCHEMA's `app_config` seeds take it. Tunable
+  (D-470): at 0 the service writes nothing and never calls `credit()`, whose `delta <> 0` would
+  refuse it.
+- [ ] **Enum and migration:** `welcome` in `ledger_reason_t`, rebuilt both ways as
+  `4a7e20790605` did (D-251), the downgrade refusing once the ledger holds a `welcome` row. A
+  credit, `ref_type` `user` (the man himself), inside the one-per-event index (D-470): named in
+  the direction and `ref_type` checks, which are allowlists, in `wallet/rules.py`, and in
+  `tests/modules/wallet/test_guards.py` and `test_reason_migration.py`. 03-SCHEMA's enum and
+  ledger-shape table change with it.
+- [ ] **Once per number:** a hash of every number that received a grant (the HMAC
+  `users.phone_hash` holds, D-061), kept where T-9.6's anonymisation never clears it, as D-072
+  keeps one. The grant checks it first, and a later account on that number gets nothing. This
+  task names the table and 03-SCHEMA takes it; if it carries a key to `users`, D-078's test makes
+  it choose deleted or kept. **`/privacy` says why the hash is kept** ("so that deleting an
+  account can't be used to escape a ban or a report", `en.ts`): this task adds the welcome reason
+  there, in the same commit (D-051's note).
+- [ ] **The grant, in `onboarding.complete()`'s transaction,** as the step moves to `done`:
+  `wallet.service.credit()` with `welcome`, key `{user_id}:welcome:{user_id}`, for a man only
+  (gender `male`, an allowlist the service checks first). A woman is skipped by the service,
+  since leaving her to D-076's trigger would abort her sign-up. Never a default balance (rules 5,
+  6). Nothing for D-078: the grant comes after `dob`, so no under-18 account can hold one (D-470).
+- [ ] **Tests, each guard broken once:** a man finishing gets 5 (balance 5, one `welcome` row); a
+  woman finishing gets 0 and no row, and her sign-up completes; `done` twice gives one grant, with
+  two completions forced to overlap; `welcome_velas` 0 gives no grant and no row; grant, delete
+  the account, sign up again on the number after T-9.6's 30 days: no second grant (P-371).
+  T-9.6 comes after this task, so until it lands the test stands in for its anonymisation by
+  freeing the number from the old account, and T-9.6 runs it through its own (its pointer).
+- [ ] **Types and copy:** `make types`, since `LedgerReason` gains `welcome` (rule 10), and a
+  history label for it in `en.ts`, whose `satisfies Record<LedgerReason, string>` fails `tsc`
+  without one.
+- [ ] **For this task's plan, the advisor's recommendation** (Claude, in a separate chat, relayed
+  by the founder, 8 October 2026; not decided here): a missing `welcome_velas` row skips the grant
+  and logs a warning, and never fails sign-up; no backfill for men already `done`, since before
+  launch they are test and seed accounts; and one line telling a new man about his 5 Velas,
+  inside D-262's rule (`claims.test.ts`). The worst case of the first, for the plan to weigh: a
+  skip is silent, so a lost row grants nobody until someone reads the warning.
+- [ ] **Commit:** `feat(onboarding): welcome Velas for new men [T-8.11]`
+
 ---
 
 # Sprint 9 — Safety, admin, notifications, hardening (weeks 14–15)
@@ -3030,6 +3085,10 @@ prices don't depend on the web photos step, and the hold is lifted.
 - [ ] **Needs:** T-3.5
 - [ ] Hide profile, hide age, hide distance, show kudos; pause (hidden + no notifications); export (JSON of own data, generated by worker, signed link valid 24 h); delete (status `deleted`, profile hidden immediately, anonymised after 30 days by cron; payments and ledger kept, detached from identity). What's erased and kept follows D-051, which `/privacy` states: messages stay in the other person's chat as from "Deleted account" and as moderation records, and a hashed phone number is kept so deletion can't escape a ban. Change the page with the code.
 - [ ] Two things T-3.3 and T-3.7 left here: what a `deleted` account gets at sign-in (`FORBIDDEN` until now, D-067), and whether and how a username can change after onboarding (locked until now, D-068; D-001's `/@username` links depend on it).
+- [ ] **The welcome hash survives the anonymisation** (T-8.11, D-470, P-371): a number that
+  received welcome Velas never gets them again, on any later account. T-8.11's test (grant,
+  delete, sign up again after 30 days, no second grant) stands in for this task's anonymisation
+  until it exists; run it through the real one here.
 - [ ] **Commit:** `feat(settings): privacy and data rights [T-9.6]`
 
 ### T-9.7 · PWA
@@ -3102,6 +3161,9 @@ prices don't depend on the web photos step, and the hold is lifted.
 - [ ] **T-10.3** Metrics queries for the weekly review: D1/D7 retention, thread → knot rate, % threads expiring with zero replies, paying conversion (men), revenue per paying user, reports per 100 users, active gender ratio.
 - [ ] **T-10.4** Price test: variant A (₹1,500 / 25 Velas) vs B (₹999 / 25) assigned 50/50; compare revenue per paying man after 3 weeks. **Both variants are gone** (D-099, D-250): D-099's packs replaced A, and T-5.2 retired B, `entry-25`, since ₹999 for 25 is ₹40 a Vela, below the new entry pack's ₹50. This task proposes a fresh test against D-099's packs when there are users to test on.
 - [ ] **T-10.7** First-thread-free test (risk R1 in `09-RESEARCH.md`): half of new men get their first thread free. Measure paying conversion, threads per man, and revenue per man — not just the free-thread take-up.
+  **Changed 8 October 2026 (D-470):** every new man now gets 5 Velas at sign-up, one Thread's
+  worth (T-8.11), so this task tests that grant, not a free Thread. What it compares, now that
+  every man gets it, is this task's to propose.
 - [ ] **T-10.5** Moderator runbook: report handling per reason, SLA, escalation (minor suspected → immediate ban + preserve evidence), canned replies.
 - [ ] **T-10.6** Feedback loop: in-app "Send feedback" → `feedback` table; weekly triage into Proposed tasks.
 
@@ -5189,3 +5251,33 @@ The number comes from the session's own block, given in its brief, from P-100 up
   URL ever covered and the row points there; or `complete` revokes the window by moving the
   object. Found building T-4.12; filed by Claude, 8 October 2026; its session's block, P-300 to
   P-309.
+- [ ] P-370 · Move the `liked_you_reveal` row from 20 to 1 Vela, by a data migration. **Before
+  T-6.7, on its Needs line.** Worst case first: the founder set the reveal at 1 Vela (8 October
+  2026, D-004's note), but the price is a row, and every database holds 20, written by T-1.14's
+  `fa16c0908c2c`. Editing the docs changes nothing that is shown or charged: T-5.5's price list
+  reads the row (`GET /prices`), so it shows 20 wherever it runs, and T-6.7, built against the row
+  as it must be, would charge twenty times the price set, Velas a man can't get back (D-230).
+  **The work:** a data migration of its own (rule 11; T-1.14's is never edited),
+  `liked_you_reveal` 20 → 1, reversible; `tests/test_reference_data.py` and
+  `tests/modules/pricing/test_router.py`, which both hold 20; and 03-SCHEMA's note, which then says
+  the row has moved. `web/src/components/wallet/WalletScreen.test.tsx` holds 20 as a stand-in for
+  the API's answer; this task says whether it follows. Filed by Claude
+  at the direction of the advisor (Claude, in a separate chat, relayed by the founder), 8 October
+  2026; its session's block, P-370 to P-379.
+- [x] P-371 · Welcome Velas: can one person collect them again and again? **Answered by the
+  founder, 8 October 2026, on the advisor's recommendation (Claude, in a separate chat), relayed;
+  recorded in D-470.** The question, found filing T-8.11: one number holds one account at a time
+  (`users.phone_hash` is unique) and one account one grant (the ledger's per-event index), and
+  D-072's hash is written only when a date of birth is refused, so it stops nothing here. Two ways
+  were left open:
+  1. **A fresh number per account: accepted.** Each fresh number gets its 5, one Thread's worth,
+     a free first message to a woman per number. Velas can't move between accounts (D-076), so
+     many numbers make many single Threads, never one balance. The founder chose this knowing
+     it, and D-470 says so.
+  2. **Re-registering on the same number: closed.** One welcome per phone number, ever: a hash of
+     every number that received a grant is kept, as D-072 keeps one, and survives T-9.6's
+     anonymisation, so a later account on that number gets no grant. T-8.11 builds it, with a
+     test (grant, delete, sign up again after 30 days, no second grant); T-9.6 carries the
+     pointer.
+  Filed and answered the same day, so T-8.11 isn't blocked on it. Filed by Claude; its session's
+  block, P-370 to P-379.

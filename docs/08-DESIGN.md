@@ -208,7 +208,8 @@ packs are ₹1,500 → 30, ₹4,500 → 100, ₹6,000 → 250 and ₹10,000 → 
 dominated one; whether the words can show before anyone has bought is the founder's to settle
 (on T-8.7's Needs line, moved from T-5.2's on 4 October 2026). The gifts are four at 5, 10, 15 and 20 Velas, with fifteen free
 sends a week, not its five at 20 to 500. Its price list's re-open (3), direct message (5) and
-album request (5) are D-098's and D-231's 2, 8 and 1. The prototype itself isn't edited (P-22).
+album request (5) are D-098's and D-231's 2, 8 and 1. Its "liked you" reveal (`likedMe`, 20) is 1
+Vela from 8 October 2026 (the founder; D-004's note). The prototype itself isn't edited (P-22).
 
 **The shell as T-5.6 built it** (provisional, 4 October 2026). The header ✦ holds the wordmark,
 `APP_NAME` in `title-1`, never the prototype's "Knot". The nav ✦ is Discover, Chats, Wallet and

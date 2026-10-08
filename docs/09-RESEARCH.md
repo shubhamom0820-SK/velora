@@ -108,6 +108,9 @@ pack a man pays ₹250 to open one Thread (D-099); Tinder India sells roughly a 
 messaging for less. We are defensible on *why* (it is what keeps the inbox clean for women), but the
 first-run experience has to prove value before it asks for money. Candidate fix: the first thread
 free, once per account. Decide before beta, measure in T-10.4.
+**Decided 8 October 2026 (the founder, D-470):** every new man gets 5 Velas when he finishes
+sign-up, once per phone number. 5 Velas = one Thread (D-098), so this is the candidate fix, given to
+every man as Velas rather than as a free Thread, and T-10.7 tests this grant, not a free Thread.
 
 **R2 · Permanence has no exit.**
 We invented a permanent tier and gave it no closure mechanic. If knots go silent, we have recreated

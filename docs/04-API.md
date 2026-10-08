@@ -98,7 +98,7 @@ further rule, computed from the shown photos' records, never `is_verified` alone
 | GET | /users/by-username/{u} | ✅ | → `PublicProfile` | T-6.6 |
 | GET | /search | ✅ | `?q=&cursor=&limit=` → `Page<CardLite>` (`@` prefix = username lookup) | T-6.6 |
 | GET | /likes | ✅ | `?cursor=&limit=` → `Page<LikeCard>` (blurred unless revealed; free for women) | T-6.7 |
-| POST | /likes/{user_id}/reveal | ✅ | → `PublicProfile` (20 Velas) | T-6.7 |
+| POST | /likes/{user_id}/reveal | ✅ | → `PublicProfile` (`liked_you_reveal`'s price: 1 Vela from 8 October 2026, the founder; 20 before; P-370 moves the row) | T-6.7 |
 
 ## Threads & messages
 | Method | Path | Auth | Body → Response | Task |
