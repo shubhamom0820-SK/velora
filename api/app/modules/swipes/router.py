@@ -36,5 +36,11 @@ async def swipe(
     config: Annotated[ConfigCache, Depends(app_config_cache)],
 ) -> SwipeResult:
     return await service.swipe(
-        session, redis, user, body.target_id, body.dir, config=config
+        session,
+        redis,
+        user,
+        body.target_id,
+        body.dir,
+        shown_price=body.shown_price,
+        config=config,
     )

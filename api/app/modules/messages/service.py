@@ -292,6 +292,7 @@ async def _send_in(
             session,
             user,
             answer,
+            shown=request.shown_price,
             ref=Ref(RefType.THREAD, thread.id),
             event=rules.answer_event(thread.id)
             if answer is LedgerReason.THREAD_REOPEN
@@ -309,7 +310,11 @@ async def _send_in(
     )
     if rules.private_message_priced(thread):
         await pricing_service.charge(
-            session, user, LedgerReason.DM_MESSAGE, ref=Ref(RefType.MESSAGE, row.id)
+            session,
+            user,
+            LedgerReason.DM_MESSAGE,
+            shown=request.shown_price,
+            ref=Ref(RefType.MESSAGE, row.id),
         )
     if not expired and threads_rules.restarts_the_hour(thread, user.gender):
         hours = await admin_service.config_int(

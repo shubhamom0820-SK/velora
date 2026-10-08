@@ -129,7 +129,7 @@ class Race:
             while self.opened < 2:
                 await asyncio.sleep(0.01)
             return await service.swipe(
-                session, redis, user, target, SwipeDirection.LIKE
+                session, redis, user, target, SwipeDirection.LIKE, shown_price=0
             )
 
 

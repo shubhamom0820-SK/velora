@@ -10,6 +10,7 @@ from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from app.core.enums import MessageKind
 from app.core.pagination import Page
+from app.modules.pricing.schemas import ShownPrice
 
 BODY_MAX = 2000
 
@@ -56,6 +57,8 @@ class SendMessageRequest(BaseModel):
     body: str | None = Field(default=None, min_length=1, max_length=BODY_MAX)
     media_key: str | None = Field(default=None, min_length=1, max_length=200)
     duration_s: int | None = Field(default=None, ge=1, le=60)
+    # The price shown for this send (P-56, D-600): compared, never charged.
+    shown_price: ShownPrice = 0
 
     @model_validator(mode="after")
     def _the_kinds_fields(self) -> Self:

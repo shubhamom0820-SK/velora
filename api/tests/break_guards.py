@@ -4900,7 +4900,7 @@ T64: list[tuple[Case, list[str]]] = [
             edits=[
                 (
                     "app/modules/swipes/service.py",
-                    "        await pricing_service.charge(\n            session, user, LedgerReason.SUPER_LIKE, ref=Ref(RefType.USER, target_id)\n        )\n",
+                    "        await pricing_service.charge(\n            session,\n            user,\n            LedgerReason.SUPER_LIKE,\n            shown=shown_price,\n            ref=Ref(RefType.USER, target_id),\n        )\n",
                     "        from app.modules.wallet import service as wallet_service\n\n        await wallet_service.debit(\n            session, user.id, 5, LedgerReason.SUPER_LIKE, ref=Ref(RefType.USER, target_id)\n        )\n",
                 )
             ],
@@ -4915,7 +4915,7 @@ T64: list[tuple[Case, list[str]]] = [
             edits=[
                 (
                     "app/modules/swipes/service.py",
-                    "        await pricing_service.charge(\n            session, user, LedgerReason.SUPER_LIKE, ref=Ref(RefType.USER, target_id)\n        )\n",
+                    "        await pricing_service.charge(\n            session,\n            user,\n            LedgerReason.SUPER_LIKE,\n            shown=shown_price,\n            ref=Ref(RefType.USER, target_id),\n        )\n",
                     "        pass\n",
                 )
             ],
@@ -7044,6 +7044,115 @@ T74: list[Case] = [
     ),
 ]
 
+
+# --- P-56: a charge refused when its price isn't the one shown (D-600) ---------------
+
+P56_SELECTION = [
+    "tests/modules/pricing/test_service.py",
+    "tests/modules/swipes/test_swipe.py",
+    "tests/modules/threads/test_open.py",
+    "tests/modules/messages/test_send.py",
+]
+PRICING_SERVICE = "app/modules/pricing/service.py"
+
+P56: list[Case] = [
+    Case(
+        id="p56-01-never-compared",
+        what="the shown price never compared: a man charged what he wasn't shown",
+        edits=[
+            (
+                PRICING_SERVICE,
+                "    if price != shown:\n        raise price_changed(price)\n",
+                "",
+            )
+        ],
+        expect=[
+            "test_a_price_changed_since_it_was_shown_is_refused_and_nothing_debited",
+            "test_a_lower_price_than_shown_is_refused_too",
+            "test_a_man_shown_no_price_is_never_charged",
+            "test_a_woman_shown_a_price_is_refused",
+            "test_a_super_like_at_a_price_he_wasnt_shown_is_refused_and_writes_nothing",
+            "test_a_thread_at_a_price_he_wasnt_shown_opens_nothing",
+            "test_a_private_message_shown_at_the_wrong_price_sends_nothing",
+            "test_a_paid_send_at_a_price_he_wasnt_shown_sends_nothing",
+        ],
+    ),
+    Case(
+        id="p56-02-absent-skips",
+        what="a request without shown_price let through: the check failing open",
+        edits=[
+            (
+                PRICING_SERVICE,
+                "    if price != shown:\n",
+                "    if shown and price != shown:\n",
+            )
+        ],
+        expect=[
+            "test_a_man_shown_no_price_is_never_charged",
+            "test_a_super_like_at_a_price_he_wasnt_shown_is_refused_and_writes_nothing[None]",
+            "test_a_super_like_at_a_price_he_wasnt_shown_is_refused_and_writes_nothing[0]",
+            "test_a_thread_at_a_price_he_wasnt_shown_opens_nothing[None-5]",
+            "test_a_paid_send_at_a_price_he_wasnt_shown_sends_nothing[None-dm-2]",
+            "test_a_paid_send_at_a_price_he_wasnt_shown_sends_nothing[None-match-5]",
+        ],
+    ),
+    Case(
+        id="p56-03-super-like-not-passed",
+        what="a Super Like comparing the price with itself, not with what was shown",
+        edits=[
+            (
+                "app/modules/swipes/service.py",
+                "            shown=shown_price,\n",
+                "            shown=await pricing_service.price_for(\n                session, user, LedgerReason.SUPER_LIKE\n            ),\n",
+            )
+        ],
+        expect=[
+            "test_a_super_like_at_a_price_he_wasnt_shown_is_refused_and_writes_nothing"
+        ],
+    ),
+    Case(
+        id="p56-04-thread-open-not-passed",
+        what="opening a Thread comparing the price with itself",
+        edits=[
+            (
+                "app/modules/threads/service.py",
+                "        shown=request.shown_price,\n",
+                "        shown=await pricing_service.price_for(\n            session, user, rules.OPEN_PRICE[origin]\n        ),\n",
+            )
+        ],
+        expect=[
+            "test_a_thread_at_a_price_he_wasnt_shown_opens_nothing",
+            "test_a_private_message_shown_at_the_wrong_price_sends_nothing",
+        ],
+    ),
+    Case(
+        id="p56-05-answer-not-passed",
+        what="his first message where she opened comparing the price with itself",
+        edits=[
+            (
+                "app/modules/messages/service.py",
+                "            answer,\n            shown=request.shown_price,\n",
+                "            answer,\n            shown=await pricing_service.price_for(session, user, answer),\n",
+            )
+        ],
+        expect=[
+            "test_a_paid_send_at_a_price_he_wasnt_shown_sends_nothing[None-match-5]"
+        ],
+    ),
+    Case(
+        id="p56-06-private-message-not-passed",
+        what="a private message comparing the price with itself",
+        edits=[
+            (
+                "app/modules/messages/service.py",
+                "            LedgerReason.DM_MESSAGE,\n            shown=request.shown_price,\n",
+                "            LedgerReason.DM_MESSAGE,\n            shown=await pricing_service.price_for(\n                session, user, LedgerReason.DM_MESSAGE\n            ),\n",
+            )
+        ],
+        expect=["test_a_paid_send_at_a_price_he_wasnt_shown_sends_nothing[None-dm-2]"],
+    ),
+]
+
 CASES: list[tuple[Case, list[str]]] = (
     [(c, T51_SELECTION) for c in T51]
     + [(c, T54_SELECTION) for c in T54]
@@ -7075,6 +7184,7 @@ CASES: list[tuple[Case, list[str]]] = (
     + T66
     + [(c, P64_SELECTION) for c in P64]
     + [(c, T74_SELECTION) for c in T74]
+    + [(c, P56_SELECTION) for c in P56]
 )
 
 # The fifty-connection fixture's own message when Postgres refuses a connection.

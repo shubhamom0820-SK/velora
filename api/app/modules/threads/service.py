@@ -187,7 +187,11 @@ async def _open_in(
         expires_at=rules.expires_at(origin, clock.now(), hours),
     )
     await pricing_service.charge(
-        session, user, rules.OPEN_PRICE[origin], ref=Ref(RefType.THREAD, thread.id)
+        session,
+        user,
+        rules.OPEN_PRICE[origin],
+        shown=request.shown_price,
+        ref=Ref(RefType.THREAD, thread.id),
     )
     if match is not None:
         await repository.link_match(session, match.id, thread.id)

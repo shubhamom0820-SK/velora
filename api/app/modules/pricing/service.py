@@ -18,8 +18,11 @@ something is measured slow. In this order:
 4. An inactive row is `NOT_ALLOWED`: the action is switched off, for everyone.
 5. A woman pays 0; a man pays the row's value.
 
-`charge()` prices the action and debits only above 0, since a debit of 0
-raises. It and gift sending (T-8.9, priced from `gifts`) are the only callers
+`charge()` prices the action, refuses it with `PRICE_CHANGED` when the price
+isn't the one the person was shown (P-56, D-600), and debits only above 0,
+since a debit of 0 raises. The shown price is compared, never charged: what is
+debited is always the row's price (rule 6). `shown` is a required argument, so
+a new paid action can't forget to compare. It and gift sending (T-8.9, priced from `gifts`) are the only callers
 of `wallet.service.debit()`, so no literal price can reach it;
 tests/modules/pricing/test_debit_callers.py holds that, as an allowlist.
 """
@@ -59,21 +62,37 @@ async def price_for(session: AsyncSession, user: User, action: LedgerReason) -> 
     return credits if user.gender is Gender.MALE else 0
 
 
+def price_changed(price: int) -> AppError:
+    """The price isn't the one the screen showed: nothing was charged, and
+    `details.price` is what it costs now, for the screen to show again."""
+    return AppError(
+        "PRICE_CHANGED",
+        "The price changed. Check it and try again.",
+        status=409,
+        details={"price": price},
+    )
+
+
 async def charge(
     session: AsyncSession,
     user: User,
     action: LedgerReason,
     *,
+    shown: int,
     ref: Ref | None = None,
     event: str | None = None,
 ) -> LedgerResult | None:
-    """Pay for `action` at its price now, in the caller's transaction.
+    """Pay for `action` at its price now, in the caller's transaction, if it is
+    the price `user` was shown (`shown_price`, 0 when the request sent none).
 
-    None when the price is 0, a woman's always: nothing is debited, and no
-    ledger row is written. Otherwise `wallet.service.debit()`'s result, or its
+    `PRICE_CHANGED` (409) when they differ, before anything is debited. None
+    when the price is 0, a woman's always: nothing is debited, and no ledger
+    row is written. Otherwise `wallet.service.debit()`'s result, or its
     `INSUFFICIENT_CREDITS` (402).
     """
     price = await price_for(session, user, action)
+    if price != shown:
+        raise price_changed(price)
     if price == 0:
         return None
     return await wallet_service.debit(

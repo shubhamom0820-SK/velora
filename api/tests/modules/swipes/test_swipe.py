@@ -44,19 +44,28 @@ EVENING = datetime(2026, 10, 8, 18, 0, tzinfo=IST)
 
 
 async def _swipe(
-    client: AsyncClient, token: str, target: object, direction: str = "like"
+    client: AsyncClient,
+    token: str,
+    target: object,
+    direction: str = "like",
+    shown: int | None = None,
 ) -> Response:
-    return await client.post(
-        "/v1/swipes",
-        json={"target_id": str(target), "dir": direction},
-        headers=bearer(token),
-    )
+    """`shown` is `shown_price`, sent only when given: a man's Super Like
+    shows 5 (P-56, D-600)."""
+    body: dict[str, Any] = {"target_id": str(target), "dir": direction}
+    if shown is not None:
+        body["shown_price"] = shown
+    return await client.post("/v1/swipes", json=body, headers=bearer(token))
 
 
 async def _ok(
-    client: AsyncClient, token: str, target: object, direction: str = "like"
+    client: AsyncClient,
+    token: str,
+    target: object,
+    direction: str = "like",
+    shown: int | None = None,
 ) -> dict[str, Any]:
-    response = await _swipe(client, token, target, direction)
+    response = await _swipe(client, token, target, direction, shown)
     assert response.status_code == 200, response.text
     body: dict[str, Any] = response.json()
     assert set(body) == {"matched", "match_id", "swipes_left"}
@@ -196,9 +205,9 @@ async def test_a_super_like_doesnt_count_and_goes_past_the_cap(
     await person_at(db, me)
     women = await _women(db, make_user, 3)
 
-    assert (await _ok(client, token, women[0], "super"))["swipes_left"] == 1
+    assert (await _ok(client, token, women[0], "super", 5))["swipes_left"] == 1
     assert (await _ok(client, token, women[1]))["swipes_left"] == 0
-    assert (await _ok(client, token, women[2], "super"))["swipes_left"] == 0
+    assert (await _ok(client, token, women[2], "super", 5))["swipes_left"] == 0
 
 
 async def test_the_count_starts_again_at_ist_midnight(
@@ -242,6 +251,41 @@ async def test_a_swipe_not_written_gives_its_place_back(
 # --- The Super Like ----------------------------------------------------------------
 
 
+@pytest.mark.parametrize("shown", [None, 0, 4, 6])
+async def test_a_super_like_at_a_price_he_wasnt_shown_is_refused_and_writes_nothing(
+    db: AsyncSession, client: AsyncClient, make_user: MakeUser, shown: int | None
+) -> None:
+    """P-56, D-600: the screen said something other than 5, or nothing at
+    all, so nothing is charged and no swipe is written; `details.price` is
+    the price now, for the screen to show again."""
+    me, token = await make_user(credits=12)
+    await person_at(db, me)
+    her, _ = await person(db, make_user, at=north(1))
+    me_id = me.id
+
+    refused = await _swipe(client, token, her.id, "super", shown)
+
+    assert refused.status_code == 409
+    assert error(refused)["code"] == "PRICE_CHANGED"
+    assert error(refused)["details"] == {"price": 5}
+    assert await _swipes_by(db, me_id) == 0
+    assert await _balance(db, me_id) == 12
+
+
+async def test_a_like_is_never_priced_whatever_was_shown(
+    db: AsyncSession, client: AsyncClient, make_user: MakeUser
+) -> None:
+    """Only a priced action compares (D-600): a like costs nothing to compare."""
+    me, token = await make_user(credits=12)
+    await person_at(db, me)
+    her, _ = await person(db, make_user, at=north(1))
+    me_id = me.id
+
+    await _ok(client, token, her.id, "like", 5)
+
+    assert await _balance(db, me_id) == 12
+
+
 async def test_a_mans_super_like_debits_five_through_the_wallet(
     db: AsyncSession, client: AsyncClient, make_user: MakeUser
 ) -> None:
@@ -250,7 +294,7 @@ async def test_a_mans_super_like_debits_five_through_the_wallet(
     her, _ = await person(db, make_user, at=north(1))
     me_id, her_id = me.id, her.id
 
-    await _ok(client, token, her_id, "super")
+    await _ok(client, token, her_id, "super", 5)
 
     assert await _balance(db, me_id) == 7
     entries = await _ledger(db, me_id)
@@ -273,7 +317,7 @@ async def test_a_super_like_he_cant_afford_is_402_and_writes_nothing(
     her, _ = await person(db, make_user, at=north(1))
     me_id = me.id
 
-    refused = await _swipe(client, token, her.id, "super")
+    refused = await _swipe(client, token, her.id, "super", 5)
 
     assert refused.status_code == 402
     assert error(refused)["code"] == "INSUFFICIENT_CREDITS"
@@ -303,9 +347,9 @@ async def test_a_second_super_like_is_already_exists_and_charges_once(
     await person_at(db, me)
     her, _ = await person(db, make_user, at=north(1))
     me_id, her_id = me.id, her.id
-    await _ok(client, token, her_id, "super")
+    await _ok(client, token, her_id, "super", 5)
 
-    again = await _swipe(client, token, her_id, "super")
+    again = await _swipe(client, token, her_id, "super", 5)
 
     assert again.status_code == 409
     assert error(again)["code"] == "ALREADY_EXISTS"
@@ -398,7 +442,7 @@ async def test_a_like_back_makes_one_match_and_tells_both(
     first = await _ok(client, her_token, me_id, hers)
     assert (first["matched"], first["match_id"]) == (False, None)
 
-    body = await _ok(client, token, her_id, mine)
+    body = await _ok(client, token, her_id, mine, 5 if mine == "super" else None)
 
     assert body["matched"] is True
     match = await db.scalar(select(Match).execution_options(populate_existing=True))

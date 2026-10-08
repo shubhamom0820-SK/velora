@@ -57,6 +57,7 @@ async def swipe(
     target_id: UUID,
     direction: SwipeDirection,
     *,
+    shown_price: int,
     config: admin_service.ConfigCache | None = None,
 ) -> SwipeResult:
     # Read now: a refusal rolls the session back, which expires `user`.
@@ -77,7 +78,7 @@ async def swipe(
         took = True
     try:
         async with session.begin():
-            match_id = await _swipe_in(session, user, target_id, direction)
+            match_id = await _swipe_in(session, user, target_id, direction, shown_price)
     except BaseException:
         if took:
             await counter.give_back(redis, user_id, day)
@@ -93,7 +94,11 @@ async def swipe(
 
 
 async def _swipe_in(
-    session: AsyncSession, user: User, target_id: UUID, direction: SwipeDirection
+    session: AsyncSession,
+    user: User,
+    target_id: UUID,
+    direction: SwipeDirection,
+    shown_price: int,
 ) -> UUID | None:
     """The swipe, its charge and its match, in the caller's transaction: the
     match's id, or None."""
@@ -106,7 +111,11 @@ async def _swipe_in(
     await repository.add(session, user.id, target_id, direction)
     if direction is SwipeDirection.SUPER:
         await pricing_service.charge(
-            session, user, LedgerReason.SUPER_LIKE, ref=Ref(RefType.USER, target_id)
+            session,
+            user,
+            LedgerReason.SUPER_LIKE,
+            shown=shown_price,
+            ref=Ref(RefType.USER, target_id),
         )
     if direction not in rules.LIKES:
         return None

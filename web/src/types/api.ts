@@ -1502,6 +1502,11 @@ export interface components {
             user_id?: string | null;
             /** First Message */
             first_message?: string | null;
+            /**
+             * Shown Price
+             * @default 0
+             */
+            shown_price: number;
         };
         /**
          * Order
@@ -1868,6 +1873,11 @@ export interface components {
             media_key?: string | null;
             /** Duration S */
             duration_s?: number | null;
+            /**
+             * Shown Price
+             * @default 0
+             */
+            shown_price: number;
         };
         /**
          * SettingsPatch
@@ -1918,6 +1928,11 @@ export interface components {
              */
             target_id: string;
             dir: components["schemas"]["SwipeDirection"];
+            /**
+             * Shown Price
+             * @default 0
+             */
+            shown_price: number;
         };
         /**
          * SwipeResult

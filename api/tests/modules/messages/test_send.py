@@ -164,8 +164,12 @@ async def test_a_retried_send_is_stored_once_and_charged_once(
     man_id, thread_id = man.id, thread.id
     client_msg_id = uuid.uuid4()
 
-    first = await _sent(client, token, thread_id, client_msg_id=client_msg_id)
-    again = await _sent(client, token, thread_id, client_msg_id=client_msg_id)
+    first = await _sent(
+        client, token, thread_id, client_msg_id=client_msg_id, shown_price=2
+    )
+    again = await _sent(
+        client, token, thread_id, client_msg_id=client_msg_id, shown_price=2
+    )
 
     assert again == first
     assert await _messages(db, thread_id) == 1
@@ -216,7 +220,7 @@ async def test_answering_her_costs_him_the_re_open_once(
     man_id = man.id
 
     await _sent(client, her_token, thread_id)
-    await _sent(client, token, thread_id)
+    await _sent(client, token, thread_id, shown_price=2)
     await _sent(client, token, thread_id)
 
     assert await _charges(db, man_id) == [("thread_reopen", -2)]
@@ -237,7 +241,7 @@ async def test_writing_first_where_she_opened_costs_him_the_open(
     thread_id = (await make_thread(woman, man)).id
     man_id = man.id
 
-    await _sent(client, token, thread_id)
+    await _sent(client, token, thread_id, shown_price=5)
     await _sent(client, token, thread_id)
 
     assert await _charges(db, man_id) == [("thread_open", -5)]
@@ -252,8 +256,8 @@ async def test_a_private_message_costs_him_two_each_and_her_nothing(
     man_id, woman_id = man.id, woman.id
 
     await _sent(client, her_token, thread_id)
-    one = await _sent(client, token, thread_id)
-    two = await _sent(client, token, thread_id)
+    one = await _sent(client, token, thread_id, shown_price=2)
+    two = await _sent(client, token, thread_id, shown_price=2)
 
     refs = await db.execute(
         select(LedgerEntry.reason, LedgerEntry.delta, LedgerEntry.ref_id)
@@ -295,11 +299,57 @@ async def test_without_the_velas_nothing_is_sent(
     woman, _ = await make_user(Gender.FEMALE)
     thread_id = (await make_thread(woman, man, origin="dm")).id
 
-    response = await _send(client, token, thread_id)
+    response = await _send(client, token, thread_id, shown_price=2)
 
     assert response.status_code == 402
     assert error(response)["code"] == "INSUFFICIENT_CREDITS"
     assert await _messages(db, thread_id) == 0
+
+
+@pytest.mark.parametrize(("origin", "price"), [("dm", 2), ("match", 5)])
+@pytest.mark.parametrize("shown", [None, 1, 9])
+async def test_a_paid_send_at_a_price_he_wasnt_shown_sends_nothing(
+    db: AsyncSession,
+    client: AsyncClient,
+    make_user: MakeUser,
+    make_thread: MakeThread,
+    origin: str,
+    price: int,
+    shown: int | None,
+) -> None:
+    """P-56, D-600: a private message's 2, or his first message where she
+    opened (5): anything else shown, or nothing, and nothing is sent or
+    charged; `details.price` is the price now."""
+    man, token = await make_user(credits=10)
+    woman, _ = await make_user(Gender.FEMALE)
+    thread_id = (await make_thread(woman, man, origin=origin)).id
+    man_id = man.id
+    extra: dict[str, Any] = {} if shown is None else {"shown_price": shown}
+
+    response = await _send(client, token, thread_id, **extra)
+
+    assert response.status_code == 409
+    assert error(response)["code"] == "PRICE_CHANGED"
+    assert error(response)["details"] == {"price": price}
+    assert await _messages(db, thread_id) == 0
+    assert await _charges(db, man_id) == []
+
+
+async def test_a_free_send_is_never_compared(
+    db: AsyncSession, client: AsyncClient, make_user: MakeUser, make_thread: MakeThread
+) -> None:
+    """Only a priced send compares (D-600): her messages, and his once paid
+    for, go whatever was shown."""
+    man, token = await make_user(credits=10)
+    woman, her_token = await make_user(Gender.FEMALE)
+    thread_id = (await make_thread(woman, man)).id
+    man_id = man.id
+    await _sent(client, token, thread_id, shown_price=5)
+
+    await _sent(client, token, thread_id, shown_price=5)
+    await _sent(client, her_token, thread_id, shown_price=3)
+
+    assert await _charges(db, man_id) == [("thread_open", -5)]
 
 
 # --- The hour (D-097, D-560) ----------------------------------------------------------

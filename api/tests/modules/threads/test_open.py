@@ -48,7 +48,10 @@ async def _match(db: AsyncSession, a: User, b: User) -> Match:
 async def _open(client: AsyncClient, token: str, **body: Any) -> Response:
     return await client.post(
         "/v1/threads",
-        json={key: str(value) for key, value in body.items()},
+        json={
+            key: value if isinstance(value, int) else str(value)
+            for key, value in body.items()
+        },
         headers=bearer(token),
     )
 
@@ -126,7 +129,7 @@ async def test_a_man_opens_from_a_match_for_five_and_she_is_told(
     woman_id = woman.id
     match = await _match(db, man, woman)
 
-    body = await _opened(client, token, match_id=match.id)
+    body = await _opened(client, token, match_id=match.id, shown_price=5)
 
     [thread] = await _threads_between(db, man_id, woman_id)
     assert body["id"] == str(thread.id)
@@ -166,7 +169,7 @@ async def test_the_hours_are_the_settings_never_a_number(
     woman_id = woman.id
     match = await _match(db, man, woman)
 
-    await _opened(client, token, match_id=match.id)
+    await _opened(client, token, match_id=match.id, shown_price=5)
 
     [thread] = await _threads_between(db, man_id, woman_id)
     assert thread.expires_at == NOON + timedelta(hours=1)
@@ -204,8 +207,8 @@ async def test_a_second_open_returns_the_thread_and_charges_nothing(
     woman_id = woman.id
     match = await _match(db, man, woman)
 
-    first = await _opened(client, token, match_id=match.id)
-    second = await _opened(client, token, match_id=match.id)
+    first = await _opened(client, token, match_id=match.id, shown_price=5)
+    second = await _opened(client, token, match_id=match.id, shown_price=5)
 
     assert second["id"] == first["id"]
     assert len(await _threads_between(db, man_id, woman_id)) == 1
@@ -222,7 +225,7 @@ async def test_a_man_without_the_velas_opens_nothing(
     woman_id = woman.id
     match = await _match(db, man, woman)
 
-    response = await _open(client, token, match_id=match.id)
+    response = await _open(client, token, match_id=match.id, shown_price=5)
 
     assert response.status_code == 402
     assert error(response)["code"] == "INSUFFICIENT_CREDITS"
@@ -230,6 +233,51 @@ async def test_a_man_without_the_velas_opens_nothing(
     assert await _threads_between(db, man_id, woman_id) == []
     await db.refresh(match)
     assert match.thread_id is None
+
+
+@pytest.mark.parametrize(("shown", "price"), [(None, 5), (4, 5), (6, 5)])
+async def test_a_thread_at_a_price_he_wasnt_shown_opens_nothing(
+    db: AsyncSession,
+    client: AsyncClient,
+    make_user: MakeUser,
+    shown: int | None,
+    price: int,
+) -> None:
+    """P-56, D-600: "Open thread · 5 Velas" and anything else charged is
+    refused, nothing opened, nothing debited, the price now in `details`."""
+    man, token = await make_user(credits=12)
+    man_id = man.id
+    woman, _ = await make_user(Gender.FEMALE)
+    woman_id = woman.id
+    match = await _match(db, man, woman)
+    body: dict[str, Any] = {"match_id": match.id}
+    if shown is not None:
+        body["shown_price"] = shown
+
+    response = await _open(client, token, **body)
+
+    assert response.status_code == 409
+    assert error(response)["code"] == "PRICE_CHANGED"
+    assert error(response)["details"] == {"price": price}
+    assert await _threads_between(db, man_id, woman_id) == []
+    assert await _ledger(db, man_id) == []
+
+
+async def test_a_private_message_shown_at_the_wrong_price_sends_nothing(
+    db: AsyncSession, client: AsyncClient, make_user: MakeUser
+) -> None:
+    man, token = await make_user(credits=12)
+    man_id = man.id
+    woman, _ = await make_user(Gender.FEMALE)
+    woman_id = woman.id
+
+    response = await _open(
+        client, token, user_id=woman_id, first_message="Hi", shown_price=5
+    )
+
+    assert error(response)["code"] == "PRICE_CHANGED"
+    assert error(response)["details"] == {"price": 8}
+    assert await _threads_between(db, man_id, woman_id) == []
 
 
 # --- An expired Thread (D-097) --------------------------------------------------
@@ -324,7 +372,11 @@ async def test_a_private_message_costs_him_eight_and_never_expires(
     woman_id = woman.id
 
     body = await _opened(
-        client, token, user_id=woman.id, first_message="Hi, call me on 9876543210"
+        client,
+        token,
+        user_id=woman.id,
+        shown_price=8,
+        first_message="Hi, call me on 9876543210",
     )
 
     [thread] = await _threads_between(db, man_id, woman_id)
@@ -360,7 +412,9 @@ async def test_the_message_event_never_carries_the_original(
     man, token = await make_user(credits=10)
     woman, _ = await make_user(Gender.FEMALE)
 
-    await _opened(client, token, user_id=woman.id, first_message="mail priya@x.com")
+    await _opened(
+        client, token, user_id=woman.id, shown_price=8, first_message="mail priya@x.com"
+    )
 
     new = [e for e in published if e.type == "message.new"]
     assert len(new) == 2
@@ -509,6 +563,8 @@ async def test_onboarding_comes_first(client: AsyncClient, make_user: MakeUser) 
         {"user_id": str(uuid.uuid4()), "first_message": "   "},
         {"user_id": str(uuid.uuid4()), "first_message": "x" * 501},
         {"match_id": str(uuid.uuid4()), "price": 5},
+        {"match_id": str(uuid.uuid4()), "shown_price": -1},
+        {"match_id": str(uuid.uuid4()), "shown_price": "five"},
     ],
 )
 async def test_a_bad_body_is_a_validation_error(
@@ -625,5 +681,7 @@ async def test_men_and_women_to_women_have_no_such_limit(
     )
     match = await _match(db, woman, other)
 
-    await _opened(client, man_token, user_id=woman.id, first_message="Hi")
+    await _opened(
+        client, man_token, user_id=woman.id, first_message="Hi", shown_price=8
+    )
     await _opened(client, token, match_id=match.id)

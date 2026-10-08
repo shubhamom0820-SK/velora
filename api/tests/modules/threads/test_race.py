@@ -126,7 +126,10 @@ class Race:
             while self.opened < 2:
                 await asyncio.sleep(0.01)
             return await service.open_thread(
-                session, redis, user, OpenThreadRequest(match_id=match_id)
+                session,
+                redis,
+                user,
+                OpenThreadRequest(match_id=match_id, shown_price=5),
             )
 
 

@@ -302,7 +302,9 @@ on a shared CI runner fails at random), its numbers in T-6.2's tick.
    the price from `action_prices` inside that transaction, with no cache, so it charges the price
    as it is now: 0 for a woman, the row's value for a man (T-5.2). Only above 0 does it call
    `wallet.debit()`, and nothing else may, but gift sending (T-8.9, priced from `gifts`); a test
-   holds that as an allowlist.
+   holds that as an allowlist. **It is given the price the screen showed** (`shown`, the request's
+   `shown_price`, 0 when absent) and refuses with `PRICE_CHANGED` when the price now differs,
+   before any debit: compared, never charged (P-56, D-600).
 2. `wallet.debit(session, user_id, amount, reason, ref=Ref(...))` locks the wallet row, checks
    balance, updates balance, inserts ledger entry. The caller never builds the key: the wallet
    does, from the reason and the ref, or from an event the caller names for the reasons that

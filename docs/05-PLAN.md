@@ -2769,6 +2769,7 @@ prices don't depend on the web photos step, and the hold is lifted.
   when it landed, 8 October 2026)
 - [ ] `GET /likes`: people who liked/super-liked me and whom I haven't swiped; for men, unrevealed entries return only a blurred thumbnail URL (server-generated blur, not CSS) and no name. `POST /likes/{id}/reveal` debits the `liked_you_reveal` row's price, through `pricing.service`, never a literal (1 Vela from 8 October 2026, the founder; this line said "debits 20" until then), and records `liked_you_reveals`.
 - [ ] Web "Liked you" tab: grid, count badge, reveal flow.
+- [ ] **The price shown (P-56, D-600):** `POST /likes/{id}/reveal` takes `shown_price` and passes it to `pricing.service.charge(..., shown=)`, which compares it, never charges it (the check came with T-6.5's first commit, before this task was on main). Test `PRICE_CHANGED` with nothing charged or written, and its web sends the price it displayed, from `/prices`.
 - [ ] **Commit:** `feat(discovery): liked you with paid reveal [T-6.7]`
 
 ### T-6.8 · Profile pages
@@ -2959,6 +2960,7 @@ prices don't depend on the web photos step, and the hold is lifted.
   `expires_at` before the cron, his send is refused and her message revives nothing; her message
   racing the cron, the overlap forced, never leaves an active Thread with an expiry in the past;
   one warning per expiry, never to her.
+- [ ] **The price shown (P-56, D-600):** re-open and Extend take `shown_price` and pass it to `charge(..., shown=)`; Extend from expired compares its 10, never 2 + 10. Test `PRICE_CHANGED` with nothing charged or written, and its web sends the price it displayed, from `/prices`.
 - [ ] **Commit:** `feat(threads): the 1-hour Thread, expiry, re-open and Extend [T-7.6]`
 
 ### T-7.7 · Tie the knot
@@ -2979,6 +2981,7 @@ prices don't depend on the web photos step, and the hold is lifted.
 - [ ] **Needs:** T-7.3, T-4.1
 - [ ] `POST /media/voice-upload-url` (women only, ≤ 60 s, ≤ 2 MB, audio/webm|ogg|mp4), then send message `kind=voice` with `media_key`, `duration_s`.
 - [ ] `POST /messages/{id}/unlock` (men, debit 5, insert `message_unlocks`, idempotent) → signed URL. `GET /messages/{id}/media` for sender or unlocked.
+- [ ] **The price shown (P-56, D-600):** `POST /messages/{id}/unlock` takes `shown_price` and passes it to `charge(..., shown=)`. Test `PRICE_CHANGED` with nothing charged or written, and its web sends the price it displayed, from `/prices`.
 - [ ] **Commit:** `feat(messages): voice notes and unlocks [T-7.9]`
 
 ### T-7.10 · Web chat list
@@ -3069,6 +3072,7 @@ prices don't depend on the web photos step, and the hold is lifted.
 - [ ] **A decline returns nothing** (D-230, superseding D-050's refund on a decline). `refund_album_declined` stays unused, never repurposed.
 - [ ] `watermark_album`: for each private photo render a copy with the viewer's `@username` tiled diagonally at ~20% opacity.
 - [ ] `GET /users/{id}/album` → signed URLs of the viewer's copies only.
+- [ ] **The price shown (P-56, D-600):** the album request takes `shown_price` and passes it to `charge(..., shown=)`. Test `PRICE_CHANGED` with nothing charged or written, and its web sends the price it displayed, from `/prices`.
 - [ ] **Commit:** `feat(album): requests, grants, watermarking [T-8.4]`
 
 ### T-8.5 · Kudos
@@ -3098,6 +3102,7 @@ prices don't depend on the web photos step, and the hold is lifted.
 - [ ] Publishes `gift.received` on the socket and a notification (respects prefs).
 - [ ] `GET /me/gifts` (received, paginated, sender card) and `GET /users/{id}/gifts` (counts only,
   hidden when `show_gifts` is false).
+- [ ] **The price shown (P-56, D-600):** `POST /gifts/send` takes `shown_price`; a gift debits outside `charge()` (priced from `gifts`), so it compares by hand with `pricing.service.price_changed()`, before the debit. A free send this week is a price of 0. Test `PRICE_CHANGED` with nothing charged or written, and its web sends the price it displayed, from `/prices`.
 - [ ] **Commit:** `feat(gifts): catalogue, sending, limits [T-8.9]`
 
 ### T-8.10 · Web gifts
@@ -4292,7 +4297,7 @@ The number comes from the session's own block, given in its brief, from P-100 up
   Until it landed, three sessions building that day (T-2.6, T-3.6 to T-3.9, and this one) worked
   around its absence: two saw rate-limit tests fail for one another's runs, and gates were run
   only in quiet windows agreed between sessions by message.
-- [ ] P-56 · Refuse a charge whose price changed after it was shown. **For T-7.1,** the first paid
+- [x] P-56 · Refuse a charge whose price changed after it was shown. **For T-7.1,** the first paid
   action a person taps. Worst case: a man sees "Open thread · 5 Velas" and is charged 6, because
   the price changed in between. The server still decides the price (rule 6), and `/terms` says
   prices can change. But charging more than the screen said is the kind of surprise that ends
@@ -4304,6 +4309,15 @@ The number comes from the session's own block, given in its brief, from P-100 up
   founder, 8 October 2026): the API side, for every paid endpoint on `main`, then T-6.5's web sends
   the shown price. T-6.7's reveal adopts it if it lands after. It comes before the web's paid
   buttons: on T-6.5's and T-7.11's Needs lines.
+  **Built 8 October 2026, before T-6.5, the first screen where a man taps a price (D-600):**
+  `shown_price` on `POST /swipes`, `POST /threads` and `POST /threads/{id}/messages`, optional and
+  0 when absent, so a man's paid action without it is refused (the founder's choice);
+  `pricing.service.charge()` takes `shown` as a required argument and refuses with
+  `PRICE_CHANGED` (409, `details.price`) before any debit. Only a priced action compares. The
+  paid endpoints not yet built carry a line each: T-6.7, T-7.6, T-7.9, T-8.4, T-8.9.
+  **Broken once each** (`uv run python -m tests.break_guards p56-`): the comparison removed, an
+  absent field let through, and each of the four call sites comparing the price with itself, every
+  one red in 1 of 1, no file differing by SHA-256 after.
 - [x] P-57 · The app's screens have no visual design. **Before T-6.5,** on its Needs line. Worst
   case: every screen in Sprints 6 and 7 is framed by a shell and built from a prototype that was
   wrong four times in Sprint 5's plan alone, and a one-way door gets designed by accident: the

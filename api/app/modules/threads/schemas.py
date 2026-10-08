@@ -10,6 +10,7 @@ from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from app.core.enums import MessageKind, ThreadOrigin, ThreadStatus
 from app.core.pagination import Page
+from app.modules.pricing.schemas import ShownPrice
 
 FIRST_MESSAGE_MAX = 500
 
@@ -25,6 +26,8 @@ class OpenThreadRequest(BaseModel):
     first_message: str | None = Field(
         default=None, min_length=1, max_length=FIRST_MESSAGE_MAX
     )
+    # The price shown for opening it (P-56, D-600): compared, never charged.
+    shown_price: ShownPrice = 0
 
     @model_validator(mode="after")
     def _one_or_the_other(self) -> Self:

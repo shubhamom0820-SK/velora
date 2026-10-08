@@ -7,6 +7,7 @@ from uuid import UUID
 from pydantic import BaseModel, ConfigDict
 
 from app.core.enums import SwipeDirection
+from app.modules.pricing.schemas import ShownPrice
 
 
 class SwipeRequest(BaseModel):
@@ -14,6 +15,8 @@ class SwipeRequest(BaseModel):
 
     target_id: UUID
     dir: SwipeDirection
+    # The price shown for a Super Like (P-56, D-600): compared, never charged.
+    shown_price: ShownPrice = 0
 
 
 class SwipeResult(BaseModel):

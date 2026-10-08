@@ -188,9 +188,9 @@ async def test_a_man_is_charged_the_price_now(
 ) -> None:
     man, _ = await make_user(Gender.MALE, credits=20)
 
-    first = await service.charge(db, man, THREAD_OPEN, ref=_thread())
+    first = await service.charge(db, man, THREAD_OPEN, shown=5, ref=_thread())
     await _set(db, THREAD_OPEN, credits=6)
-    second = await service.charge(db, man, THREAD_OPEN, ref=_thread())
+    second = await service.charge(db, man, THREAD_OPEN, shown=6, ref=_thread())
 
     assert first is not None and first.applied
     assert second is not None and second.applied
@@ -204,7 +204,7 @@ async def test_a_woman_is_charged_nothing_and_no_row_is_written(
     woman, _ = await make_user(Gender.FEMALE)
 
     for action in PRICES:
-        assert await service.charge(db, woman, action, ref=_thread()) is None
+        assert await service.charge(db, woman, action, shown=0, ref=_thread()) is None
 
     assert await _entries(db, woman.id) == []
     assert await _balance(db, woman.id) == 0
@@ -218,7 +218,7 @@ async def test_a_price_of_0_debits_nothing(
     man, _ = await make_user(Gender.MALE, credits=10)
     await _set(db, THREAD_OPEN, credits=0)
 
-    assert await service.charge(db, man, THREAD_OPEN, ref=_thread()) is None
+    assert await service.charge(db, man, THREAD_OPEN, shown=0, ref=_thread()) is None
     assert await _entries(db, man.id) == [("admin_grant", 10)]
     assert await _balance(db, man.id) == 10
 
@@ -229,7 +229,7 @@ async def test_a_charge_beyond_the_balance_writes_nothing(
     man, _ = await make_user(Gender.MALE, credits=3)
 
     with pytest.raises(AppError) as refused:
-        await service.charge(db, man, THREAD_OPEN, ref=_thread())
+        await service.charge(db, man, THREAD_OPEN, shown=5, ref=_thread())
 
     assert (refused.value.code, refused.value.status) == ("INSUFFICIENT_CREDITS", 402)
     assert refused.value.details == {"required": 5, "balance": 3}
@@ -243,7 +243,7 @@ async def test_an_inactive_action_charges_nothing(
     await _set(db, THREAD_OPEN, active=False)
 
     with pytest.raises(AppError, match="isn't available"):
-        await service.charge(db, man, THREAD_OPEN, ref=_thread())
+        await service.charge(db, man, THREAD_OPEN, shown=5, ref=_thread())
 
     assert await _balance(db, man.id) == 10
 
@@ -258,7 +258,7 @@ async def test_extend_can_be_bought_again_for_one_thread(
 
     for event in ("extend-1", "extend-2"):
         result = await service.charge(
-            db, man, LedgerReason.THREAD_EXTEND, ref=thread, event=event
+            db, man, LedgerReason.THREAD_EXTEND, shown=10, ref=thread, event=event
         )
         assert result is not None and result.applied
 
@@ -277,9 +277,71 @@ async def test_a_private_message_is_charged_once(
     man, _ = await make_user(Gender.MALE, credits=10)
     message = Ref(RefType.MESSAGE, uuid.uuid4())
 
-    first = await service.charge(db, man, LedgerReason.DM_MESSAGE, ref=message)
-    again = await service.charge(db, man, LedgerReason.DM_MESSAGE, ref=message)
+    first = await service.charge(db, man, LedgerReason.DM_MESSAGE, shown=2, ref=message)
+    again = await service.charge(db, man, LedgerReason.DM_MESSAGE, shown=2, ref=message)
 
     assert first is not None and first.applied
     assert again is not None and not again.applied
     assert await _balance(db, man.id) == 8
+
+
+# --- charge(): the price shown (P-56, D-600) ---------------------------------------
+
+
+async def test_a_price_changed_since_it_was_shown_is_refused_and_nothing_debited(
+    db: AsyncSession, make_user: MakeUser
+) -> None:
+    """He saw 5, it is 6 now: refused, with the price now for the screen,
+    and no ledger row. The shown price is compared, never charged."""
+    man, _ = await make_user(Gender.MALE, credits=20)
+    await _set(db, THREAD_OPEN, credits=6)
+
+    with pytest.raises(AppError) as refused:
+        await service.charge(db, man, THREAD_OPEN, shown=5, ref=_thread())
+
+    assert (refused.value.code, refused.value.status) == ("PRICE_CHANGED", 409)
+    assert refused.value.details == {"price": 6}
+    assert await _entries(db, man.id) == [("admin_grant", 20)]
+
+
+async def test_a_lower_price_than_shown_is_refused_too(
+    db: AsyncSession, make_user: MakeUser
+) -> None:
+    """Any difference, either way: the screen is shown again, never guessed."""
+    man, _ = await make_user(Gender.MALE, credits=20)
+    await _set(db, THREAD_OPEN, credits=4)
+
+    with pytest.raises(AppError) as refused:
+        await service.charge(db, man, THREAD_OPEN, shown=5, ref=_thread())
+
+    assert refused.value.code == "PRICE_CHANGED"
+    assert refused.value.details == {"price": 4}
+    assert await _balance(db, man.id) == 20
+
+
+async def test_a_man_shown_no_price_is_never_charged(
+    db: AsyncSession, make_user: MakeUser
+) -> None:
+    """A request without `shown_price` arrives as 0 (D-600): a man's paid
+    action sent that way is refused, so the check fails closed."""
+    man, _ = await make_user(Gender.MALE, credits=20)
+
+    with pytest.raises(AppError) as refused:
+        await service.charge(db, man, LedgerReason.SUPER_LIKE, shown=0, ref=_thread())
+
+    assert refused.value.code == "PRICE_CHANGED"
+    assert refused.value.details == {"price": 5}
+    assert await _balance(db, man.id) == 20
+
+
+async def test_a_woman_shown_a_price_is_refused(
+    db: AsyncSession, make_user: MakeUser
+) -> None:
+    """Her price is 0 (D-098); a screen that showed her one is wrong."""
+    woman, _ = await make_user(Gender.FEMALE)
+
+    with pytest.raises(AppError) as refused:
+        await service.charge(db, woman, THREAD_OPEN, shown=5, ref=_thread())
+
+    assert refused.value.code == "PRICE_CHANGED"
+    assert refused.value.details == {"price": 0}

@@ -4499,6 +4499,35 @@ unless `[http_service.concurrency]` says otherwise. Fly's own reference (read 8 
 says the default is `type = "connections"`, a `soft_limit` of 20, a load-balancing preference,
 and no `hard_limit` at all. So nothing in `infra/` changed.
 
+### D-600 · A charge is refused when its price isn't the one shown: `shown_price`, `PRICE_CHANGED` — Locked
+**The decision (P-56; the founder, 8 October 2026, on the advisor's recommendation, Claude in a
+separate chat, relayed by the founder):**
+- **Every paid action's request carries `shown_price`**, the price in Velas the screen showed for
+  it: `POST /swipes` (a Super Like), `POST /threads` (opening one, from a match or a private
+  message) and `POST /threads/{id}/messages` (his first message in a Thread she opened, and each
+  paid private message). An integer from 0; **optional, and absent means 0**, "no price was shown".
+- **`pricing.service.charge()` compares it, never charges it.** It reads the price fresh, as
+  before (T-5.2), and refuses with `PRICE_CHANGED` (409, `details.price`, the price now) when the
+  two differ either way, before anything is debited; the transaction rolls back, so nothing the
+  action would have written stays. What is debited is always the row's price (rule 6). `shown`
+  is a required argument of `charge()`, so mypy refuses a new paid action that forgets it.
+- **Only a priced action compares.** A like or a pass, a Thread that already exists (returned,
+  nothing charged), a `client_msg_id` sent again, and a message that costs nothing aren't
+  compared: nothing is charged, so nothing can surprise. A woman's price is 0 (D-098), so she
+  needs nothing, and a screen that showed her a price is refused.
+- **Why absent means 0, not "skip":** a client that forgets the field can't charge a man
+  anything, so the check fails closed. Free actions, women and old clients need nothing.
+  Required on all three bodies was the alternative; every free message would carry a 0 for it.
+
+**Rejected:** a client price that is charged (rule 6); a field absent meaning "don't compare",
+which fails open; a refusal only when the price went up (a screen that is wrong either way is
+shown again, never guessed); a cache of prices with a version number (P-47, P-50: none is
+measured slow).
+
+**Where it reaches next** (pointers on each task's line): T-6.7's reveal, T-7.6's re-open and
+Extend, T-7.9's unlock, the album request and T-8.9's gifts, which debit outside `charge()` and
+so compare by hand. Built with T-6.5, the first screen where a man taps a price.
+
 ## Adding a decision
 
 Append `D-0NN · Title — Locked|Open`, with Decision, Why, Rejected. Never edit a Locked entry —
