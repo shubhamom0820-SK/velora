@@ -5536,8 +5536,18 @@ T71: list[Case] = [
         edits=[
             (
                 THREADS_SERVICE,
-                "    await pricing_service.charge(\n",
-                "    None and await pricing_service.charge(\n",
+                (
+                    "    await pricing_service.charge(\n"
+                    "        session,\n"
+                    "        user,\n"
+                    "        rules.OPEN_PRICE[origin],\n"
+                ),
+                (
+                    "    None and await pricing_service.charge(\n"
+                    "        session,\n"
+                    "        user,\n"
+                    "        rules.OPEN_PRICE[origin],\n"
+                ),
             )
         ],
         expect=[
@@ -5564,8 +5574,14 @@ T71: list[Case] = [
         edits=[
             (
                 THREADS_RULES,
-                "    return gender is Gender.MALE\n",
-                "    return True\n",
+                (
+                    '    """Whether `expires_at` is shown to this person: a man (D-554)."""\n'
+                    "    return gender is Gender.MALE\n"
+                ),
+                (
+                    '    """Whether `expires_at` is shown to this person: a man (D-554)."""\n'
+                    "    return True\n"
+                ),
             )
         ],
         expect=["test_a_woman_opens_free_and_sees_no_countdown"],
@@ -5576,8 +5592,8 @@ T71: list[Case] = [
         edits=[
             (
                 THREADS_RULES,
-                "    return now + timedelta(hours=hours)\n",
-                "    return now + timedelta(hours=24)\n",
+                "        return None\n    return now + timedelta(hours=hours)\n",
+                "        return None\n    return now + timedelta(hours=24)\n",
             )
         ],
         expect=["test_the_hours_are_the_settings_never_a_number"],
@@ -5999,8 +6015,8 @@ T72: list[Case] = [
         edits=[
             (
                 THREADS_REPOSITORY,
-                "            ~blocked_either_way(viewer_id, _other(viewer_id)),\n",
-                "            true(),\n",
+                "        ~blocked_either_way(viewer_id, _other(viewer_id)),\n    )\n    if lock:\n",
+                "        true(),\n    )\n    if lock:\n",
             )
         ],
         expect=["test_a_block_either_way_hides_the_thread"],
@@ -6107,10 +6123,10 @@ T72: list[Case] = [
             (
                 THREADS_REPOSITORY,
                 (
-                    "            Thread.id == thread_id,\n"
-                    "            or_(Thread.user_low == viewer_id, Thread.user_high == viewer_id),\n"
+                    "        Thread.id == thread_id,\n"
+                    "        or_(Thread.user_low == viewer_id, Thread.user_high == viewer_id),\n"
                 ),
-                "            Thread.id == thread_id,\n",
+                "        Thread.id == thread_id,\n",
             )
         ],
         expect=["test_one_thread_is_mine_to_read_and_nobody_elses"],
@@ -7583,8 +7599,11 @@ T78: list[Case] = [
         edits=[
             (
                 THREADS_REPOSITORY,
-                "        ~blocked_either_way(viewer_id, _other(viewer_id)),\n    )\n",
-                "    )\n",
+                (
+                    "        ~blocked_either_way(viewer_id, _other(viewer_id)),\n    )\n"
+                    "\n\nasync def lock_mine("
+                ),
+                "    )\n\n\nasync def lock_mine(",
             )
         ],
         expect=[
@@ -9778,6 +9797,372 @@ T69: list[Case] = [
     ),
 ]
 
+# --- T-7.6: the 1-hour Thread, re-open, Extend, the minute's sweeps ----------------
+
+T76_SELECTION = [
+    "tests/modules/threads",
+    "tests/modules/messages",
+    "tests/workers/test_thread_clock.py",
+    "tests/workers/test_minutely.py",
+    "tests/test_reference_data.py",
+]
+THREADS_ROUTER = "app/modules/threads/router.py"
+THREAD_CLOCK = "app/workers/tasks/thread_clock.py"
+MINUTELY = "app/workers/minutely.py"
+WORKER_MAIN = "app/workers/main.py"
+THE_HOUR = "alembic/versions/20261008_7ee6438868ed_one_hour_threads.py"
+
+T76: list[Case] = [
+    Case(
+        id="t76-01-buying-time-unlocked",
+        what="a re-open or an Extend reading the hour without holding the Thread",
+        edits=[
+            (
+                THREADS_SERVICE,
+                "my_thread(session, thread_id, user_id, lock=True)",
+                "my_thread(session, thread_id, user_id, lock=False)",
+            )
+        ],
+        expect=["test_two_extends_at_once_each_add_their_day"],
+    ),
+    Case(
+        id="t76-02-a-retried-tap-bought-again",
+        what="the same Idempotency-Key not looked for before buying",
+        edits=[
+            (
+                THREADS_SERVICE,
+                "        if await wallet_service.entry_for(session, user_id, reason, event) is not None:\n",
+                "        if False:\n",
+            )
+        ],
+        expect=["test_the_same_key_again_is_charged_once_and_moves_nothing[extend]"],
+    ),
+    Case(
+        id="t76-03-she-buys-time",
+        what="a woman let through to re-open or Extend",
+        edits=[
+            (
+                THREADS_SERVICE,
+                "        if not rules.buys_time(gender) or not rules.has_an_hour(thread):\n",
+                "        if not rules.has_an_hour(thread):\n",
+            )
+        ],
+        expect=["test_a_woman_buys_nothing_and_is_refused"],
+    ),
+    Case(
+        id="t76-04-time-for-what-has-no-hour",
+        what="a Knot or a private message sold an hour",
+        edits=[
+            (
+                THREADS_SERVICE,
+                "        if not rules.buys_time(gender) or not rules.has_an_hour(thread):\n",
+                "        if not rules.buys_time(gender):\n",
+            )
+        ],
+        expect=["test_what_has_no_hour_cant_be_bought"],
+    ),
+    Case(
+        id="t76-05-a-live-thread-reopened-for-money",
+        what="a re-open charging for a Thread that is still live",
+        edits=[
+            (
+                THREADS_SERVICE,
+                "            if not rules.has_expired(thread, now):\n                return view_of(thread, user)\n",
+                "",
+            )
+        ],
+        expect=["test_reopening_a_live_thread_returns_it_and_charges_nothing"],
+    ),
+    Case(
+        id="t76-06-extend-from-now",
+        what="Extend counting from now, losing what was left (answer 4)",
+        edits=[
+            (
+                THREADS_RULES,
+                "    start = now if left_until is None or left_until < now else left_until\n",
+                "    start = now\n",
+            )
+        ],
+        expect=[
+            "test_extend_adds_a_day_to_what_is_left",
+            "test_a_second_extend_stacks_on_the_first",
+        ],
+    ),
+    Case(
+        id="t76-07-extend-from-a-past-expiry",
+        what="Extend from expired counting from the old expiry, not now",
+        edits=[
+            (
+                THREADS_RULES,
+                "    start = now if left_until is None or left_until < now else left_until\n",
+                "    start = now if left_until is None else left_until\n",
+            )
+        ],
+        expect=["test_extend_from_expired_is_one_debit_and_a_day_from_now"],
+    ),
+    Case(
+        id="t76-08-reopen-from-the-old-hour",
+        what="a re-open's hour counted from the old expiry, not now (answer 1)",
+        edits=[
+            (
+                THREADS_SERVICE,
+                "            until = rules.reopened_until(now, hours)\n",
+                "            until = rules.reopened_until(thread.expires_at or now, hours)\n",
+            )
+        ],
+        expect=["test_reopen_is_two_and_an_hour_from_now"],
+    ),
+    Case(
+        id="t76-09-the-warning-kept-after-buying",
+        what="a re-open or an Extend leaving the old warning's mark",
+        edits=[(THREADS_SERVICE, "        thread.expiry_warned_at = None\n", "")],
+        expect=[
+            "test_extend_adds_a_day_to_what_is_left",
+            "test_reopen_is_two_and_an_hour_from_now",
+            "test_each_new_expiry_gets_its_own_warning",
+        ],
+    ),
+    Case(
+        id="t76-10-bought-and-still-expired",
+        what="a re-open or an Extend leaving the status expired",
+        edits=[(THREADS_SERVICE, "        thread.status = ThreadStatus.ACTIVE\n", "")],
+        expect=[
+            "test_extend_from_expired_is_one_debit_and_a_day_from_now[status]",
+            "test_reopen_is_two_and_an_hour_from_now[status]",
+        ],
+    ),
+    Case(
+        id="t76-11-the-key-without-its-thread",
+        what="the wallet's event built from the key alone, not the Thread",
+        edits=[
+            (
+                THREADS_RULES,
+                '    return f"{kind}:{thread_id}:{key}"\n',
+                '    return f"{kind}:{key}"\n',
+            )
+        ],
+        expect=["test_one_key_for_two_threads_buys_twice"],
+    ),
+    Case(
+        id="t76-12-the-price-compared-with-itself",
+        what="re-open and Extend comparing the price with itself (P-56)",
+        edits=[
+            (
+                THREADS_SERVICE,
+                "            shown=shown_price,\n            ref=Ref(RefType.THREAD, thread.id),\n            event=event,\n",
+                (
+                    "            shown=await pricing_service.price_for(session, user, reason),\n"
+                    "            ref=Ref(RefType.THREAD, thread.id),\n            event=event,\n"
+                ),
+            )
+        ],
+        expect=[
+            "test_extend_from_expired_compares_its_ten_and_nothing_else",
+            "test_a_reopen_he_wasnt_shown_the_price_of_buys_nothing",
+        ],
+    ),
+    Case(
+        id="t76-13-the-sweep-waits-on-a-held-thread",
+        what="the sweep waiting on a Thread a send holds (no SKIP LOCKED)",
+        edits=[
+            (
+                THREADS_REPOSITORY,
+                "        .with_for_update(skip_locked=True)\n",
+                "        .with_for_update()\n",
+            )
+        ],
+        expect=["test_the_sweep_skips_a_thread_her_send_holds"],
+    ),
+    Case(
+        id="t76-14-the-sweep-expires-live-threads",
+        what="the sweep expiring a Thread before its hour is up",
+        edits=[
+            (
+                THREADS_REPOSITORY,
+                "    due = _due(Thread.expires_at <= now, limit=limit)\n",
+                "    due = _due(Thread.expires_at.is_not(None), limit=limit)\n",
+            )
+        ],
+        expect=["test_what_isnt_due_is_left_alone"],
+    ),
+    Case(
+        id="t76-15-she-is-told",
+        what="the expiry and the warning sent to her too (D-097)",
+        edits=[
+            (
+                THREADS_SERVICE,
+                "            if rules.sees_the_expiry(genders.get(user_id)):\n",
+                "            if True:\n",
+            )
+        ],
+        expect=[
+            "test_a_thread_past_its_hour_is_expired_and_he_is_told",
+            "test_ten_minutes_out_he_is_warned_once_and_she_never",
+        ],
+    ),
+    Case(
+        id="t76-16-warned-twice",
+        what="a Thread warned again for the same expiry",
+        edits=[
+            (THREADS_REPOSITORY, "        Thread.expiry_warned_at.is_(None),\n", "")
+        ],
+        expect=["test_ten_minutes_out_he_is_warned_once_and_she_never"],
+    ),
+    Case(
+        id="t76-17-the-warning-a-literal",
+        what="the warning's ten minutes written in the code (answer 3)",
+        edits=[
+            (
+                THREADS_SERVICE,
+                "now + timedelta(minutes=minutes)",
+                "now + timedelta(minutes=10)",
+            )
+        ],
+        expect=["test_the_warning_reads_the_setting_never_a_number"],
+    ),
+    Case(
+        id="t76-18-extend-a-literal",
+        what="Extend's day written in the code",
+        edits=[
+            (
+                THREADS_SERVICE,
+                "            until = rules.extended_until(thread, now, hours)\n",
+                "            until = rules.extended_until(thread, now, 24)\n",
+            )
+        ],
+        expect=["test_extend_reads_the_setting_never_a_number"],
+    ),
+    Case(
+        id="t76-19-reopen-a-literal",
+        what="a re-open's hour written in the code",
+        edits=[
+            (
+                THREADS_SERVICE,
+                "            until = rules.reopened_until(now, hours)\n",
+                "            until = rules.reopened_until(now, 1)\n",
+            )
+        ],
+        expect=["test_reopen_reads_the_setting_never_a_number"],
+    ),
+    Case(
+        id="t76-20-one-batch-a-minute",
+        what="the sweep stopping after its first batch",
+        edits=[(THREAD_CLOCK, "        if taken < limit:\n", "        if True:\n")],
+        expect=["test_it_works_in_batches_until_none_is_left"],
+    ),
+    Case(
+        id="t76-21-warned-before-expired",
+        what="the minute warning before it expires",
+        edits=[
+            (
+                THREAD_CLOCK,
+                (
+                    '    expired = await expire_threads(ctx["sessionmaker"], ctx["redis"])\n'
+                    '    warned = await warn_expiring(ctx["sessionmaker"], ctx["redis"])\n'
+                ),
+                (
+                    '    warned = await warn_expiring(ctx["sessionmaker"], ctx["redis"])\n'
+                    '    expired = await expire_threads(ctx["sessionmaker"], ctx["redis"])\n'
+                ),
+            )
+        ],
+        expect=["test_a_minute_expires_first_and_then_warns"],
+    ),
+    Case(
+        id="t76-22-paid-time-isnt-his-answer",
+        what="his first message charged after he paid a re-open or an Extend (D-641)",
+        edits=[(MESSAGES_RULES, "        or bought_time\n", "")],
+        expect=[
+            "test_after_he_paid_from_expired_answering_her_is_free",
+            "test_after_an_extend_on_a_live_thread_answering_her_is_free",
+            "test_after_a_reopen_where_nobody_wrote_writing_first_is_free",
+        ],
+    ),
+    Case(
+        id="t76-23-time-bought-anywhere-answers",
+        what="time bought in another Thread counted as his answer here",
+        edits=[
+            (
+                MESSAGES_REPOSITORY,
+                "                LedgerEntry.ref_id == thread_id,\n",
+                "",
+            )
+        ],
+        expect=["test_time_bought_in_another_thread_answers_nothing_here"],
+    ),
+    Case(
+        id="t76-24-a-failed-minute-stops-the-loop",
+        what="one failed minute ending every minute after it",
+        edits=[
+            (
+                MINUTELY,
+                (
+                    "            except Exception as error:  # noqa: BLE001 — the next minute tries again\n"
+                    "                log.warning(\n"
+                ),
+                (
+                    "            except Exception as error:  # noqa: BLE001 — the next minute tries again\n"
+                    "                raise\n"
+                    "                log.warning(\n"
+                ),
+            )
+        ],
+        expect=["test_a_failed_minute_is_logged_and_the_next_one_runs"],
+    ),
+    Case(
+        id="t76-25-runs-drift",
+        what="runs a minute apart end to start, drifting by each run's length",
+        edits=[
+            (
+                MINUTELY,
+                "            await self._sleep(max(0.0, self._every_s - took))\n",
+                "            await self._sleep(self._every_s)\n",
+            )
+        ],
+        expect=["test_runs_start_a_minute_apart_whatever_each_took"],
+    ),
+    Case(
+        id="t76-26-the-worker-never-starts-the-clock",
+        what="the worker starting without the Thread's clock",
+        edits=[
+            (
+                WORKER_MAIN,
+                '    ctx["minutely"] = asyncio.create_task(each_minute(ctx).run())\n',
+                "",
+            )
+        ],
+        expect=["test_the_worker_starts_the_threads_clock_and_stops_it"],
+    ),
+    Case(
+        id="t76-27-the-hour-left-a-day",
+        what="the migration leaving thread_hours at 24",
+        edits=[
+            (
+                THE_HOUR,
+                'THREAD_HOURS = ("thread_hours", 1)\n',
+                'THREAD_HOURS = ("thread_hours", 24)\n',
+            )
+        ],
+        expect=[
+            "test_app_config_seeds",
+            "test_the_hour_goes_back_to_a_day_and_returns",
+            "test_a_man_opens_from_a_match_for_five_and_she_is_told",
+        ],
+    ),
+    Case(
+        id="t76-28-any-key-at-all",
+        what="an Idempotency-Key of any shape accepted",
+        edits=[
+            (
+                THREADS_ROUTER,
+                '    str, Header(alias="Idempotency-Key", pattern=IDEMPOTENCY_KEY_PATTERN)\n',
+                '    str, Header(alias="Idempotency-Key")\n',
+            )
+        ],
+        expect=["test_a_missing_or_malformed_key_is_a_validation_error"],
+    ),
+]
+
 CASES: list[tuple[Case, list[str]]] = (
     [(c, T51_SELECTION) for c in T51]
     + [(c, T54_SELECTION) for c in T54]
@@ -9822,6 +10207,7 @@ CASES: list[tuple[Case, list[str]]] = (
     + [(c, P152_SELECTION) for c in P152]
     + [(c, T86_SELECTION) for c in T86]
     + [(c, T69_SELECTION) for c in T69]
+    + [(c, T76_SELECTION) for c in T76]
 )
 
 # The fifty-connection fixture's own message when Postgres refuses a connection.

@@ -168,9 +168,9 @@ export const en = {
       // His, while the price loads: never a number guessed.
       openPlain: "Open thread",
       keepSwiping: "Keep swiping",
-      // Copy follows app_config.thread_hours, seeded 24 (P-14): "an hour" when
-      // T-7.6 sets it to 1, with 08-DESIGN §8's words.
-      footer: "Threads last a day. Knots last.",
+      // Copy follows app_config.thread_hours (P-14): 1 since T-7.6, in
+      // 08-DESIGN §8's words.
+      footer: "Threads last an hour. Knots last.",
     },
     empty: {
       nobodyTitle: "No one new nearby",
@@ -757,21 +757,21 @@ export const en = {
   // and nothing else here (CLAUDE.md rule 17).
   landing: {
     getStarted: "Get started",
-    // headlineThreads ("a day"), intro and features.threads.title ("24-hour")
-    // promise app_config.thread_hours, seeded 24. Copy, not a computation, so
-    // it's written out rather than read: change it with the setting (T-2.1).
-    // The headline is also baked into the share image's pixels: change it, and
-    // regenerate src/app/opengraph-image.png and its alt text (T-2.4,
-    // 08-DESIGN §7). A test fails until the alt text matches.
-    headlineThreads: "Threads last a day.",
+    // headlineThreads ("an hour"), intro and features.threads.title ("1-hour")
+    // promise app_config.thread_hours, 1 since T-7.6 (D-097). Copy, not a
+    // computation, so it's written out rather than read: change it with the
+    // setting (T-2.1). The headline is also baked into the share image's
+    // pixels: change it, and regenerate src/app/opengraph-image.jpg and its alt
+    // text (T-2.4, 08-DESIGN §7). A test fails until the alt text matches.
+    headlineThreads: "Threads last an hour.",
     headlineKnots: "Knots last.",
     intro:
-      "Meet people nearby. Every conversation starts as a 24-hour thread. If you both want to keep it, you tie the knot and it becomes permanent.",
+      "Meet people nearby. Every conversation starts as a 1-hour thread. If you both want to keep it, you tie the knot and it becomes permanent.",
     join: "Join {app}",
     ageNote: "18+ only · Free for women, always",
     features: {
       threads: {
-        title: "24-hour threads",
+        title: "1-hour threads",
         body: "No dead matches sitting for weeks. Talk, or it goes.",
       },
       knot: {
@@ -857,9 +857,10 @@ export const en = {
       },
       conversations: {
         title: "Threads and Knots",
-        // D-003; reopening price: D-004. "lasts a day" promises
-        // app_config.thread_hours, seeded 24: change it with the setting.
-        body: "Every conversation starts as a Thread, which lasts a day. If you both tap “Tie the knot”, it becomes a Knot: permanent, and free for both of you, forever. Only the other person can make a conversation permanent; it can never be bought. A Thread that runs out is kept, read-only, and can be reopened for the price shown before you pay.",
+        // D-003, D-097; reopening and Extend: D-098, D-253. "lasts an hour"
+        // promises app_config.thread_hours, 1 since T-7.6, and "extended by a
+        // day" thread_extend_hours, 24: change it with the setting.
+        body: "Every conversation starts as a Thread, which lasts an hour. If you both tap “Tie the knot”, it becomes a Knot: permanent, and free for both of you, forever. Only the other person can make a conversation permanent; it can never be bought. A Thread that runs out is kept, read-only, and can be reopened, or extended by a day, for the price shown before you pay.",
       },
       paying: {
         title: "Paying",

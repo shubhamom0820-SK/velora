@@ -14,6 +14,11 @@ themselves).
   (T-9.6, D-500). ARQ checks their schedules in the heartbeat each poll already
   makes, so each adds a job's few commands a day, nothing per poll. Schedules
   are in UTC, whatever the machine's clock says.
+- **The Thread's clock runs once a minute in the worker's own loop**
+  (`app/workers/minutely.py`, D-640, T-7.6): `expire_threads` and
+  `warn_expiring`, coordinated in Postgres, so they cost Redis nothing but the
+  events they publish. An ARQ cron every minute would be about 864,000
+  commands a month, over Free on its own.
 - **A wake runs `verify_selfie` at once** (D-261): a listener on a Redis
   channel of its own (`app/workers/wake.py`), started with the worker, so a
   woman's selfie is decided in seconds, not at the next look at the queue. The
@@ -62,7 +67,9 @@ from app.core.queue import (
     VERIFY_SELFIE,
     ArqQueue,
 )
+from app.workers.minutely import Minutely
 from app.workers.tasks import log_turnover as log_turnover_job
+from app.workers.tasks import thread_clock
 from app.workers.tasks import verify_selfie as verify_selfie_job
 from app.workers.tasks.blur_photo import BLUR_TRIES, blur_photo
 from app.workers.tasks.delete_files import delete_files
@@ -181,10 +188,12 @@ async def startup(ctx: MutableMapping[str, Any]) -> None:
     refuse_unless_ready(settings)
     await open_resources(ctx, settings, build_providers(settings))
     ctx["wake"] = asyncio.create_task(listen_for_wakes(ctx, settings).run())
+    ctx["minutely"] = asyncio.create_task(each_minute(ctx).run())
     log.info(
         "worker.started",
         jobs=[job.name for job in JOBS],
         cron=[job.name for job in CRON_JOBS],
+        minutely=[THREAD_CLOCK],
         poll_delay_s=settings.WORKER_POLL_DELAY_S,
         env=settings.ENV,
     )
@@ -197,12 +206,24 @@ def listen_for_wakes(ctx: MutableMapping[str, Any], settings: Settings) -> WakeL
     return WakeListener(connect_to(settings.REDIS_URL), handle)
 
 
+# The worker's minute (D-640): the Thread's clock (T-7.6).
+THREAD_CLOCK: Final = "thread_clock"
+
+
+def each_minute(ctx: MutableMapping[str, Any]) -> Minutely:
+    async def work() -> dict[str, int]:
+        return await thread_clock.run(ctx)
+
+    return Minutely(work, name=THREAD_CLOCK)
+
+
 async def shutdown(ctx: MutableMapping[str, Any]) -> None:
     """Release what `startup` opened. Safe if it never ran."""
-    if "wake" in ctx:
-        ctx["wake"].cancel()
-        with contextlib.suppress(asyncio.CancelledError):
-            await ctx["wake"]
+    for task in ("minutely", "wake"):
+        if task in ctx:
+            ctx[task].cancel()
+            with contextlib.suppress(asyncio.CancelledError):
+                await ctx[task]
     if "engine" in ctx:
         await ctx["engine"].dispose()
     for name in ("storage", "moderation"):

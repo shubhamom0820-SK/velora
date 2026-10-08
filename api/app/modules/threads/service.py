@@ -1,5 +1,5 @@
 """Opening a Thread (T-7.1); listing them (T-7.2); clearing one from your own
-chats (T-7.8).
+chats (T-7.8); its hour bought and run out (T-7.6, at the end).
 
 `POST /v1/threads`, from a match (`thread_open`) or as a private message
 (`dm_open`, with its first message; D-231). One Thread per pair, forever: if
@@ -23,9 +23,9 @@ before it and given back if nothing is written.
 from __future__ import annotations
 
 import uuid
-from collections.abc import Sequence
+from collections.abc import Callable, Sequence
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import datetime, timedelta
 from typing import Any, Literal
 from uuid import UUID
 
@@ -35,7 +35,13 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core import clock, events
 from app.core.config import Settings
-from app.core.enums import MessageKind, ThreadOrigin, UserStatus
+from app.core.enums import (
+    LedgerReason,
+    MessageKind,
+    ThreadOrigin,
+    ThreadStatus,
+    UserStatus,
+)
 from app.core.errors import AppError
 from app.core.pagination import Cursor, PageParams
 from app.core.storage_keys import public_url
@@ -49,10 +55,15 @@ from app.modules.pricing import service as pricing_service
 from app.modules.threads import repository, rules, schemas
 from app.modules.threads.models import Thread
 from app.modules.users.models import User
+from app.modules.wallet import service as wallet_service
 from app.modules.wallet.rules import Ref, RefType
 
 THREAD_OPENED = "thread.opened"
 THREAD_NOTIFICATION = "thread"
+# T-7.6: to whoever sees the expiry, a man, never her (D-097, D-554).
+THREAD_EXPIRING = "thread.expiring"
+THREAD_EXPIRED = "thread.expired"
+EXPIRING_NOTIFICATION = "thread_expiring"
 
 
 def _not_found() -> AppError:
@@ -362,3 +373,170 @@ async def restore(session: AsyncSession, user: User, thread_id: UUID) -> None:
         if await repository.my_thread(session, thread_id, user.id) is None:
             raise _not_found()
         await repository.restore(session, user.id, thread_id)
+
+
+# --- The hour, bought and run out (T-7.6) -------------------------------------------
+
+# Threads a sweep takes in one transaction; it goes on until a batch comes back
+# short.
+SWEEP_BATCH = 500
+
+
+async def reopen(
+    session: AsyncSession,
+    user: User,
+    thread_id: UUID,
+    *,
+    key: str,
+    shown_price: int,
+    config: admin_service.ConfigCache | None = None,
+) -> schemas.Thread:
+    """`POST /threads/{id}/reopen`: an expired Thread, his again for an hour
+    from now, for `thread_reopen` (D-097 step 4, D-098; T-7.6's answer 1). A
+    live one is returned as it is, nothing charged (D-642)."""
+    return await _buy_time(
+        session,
+        user,
+        thread_id,
+        LedgerReason.THREAD_REOPEN,
+        key=key,
+        shown_price=shown_price,
+        config=config,
+    )
+
+
+async def extend(
+    session: AsyncSession,
+    user: User,
+    thread_id: UUID,
+    *,
+    key: str,
+    shown_price: int,
+    config: admin_service.ConfigCache | None = None,
+) -> schemas.Thread:
+    """`POST /threads/{id}/extend`: `thread_extend_hours` more, on top of what
+    is left, for `thread_extend`, as often as he likes (D-250); from expired the
+    same price re-opens it too, one debit, never a re-open beside it (D-253)."""
+    return await _buy_time(
+        session,
+        user,
+        thread_id,
+        LedgerReason.THREAD_EXTEND,
+        key=key,
+        shown_price=shown_price,
+        config=config,
+    )
+
+
+async def _buy_time(
+    session: AsyncSession,
+    user: User,
+    thread_id: UUID,
+    reason: LedgerReason,
+    *,
+    key: str,
+    shown_price: int,
+    config: admin_service.ConfigCache | None,
+) -> schemas.Thread:
+    """In one transaction, holding the Thread: the same `Idempotency-Key` again
+    returns the Thread, nothing charged and the hour not moved; then who may
+    buy, what the Thread allows, the charge at the price he was shown (P-56,
+    D-600), and the hour moved, the Thread `active` and its warning cleared
+    (D-560)."""
+    user_id, gender = user.id, user.gender
+    async with session.begin():
+        thread = await repository.my_thread(session, thread_id, user_id, lock=True)
+        if thread is None:
+            raise _not_found()
+        event = rules.time_event(reason, thread.id, key)
+        if await wallet_service.entry_for(session, user_id, reason, event) is not None:
+            return view_of(thread, user)
+        if not rules.buys_time(gender) or not rules.has_an_hour(thread):
+            raise rules.not_allowed()
+        now = clock.now()
+        if reason is LedgerReason.THREAD_REOPEN:
+            if not rules.has_expired(thread, now):
+                return view_of(thread, user)
+            hours = await admin_service.config_int(
+                session, rules.THREAD_HOURS_KEY, cache=config
+            )
+            until = rules.reopened_until(now, hours)
+        else:
+            hours = await admin_service.config_int(
+                session, rules.THREAD_EXTEND_HOURS_KEY, cache=config
+            )
+            until = rules.extended_until(thread, now, hours)
+        await pricing_service.charge(
+            session,
+            user,
+            reason,
+            shown=shown_price,
+            ref=Ref(RefType.THREAD, thread.id),
+            event=event,
+        )
+        thread.status = ThreadStatus.ACTIVE
+        thread.expires_at = until
+        thread.expiry_warned_at = None
+        return view_of(thread, user)
+
+
+async def expire_batch(session: AsyncSession, *, limit: int = SWEEP_BATCH) -> int:
+    """One transaction of the expiry sweep: active Threads past `expires_at`
+    marked `expired`, and `thread.expired` to whoever of the two sees the
+    expiry, never her (D-097). How many it took."""
+    async with session.begin():
+        rows = await repository.expire_due(session, clock.now(), limit=limit)
+        await _tell(session, rows, THREAD_EXPIRED, lambda row: {})
+    return len(rows)
+
+
+async def warn_batch(
+    session: AsyncSession,
+    *,
+    limit: int = SWEEP_BATCH,
+    config: admin_service.ConfigCache | None = None,
+) -> int:
+    """One transaction of the warning sweep: active Threads with
+    `thread_warn_minutes` or less left and not yet warned for this expiry,
+    marked warned, and `thread.expiring` and a notification to whoever of the
+    two sees the expiry, never her (T-7.6's answer 2). Every move of the hour
+    clears the mark, so each expiry gets its one warning. How many it took."""
+    async with session.begin():
+        minutes = await admin_service.config_int(
+            session, rules.THREAD_WARN_MINUTES_KEY, cache=config
+        )
+        now = clock.now()
+        rows = await repository.warn_due(
+            session, now, now + timedelta(minutes=minutes), limit=limit
+        )
+
+        def data(row: Any) -> dict[str, Any]:
+            return {"expires_at": row.expires_at.isoformat()}
+
+        told = await _tell(session, rows, THREAD_EXPIRING, data)
+        for user_id, payload in told:
+            notifications_repository.add(
+                session, user_id, EXPIRING_NOTIFICATION, payload
+            )
+    return len(rows)
+
+
+async def _tell(
+    session: AsyncSession,
+    rows: Sequence[Any],
+    type_: str,
+    data: Callable[[Any], dict[str, Any]],
+) -> list[tuple[UUID, dict[str, Any]]]:
+    """`type_` to each of each Thread's two who sees the expiry (D-554's
+    allowlist): a man. What was queued, by whom."""
+    genders = await repository.genders_of(
+        session, {user for row in rows for user in (row.user_low, row.user_high)}
+    )
+    told = []
+    for row in rows:
+        payload = {"thread_id": str(row.id), **data(row)}
+        for user_id in (row.user_low, row.user_high):
+            if rules.sees_the_expiry(genders.get(user_id)):
+                events.queue(session, user_id, type_, payload)
+                told.append((user_id, payload))
+    return told

@@ -265,8 +265,8 @@ Short, warm, plain. Say what happens, not what the system is. "Cleared from your
 "Deleted". "This thread disappears in 4h" not "TTL remaining". Prices always in Velas with the
 number first: "Open thread · 5 Velas". Never shame or pressure ("Only 2 left!").
 **Flagged 4 October 2026, don't copy it:** "This thread disappears in 4h" is wrong twice. Nothing
-disappears, since an expired Thread stays readable, and a Thread is an hour (D-097). The 1-hour
-task D-097 names rewrites it.
+disappears, since an expired Thread stays readable, and a Thread is an hour (D-097). Say it as
+§8's words do: "41m left", "The hour ran out" (T-7.6, which made the hour real).
 
 ## 7. Brand images
 
@@ -277,10 +277,18 @@ holding a hex value.
 
 | File | What it shows |
 |---|---|
-| `opengraph-image.jpg` | 1200 × 630, every page's link preview: the landing hero. `--chrome` under `--chrome-glow`, "Threads last a day. Knots last." in `--chrome-ink` at display weight, the wordmark top left, `veloraapp.co.in` in `--chrome-mute` along the bottom. JPEG at quality 90, because the glow is a gradient and PNG compresses it poorly (152 KB against 43 KB). |
+| `opengraph-image.jpg` | 1200 × 630, every page's link preview: the landing hero. `--chrome` under `--chrome-glow`, "Threads last an hour. Knots last." in `--chrome-ink` at display weight, the wordmark top left, `veloraapp.co.in` in `--chrome-mute` along the bottom. JPEG at quality 90, because the glow is a gradient and PNG compresses it poorly (152 KB against 43 KB). |
 | `opengraph-image.alt.txt` | Its alt text: exactly the home page's title, the brand and the headline. |
 | `apple-icon.png` | 180 × 180: a V in `--chrome-ink` on `--chrome`, with margins, since iOS crops it to a rounded square. |
 | `favicon.ico` | The same V at 16, 32 and 48 px, filling more of its tile. White, not red: at 16 px red on black muddies, and white stays legible (the founder). Its PNGs are RGBA, which Next requires. |
+
+**Regenerated 8 October 2026 (T-7.6)** for "Threads last an hour", by Claude, the same way, from a
+page that reads `tokens.css` itself: the wordmark 42 px bold at 66 × 58; the headline at
+`--type-display-weight`, 100 px, line height 1.09, tracking −3 px, two centred lines from 206 px
+down; the domain 30 px in `--chrome-mute`, centred, from 535 px; Chrome headless at 1200 × 630,
+scale 1, saved as JPEG quality 90 by Pillow (49.5 KB). Those numbers were fitted to the first image:
+rendered with its own words they differ from it by 7.7 of 255 on average over the headline, against
+6.25 over the domain line, whose words didn't change.
 
 **Regenerate them** when the name changes (the wordmark and the V; rule 17), when the landing
 headline changes (it promises `thread_hours`, 03-SCHEMA §8; a test fails until the alt text
@@ -321,9 +329,8 @@ card uses it).
 price badge on a button is the number alone: Super's "5", "Extend 24h · 10". Nowhere "verified"
 (D-262): the badge says "Selfie matched", and `web/src/i18n/claims.test.ts` holds every string.
 **Every hour on these screens is D-097's** ("41m left", "Threads last an hour", "The hour ran
-out"), decided and not built: `app_config.thread_hours` is 24 until T-7.6, the 1-hour task, lands.
-A screen built before then says what runs, as the landing does (copy follows the setting, P-14),
-and takes these words when the task lands.
+out"), built by T-7.6, which set `app_config.thread_hours` to 1 and took these words into the
+landing, `/terms`, the share image and the match sheet (copy follows the setting, P-14).
 
 **The card (T-6.5).** `--corner-swipe`. The photo on top, 336 of the card's 560 px, on a
 `--surface-2` placeholder while it loads; the thread; the text below. Name and age in `title-1`.
@@ -352,8 +359,8 @@ cards behind it are drawn smaller and lower, out of reach. The feed row has Sear
 screen (P-443); Filters joins it with T-6.9's sheet, and Liked you with T-6.7's screen and its
 count. The empty state is `EmptyState` inside a dashed card-shaped outline, its action filled
 `--accent`; its body stays `small`, as `EmptyState` has it everywhere. The match sheet's two
-people are initials, never photos, as the canvas draws them; its footer says "Threads last a
-day" until T-7.6 sets the hour (§8's Words).
+people are initials, never photos, as the canvas draws them; its footer says "Threads last an
+hour. Knots last." (§8's Words, since T-7.6).
 
 **The match sheet ✦ (T-6.5).** `--chrome` under `--chrome-glow`. Two initials in 96 px
 `--chrome-line` circles; the one whose like was already there (the match forms on the second like,

@@ -35,7 +35,7 @@ COUNTS = {
     "action_prices": 9,
     "credit_packs": 8,
     "gifts": 6,
-    "app_config": 14,
+    "app_config": 16,
     "interests": 24,
     "areas": 17,
 }
@@ -191,9 +191,13 @@ async def test_app_config_seeds(db: AsyncSession) -> None:
         "swipe_daily_limit_men": 50,
         "discovery_radius_km": 25,
         # Promised in copy, in web/src/i18n/en.ts: the landing page ("Threads last
-        # a day", "24-hour", T-2.1) and /terms ("lasts a day", T-2.2). A migration
-        # changing it changes that copy too.
-        "thread_hours": 24,
+        # an hour", "1-hour", T-2.1), /terms ("lasts an hour", T-2.2), the match
+        # sheet and the share image. 1 since T-7.6 (D-097); a migration changing
+        # it changes that copy too.
+        "thread_hours": 1,
+        # T-7.6, D-560: what Extend buys, and when he is warned.
+        "thread_extend_hours": 24,
+        "thread_warn_minutes": 10,
         # Promised on /terms and /privacy ("first 20 messages", T-2.2): a migration
         # changing it changes that copy too.
         "mask_first_n_messages": 20,

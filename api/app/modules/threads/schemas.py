@@ -1,4 +1,4 @@
-"""Threads — the requests and responses (04-API.md, T-7.1, T-7.2)."""
+"""Threads — the requests and responses (04-API.md, T-7.1, T-7.2, T-7.6)."""
 
 from __future__ import annotations
 
@@ -40,6 +40,15 @@ class OpenThreadRequest(BaseModel):
         if self.first_message is not None and not self.first_message.strip():
             raise ValueError("first_message can't be blank")
         return self
+
+
+class BuyTimeRequest(BaseModel):
+    """Re-open or Extend (T-7.6): the price the screen showed for it (P-56,
+    D-600), compared, never charged. The body may be left out: 0."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    shown_price: ShownPrice = 0
 
 
 class Thread(BaseModel):

@@ -7,7 +7,7 @@ The detail lives in `docs/`. When a rule here conflicts with anything else, this
 
 A web-first dating app for India. Women use it free. Men buy **Velas**.
 Every conversation starts as a **Thread** that expires after an hour, restarted only by her
-messages (D-097; T-7.6 builds it, and until then the code runs 24 hours). Extend buys a day.
+messages (D-097, built by T-7.6). Extend buys a day.
 If both people tap "Tie the knot", it becomes a **Knot** — permanent and free forever.
 Permanence is granted by the other person, never bought.
 
@@ -113,7 +113,9 @@ make dev         # infra + api + worker + web on 127.0.0.1
 make worker      # ARQ worker only: moderate_photo, delete_files, verify_selfie, match_photo,
                  # blur_photo (D-543), export_data, expire_export (polls every 10 s, D-091; a selfie's wake runs it at
                  # once, D-261); two daily crons: log_turnover at 09:00 IST, the year's turnover at
-                 # warning from ₹15 lakh (D-483), and erase_accounts at 03:30 IST (D-500)
+                 # warning from ₹15 lakh (D-483), and erase_accounts at 03:30 IST (D-500); and
+                 # once a minute in its own loop, not ARQ's, the Thread's clock: expire_threads and
+                 # warn_expiring (T-7.6, D-640)
 make models      # fetch the face models into api/models, checked by SHA-256 (D-088; needed
                  # where FACEMATCH_PROVIDER=sface, and by the face-match tests)
 make seed        # dev data: 20 profiles, test users (local only; a re-run changes nothing, infra-reset starts over)

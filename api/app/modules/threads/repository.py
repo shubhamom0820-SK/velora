@@ -1,8 +1,8 @@
-"""SQL for threads (T-7.1, T-7.2, T-7.8). No rules here: the service decides."""
+"""SQL for threads (T-7.1, T-7.2, T-7.6, T-7.8). No rules here: the service decides."""
 
 from __future__ import annotations
 
-from collections.abc import Sequence
+from collections.abc import Collection, Sequence
 from dataclasses import dataclass
 from datetime import datetime
 from typing import Any
@@ -268,17 +268,21 @@ async def rows_for(
 
 
 async def my_thread(
-    session: AsyncSession, thread_id: UUID, viewer_id: UUID
+    session: AsyncSession, thread_id: UUID, viewer_id: UUID, *, lock: bool = False
 ) -> Thread | None:
     """The Thread, if the viewer is one of its two and no block stands between
-    them."""
-    found: Thread | None = await session.scalar(
-        select(Thread).where(
-            Thread.id == thread_id,
-            or_(Thread.user_low == viewer_id, Thread.user_high == viewer_id),
-            ~blocked_either_way(viewer_id, _other(viewer_id)),
-        )
+    them; with `lock`, held until the transaction ends, so whatever moves its
+    hour moves it one after the other (D-560)."""
+    query = select(Thread).where(
+        Thread.id == thread_id,
+        or_(Thread.user_low == viewer_id, Thread.user_high == viewer_id),
+        ~blocked_either_way(viewer_id, _other(viewer_id)),
     )
+    if lock:
+        query = query.with_for_update(of=Thread).execution_options(
+            populate_existing=True
+        )
+    found: Thread | None = await session.scalar(query)
     return found
 
 
@@ -369,3 +373,72 @@ async def restore(session: AsyncSession, viewer_id: UUID, thread_id: UUID) -> No
             ThreadClear.user_id == viewer_id, ThreadClear.thread_id == thread_id
         )
     )
+
+
+# --- The clock (T-7.6) ---------------------------------------------------------------
+
+
+def _due(*where: Any, limit: int) -> Any:
+    """Up to `limit` active Threads matching `where`, soonest first, locked for
+    this transaction; a Thread another transaction holds (a send, an Extend) is
+    skipped, never waited on: the next run takes it. Materialised, so the rows
+    locked are the rows updated."""
+    return (
+        select(Thread.id)
+        .where(Thread.status == ThreadStatus.ACTIVE, *where)
+        .order_by(Thread.expires_at)
+        .limit(limit)
+        .with_for_update(skip_locked=True)
+        .cte("due")
+        .prefix_with("MATERIALIZED")
+    )
+
+
+async def expire_due(
+    session: AsyncSession, now: datetime, *, limit: int
+) -> Sequence[Row[Any]]:
+    """Marks up to `limit` active Threads whose `expires_at` has passed
+    `expired`. Each row: `id`, `user_low`, `user_high`. A private message has
+    no `expires_at`, so it is never due."""
+    due = _due(Thread.expires_at <= now, limit=limit)
+    rows = await session.execute(
+        update(Thread)
+        .where(Thread.id == due.c.id)
+        .values(status=ThreadStatus.EXPIRED)
+        .returning(Thread.id, Thread.user_low, Thread.user_high)
+        .execution_options(synchronize_session=False)
+    )
+    return rows.all()
+
+
+async def warn_due(
+    session: AsyncSession, now: datetime, until: datetime, *, limit: int
+) -> Sequence[Row[Any]]:
+    """Marks warned up to `limit` active Threads expiring after `now` and by
+    `until` that haven't been warned for this expiry. Each row: `id`,
+    `user_low`, `user_high`, `expires_at`."""
+    due = _due(
+        Thread.expires_at > now,
+        Thread.expires_at <= until,
+        Thread.expiry_warned_at.is_(None),
+        limit=limit,
+    )
+    rows = await session.execute(
+        update(Thread)
+        .where(Thread.id == due.c.id)
+        .values(expiry_warned_at=now)
+        .returning(Thread.id, Thread.user_low, Thread.user_high, Thread.expires_at)
+        .execution_options(synchronize_session=False)
+    )
+    return rows.all()
+
+
+async def genders_of(
+    session: AsyncSession, user_ids: Collection[UUID]
+) -> dict[UUID, Gender | None]:
+    if not user_ids:
+        return {}
+    rows = await session.execute(
+        select(User.id, User.gender).where(User.id.in_(user_ids))
+    )
+    return {user_id: gender for user_id, gender in rows.tuples()}

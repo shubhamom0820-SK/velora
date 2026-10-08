@@ -1,10 +1,9 @@
-"""Threads (T-7.1): what opening one costs, how long it lasts, and who sees
-what of it. No I/O.
+"""Threads (T-7.1, T-7.6): what opening one costs, how long it lasts, what
+buys it time, and who sees what of it. No I/O.
 
 - A Thread from a match lasts `app_config.thread_hours`, read at the moment it
-  opens, never a number written here (checklist A): 24 today, the 1-hour
-  Thread's when P-150 changes the setting (D-097). A private message never
-  expires (D-231, D-550).
+  opens, never a number written here (checklist A): an hour since T-7.6
+  (D-097). A private message never expires (D-231, D-550).
 - Opening is `thread_open` from a match and `dm_open` for a private message,
   priced by `pricing` (0 for a woman, D-098).
 - An expired Thread refuses a man and lets a woman through (D-097): an
@@ -12,19 +11,28 @@ what of it. No I/O.
 - Her message moves a live Thread's hour on, never his (D-097's amendment;
   D-560); expiry is read from the clock, not the status column.
 - Her side shows no countdown (D-097, 08-DESIGN §8, D-554): `expires_at` goes
-  to a man only, by the same kind of allowlist.
+  to a man only, by the same kind of allowlist, and so do the warning and the
+  expiry (T-7.6).
+- **Time is bought by a man only** (T-7.6): re-open (`thread_reopen`, a fresh
+  hour from now) and Extend (`thread_extend`, `thread_extend_hours` on top of
+  what is left, and from expired from now; D-250, D-253, D-560). She is never charged and never shown
+  either (D-097); a Knot or a private message has no hour to buy (D-642).
 """
 
 from __future__ import annotations
 
 from datetime import datetime, timedelta
 from typing import Final
+from uuid import UUID
 
 from app.core.enums import Gender, LedgerReason, ThreadOrigin, ThreadStatus
 from app.core.errors import AppError
 from app.modules.threads.models import Thread
 
 THREAD_HOURS_KEY: Final = "thread_hours"
+# T-7.6, D-560: what one Extend adds, and how long before expiry he is warned.
+THREAD_EXTEND_HOURS_KEY: Final = "thread_extend_hours"
+THREAD_WARN_MINUTES_KEY: Final = "thread_warn_minutes"
 
 # The chats list (T-7.2): "Recent" is a message in the last three days, as the
 # prototype's Knots filter has it; a row's preview is a text's first 100
@@ -87,3 +95,47 @@ def thread_expired() -> AppError:
         "This Thread has run out. Re-open it to reply.",
         status=410,
     )
+
+
+# --- Buying time (T-7.6) -------------------------------------------------------------
+
+
+def buys_time(gender: Gender | None) -> bool:
+    """Whether this person may re-open or Extend a Thread: a man. She is never
+    charged and never shown either (D-097), so hers is `NOT_ALLOWED`."""
+    return gender is Gender.MALE
+
+
+def has_an_hour(thread: Thread) -> bool:
+    """Whether the Thread runs on an hour at all: one from a match, not knotted.
+    A Knot is permanent (D-003) and a private message never expires (D-550)."""
+    return (
+        thread.origin is ThreadOrigin.MATCH
+        and thread.status is not ThreadStatus.KNOTTED
+    )
+
+
+def reopened_until(now: datetime, hours: int) -> datetime:
+    """A re-open's hour starts now (T-7.6's answer 1): he paid 2 for an hour."""
+    return now + timedelta(hours=hours)
+
+
+def extended_until(thread: Thread, now: datetime, hours: int) -> datetime:
+    """Extend adds to what is left, never from now while time is left (T-7.6's
+    answer 4: 4 hours left and an Extend of 24 is 28); from expired, from now
+    (D-560)."""
+    left_until = thread.expires_at
+    start = now if left_until is None or left_until < now else left_until
+    return start + timedelta(hours=hours)
+
+
+def time_event(reason: LedgerReason, thread_id: UUID, key: str) -> str:
+    """The wallet's event for a re-open or an Extend bought under the client's
+    `Idempotency-Key` (D-077: the key fills only the event): the Thread named
+    too, so a key sent again for another Thread is another purchase."""
+    kind = "reopen" if reason is LedgerReason.THREAD_REOPEN else "extend"
+    return f"{kind}:{thread_id}:{key}"
+
+
+def not_allowed() -> AppError:
+    return AppError("NOT_ALLOWED", "This Thread can't take that.", status=422)

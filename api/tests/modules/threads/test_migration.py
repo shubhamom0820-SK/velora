@@ -72,3 +72,33 @@ async def test_going_back_puts_t110s_rule_back(
             )
 
     assert "ck_threads_active_expires" in str(refused.value)
+
+
+# Migration 7ee6438868ed (T-7.6): the hour, and the two settings beside it.
+
+BEFORE_THE_HOUR = "0e6719809c1b"
+THE_HOUR = "7ee6438868ed"
+
+
+async def _hour_settings(db: AsyncSession) -> dict[str, object]:
+    rows = await db.execute(
+        text(
+            "select key, value from app_config where key in "
+            "('thread_hours', 'thread_extend_hours', 'thread_warn_minutes')"
+        )
+    )
+    return dict(rows.tuples().all())
+
+
+async def test_the_hour_goes_back_to_a_day_and_returns(db: AsyncSession) -> None:
+    await _alembic(db, command.downgrade, BEFORE_THE_HOUR)
+    before = await _hour_settings(db)
+    await _alembic(db, command.upgrade, THE_HOUR)
+    after = await _hour_settings(db)
+
+    assert before == {"thread_hours": 24}
+    assert after == {
+        "thread_hours": 1,
+        "thread_extend_hours": 24,
+        "thread_warn_minutes": 10,
+    }

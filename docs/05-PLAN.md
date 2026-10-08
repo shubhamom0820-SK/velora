@@ -2975,7 +2975,7 @@ prices don't depend on the web photos step, and the hold is lifted.
 - [x] **Commit:** `feat(realtime): read receipts and typing [T-7.5]`
 
 ### T-7.6 · The 1-hour Thread: expiry, re-open, Extend
-- [ ] **Needs:** T-7.4 (and through it T-7.3, whose send path this task changes)
+- [x] **Needs:** T-7.4 (and through it T-7.3, whose send path this task changes)
 - **This is the 1-hour task D-097 names** (written by P-150, 8 October 2026). Until it lands, 24
   hours is what runs. What it builds is decided: D-097's five steps and its amendment (his message
   never restarts the hour; when Extend ends, the hour runs from her last message), D-098's prices,
@@ -2993,7 +2993,7 @@ prices don't depend on the web photos step, and the hold is lifted.
      left gives 28, so no paid hour is lost.
   5. **The setting and the copy change together, in this task;** `/terms`' new sentence is shown
      to the founder before this task lands.
-- [ ] **The hour lives in `expires_at` alone (D-560),** every move of it in the transaction that
+- [x] **The hour lives in `expires_at` alone (D-560),** every move of it in the transaction that
   causes it, with the Thread row locked:
   - open: `now + thread_hours` (T-7.1, as built);
   - **her** message on a live Thread: `max(expires_at, sent_at + thread_hours)`, so a message in
@@ -3004,7 +3004,7 @@ prices don't depend on the web photos step, and the hold is lifted.
   - re-open: `now + thread_hours` (answer 1);
   - untie (T-7.7): `now + thread_hours`.
   Every move later clears `expiry_warned_at`, so each expiry gets its one warning.
-- [ ] **Expired is the clock, not the status column.** A Thread whose `expires_at` has passed is
+- [x] **Expired is the clock, not the status column.** A Thread whose `expires_at` has passed is
   expired for every check, though the cron hasn't caught its status up: his send is refused with
   `THREAD_EXPIRED`, and her message is delivered and moves nothing (D-097 step 4: it stays expired
   until he re-opens). Without this, the minute between crons lets him send in a Thread that ran
@@ -3012,20 +3012,20 @@ prices don't depend on the web photos step, and the hold is lifted.
   **Built in T-7.3** (the founder's Q7, 8 October 2026; D-551): her message's `max` and the
   warning it clears, his message moving nothing, and expiry read from the clock in the send and
   in T-7.1's open path (`threads/rules.py`'s `has_expired`). This task's tests of them stand.
-- [ ] Cron `expire_threads` (every minute, batches of 500, `FOR UPDATE SKIP LOCKED`): active
+- [x] Cron `expire_threads` (every minute, batches of 500, `FOR UPDATE SKIP LOCKED`): active
   Threads past `expires_at` → `expired`, `thread.expired` to him. Cron `warn_expiring` (every
   minute): active Threads with `thread_warn_minutes` or less left and no `expiry_warned_at` →
   set it, push + `thread.expiring` to him. **Neither reaches her** (D-097: her side shows only
   that her message hasn't been seen; T-7.2 sends her `expires_at` as null).
-- [ ] **`POST /threads/{id}/extend`** + `Idempotency-Key` → `Thread`: Extend is sold here (D-253:
+- [x] **`POST /threads/{id}/extend`** + `Idempotency-Key` → `Thread`: Extend is sold here (D-253:
   no other task sells it). 10 Velas through `pricing.service.charge`, one `thread_extend` debit
   (D-251), the key naming the event the wallet keys a repeating reason on (D-077), so a double tap
   charges once. An active or an expired Thread; from expired the same 10 re-opens it, `active`,
   never a `thread_reopen` beside it (D-253). A Knot, or a woman (D-097: she is never charged and
   never shown it), → `NOT_ALLOWED`, and no ledger row.
-- [ ] `POST /threads/{id}/reopen` + `Idempotency-Key` (expired only) → debit 2 (men; D-098,
+- [x] `POST /threads/{id}/reopen` + `Idempotency-Key` (expired only) → debit 2 (men; D-098,
   `thread_reopen`), `active`, `expires_at = now + thread_hours`, warning cleared.
-- [ ] **The setting and every promise of it, in one commit** (answer 5). A data migration sets
+- [x] **The setting and every promise of it, in one commit** (answer 5). A data migration sets
   `thread_hours` to 1 and adds `thread_extend_hours` (24) and `thread_warn_minutes` (10),
   reversibly; with it, everything that says a Thread lasts a day (P-150's sweep, 8 October 2026):
   - `web/src/i18n/en.ts`: `landing.headlineThreads` ("Threads last a day."), `landing.intro` ("a
@@ -3040,18 +3040,36 @@ prices don't depend on the web photos step, and the hold is lifted.
   Untouched, and right: the seed migration's `thread_hours: 24` (history; the new migration
   moves it), and `api/tests/modules/pricing/test_service.py`'s "another 24 hours", which is
   Extend's.
-- [ ] Tests using a controllable clock: her message restarts the hour and his never does; Extend
+- [x] Tests using a controllable clock: her message restarts the hour and his never does; Extend
   stacks (answer 4); an extended Thread expires the instant Extend ends when her last message is
   over an hour old (d), and doesn't when she wrote in its last hour; Extend from expired is one
   debit of 10; re-open is 2 and an hour from now; a woman's Extend writes nothing; past
   `expires_at` before the cron, his send is refused and her message revives nothing; her message
   racing the cron, the overlap forced, never leaves an active Thread with an expiry in the past;
   one warning per expiry, never to her.
-- [ ] **The price shown (P-56, D-600):** re-open and Extend take `shown_price` and pass it to `charge(..., shown=)`; Extend from expired compares its 10, never 2 + 10. Test `PRICE_CHANGED` with nothing charged or written, and its web sends the price it displayed, from `/prices`.
-- [ ] **The match sheet's footer too** (T-6.5): `discover.match.footer` in `en.ts` says "Threads
+- [x] **The price shown (P-56, D-600):** re-open and Extend take `shown_price` and pass it to `charge(..., shown=)`; Extend from expired compares its 10, never 2 + 10. Test `PRICE_CHANGED` with nothing charged or written, and its web sends the price it displayed, from `/prices`.
+- [x] **The match sheet's footer too** (T-6.5): `discover.match.footer` in `en.ts` says "Threads
   last a day. Knots last." while `thread_hours` is 24; with this task it takes 08-DESIGN §8's
   "Threads last an hour. Knots last." in the same commit.
-- [ ] **Commit:** `feat(threads): the 1-hour Thread, expiry, re-open and Extend [T-7.6]`
+  **Built 8 October 2026, with the founder's answers to its plan (D-640 to D-642):** the two
+  sweeps run once a minute in the worker's own loop, not as ARQ crons, which would cost Upstash
+  Free more than it has (D-640, `app/workers/minutely.py`); a re-open or an Extend he paid for is
+  his answer too, so he never pays to re-open and then again to reply (D-641); a woman's re-open,
+  and either on a Knot or a private message, is `NOT_ALLOWED`, and a re-open of a live Thread
+  returns it, nothing charged (D-642). Re-open and Extend take `{shown_price?}` and an
+  `Idempotency-Key`, the wallet's event `reopen|extend:{thread}:{key}`; `useReopenThread` and
+  `useExtendThread` (`web/src/lib/queries/threads.ts`) send both, for T-7.11's buttons. The
+  migration is `7ee6438868ed`. The share image was regenerated as 08-DESIGN §7 now records. The
+  `/terms` sentence and the landing, match-sheet and share lines were shown to the founder and
+  approved before landing. The races are forced on committed rows with no ledger row committed
+  (`test_clock_race.py`): two Extends at once each add their day, and the sweep skips a Thread a
+  send holds and takes it the next minute. **Broken once each** (`uv run python -m
+  tests.break_guards t76-`): twenty-eight cases, each red in 1 of 1, and the five older cases
+  whose anchors this task moved (t71-04, t71-06, t71-07, t72-04, t72-13) red again, every file
+  restored and none differing by SHA-256 after (t72-04's anchor moved again on rebasing over
+  T-7.8, whose t78-02 needed a longer one beside it: both red again); the hooks' four guards and the share image's alt
+  text broken by hand, each red, each file restored by its hash. Found writing the plan: P-540.
+- [x] **Commit:** `feat(threads): the 1-hour Thread, expiry, re-open and Extend [T-7.6]`
 
 ### T-7.7 · Tie the knot
 - [ ] **Needs:** T-7.6
@@ -6147,3 +6165,13 @@ The number comes from the session's own block, given in its brief, from P-100 up
   outside a request publishes nothing"). The same holds for any credit or event a job writes.
   Fix: the worker's session factory publishes committed events as `get_session` does. Filed by
   Claude building T-8.6, 8 October 2026.
+- [ ] P-540 · Decide what the hour means between two men, and between two women. **Before beta,**
+  the founder to place it on a task's Needs line. Worst case: two men matched with each other pay
+  2 Velas every hour, each, to keep talking, since neither's message restarts the hour (D-097's
+  amendment names hers only, and `threads.rules.restarts_the_hour` is an allowlist of women),
+  while two women's Thread never stops anyone, since an expired Thread lets a woman through. A
+  same-gender pair is something the product allows (`seeking`), and D-097 was written for a man
+  and a woman; nothing says whether its asymmetry should hold, flip or fall away for them. As
+  built (T-7.6, D-642): the warning and the expiry go to whoever sees the expiry, a man, so both
+  men are told. Found writing T-7.6's plan; filed by Claude, 8 October 2026; its session's block,
+  P-540 to P-549.

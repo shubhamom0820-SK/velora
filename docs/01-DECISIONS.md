@@ -2213,6 +2213,9 @@ propose and the founder's to decide; the poll interval doesn't change for it.
 ARQ checks cron schedules in the heartbeat each poll already makes, so the sum above is unchanged
 but for one job's enqueue, run and cleanup a day, about a dozen commands: a few hundred a month,
 under 0.1% of Free. Estimated from arq's source, not measured.
+**Noted 8 October 2026 (T-7.6, D-640):** the Thread's clock runs every minute, but in the worker's
+own loop, never as an ARQ cron, which at about 20 commands a run would be about 864,000 a month on
+its own. The loop costs no command when nothing is due; each event it sends is one PUBLISH.
 
 ### D-092 · Pillow re-encodes every photo, pinned, bounded and proved — Locked
 **The decision (T-4.4; approved by the founder, 4 October 2026, with three conditions):** Pillow, a
@@ -2392,6 +2395,8 @@ hers only. Written up by Claude, 8 October 2026.
 **Written 8 October 2026: the 1-hour task is T-7.6** (P-150). It sets `thread_hours` to 1 with
 the copy that promises it, and sells Extend; how it keeps the hour is D-560. Until it lands, 24
 hours still runs.
+**Built 8 October 2026 (T-7.6):** an hour is what runs, and the landing, `/terms`, the match sheet
+and the share image say so.
 
 ### D-098 · What things cost: men pay per action, women pay nothing — Locked (values tunable)
 Prices stay data (D-004, D-016): `action_prices` and `gifts`, changed by a row, not a deploy.
@@ -4158,7 +4163,7 @@ residency read); an allowlist keeps out what a strip list can't know about.
 
 **Rejected:** storing the payload whole; a list of fields to strip.
 
-### D-560 · The hour lives in `expires_at` alone; Extend is sold by T-7.6 — Open (the mechanism, until T-7.6 builds it)
+### D-560 · The hour lives in `expires_at` alone; Extend is sold by T-7.6 — Locked (built by T-7.6, 8 October 2026)
 **Decision.** T-7.6 keeps D-097's hour in the one column the schema already has. Each event moves
 `expires_at`, in its own transaction with the Thread row locked:
 
@@ -4191,6 +4196,12 @@ index on `expires_at`; expiry by the status column alone, which leaves the minut
 **Open** because the mechanism is Claude's, written in P-150, 8 October 2026, and T-7.6 may find a
 better one while building; the rules it keeps are Locked where they are written (D-097, D-098,
 D-250, D-253, and T-7.6's five answers), and no change to the mechanism may change them.
+
+**Built as written, 8 October 2026 (T-7.6), so Locked:** every row of the table above, each in the
+transaction that causes it with the Thread's row held (`threads.service._buy_time`, T-7.3's send;
+untie is T-7.7's). Building it found nothing better, and three things around it, each decided by the
+founder the same day: the minute's sweeps run in the worker's own loop (D-640), a re-open or an
+Extend he paid for is his answer too (D-641), and who can't buy time (D-642).
 
 ### D-550 · A private message is a Thread of origin `dm` that never expires — Locked
 **The decision (T-7.1, approved by the founder 8 October 2026 on the advisor's recommendation,
@@ -5047,6 +5058,59 @@ combine with New, and would make Clear reset the feed.
 **Rejected:** the toggle as a second Online pill (above); filtering in the browser (the server
 decides, and a page of 20 filtered down could be empty with more behind it); the prototype's
 "Premium filters" label (no decision prices them, and D-002's women pay nothing).
+
+### D-640 · The Thread's clock runs in the worker's own minute, not as an ARQ cron — Locked
+**The decision (T-7.6; the founder, 8 October 2026, on the advisor's recommendation, Claude in a
+separate chat, relayed by the founder; T-7.6's plan, Q1):** `expire_threads` and `warn_expiring`
+run once a minute inside the worker's process, in a loop of its own (`app/workers/minutely.py`),
+started beside the wake listener (D-261) and cancelled at shutdown. Runs start a minute apart; a
+failed minute is logged, its error's class only, and the next one runs. Each sweep works in batches
+of 500, one transaction each, taking its rows `FOR UPDATE SKIP LOCKED`, and publishes a batch's
+events once it has committed.
+
+**Why:** an ARQ cron job costs Redis commands every time it runs (queued, started, run and
+finished: about 20, by arq 0.28's source), so two every minute would be about 1.7 million commands
+a month, and one about 864,000, against Upstash Free's 500,000, of which the idle worker already
+spends 260,640 (D-091). D-091 says to report that and stop; this is the report's answer. The loop
+spends no Redis command when nothing is due: the sweeps coordinate in Postgres, where `SKIP
+LOCKED` keeps two workers, or a sweep and a send, off each other's rows, and each event is one
+PUBLISH. Expiry is read from the clock everywhere (D-560), so a late or failed minute delays only
+the status column and the events, never what a person may do.
+
+**Rejected:** two ARQ crons every minute (about 1.7M commands a month); one ARQ cron every five
+minutes (about 180,000, leaving about 60,000 of Free for real traffic, and warnings five minutes
+late); a paid Upstash plan (the founder's call alone, never taken quietly, D-091).
+
+**Costs:** no ARQ retries or uniqueness for these two; neither is needed, since a run is idempotent
+and two at once take different rows. The estimate is from arq's source, not measured.
+
+### D-641 · A re-open or an Extend he paid for is his answer too — Locked
+**The decision (T-7.6; the founder, 8 October 2026, on the advisor's recommendation, relayed;
+T-7.6's plan, Q2):** once he has paid a re-open (`thread_reopen`) or an Extend (`thread_extend`)
+naming a Thread, his first message there costs nothing more. T-7.3's answer price (D-551: 2 to
+answer her, or 5 to write first where she opened) applies only while he has paid neither.
+
+**Why:** D-097 step 4 says he pays 2 "to re-open the Thread and reply", and D-253 that he never pays
+2 and then 10. Without this, a man who let her first message's hour run out paid 4 to answer (the
+re-open, then the answer), 12 with an Extend, and 7 where she opened without a word.
+
+**How:** `messages.rules.answer_price` takes `bought_time`, read from the ledger: an entry of his
+for either reason whose ref is this Thread. The answer's own `thread_reopen` (keyed
+`answer:{thread}`) is in the ledger only beside his first message, so it never stands in for one.
+
+### D-642 · Who can't buy time, and a re-open of a live Thread — Locked
+**The decision (T-7.6; the founder, 8 October 2026, on the advisor's recommendation, relayed;
+T-7.6's plan, Q3):**
+- **A woman's re-open or Extend is `NOT_ALLOWED`,** nothing written, as T-7.6 already said of
+  Extend: her messages pass an expired Thread (D-097), and a button would show her that time
+  stands between them. An allowlist: only a man buys time.
+- **A Knot or a private message is `NOT_ALLOWED`** for either: a Knot is permanent (D-003) and a
+  private message never expires (D-550), so neither has an hour to buy.
+- **A re-open of a Thread that is still live returns it as it is, nothing charged,** as `POST
+  /threads` returns an existing Thread: it is already what he asked for.
+- **The warning and the expiry go to whoever of the two sees the expiry** (D-554's allowlist): a
+  man. In a Thread between two men both are told, and neither's message restarts the hour, so it
+  runs out every hour; whether it should is P-540's, not decided here.
 
 ## Adding a decision
 

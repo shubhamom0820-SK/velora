@@ -323,11 +323,12 @@ async def send(
     filters; the same `client_msg_id` again returns the message it made, with
     nothing charged; nothing reaches a deleted account; an expired Thread
     refuses him and takes hers (D-097), by the clock (D-560); he pays what
-    D-098 and D-250 say (`rules.answer_price`, and `dm_message` in a private
-    message); her message moves the hour on, his never does (D-097's
-    amendment); masked while the Thread is young (D-030); both told. A voice
-    note's upload is checked once the Thread is known to be hers
-    (`check_voice`), outside any transaction: no lock waits on storage.
+    D-098 and D-250 say (`rules.answer_price`, nothing after a re-open or an
+    Extend he paid for, D-641, and `dm_message` in a private message); her
+    message moves the hour on, his never does (D-097's amendment); masked
+    while the Thread is young (D-030); both told. A voice note's upload is
+    checked once the Thread is known to be hers (`check_voice`), outside any
+    transaction: no lock waits on storage.
     """
     # Read now: a refusal rolls the session back, which expires `user`.
     user_id, gender = user.id, user.gender
@@ -432,6 +433,9 @@ async def _send_in(
         user.id,
         wrote=await repository.has_written(session, thread.id, user.id),
         they_wrote=await repository.has_written(session, thread.id, other_id),
+        bought_time=await repository.has_paid(
+            session, thread.id, user.id, rules.TIME_BOUGHT
+        ),
     )
     if answer is not None:
         await pricing_service.charge(

@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from collections.abc import Sequence
+from collections.abc import Collection, Sequence
 from datetime import datetime
 from typing import Any
 from uuid import UUID
@@ -11,11 +11,13 @@ from sqlalchemy import Row, case, exists, insert, or_, select, tuple_, update
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.enums import Gender, MessageKind, UserStatus
+from app.core.enums import Gender, LedgerReason, MessageKind, UserStatus
 from app.modules.discovery.repository import blocked_either_way
 from app.modules.messages.models import Message, MessageUnlock
 from app.modules.threads.models import Thread, ThreadClear
 from app.modules.users.models import User
+from app.modules.wallet.models import LedgerEntry
+from app.modules.wallet.rules import RefType
 
 
 async def add_text(
@@ -158,6 +160,27 @@ async def has_written(session: AsyncSession, thread_id: UUID, user_id: UUID) -> 
     found = await session.scalar(
         select(
             exists().where(Message.thread_id == thread_id, Message.sender_id == user_id)
+        )
+    )
+    return bool(found)
+
+
+async def has_paid(
+    session: AsyncSession,
+    thread_id: UUID,
+    user_id: UUID,
+    reasons: Collection[LedgerReason],
+) -> bool:
+    """Whether `user_id` has a ledger entry for one of `reasons` naming this
+    Thread."""
+    found = await session.scalar(
+        select(
+            exists().where(
+                LedgerEntry.user_id == user_id,
+                LedgerEntry.reason.in_(reasons),
+                LedgerEntry.ref_type == RefType.THREAD.value,
+                LedgerEntry.ref_id == thread_id,
+            )
         )
     )
     return bool(found)

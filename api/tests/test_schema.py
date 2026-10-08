@@ -586,7 +586,7 @@ async def test_knotting_properly_is_allowed(db: AsyncSession) -> None:
 
 
 async def test_an_active_thread_must_expire(db: AsyncSession) -> None:
-    """Otherwise it would sit active forever and break the 24-hour promise."""
+    """Otherwise it would sit active forever and break the 1-hour promise."""
     low, high = await _pair(db)
 
     refusal = await _check_refused(

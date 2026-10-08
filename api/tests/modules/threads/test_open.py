@@ -137,8 +137,8 @@ async def test_a_man_opens_from_a_match_for_five_and_she_is_told(
     assert body["status"] == "active"
     assert body["other_user_id"] == str(woman.id)
     assert body["i_tied"] is False
-    # thread_hours, read from app_config (24 today; P-150 makes it 1).
-    assert thread.expires_at == NOON + timedelta(hours=24)
+    # thread_hours, read from app_config: an hour since T-7.6 (D-097).
+    assert thread.expires_at == NOON + timedelta(hours=1)
     assert datetime.fromisoformat(body["expires_at"]) == thread.expires_at
     assert thread.opened_by == man.id
     assert await _ledger(db, man_id) == [("thread_open", -5, thread.id)]
@@ -160,9 +160,10 @@ async def test_a_man_opens_from_a_match_for_five_and_she_is_told(
 async def test_the_hours_are_the_settings_never_a_number(
     db: AsyncSession, client: AsyncClient, make_user: MakeUser, clock: ModuleType
 ) -> None:
-    """D-097's hour arrives as a row: nothing in the code says 24."""
+    """D-097's hour arrives as a row: nothing in the code says 1. Set to 3,
+    which no setting holds, so a literal can't pass."""
     clock.freeze(NOON)
-    await _config(db, "thread_hours", 1)
+    await _config(db, "thread_hours", 3)
     man, token = await make_user(credits=5)
     man_id = man.id
     woman, _ = await make_user(Gender.FEMALE)
@@ -172,7 +173,7 @@ async def test_the_hours_are_the_settings_never_a_number(
     await _opened(client, token, match_id=match.id, shown_price=5)
 
     [thread] = await _threads_between(db, man_id, woman_id)
-    assert thread.expires_at == NOON + timedelta(hours=1)
+    assert thread.expires_at == NOON + timedelta(hours=3)
 
 
 async def test_a_woman_opens_free_and_sees_no_countdown(

@@ -210,8 +210,8 @@ socket of theirs and is never sent to a client (T-7.4).
 | `erase_accounts` | cron, daily 03:30 IST (the worker's only cron) | erase every account deleted ≥ 29 days ago, files first, by D-503's lists, then anonymise its row (D-500); expire any export file its own job left |
 | `watermark_album` | album access granted | render per-viewer watermarked copies |
 | `send_push` | any notification | Web Push, drop dead subscriptions on 404/410 |
-| `expire_threads` | cron, every minute | active threads past `expires_at` → `expired`, emit event |
-| `warn_expiring` | cron, every minute | threads with `thread_warn_minutes` (10) or less left, warned once per expiry, him only (T-7.6) |
+| `expire_threads` | the worker's minute (D-640) | active threads past `expires_at` → `expired`, `thread.expired` to him only, in batches of 500, `SKIP LOCKED` (T-7.6) |
+| `warn_expiring` | the worker's minute (D-640) | threads with `thread_warn_minutes` (10) or less left, warned once per expiry: `thread.expiring` and a notification, him only (T-7.6) |
 | `recompute_fraud` | cron every 10 min + on report | recompute score, apply band actions |
 | `cleanup` | cron, daily 03:30 IST | purge expired OTP keys, old WS tickets, stale push subs |
 | `log_turnover` | cron, daily 03:30 UTC (09:00 IST) | the financial year's paid turnover, logged: warning from ₹15 lakh, error from ₹20 lakh (D-483, P-350). The worker's cron schedules are in UTC (`WorkerSettings.timezone`) |
