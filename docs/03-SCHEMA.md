@@ -113,7 +113,7 @@ Unique `(kind, value)`.
 | hometown | text | ≤ 40 |
 | city | text | ≤ 40 |
 | area_id | uuid null fk areas | manual fallback |
-| location | geography(Point,4326) null | |
+| location | geography(Point,4326) null | a point of the 0.01° grid, never the exact position: CHECK `ck_profiles_location_on_grid` (D-490) |
 | location_updated_at | timestamptz | |
 | seeking | seeking_t | |
 | is_hidden | boolean default false | privacy: hide profile |

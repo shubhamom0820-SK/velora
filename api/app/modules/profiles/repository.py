@@ -6,8 +6,8 @@ from collections.abc import Collection
 from typing import Any
 from uuid import UUID
 
-from geoalchemy2 import Geography
-from sqlalchemy import ScalarSelect, cast, delete, func, select
+from geoalchemy2 import Geography, Geometry
+from sqlalchemy import cast, delete, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.modules.profiles.models import (
@@ -18,6 +18,7 @@ from app.modules.profiles.models import (
     ProfileIntent,
     ProfileInterest,
 )
+from app.modules.profiles.rules import GRID_DEG
 
 
 async def intents(session: AsyncSession) -> list[Intent]:
@@ -100,26 +101,44 @@ async def area_exists(session: AsyncSession, area_id: UUID) -> bool:
     return found is not None
 
 
-def point(lat: float, lng: float) -> Any:
-    """A position as `profiles.location` stores it: a geography point, WGS 84,
-    longitude first."""
+def exact_point(lat: float, lng: float) -> Any:
+    """A position exactly as given, a geography point, WGS 84, longitude
+    first: for finding its area, never for storing (D-490)."""
     return cast(
         func.ST_SetSRID(func.ST_MakePoint(lng, lat), 4326),
         Geography(geometry_type="POINT", srid=4326),
     )
 
 
-def centroid_of(area_id: UUID) -> ScalarSelect[Any]:
-    """An area's centroid, read by the statement that stores it."""
-    return select(Area.centroid).where(Area.id == area_id).scalar_subquery()
+def on_grid(position: Any) -> Any:
+    """`position`, a geography point, moved to the nearest point of D-490's
+    grid: what `profiles.location` stores, and all it stores."""
+    return cast(
+        func.ST_SnapToGrid(
+            cast(position, Geometry(geometry_type="POINT", srid=4326)), GRID_DEG
+        ),
+        Geography(geometry_type="POINT", srid=4326),
+    )
+
+
+def point(lat: float, lng: float) -> Any:
+    """A position as `profiles.location` stores it: on the grid (D-490)."""
+    return on_grid(exact_point(lat, lng))
+
+
+def centroid_of(area_id: UUID) -> Any:
+    """An area's centroid as `profiles.location` stores it, on the grid,
+    read by the statement that stores it."""
+    return on_grid(select(Area.centroid).where(Area.id == area_id).scalar_subquery())
 
 
 async def nearest_area_id(
     session: AsyncSession, lat: float, lng: float, within_m: float
 ) -> UUID | None:
     """The area whose centroid is nearest the position, if one is within
-    `within_m` metres."""
-    here = point(lat, lng)
+    `within_m` metres: from the exact position, before it is snapped
+    (D-220, D-490)."""
+    here = exact_point(lat, lng)
     found: UUID | None = await session.scalar(
         select(Area.id)
         .where(func.ST_DWithin(Area.centroid, here, within_m))

@@ -1813,7 +1813,7 @@ COUNT = "        .where(_these(city, names))\n    )\n    if in_use:\n"
 REFUSES_IN_USE = "test_the_migration_refuses_to_remove_an_area_in_use"
 LAUNCH_CITY = "test_areas_are_in_the_launch_city"
 UNDER_HALF = "test_the_scatter_stays_under_half_the_closest_gap"
-INSIDE = "test_each_profile_sits_at_its_scatter_inside_its_area"
+INSIDE = "test_each_profile_sits_on_its_scatters_grid_point_inside_its_area"
 
 P38: list[Case] = [
     Case(
@@ -1900,18 +1900,9 @@ P38: list[Case] = [
         edits=[(SEED, 'AREA_CITY = "Phagwara"\n', 'AREA_CITY = "Bengaluru"\n')],
         expect=[UNDER_HALF, INSIDE],
     ),
-    Case(
-        id="p38-11-ananya-with-the-other-three",
-        what="Ananya back in Guru Hargobind Nagar with three others",
-        edits=[
-            (
-                SEED_DATA,
-                '        area="Chachoki",\n',
-                '        area="Guru Hargobind Nagar",\n',
-            )
-        ],
-        expect=["test_nobody_shares_a_spot"],
-    ),
+    # p38-11 (Ananya back with three others, two of them 89 m apart) went with
+    # D-490: on the 1 km grid profiles share points by design, so the seed no
+    # longer keeps everyone 100 m apart, and nothing is left for it to break.
 ]
 
 # --- T-4.5: selfie face matching, the wake, the review, the seed's selfies ----------
@@ -3652,6 +3643,165 @@ T81: list[Case] = [
     ),
 ]
 
+
+# --- P-120: positions on a 1 km grid, never exactly (D-490) --------------------------
+
+PROFILES_REPO120 = "app/modules/profiles/repository.py"
+PROFILES_MODELS120 = "app/modules/profiles/models.py"
+SNAP120 = "alembic/versions/20261008_4c71a9e2b058_snap_profile_positions.py"
+CHECK120 = "alembic/versions/20261008_9b4e0d2c7a15_profiles_location_on_grid.py"
+GRID_TESTS120 = ["tests/modules/profiles/test_grid.py"]
+LOCATION_TESTS120 = [
+    "tests/modules/profiles/test_grid.py",
+    "tests/modules/profiles/test_location.py",
+]
+
+P120: list[tuple[Case, list[str]]] = [
+    (
+        Case(
+            id="p120-01-a-shared-position-stored-exactly",
+            what="D-490: `PUT /me/location` storing the exact point",
+            edits=[
+                (
+                    PROFILES_REPO120,
+                    "    return on_grid(exact_point(lat, lng))\n",
+                    "    return exact_point(lat, lng)\n",
+                )
+            ],
+            expect=[
+                "test_every_position_inside_one_cell_is_stored_as_the_same_point",
+                "test_a_position_is_stored_with_its_nearest_area_and_answers_me",
+            ],
+        ),
+        LOCATION_TESTS120,
+    ),
+    (
+        Case(
+            id="p120-02-no-check",
+            what="D-490: the database taking an exact point (the CHECK gone)",
+            edits=[
+                (
+                    CHECK120,
+                    '    op.create_check_constraint(op.f(NAME), "profiles", ON_GRID)\n',
+                    "    pass\n",
+                ),
+                (
+                    CHECK120,
+                    '    op.drop_constraint(op.f(NAME), "profiles", type_="check")\n',
+                    "    pass\n",
+                ),
+                (
+                    PROFILES_MODELS120,
+                    '        CheckConstraint(LOCATION_ON_GRID, name="location_on_grid"),\n',
+                    "",
+                ),
+            ],
+            expect=["test_the_database_refuses_a_position_off_the_grid"],
+        ),
+        GRID_TESTS120,
+    ),
+    (
+        Case(
+            id="p120-03-the-area-from-the-grid-point",
+            what="D-220: a shared position's area found from its grid point",
+            edits=[
+                (
+                    PROFILES_REPO120,
+                    "    here = exact_point(lat, lng)\n",
+                    "    here = point(lat, lng)\n",
+                )
+            ],
+            expect=[
+                "test_the_area_is_found_from_the_exact_position_not_its_grid_point[True]",
+                "test_the_area_is_found_from_the_exact_position_not_its_grid_point[False]",
+            ],
+        ),
+        GRID_TESTS120,
+    ),
+    (
+        Case(
+            id="p120-04-a-picked-centroid-stored-exactly",
+            what="D-490: a picked area stored at its exact centroid",
+            edits=[
+                (
+                    PROFILES_REPO120,
+                    "    return on_grid(select(Area.centroid).where(Area.id == area_id).scalar_subquery())\n",
+                    "    return select(Area.centroid).where(Area.id == area_id).scalar_subquery()\n",
+                )
+            ],
+            expect=["test_a_picked_area_is_stored_at_its_centroids_grid_point"],
+        ),
+        LOCATION_TESTS120,
+    ),
+    (
+        Case(
+            id="p120-05-the-migration-moving-nothing",
+            what="D-490: the positions stored before the grid left exact",
+            edits=[
+                (
+                    SNAP120,
+                    '            "WHERE location IS NOT NULL "\n',
+                    '            "WHERE false "\n',
+                )
+            ],
+            expect=["test_the_migration_moves_the_positions_already_stored"],
+        ),
+        GRID_TESTS120,
+    ),
+    (
+        Case(
+            # p120-01's red is the CHECK refusing the write; with the CHECK gone
+            # too, the tests' own assertions must still see the exact point.
+            id="p120-07-stored-exactly-with-no-check",
+            what="D-490: the exact point stored, and the database letting it",
+            edits=[
+                (
+                    PROFILES_REPO120,
+                    "    return on_grid(exact_point(lat, lng))\n",
+                    "    return exact_point(lat, lng)\n",
+                ),
+                (
+                    CHECK120,
+                    '    op.create_check_constraint(op.f(NAME), "profiles", ON_GRID)\n',
+                    "    pass\n",
+                ),
+                (
+                    CHECK120,
+                    '    op.drop_constraint(op.f(NAME), "profiles", type_="check")\n',
+                    "    pass\n",
+                ),
+                (
+                    PROFILES_MODELS120,
+                    '        CheckConstraint(LOCATION_ON_GRID, name="location_on_grid"),\n',
+                    "",
+                ),
+            ],
+            expect=[
+                "test_every_position_inside_one_cell_is_stored_as_the_same_point",
+                "test_a_position_is_stored_with_its_nearest_area_and_answers_me",
+            ],
+        ),
+        LOCATION_TESTS120,
+    ),
+    (
+        Case(
+            id="p120-06-the-seed-storing-exactly",
+            what="D-490: the seed writing its scatter's exact point",
+            edits=[
+                (
+                    SEED,
+                    "            location = profiles_repository.on_grid(\n",
+                    "            location = (\n",
+                )
+            ],
+            expect=[
+                "test_each_profile_sits_on_its_scatters_grid_point_inside_its_area"
+            ],
+        ),
+        ["tests/seed/test_seed.py"],
+    ),
+]
+
 CASES: list[tuple[Case, list[str]]] = (
     [(c, T51_SELECTION) for c in T51]
     + [(c, T54_SELECTION) for c in T54]
@@ -3667,6 +3817,7 @@ CASES: list[tuple[Case, list[str]]] = (
     + [(c, T411_SELECTION) for c in T411]
     + T412
     + [(c, T81_SELECTION) for c in T81]
+    + P120
 )
 
 # The fifty-connection fixture's own message when Postgres refuses a connection.

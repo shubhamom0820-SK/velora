@@ -225,6 +225,14 @@ INDIA_LNG = (68.0, 97.5)
 # none: someone in Jalandhar is in none of Phagwara's areas (D-220).
 AREA_WITHIN_M = 2000
 
+# Every stored position is on this grid, in degrees: about 1.1 km north to south
+# and 1.0 km east to west at Phagwara (D-490, P-120). A distance, and whether
+# someone is inside discovery's radius at all, is measured between grid points,
+# so moving yourself about inside one cell tells you nothing, and nothing ever
+# tells anyone more than which cell a person is in. The exact point is never
+# stored; `ck_profiles_location_on_grid` refuses one.
+GRID_DEG = 0.01
+
 # How long a location counts as current. The web refreshes an older one when
 # the app opens, if the browser already allows it (T-4.10).
 LOCATION_FRESH_FOR = timedelta(hours=6)

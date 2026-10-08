@@ -113,7 +113,8 @@ async def areas(session: AsyncSession, city: str | None) -> list[Area]:
 async def set_position(session: AsyncSession, user: User, lat: float, lng: float) -> Me:
     """A position the browser shared, inside India's box, with the nearest
     area within `AREA_WITHIN_M` of it, or none, replacing any area picked
-    before (D-220)."""
+    before (D-220). The area is found from the exact position; what is stored
+    is its grid point, never the position itself (D-490)."""
     async with session.begin():
         user = await users_service.locked_user(session, user.id)
         users_service.at_step(user, LOCATION_FROM)
@@ -129,7 +130,8 @@ async def set_position(session: AsyncSession, user: User, lat: float, lng: float
 
 
 async def set_area(session: AsyncSession, user: User, area_id: UUID) -> Me:
-    """An area picked instead: its centroid becomes the location (D-034)."""
+    """An area picked instead: its centroid becomes the location (D-034), on
+    the grid like any other (D-490)."""
     async with session.begin():
         user = await users_service.locked_user(session, user.id)
         users_service.at_step(user, LOCATION_FROM)

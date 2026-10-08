@@ -3695,6 +3695,38 @@ first day over. The counter is the only thing that can say the threshold is near
 
 **Rejected:** counting from the ledger (bonus Velas aren't turnover); the year in UTC (a sale at
 11 pm IST on 31 March would land in the wrong year); a moderator's read.
+### D-490 · Positions are stored on a 1 km grid, never exactly — Locked
+**Decision.** `profiles.location` holds only points of a 0.01° grid (`profiles.rules.GRID_DEG`):
+cells about 1.1 km north to south and 1.0 km east to west at Phagwara, a little wider in the
+south. A shared position is snapped as it is written, a picked area's centroid too; the exact
+point is never stored. `ck_profiles_location_on_grid` refuses anything else, so no writer, the
+seed and later tasks included, can store an exact one by forgetting. Discovery's radius, the
+`Card`'s `distance_km` and the ranking all read the stored point, so all three are measured
+between grid points. The area a shared position takes is still found from the exact position,
+before snapping (D-220 unchanged). Built by P-120's commit on T-6.2's branch, 8 October 2026:
+migration `4c71a9e2b058` moved the rows already stored, and `9b4e0d2c7a15` added the CHECK.
+
+**Why: the worst case is a stalker finding where a woman lives (P-120).** `PUT /me/location`
+takes any point in India, so anyone can read her from places of their choosing. Two leaks, and
+the second is the sharper: her whole-kilometre `distance_km` from three places crosses where she
+is; and **whether she is in the feed at all**, the 25 km radius's edge, is a circle exact to the
+metre, with `hide_distance` on or off. On grid points a move inside one cell changes nothing, so
+both leaks end at her cell, about a square kilometre, never her home. The rate limit (D-220's 10
+an hour) only slows the reading, and a second account starts its own hour; the fix had to be the
+distance's.
+
+**What it costs.** Two people in one cell read as 1 km apart (D-034's floor), and the dev seed's
+profiles share a few points instead of sitting apart. The exact positions stored before the
+migration are gone, on purpose: its downgrade can't restore them, and says so.
+
+**Rejected:**
+- **Snapping only in the query, keeping the exact point:** her home would still sit in the
+  database, and the radius filter would need an index of its own on the snapped expression.
+- **Distance bands ("2–5 km"):** D-034 (Locked) shows whole kilometres, and bands leave the
+  radius's edge exact.
+
+The founder's choice, 8 October 2026, of the option Claude recommended in T-6.2's plan (P-120),
+on the advisor's recommendation (Claude, in a separate chat), relayed by the founder.
 
 ---
 

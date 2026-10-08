@@ -52,6 +52,10 @@ machine.
   and Ishita's sketching on the metro, which Phagwara doesn't have.
 - **Rewriting Ishita's, which P-38's entry didn't list, was the advisor's call**
   (Claude, in a separate chat), 5 October 2026.
+
+**On the 1 km grid from 8 October 2026 (D-490, P-120):** each profile is stored
+at its scatter's grid point, so several share one and the 100 m spacing above
+no longer holds; the scatter still decides each one's area.
 """
 
 from __future__ import annotations

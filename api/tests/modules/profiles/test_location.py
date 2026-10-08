@@ -1,7 +1,8 @@
 """`GET /v1/areas` and `PUT /v1/me/location` (T-4.10, D-220): a position inside
 India's box with the nearest area within 2 km, or a picked area at its
 centroid; from the `username` step on, never moving it; and `Me` saying
-whether the location is current, by the server's clock."""
+whether the location is current, by the server's clock. Either is stored as its
+point of D-490's grid, which `test_grid.py` holds."""
 
 from __future__ import annotations
 
@@ -30,6 +31,9 @@ START = datetime(2026, 10, 5, 6, 30, tzinfo=UTC)
 # 650 m from Guru Hargobind Nagar's, the nearest other.
 NEAR_MODEL_TOWN = {"lat": 31.2139, "lng": 75.7680}
 DELHI = {"lat": 28.6139, "lng": 77.2090}
+# Where each is stored: its point of the 0.01° grid (D-490).
+NEAR_MODEL_TOWN_ON_GRID = (31.21, 75.77)
+DELHI_ON_GRID = (28.61, 77.21)
 
 STEPS = list(OnboardingStep)
 BEFORE = STEPS[: STEPS.index(OnboardingStep.USERNAME)]
@@ -162,7 +166,7 @@ async def test_a_position_is_stored_with_its_nearest_area_and_answers_me(
     assert stored["area_id"] == await _area_id(db, "Model Town")
     assert stored["location_updated_at"] == START
     assert (stored["lat"], stored["lng"]) == pytest.approx(
-        (NEAR_MODEL_TOWN["lat"], NEAR_MODEL_TOWN["lng"]), abs=1e-9
+        NEAR_MODEL_TOWN_ON_GRID, abs=1e-9
     )
 
 
@@ -178,9 +182,7 @@ async def test_a_position_far_from_every_area_has_none_replacing_a_picked_one(
     assert response.status_code == 200
     stored = await _stored(db, user_id)
     assert stored["area_id"] is None
-    assert (stored["lat"], stored["lng"]) == pytest.approx(
-        (DELHI["lat"], DELHI["lng"]), abs=1e-9
-    )
+    assert (stored["lat"], stored["lng"]) == pytest.approx(DELHI_ON_GRID, abs=1e-9)
 
 
 @pytest.mark.parametrize(("metres", "within"), [(1990, True), (2010, False)])
@@ -341,9 +343,11 @@ async def test_not_a_number_and_infinity_are_validation_errors(
 # --- A picked area -------------------------------------------------------------------
 
 
-async def test_a_picked_area_is_stored_at_exactly_its_centroid(
+async def test_a_picked_area_is_stored_at_its_centroids_grid_point(
     db: AsyncSession, client: AsyncClient, make_user: MakeUser, clock: ModuleType
 ) -> None:
+    """Law Gate's centroid is 31.2536, 75.6969: its grid point is 31.25, 75.70,
+    about 500 m away (D-490)."""
     clock.freeze(START)
     _, token, user_id = await _at(db, make_user, OnboardingStep.USERNAME)
     law_gate = await _area_id(db, "Law Gate")
@@ -354,7 +358,8 @@ async def test_a_picked_area_is_stored_at_exactly_its_centroid(
     assert response.json()["profile"]["location"] == "fresh"
     stored = await _stored(db, user_id)
     assert (stored["area_id"], stored["location_updated_at"]) == (law_gate, START)
-    assert await _metres_from_centroid(db, user_id, law_gate) == 0
+    assert (stored["lat"], stored["lng"]) == pytest.approx((31.25, 75.70), abs=1e-9)
+    assert 0 < await _metres_from_centroid(db, user_id, law_gate) < 800
 
 
 async def test_an_area_that_doesnt_exist_is_refused_and_nothing_stored(

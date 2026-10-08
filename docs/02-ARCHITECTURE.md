@@ -399,7 +399,7 @@ secret is left empty. Real secret values are never committed.
 | Reports | 10 / day / user |
 | Username check | 30 / min / user |
 | `POST /payments/orders` | 20 / hour / user (T-8.1): each asks the gateway for an order; every retry a real checkout needs fits |
-| `PUT /me/location` | 10 / hour / user (T-4.10). Onboarding's tries and a refresh each time the app opens fit easily; it slows someone moving themselves about to measure distances, and can't stop them (P-120) |
+| `PUT /me/location` | 10 / hour / user (T-4.10). Onboarding's tries and a refresh each time the app opens fit easily; it slows someone moving themselves about to measure distances, and can't stop them; the grid (D-490) is what makes their readings tell nothing finer than a 1 km cell |
 | Waitlist | 5 / min / IP, invalid tries included (D-056) |
 | `GET /prices` | None (T-5.2): public and read-only, one read of a table of about ten rows, as `/readyz` with none; a per-IP limit would mostly catch men behind one carrier's shared address. Flooding is the edge's to stop |
 | Everything else | 300 / min / user, in `current_user`, so every authenticated route has it (T-3.5) |

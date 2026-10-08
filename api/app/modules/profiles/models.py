@@ -32,6 +32,13 @@ from sqlalchemy.orm import Mapped, mapped_column
 from app.core.db import Base, CreatedAt, Timestamps, pg_enum, uuid_pk
 from app.core.enums import Seeking
 
+# D-490: a stored position is a point of the 0.01° grid, `rules.GRID_DEG`, which
+# snapping it again leaves where it is. Migration 9b4e0d2c7a15 adds it; a test
+# holds the two numbers together.
+LOCATION_ON_GRID = (
+    "ST_Equals(location::geometry, ST_SnapToGrid(location::geometry, 0.01))"
+)
+
 
 def _point() -> Geography:
     # spatial_index=False: the GIST index is declared explicitly below, so it
@@ -91,6 +98,8 @@ class Profile(Timestamps, Base):
         CheckConstraint("char_length(hometown) <= 40", name="hometown_length"),
         CheckConstraint("char_length(city) <= 40", name="city_length"),
         CheckConstraint("completeness BETWEEN 0 AND 100", name="completeness_range"),
+        # D-490 (P-120): only grid points are stored, never an exact position.
+        CheckConstraint(LOCATION_ON_GRID, name="location_on_grid"),
         Index("ix_profiles_location", "location", postgresql_using="gist"),
         Index(
             "ix_profiles_username_trgm",

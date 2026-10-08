@@ -4886,7 +4886,7 @@ The number comes from the session's own block, given in its brief, from P-100 up
   T-5.3's report said 22, a line count that took in the schema's own definition), while the API
   answers `400 VALIDATION_ERROR` in our envelope. One gap across the whole API, so its own task.
   Filed from T-5.3's block, as the founder asked, 5 October 2026.
-- [ ] P-120 · Keep a distance from giving away where someone is. **Before T-6.2's `distance_km`
+- [x] P-120 · Keep a distance from giving away where someone is. **Before T-6.2's `distance_km`
   reaches anyone** (on T-6.2's Needs line). Worst case: a stalker finds where a woman lives. A
   `Card`'s `distance_km` is whole kilometres, never under 1 (D-034), and anyone can put themselves
   anywhere in India at will with `PUT /me/location` (T-4.10). Read her distance from three places
@@ -4897,6 +4897,12 @@ The number comes from the session's own block, given in its brief, from P-100 up
   decision, for example measuring between positions the server has snapped to a grid about a
   kilometre wide, so a move finer than the grid tells nothing. Found building T-4.10; filed from
   its session block (P-120 to P-129).
+  **Done, 8 October 2026, on T-6.2's branch (D-490):** the founder chose the 0.01° grid at write,
+  the exact point never stored, from T-6.2's plan. Building it found the sharper leak: the radius
+  filter's edge, exact to the metre whatever `hide_distance` says; on grid points both end at a
+  cell. `ck_profiles_location_on_grid` refuses an exact point, `4c71a9e2b058` moved the stored
+  rows (its downgrade can't restore them, and says so), and `tests/modules/profiles/test_grid.py`
+  holds it.
 - [ ] P-121 · Correct 03-SCHEMA §9's seed list, which still says `areas` is "40 neighbourhoods for
   the launch city". **Whenever 03-SCHEMA is next opened.** Worst case: someone sizes a picker or a
   test on 40 when there are 17. P-38 replaced Bengaluru's 40 with Phagwara's 17, and §2 says so;

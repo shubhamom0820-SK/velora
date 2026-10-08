@@ -36,7 +36,7 @@ named `<T>Page` (`LedgerEntryPage`). `limit` is 1 to 50, 20 when absent; outside
 | PUT | /me/interests | 🔐 | `{interest_ids[5]}` → `Me` | T-3.8 |
 | POST | /me/pin/skip | 🔐 | → `Me`, moving `pin` → `selfie` (D-069) | T-3.9 |
 | POST | /me/onboarding/complete | 🔐 | → `Me`, moving `selfie` → `done` (D-310). Every requirement met, or `PROFILE_INCOMPLETE` naming each one missing; a matched selfie for anyone but a man, or `VERIFICATION_REQUIRED`. Before `selfie`, `ONBOARDING_INCOMPLETE`; once `done`, `Me` unchanged. Sets `completeness` | T-4.8 |
-| PUT | /me/location | 🔐 | `{lat, lng}`, inside India's box, or `{area_id}`, stored at its centroid → `Me` (D-220). A position takes the nearest area within 2 km, or none. From the `username` step on, never moving it; before, `ONBOARDING_INCOMPLETE`. Outside the box, or an area that isn't one: `VALIDATION_ERROR`. 10 an hour per user | T-4.10 |
+| PUT | /me/location | 🔐 | `{lat, lng}`, inside India's box, or `{area_id}`, stored at its centroid → `Me` (D-220). Either is stored as its point of the 0.01° grid, never exactly (D-490). A position takes the nearest area within 2 km of the exact position, or none. From the `username` step on, never moving it; before, `ONBOARDING_INCOMPLETE`. Outside the box, or an area that isn't one: `VALIDATION_ERROR`. 10 an hour per user | T-4.10 |
 | PATCH | /me/settings | ✅ | `{is_hidden?, hide_age?, hide_distance?, show_kudos?}` → `Me` | T-9.6 |
 | POST | /me/pause | ✅ | → 204 | T-9.6 |
 | POST | /me/export | ✅ | → 202 (emailed/downloadable later) | T-9.6 |

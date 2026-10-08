@@ -652,28 +652,51 @@ async def test_the_scatter_stays_under_half_the_closest_gap(db: AsyncSession) ->
     )
 
 
-async def test_each_profile_sits_at_its_scatter_inside_its_area(
+# Where `scatter` put each seeded profile's shared position, exactly: the point
+# its area is found from (D-220), before the grid (D-490).
+_SHARED = (
+    "ST_Project(a.centroid, CAST(:metres AS float8), radians(CAST(:bearing AS float8)))"
+)
+
+
+async def test_each_profile_sits_on_its_scatters_grid_point_inside_its_area(
     db: AsyncSession, seeded: run.SeedReport
 ) -> None:
-    """Exactly where `scatter` says, and nearer its own area's centroid than
-    any other area's: inside the area, as far as centroids can say."""
+    """Stored at the grid point of where `scatter` says (D-490), and that
+    shared position nearer its own area's centroid than any other area's:
+    inside the area, as far as centroids can say."""
     rows = (
         await db.execute(
             text(
-                "SELECT pr.username, ST_Distance(a.centroid, pr.location), "
-                "degrees(ST_Azimuth(a.centroid, pr.location)), "
-                "(SELECT o.id FROM areas o WHERE o.city = a.city "
-                " ORDER BY o.centroid <-> pr.location LIMIT 1) = a.id "
-                "FROM profiles pr JOIN areas a ON a.id = pr.area_id"
+                "SELECT pr.username, pr.area_id FROM profiles pr "
+                "WHERE pr.area_id IS NOT NULL"
             )
         )
     ).all()
     assert len(rows) == 22  # everyone but the moderator
-    for username, metres, bearing, nearest_is_own in rows:
-        expected_metres, expected_bearing = scatter(username)
-        assert metres == pytest.approx(expected_metres, abs=0.001), username
-        assert bearing == pytest.approx(expected_bearing, abs=1e-6), username
+    for username, area_id in rows:
+        metres, bearing = scatter(username)
+        on_grid, nearest_is_own = (
+            await db.execute(
+                text(
+                    f"SELECT ST_Equals(pr.location::geometry, ST_SnapToGrid("
+                    f"{_SHARED}::geometry, CAST(:grid AS float8))), "
+                    f"(SELECT o.id FROM areas o WHERE o.city = a.city "
+                    f" ORDER BY o.centroid <-> {_SHARED} LIMIT 1) = a.id "
+                    f"FROM profiles pr JOIN areas a ON a.id = pr.area_id "
+                    f"WHERE pr.username = :username"
+                ),
+                {
+                    "metres": metres,
+                    "bearing": bearing,
+                    "grid": rules.GRID_DEG,
+                    "username": username,
+                },
+            )
+        ).one()
+        assert on_grid, username
         assert nearest_is_own, username
+        assert area_id is not None
 
 
 async def test_each_profile_has_the_area_its_position_would_get_if_shared(
@@ -686,14 +709,23 @@ async def test_each_profile_has_the_area_its_position_would_get_if_shared(
     rows = (
         await db.execute(
             text(
-                "SELECT username, area_id, ST_Y(location::geometry), "
-                "ST_X(location::geometry), location_updated_at FROM profiles "
+                "SELECT username, area_id, location_updated_at FROM profiles "
                 "WHERE location IS NOT NULL"
             )
         )
     ).all()
     assert len(rows) == 22  # everyone but the moderator
-    for username, area_id, lat, lng, updated_at in rows:
+    for username, area_id, updated_at in rows:
+        metres, bearing = scatter(username)
+        lat, lng = (
+            await db.execute(
+                text(
+                    f"SELECT ST_Y(p::geometry), ST_X(p::geometry) FROM ("
+                    f"SELECT {_SHARED} AS p FROM areas a WHERE a.id = :area) AS t"
+                ),
+                {"metres": metres, "bearing": bearing, "area": area_id},
+            )
+        ).one()
         assert rules.position_problems(lat, lng) == {}, username
         shared = await profiles_repository.nearest_area_id(
             db, lat, lng, within_m=rules.AREA_WITHIN_M
@@ -701,17 +733,27 @@ async def test_each_profile_has_the_area_its_position_would_get_if_shared(
         assert (shared, updated_at is not None) == (area_id, True), username
 
 
-async def test_nobody_shares_a_spot(db: AsyncSession, seeded: run.SeedReport) -> None:
-    """The point of the scatter: no two profiles 0 m apart, so distance sorting
-    has a spread to show."""
-    closest = await db.scalar(
-        text(
-            "SELECT min(ST_Distance(a.location, b.location)) FROM profiles a "
-            "JOIN profiles b ON a.user_id < b.user_id "
-            "WHERE a.location IS NOT NULL AND b.location IS NOT NULL"
+async def test_the_grid_puts_some_on_one_point_and_spreads_the_rest(
+    db: AsyncSession, seeded: run.SeedReport
+) -> None:
+    """On the grid (D-490) several profiles share a point, so the 1 km floor
+    shows (D-034), and the rest spread over several kilometres, so distance
+    sorting has a range to show."""
+    points, shared, farthest = (
+        await db.execute(
+            text(
+                "SELECT count(DISTINCT ST_AsText(location)), "
+                "count(*) - count(DISTINCT ST_AsText(location)), "
+                "(SELECT max(ST_Distance(a.location, b.location)) FROM profiles a "
+                " JOIN profiles b ON a.user_id < b.user_id "
+                " WHERE a.location IS NOT NULL AND b.location IS NOT NULL) "
+                "FROM profiles WHERE location IS NOT NULL"
+            )
         )
-    )
-    assert closest is not None and closest > 100
+    ).one()
+    assert points >= 5
+    assert shared >= 1
+    assert farthest > 3000
 
 
 async def test_the_swipes_are_written_and_make_no_match(

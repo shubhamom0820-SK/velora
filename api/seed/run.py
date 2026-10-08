@@ -68,6 +68,7 @@ from app.modules.onboarding import repository as onboarding_repository
 from app.modules.onboarding import rules as onboarding_rules
 from app.modules.onboarding import service as onboarding_service
 from app.modules.photos.models import Photo
+from app.modules.profiles import repository as profiles_repository
 from app.modules.profiles import rules
 from app.modules.profiles.models import (
     Area,
@@ -320,12 +321,14 @@ def _person_problems(person: Person, today: date) -> list[str]:
 
 
 def scatter(username: str) -> tuple[float, float]:
-    """Where a profile sits from its area's centroid: (metres, bearing in degrees).
+    """Where a profile's shared position was, from its area's centroid:
+    (metres, bearing in degrees).
 
-    On the centroid itself, everyone in one area would be 0 m apart, so
-    discovery's distance sort would be all ties and `hide_distance` would have
-    nothing to hide. Derived from the username, so every run puts everyone in
-    the same place, and spread evenly over a disc of `SCATTER_RADIUS_M`.
+    The position its area is found from, as `PUT /me/location` finds one
+    (D-220); what is stored is its grid point (D-490), as the API stores it, so
+    several profiles share one and read as 1 km apart. Derived from the
+    username, so every run puts everyone in the same place, and spread evenly
+    over a disc of `SCATTER_RADIUS_M`.
     """
     digest = hashlib.sha256(username.encode()).digest()
     distance_share = int.from_bytes(digest[:8]) / 2**64
@@ -435,8 +438,10 @@ async def write_seed(
         if area_id is not None and person.username is not None:
             metres, bearing = scatter(person.username)
             centroid = select(Area.centroid).where(Area.id == area_id)
-            location = func.ST_Project(
-                centroid.scalar_subquery(), metres, func.radians(bearing)
+            location = profiles_repository.on_grid(
+                func.ST_Project(
+                    centroid.scalar_subquery(), metres, func.radians(bearing)
+                )
             )
         profile.first_name = person.first_name
         profile.username = person.username
@@ -444,7 +449,8 @@ async def write_seed(
         profile.hometown = person.hometown
         profile.city = AREA_CITY if area_id is not None else None
         # Both, as `PUT /me/location` leaves a shared position: the nearest
-        # area within 2 km of it, which the scatter keeps its own (D-220).
+        # area within 2 km of it, which the scatter keeps its own (D-220), and
+        # the position's grid point (D-490).
         profile.area_id = area_id
         profile.location = location
         profile.location_updated_at = None if location is None else now
