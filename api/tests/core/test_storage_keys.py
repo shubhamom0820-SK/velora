@@ -50,6 +50,7 @@ def test_anything_but_a_uuid_is_refused(smuggled: Any) -> None:
         lambda: scored_key(A, smuggled),
         lambda: voice_key(smuggled, B, "audio/webm"),
         lambda: voice_upload_key(A, smuggled, "audio/webm"),
+        lambda: album_key(smuggled, B),
         lambda: album_key(A, smuggled),
         lambda: export_key(smuggled, B),
         lambda: export_key(A, smuggled),

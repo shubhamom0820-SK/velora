@@ -48,6 +48,7 @@ from app.core.queue import (
     MATCH_PHOTO,
     MODERATE_PHOTO,
     VERIFY_SELFIE,
+    WATERMARK_ALBUM,
     ArqQueue,
 )
 from app.core.redis import build_redis
@@ -107,6 +108,7 @@ def test_it_runs_exactly_the_jobs_the_api_queues() -> None:
         EXPORT_DATA,
         EXPIRE_EXPORT,
         BLUR_PHOTO,
+        WATERMARK_ALBUM,
     }
     assert jobs[MODERATE_PHOTO].max_tries == 3
     assert jobs[BLUR_PHOTO].max_tries == 3
@@ -114,6 +116,7 @@ def test_it_runs_exactly_the_jobs_the_api_queues() -> None:
     assert jobs[MATCH_PHOTO].max_tries == 3
     assert jobs[EXPORT_DATA].max_tries == 3
     assert jobs[EXPIRE_EXPORT].max_tries == 4
+    assert jobs[WATERMARK_ALBUM].max_tries == 3
 
 
 def test_the_erasure_runs_daily_at_0330_ist() -> None:

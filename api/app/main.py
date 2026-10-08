@@ -25,6 +25,7 @@ from app.core.redis import build_redis
 from app.modules.account.router import router as account_router
 from app.modules.admin.router import router as admin_router
 from app.modules.admin.service import ConfigCache
+from app.modules.album.router import router as album_router
 from app.modules.auth.router import firebase_router, otp_router
 from app.modules.auth.router import router as auth_router
 from app.modules.discovery.router import router as discovery_router
@@ -179,6 +180,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.include_router(kudos_router, prefix="/v1")
     app.include_router(media_router, prefix="/v1")
     app.include_router(gifts_router, prefix="/v1")
+    app.include_router(album_router, prefix="/v1")
     app.include_router(realtime_router, prefix="/v1")
     # The socket, at the root (02-ARCHITECTURE §6): `wss://api…/ws`.
     app.include_router(realtime_gateway)

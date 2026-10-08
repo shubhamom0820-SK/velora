@@ -105,9 +105,15 @@ async def delete_photo(
     session: Annotated[AsyncSession, Depends(get_session)],
     providers: Annotated[Providers, Depends(get_providers)],
     settings: Annotated[Settings, Depends(app_settings)],
+    queue: Annotated[Queue, Depends(get_queue)],
 ) -> Response:
     await service.delete_photo(
-        session, user, photo_id, storage=providers.storage, settings=settings
+        session,
+        user,
+        photo_id,
+        storage=providers.storage,
+        settings=settings,
+        queue=queue,
     )
     return Response(status_code=204)
 

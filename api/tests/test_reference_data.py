@@ -35,7 +35,7 @@ COUNTS = {
     "action_prices": 9,
     "credit_packs": 8,
     "gifts": 6,
-    "app_config": 16,
+    "app_config": 17,
     "interests": 24,
     "areas": 17,
 }
@@ -220,6 +220,8 @@ async def test_app_config_seeds(db: AsyncSession) -> None:
         # Paused, 0, since P-740 (D-840): no code is applied, nothing paid.
         "referral_reward_velas": 0,
         "referral_rewards_max": 10,
+        # T-8.4, D-731: after she declines or revokes, his days before asking again.
+        "album_reask_days": 30,
     }
 
 

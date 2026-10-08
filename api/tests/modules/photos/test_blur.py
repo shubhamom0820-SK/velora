@@ -197,7 +197,12 @@ async def test_removing_a_photo_removes_its_blur(
         await db.commit()
 
     await service.delete_photo(
-        db, user, photo.id, storage=storage, settings=make_test_settings()
+        db,
+        user,
+        photo.id,
+        storage=storage,
+        settings=make_test_settings(),
+        queue=FakeQueue(),
     )
 
     assert (PUBLIC, blur_key) not in storage.objects

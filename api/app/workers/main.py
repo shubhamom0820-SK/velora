@@ -65,6 +65,7 @@ from app.core.queue import (
     MATCH_PHOTO,
     MODERATE_PHOTO,
     VERIFY_SELFIE,
+    WATERMARK_ALBUM,
     ArqQueue,
 )
 from app.workers.minutely import Minutely
@@ -78,6 +79,7 @@ from app.workers.tasks.expire_export import EXPIRE_TRIES, expire_export
 from app.workers.tasks.export_data import EXPORT_TRIES, export_data
 from app.workers.tasks.match_photo import MATCH_TRIES, match_photo
 from app.workers.tasks.moderate_photo import MODERATE_TRIES, moderate_photo
+from app.workers.tasks.watermark_album import WATERMARK_TRIES, watermark_album
 from app.workers.wake import WakeListener, connect_to
 
 log = structlog.get_logger(__name__)
@@ -97,6 +99,8 @@ JOBS: Final[Sequence[Function]] = (
     # T-9.6, D-502: a user's own data, and its file deleted 24 hours on.
     func(export_data, name=EXPORT_DATA, max_tries=EXPORT_TRIES),
     func(expire_export, name=EXPIRE_EXPORT, max_tries=EXPIRE_TRIES),
+    # T-8.4, D-730: a granted album request's watermarked copies, made or deleted.
+    func(watermark_album, name=WATERMARK_ALBUM, max_tries=WATERMARK_TRIES),
 )
 # T-9.6, D-500: erasing deleted accounts, at 22:00 UTC, which is 03:30 IST.
 # One run at a time across workers (`unique`), and a timeout of its own: it goes

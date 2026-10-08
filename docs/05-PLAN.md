@@ -3229,13 +3229,25 @@ prices don't depend on the web photos step, and the hold is lifted.
 - [x] **Commit:** `feat(payments): refund requests [T-8.3]`
 
 ### T-8.4 · Private album
-- [ ] **Needs:** T-4.4, T-5.1; **P-79**: an approved private photo can't be swapped for an unmoderated one through its upload URL; and **P-301**: a private photo's served copy is the bytes moderation scored
-- [ ] Requests (debit 1 for men, D-231: viewing private pictures; `credits_charged` stored), incoming list for owner, decide (grant → enqueue `watermark_album`; decline → nothing is returned, D-230), revoke (delete watermarked copies, status `revoked`).
-- [ ] **A decline returns nothing** (D-230, superseding D-050's refund on a decline). `refund_album_declined` stays unused, never repurposed.
-- [ ] `watermark_album`: for each private photo render a copy with the viewer's `@username` tiled diagonally at ~20% opacity, **from its `scored_key`, never `raw_key`** (D-700); a photo with none is left out.
-- [ ] `GET /users/{id}/album` → signed URLs of the viewer's copies only.
-- [ ] **The price shown (P-56, D-600):** the album request takes `shown_price` and passes it to `charge(..., shown=)`. Test `PRICE_CHANGED` with nothing charged or written, and its web sends the price it displayed, from `/prices`.
-- [ ] **Commit:** `feat(album): requests, grants, watermarking [T-8.4]`
+- [x] **Needs:** T-4.4, T-5.1; **P-79**: an approved private photo can't be swapped for an unmoderated one through its upload URL; and **P-301**: a private photo's served copy is the bytes moderation scored
+- [x] Requests (debit 1 for men, D-231: viewing private pictures; `credits_charged` stored), incoming list for owner, decide (grant → enqueue `watermark_album`; decline → nothing is returned, D-230), revoke (delete watermarked copies, status `revoked`).
+- [x] **A decline returns nothing** (D-230, superseding D-050's refund on a decline). `refund_album_declined` stays unused, never repurposed.
+- [x] `watermark_album`: for each private photo render a copy with the viewer's `@username` tiled diagonally at ~20% opacity, **from its `scored_key`, never `raw_key`** (D-700); a photo with none is left out.
+- [x] `GET /users/{id}/album` → signed URLs of the viewer's copies only.
+- [x] **The price shown (P-56, D-600):** the album request takes `shown_price` and passes it to `charge(..., shown=)`. Test `PRICE_CHANGED` with nothing charged or written, and its web sends the price it displayed, from `/prices`.
+- [x] **Built 9 October 2026 (D-730, D-731, D-732, the founder's answers on the advisor's
+  recommendation):** `album_copies` rows (`57ab54709630`, its downgrade refusing while one exists),
+  keys `album/{request_id}/{photo_id}.jpg`, on the erasure's and D-078's file lists; 30 days before
+  asking her again after a decline or revoke (`album_reask_days`, `652c4bad186e`); `{status,
+  photos}` for the album, her list paged, no charge for an album with no scored photo, and
+  `album_photo_count` counting only those; a removed private photo's copies deleted. Tested in
+  `tests/modules/album/` (the price, the cooldown on day 30 and day 31, five-way refusals with
+  nothing written, the race forced on two connections, copies from the scored bytes and never the
+  upload, a revoke racing the render), `test_images_watermark.py` and `test_watermark_album.py`.
+  Broken once each (`uv run python -m tests.break_guards t84-`, log in
+  `out/t84-break-guards.log`): 20 of 20 red, and t412-22, re-anchored to the generalised file
+  read, still red; no file differing by SHA-256 after.
+- [x] **Commit:** `feat(album): requests, grants, watermarking [T-8.4]`
 
 ### T-8.5 · Kudos
 - [x] **Needs:** T-7.3
@@ -3357,6 +3369,10 @@ prices don't depend on the web photos step, and the hold is lifted.
   "invite friends" or share card, nor any copy offering a referral. `POST /referrals/apply`
   refuses every code (`NOT_ALLOWED`, `referrals_paused`). The two referral items above wait for
   the decision that turns referrals back on, and that one needs P-591 done first.
+- [ ] **The album request sends `shown_price`,** the `album_request` price it displayed from
+  `/prices` (P-56, D-600): T-8.4's API refuses anything else with `PRICE_CHANGED`, a man's absent
+  field included. Its states are `GET /users/{id}/album`'s `status` (D-732); a refusal's
+  `details.why` (`recently_declined`, `empty_album`) is shown in words, never as a code.
 - [ ] **Commit:** `feat(web): album, kudos, referrals [T-8.8]`
 
 ### T-8.11 · Welcome Velas
@@ -3465,6 +3481,9 @@ number** per account gets its 5 each, one Thread's worth, and is **accepted**, k
 - [ ] **P-550: gifts.** T-8.9 writes a `gift` notification (`{gift_send_id, gift_id, user_id}`)
   for every gift received, and no setting names gifts: decide which one governs its push, and add
   `gift` to the kinds above.
+- [ ] **P-631: album requests.** T-8.4 tells her nothing when someone asks to see her album (D-732):
+  add an `album.requested` event and an `album_request` notification, and the setting that
+  governs its push.
 - [ ] Web: Serwist service worker (push + notificationclick → open the right route), permission asked **after the first match**, not on load; generic-text option; iOS note when not installed.
 - [ ] Update `/privacy` (T-2.2) to say what push notifications carry and who delivers them.
 - [ ] **Commit:** `feat(notifications): web push and in-app list [T-9.4]`
@@ -6271,3 +6290,11 @@ The number comes from the session's own block, given in its brief, from P-100 up
   through the screens in steps of its own, shortened from J1's helpers in `signup.spec.ts`, which
   aren't exported, and moving them would have reshaped T-3.13's file mid-task. Fix: move them to
   `e2e/onboarding.ts`, used by both. Filed by Claude building T-8.7, 9 October 2026.
+- [ ] P-631 · Tell her when someone asks to see her album. **In T-9.4.** Worst case: a man pays a
+  Vela for a request that sits unseen in her incoming list until she happens to open it, so the
+  request reads to him as ignored and to her as nothing at all; T-8.4 writes no event and no
+  notification for a new request (D-732), only `album.decided` back to him. Add an
+  `album.requested` event and an `album_request` notification at the request's commit, a setting
+  in `notification_prefs` that governs its push (as P-550 asks for gifts), and nothing to a paused
+  woman. Filed by Claude building T-8.4, 9 October 2026, at the founder's direction; its session's
+  block, P-630 to P-639.

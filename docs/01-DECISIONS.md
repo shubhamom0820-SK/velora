@@ -5112,6 +5112,74 @@ T-7.6's plan, Q3):**
 - **The warning and the expiry go to whoever of the two sees the expiry** (D-554's allowlist): a
   man. In a Thread between two men both are told, and neither's message restarts the hour, so it
   runs out every hour; whether it should is P-540's, not decided here.
+### D-730 · The album's watermarked copies are rows: `album_copies`, a key per request — Locked
+**The decision (T-8.4; the founder, 9 October 2026, on the advisor's recommendation, Claude in a
+separate chat, relayed by the founder):** each private photo watermarked for one granted album
+request's viewer is a row of `album_copies` (`request_id`, `photo_id`, `owner_id`, `viewer_id`,
+`file_key`), its file at `album/{request_id}/{photo_id}.jpg` in the private bucket. A row is written
+only once its file is, under the request's lock and only while the request is still granted; it
+is deleted only once its file is gone, read back. One job, `watermark_album`, brings a request's
+copies in line with it: while granted, a copy of each private photo with a scored copy, rendered
+from `scored_key`, never `raw_key` (D-700), with the viewer's `@username` tiled diagonally at about
+20% opacity; otherwise, and for a photo no longer shown, none. It is queued with a job id per
+reason (the grant, the revoke, a photo come or gone), since ARQ refuses an id it finished within
+the hour and a revoke's deletion must never be dropped.
+
+**Why rows:** a revoke, the erasure (D-503) and an under-18 refusal (D-078) must each find every
+copy, and their tests hold the file lists to every `*_key` column, so a column puts the copies on
+both lists or fails, as D-700 reasoned for `scored_key`. Both people are on the row, so either
+one's erasure finds it; the two lists' file reads now name a table's rows by every column the list
+gives it, not only `user_id`.
+
+**Why a key per request, not per viewer:** T-4.1's `album_key` was `album/{photo_id}/{viewer_id}`.
+A man who asks again after a revoke would get the same keys, and the first request's late
+deletion could remove the second request's copies.
+
+**Rejected:** keys worked out in code with no row (the lists' tests can't see them, D-700's
+reason); a copy rendered on each view (a decode and encode per look, and nothing to delete); the
+owner's removed photo left to the album's filter alone (its copies would stay in storage):
+`delete_photo` queues their deletion.
+
+### D-731 · Thirty days before asking for the same album again — Locked (value tunable)
+**The decision (T-8.4; the founder, 9 October 2026, on the advisor's recommendation, relayed by
+the founder):** after she declines or revokes a man's album request, he can't ask her again for
+`album_reask_days` days (`app_config`, 30, read fresh at each request): `NOT_ALLOWED`, `details.why`
+`recently_declined`, nothing charged, checked under the requester's lock before any charge. From
+the 30th day after (day 31) he may ask, and pays as for any request. Another man is unaffected.
+**`decided_at` is her last answer to the request,** the revoke's time for a revoked one: the
+cooldown runs from it. The grant's time on a revoked request is not kept.
+
+**Why:** the schema frees the pair on a decline (the live-pair index), so without a wait a man
+could ask again at once, each time 1 Vela, and each time in her list: a "no" answered by asking
+again is the pressure the product exists to keep off her.
+
+**Rejected:** refusing forever after a decline (a revoke may be a mood, and the setting can be
+raised); filing it for later (the founder's call: build it here).
+
+### D-732 · The album's shapes: a status with the photos, a paged list, no charge for nothing — Locked
+**The decision (T-8.4; the founder, 9 October 2026, on the advisor's recommendation, relayed by
+the founder):**
+- **`GET /users/{id}/album` is `{status, photos}`:** `status` is the viewer's latest request to her
+  (`pending`, `granted`, `declined`, `revoked`, or null if he never asked), and `photos` his own
+  copies, each signed for 10 minutes, empty unless granted. T-8.8's album row shows locked, pending
+  and granted, and nothing else tells him "pending". 04-API said `{photos}` only.
+- **`GET /album-requests/incoming` is paged** (`AlbumRequestPage`, D-270): her pending and granted
+  requests, newest first, none from across a block. 04-API said `AlbumRequest[]`.
+- **No charge for an empty album:** a request to someone with no approved private photo with a
+  scored copy is `NOT_ALLOWED` (`empty_album`), before any charge; and `album_photo_count` on the
+  public profile counts only those photos, so the number a man pays to see is the number he sees.
+  A private photo approved before D-700 has none: never shown nor counted (beta: it stays out
+  until its owner uploads it again).
+- **An `AlbumRequest` never says what he paid**, as a received gift doesn't (D-652): his wallet's
+  history has it. It carries the requester as a `CardLite`.
+- **Only she answers or revokes;** anyone else is `NOT_FOUND`, the answer for an id nobody holds.
+  The same answer again changes nothing; the other, once answered, `NOT_ALLOWED`
+  (`already_decided`); a revoke of anything but a grant, `not_granted`.
+- **Who may ask:** whoever could send her a private message (D-550's reach, both wanting the
+  other's gender); **who may look:** whoever can still open her profile (D-493), so a block either
+  way closes it at once.
+- **No notification of a new request yet:** her incoming list is where it shows. P-631 asks T-9.4
+  for an `album.requested` event and notification.
 
 ### D-840 · Referrals paused: the reward at 0, and no code applied while it is — Locked
 **The decision (P-740):** referrals are paused. Nobody is given a referral reward, and nobody can

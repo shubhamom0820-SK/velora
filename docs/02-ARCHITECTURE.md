@@ -180,7 +180,7 @@ Envelope, both directions: `{ "type": "…", "id": "<uuid>", "data": { … } }`
 | `knot.requested` / `knot.accepted` / `knot.untied` | knot state changes |
 | `wallet.updated` | balance changed |
 | `match.created` | a like or Super Like met one back (T-6.4): `{match_id, user_id}`, the other person, to both |
-| `album.decided` | album request granted / declined |
+| `album.decided` | album request granted / declined (T-8.4): `{album_request_id, user_id, granted}`, `user_id` the owner, to the requester |
 | `gift.received` | a gift sent to you (T-8.9): `{gift_send_id, gift_id, user_id}`, the sender |
 
 | Client → server | Effect |
@@ -208,7 +208,7 @@ socket of theirs and is never sent to a client (T-7.4).
 | `export_data` | `POST /me/export`, after its commit | a user's own data as JSON to the private bucket, key recorded first; `ready` for 24 hours (D-502). 3 tries, the last marking it `failed` |
 | `expire_export` | `export_data`, 24 h on | delete the export's file, read back as gone; `expired` (D-502) |
 | `erase_accounts` | cron, daily 03:30 IST (the worker's only cron) | erase every account deleted ≥ 29 days ago, files first, by D-503's lists, then anonymise its row (D-500); expire any export file its own job left |
-| `watermark_album` | album access granted | render per-viewer watermarked copies |
+| `watermark_album` | album request granted or revoked; the album missing a photo's copy; a private photo removed | bring one request's copies in line with it (D-730): while granted, each private photo with a scored copy rendered from `scored_key`, never `raw_key` (D-700), with the viewer's `@username` tiled diagonally at ~20% opacity, written to `album/{request_id}/{photo_id}.jpg` and recorded in `album_copies` only if still granted, else the file deleted; otherwise every copy deleted, file read back as gone, then its row. A job id per reason, since ARQ refuses a finished id for an hour. 3 tries |
 | `send_push` | any notification | Web Push, drop dead subscriptions on 404/410 |
 | `expire_threads` | the worker's minute (D-640) | active threads past `expires_at` → `expired`, `thread.expired` to him only, in batches of 500, `SKIP LOCKED` (T-7.6) |
 | `warn_expiring` | the worker's minute (D-640) | threads with `thread_warn_minutes` (10) or less left, warned once per expiry: `thread.expiring` and a notification, him only (T-7.6) |

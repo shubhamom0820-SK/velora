@@ -169,6 +169,7 @@ def test_every_storage_key_on_an_erased_table_is_in_the_file_list() -> None:
             ("photos", "scored_key"),
             ("photos", "blur_key"),
             ("data_exports", "file_key"),
+            ("album_copies", "file_key"),
         }
     )
 
@@ -208,12 +209,21 @@ async def _everywhere(
     )
     # An approved private photo: its upload and its scored copy (P-79, D-700).
     private_raw, scored = f"raw/{me}/c", f"scored/{me}/c.jpg"
-    await db.execute(
+    v["private"] = await db.scalar(
         text(
             "insert into photos (user_id, kind, raw_key, scored_key, status) "
-            "values (:m, 'private', :raw, :scored, 'approved')"
+            "values (:m, 'private', :raw, :scored, 'approved') returning id"
         ),
         {**v, "raw": private_raw, "scored": scored},
+    )
+    # Theirs, which the erasure keeps, watermarked for me below.
+    v["theirs"] = await db.scalar(
+        text(
+            "insert into photos (user_id, kind, raw_key, scored_key, status) "
+            "values (:o, 'private', 'raw/o/d', 'scored/o/d.jpg', 'approved') "
+            "returning id"
+        ),
+        v,
     )
     export = f"exports/{me}/b.json"
     statements = [
@@ -287,7 +297,23 @@ async def _everywhere(
     for statement in both_ways:
         for a, b in ((me, other), (other, me)):
             await db.execute(text(statement), {**v, "a": a, "b": b})
+    # Album copies (T-8.4, D-730): my photo watermarked for them, and theirs
+    # for me. Both are erased, files and rows, whichever side I am on.
+    mine_for_them, theirs_for_me = f"album/{me}/mine.jpg", f"album/{me}/theirs.jpg"
+    copy = (
+        "insert into album_copies (request_id, photo_id, owner_id, viewer_id, "
+        "file_key) select id, :photo, owner_id, requester_id, :key "
+        "from album_requests where owner_id = :owner"
+    )
+    await db.execute(
+        text(copy), {"photo": v["private"], "owner": me, "key": mine_for_them}
+    )
+    await db.execute(
+        text(copy), {"photo": v["theirs"], "owner": other, "key": theirs_for_me}
+    )
     for bucket, key in (
+        (PRIVATE, mine_for_them),
+        (PRIVATE, theirs_for_me),
         (PRIVATE, raw),
         (PUBLIC, public),
         (PRIVATE, private_raw),

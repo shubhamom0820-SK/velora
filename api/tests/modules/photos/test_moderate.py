@@ -573,6 +573,7 @@ async def test_a_photo_its_owner_removed_while_it_was_checked_is_never_published
                 photo.id,
                 storage=storage,
                 settings=make_test_settings(),
+                queue=FakeQueue(),
             )
             return await super().check(image)
 

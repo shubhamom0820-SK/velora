@@ -441,7 +441,9 @@ async def kudos_counts(session: AsyncSession, user_id: UUID) -> dict[KudosKind, 
 
 
 async def album_photo_count(session: AsyncSession, user_id: UUID) -> int:
-    """Their approved private photos: a number, never one of them."""
+    """Their approved private photos the album shows, those with a scored copy
+    (D-700, T-8.4): a number, never one of them. One approved before D-700 has
+    none, so it is neither shown nor counted."""
     count = await session.scalar(
         select(func.count())
         .select_from(Photo)
@@ -449,6 +451,7 @@ async def album_photo_count(session: AsyncSession, user_id: UUID) -> int:
             Photo.user_id == user_id,
             Photo.kind == PhotoKind.PRIVATE,
             Photo.status == ReviewStatus.APPROVED,
+            Photo.scored_key.is_not(None),
         )
     )
     return count or 0

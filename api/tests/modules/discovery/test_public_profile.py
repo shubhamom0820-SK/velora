@@ -194,6 +194,9 @@ async def test_only_approved_public_photos_are_shown_and_nothing_private_named(
     await photo(db, her, kind=PhotoKind.PRIVATE)
     await photo(db, her, kind=PhotoKind.PRIVATE)
     await photo(db, her, kind=PhotoKind.PRIVATE, status=ReviewStatus.PENDING)
+    # Approved before D-700 wrote scored copies: the album never shows it, so
+    # the count, what a man pays to see, doesn't count it (T-8.4).
+    await photo(db, her, kind=PhotoKind.PRIVATE, scored=False)
 
     response = await _get(client, token, her.id)
 

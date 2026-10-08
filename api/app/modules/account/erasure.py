@@ -23,6 +23,7 @@ from dataclasses import dataclass
 from typing import Any, Literal
 
 from app.modules.account.models import DataExport
+from app.modules.album.models import AlbumCopy
 from app.modules.auth.models import Session
 from app.modules.discovery.models import ProfileView
 from app.modules.kudos.models import Kudos
@@ -49,12 +50,16 @@ class Erased:
     columns: tuple[str, ...]
 
 
-# In an order the keys between them allow: verifications before photos.
+# In an order the keys between them allow: verifications and album copies before
+# photos.
 ERASED = (
     Erased(Profile, ("user_id",)),
     Erased(ProfileIntent, ("user_id",)),
     Erased(ProfileInterest, ("user_id",)),
     Erased(Verification, ("user_id",)),
+    # Their private photos watermarked for others, and others' watermarked for
+    # them (T-8.4, D-730): before photos, whose rows they name.
+    Erased(AlbumCopy, ("owner_id", "viewer_id")),
     Erased(Photo, ("user_id",)),
     Erased(DataExport, ("user_id",)),
     # Who they liked, passed, viewed and revealed, and who did so to them:
@@ -128,4 +133,10 @@ FILES: tuple[tuple[type[Any], str, Literal["public", "private"]], ...] = (
     (Photo, "scored_key", "private"),
     (Photo, "blur_key", "public"),
     (DataExport, "file_key", "private"),
+    (AlbumCopy, "file_key", "private"),
 )
+
+
+def columns_of(model: type[Any]) -> tuple[str, ...]:
+    """The columns naming the user on `model`'s rows, as `ERASED` lists them."""
+    return next(e.columns for e in ERASED if e.model is model)

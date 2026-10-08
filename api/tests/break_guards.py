@@ -3291,8 +3291,8 @@ T412: list[tuple[Case, list[str]]] = [
             edits=[
                 (
                     USERS_REPO412,
-                    "            select(column).where(file.model.user_id == user_id, column.is_not(None))\n",
-                    '            select(column).where(\n                file.model.user_id == user_id,\n                column.is_not(None),\n                file.model.kind != "verification",\n            )\n',
+                    "            select(column).where(or_(*naming), column.is_not(None))\n",
+                    '            select(column).where(\n                or_(*naming),\n                column.is_not(None),\n                getattr(file.model, "kind", None) != "verification",\n            )\n',
                 )
             ],
             expect=["test_a_refusals_face_photo_goes_with_it"],
@@ -10259,6 +10259,294 @@ P740: list[Case] = [
     ),
 ]
 
+# --- T-8.4: the private album ----------------------------------------------------------
+
+ALBUM_SERVICE = "app/modules/album/service.py"
+ALBUM_REPO = "app/modules/album/repository.py"
+T84_SELECTION = [
+    "tests/modules/album",
+    "tests/core/test_images_watermark.py",
+    "tests/workers/test_watermark_album.py",
+    "tests/modules/account/test_erasure.py",
+    "tests/modules/users/test_dob_gender.py",
+    "tests/modules/discovery/test_public_profile.py",
+]
+FROM_SCORED = "test_granted_he_sees_his_own_copies_made_from_the_scored_bytes"
+NOT_YET = "test_thirty_days_after_she_says_no_he_may_ask_again_not_before"
+
+T84: list[Case] = [
+    Case(
+        id="t84-01-the-price-compared-with-itself",
+        what="P-56: the request's shown price replaced by the row's, so nothing is refused",
+        edits=[
+            (
+                ALBUM_SERVICE,
+                "        shown=body.shown_price,\n",
+                (
+                    "        shown=await pricing_service.price_for(\n"
+                    "            session, user, LedgerReason.ALBUM_REQUEST\n"
+                    "        ),\n"
+                ),
+            )
+        ],
+        expect=[
+            "test_a_price_he_wasnt_shown_is_refused_with_nothing_written",
+            "test_the_row_is_the_price_and_a_changed_row_is_refused",
+            "test_a_woman_shown_a_price_is_refused",
+        ],
+    ),
+    Case(
+        id="t84-02-the-requester-unlocked",
+        what="two requests at once, each finding none, the second breaking the index",
+        edits=[
+            (
+                ALBUM_SERVICE,
+                "    await repository.lock_requester(session, user.id)\n",
+                "",
+            )
+        ],
+        expect=["test_two_requests_at_once_are_one_request"],
+    ),
+    Case(
+        id="t84-03-rendered-from-the-upload",
+        what="D-700's hole: the copy rendered from the upload a second PUT can replace",
+        edits=[
+            (
+                ALBUM_SERVICE,
+                "            photo.scored_key,\n",
+                "            photo.raw_key,\n",
+            )
+        ],
+        expect=[FROM_SCORED],
+    ),
+    Case(
+        id="t84-04-a-copy-kept-after-the-revoke",
+        what="a copy written as she revokes recorded anyway",
+        edits=[
+            (
+                ALBUM_SERVICE,
+                "            and locked.status is AlbumRequestStatus.GRANTED\n",
+                "",
+            )
+        ],
+        expect=["test_a_copy_rendered_as_she_revokes_is_deleted_never_kept"],
+    ),
+    Case(
+        id="t84-05-erasure-leaves-album-copies",
+        what="D-503's erasure without the album copies in its file list",
+        edits=[(ERASURE96, '    (AlbumCopy, "file_key", "private"),\n', "")],
+        expect=[
+            "test_every_storage_key_on_an_erased_table_is_in_the_file_list",
+            "test_an_account_deleted_29_days_ago_is_erased_and_kept_exactly_as_d051_says",
+        ],
+    ),
+    Case(
+        id="t84-06-underage-leaves-album-copies",
+        what="D-078's deletion without the album copies in its file list",
+        edits=[
+            (
+                "app/modules/users/repository.py",
+                '    FileColumn(AlbumCopy, "file_key", "private"),\n',
+                "",
+            )
+        ],
+        expect=["test_every_storage_key_on_a_deleted_table_is_in_the_file_list"],
+    ),
+    Case(
+        id="t84-07-another-viewers-copies",
+        what="the album's copies read without the viewer's request: everyone's shown",
+        edits=[
+            (
+                ALBUM_REPO,
+                "        .where(AlbumCopy.request_id == request_id, *_albumable(owner_id))\n",
+                "        .where(*_albumable(owner_id))\n",
+            )
+        ],
+        expect=[FROM_SCORED],
+    ),
+    Case(
+        id="t84-08-a-decline-refunds",
+        what="D-230 undone: a decline credits his Vela back",
+        edits=[
+            (
+                ALBUM_SERVICE,
+                "            row.decided_at = clock.now()\n            granted_now = grant\n",
+                (
+                    "            row.decided_at = clock.now()\n            granted_now = grant\n"
+                    "            if not grant:\n"
+                    "                from app.modules.wallet import service as wallet\n"
+                    "\n"
+                    "                await wallet.credit(\n"
+                    "                    session,\n"
+                    "                    row.requester_id,\n"
+                    "                    row.credits_charged,\n"
+                    "                    LedgerReason.REFUND_ALBUM_DECLINED,\n"
+                    "                    ref=Ref(RefType.ALBUM_REQUEST, row.id),\n"
+                    "                )\n"
+                ),
+            )
+        ],
+        expect=["test_a_decline_returns_nothing"],
+    ),
+    Case(
+        id="t84-09-no-cooldown",
+        what="D-731 gone: he asks again the moment she says no",
+        edits=[
+            (
+                ALBUM_SERVICE,
+                "    if not rules.may_ask_again(closed_at, now, days):\n",
+                "    if False:\n",
+            )
+        ],
+        expect=[
+            f"{NOT_YET}[declined]",
+            f"{NOT_YET}[revoked]",
+            "test_the_days_are_read_fresh_from_app_config",
+        ],
+    ),
+    Case(
+        id="t84-10-the-cooldown-a-day-short",
+        what="D-731's thirty days counted as twenty-nine",
+        edits=[
+            (
+                "app/modules/album/rules.py",
+                "now >= closed_at + timedelta(days=days)\n",
+                "now >= closed_at + timedelta(days=days - 1)\n",
+            )
+        ],
+        expect=[f"{NOT_YET}[declined]", f"{NOT_YET}[revoked]"],
+    ),
+    Case(
+        id="t84-11-charged-for-an-empty-album",
+        what="D-732: a man charged to see an album with nothing in it",
+        edits=[
+            (
+                ALBUM_SERVICE,
+                "    if await repository.albumable_count(session, owner_id) == 0:\n",
+                "    if False:\n",
+            )
+        ],
+        expect=["test_an_empty_album_is_refused_before_anything_is_charged"],
+    ),
+    Case(
+        id="t84-12-an-unscored-photo-in-the-album",
+        what="a photo approved before D-700, with no scored copy, taken into the album",
+        edits=[(ALBUM_REPO, "        Photo.scored_key.is_not(None),\n", "")],
+        expect=[
+            "test_a_photo_approved_before_scored_copies_is_never_shown",
+            "test_an_empty_album_is_refused_before_anything_is_charged",
+        ],
+    ),
+    Case(
+        id="t84-13-the-profile-counts-unscored-photos",
+        what="D-732: the profile counts a photo the album never shows",
+        edits=[
+            (
+                "app/modules/discovery/repository.py",
+                "            Photo.scored_key.is_not(None),\n",
+                "",
+            )
+        ],
+        expect=["test_only_approved_public_photos_are_shown_and_nothing_private_named"],
+    ),
+    Case(
+        id="t84-14-the-revoke-shares-the-grants-job-id",
+        what="the revoke's deletion queued under the grant's id, which ARQ drops",
+        edits=[
+            (
+                "app/modules/album/rules.py",
+                '    return f"{WATERMARK_ALBUM}:{request_id}:revoked"\n',
+                '    return f"{WATERMARK_ALBUM}:{request_id}"\n',
+            )
+        ],
+        expect=["test_a_revoke_closes_it_and_queues_its_copies_deletion"],
+    ),
+    Case(
+        id="t84-15-a-removed-photos-copies-stay",
+        what="her removed private photo's copies left in every album's storage",
+        edits=[
+            (
+                PHOTOS_SERVICE,
+                (
+                    "        if photo.kind is PhotoKind.PRIVATE:\n"
+                    "            albums = await album_repository.granted_requests(session, user.id)\n"
+                ),
+                "",
+            )
+        ],
+        expect=["test_a_photo_she_removes_leaves_every_album_file_and_row"],
+    ),
+    Case(
+        id="t84-16-a-block-leaves-the-album-open",
+        what="D-493 skipped: a granted man still sees her album after a block",
+        edits=[
+            (
+                ALBUM_SERVICE,
+                (
+                    "        if owner_id == user.id or not await discovery_service.can_reach(\n"
+                    "            session, user, owner_id, mutual=False\n"
+                    "        ):\n"
+                ),
+                "        if owner_id == user.id:\n",
+            )
+        ],
+        expect=["test_after_a_block_either_way_the_album_is_not_found"],
+    ),
+    Case(
+        id="t84-17-the-downgrade-drops-copies",
+        what="the table dropped while files hang off it, out of every deletion's sight",
+        edits=[
+            (
+                "alembic/versions/20261009_57ab54709630_album_copies.py",
+                "    if held:\n",
+                "    if False:\n",
+            )
+        ],
+        expect=["test_the_downgrade_refuses_while_a_copy_is_recorded"],
+    ),
+    Case(
+        id="t84-18-no-watermark-on-the-copy",
+        what="the copy written as the scored bytes, with nobody's name on it",
+        edits=[
+            (
+                ALBUM_SERVICE,
+                '        marked = images.watermark(data, f"@{username}")\n',
+                "        marked = data\n",
+            )
+        ],
+        expect=[FROM_SCORED, "test_the_copy_carries_his_username"],
+    ),
+    Case(
+        id="t84-19-the-watermark-invisible",
+        what="the name drawn at no opacity",
+        edits=[
+            (
+                "app/core/images.py",
+                "WATERMARK_ALPHA: Final = 51\n",
+                "WATERMARK_ALPHA: Final = 0\n",
+            )
+        ],
+        expect=[
+            "test_the_name_is_on_every_part_of_the_photo_and_faint",
+            "test_each_viewer_gets_a_copy_of_his_own",
+            FROM_SCORED,
+        ],
+    ),
+    Case(
+        id="t84-20-a-revoke-deletes-nothing",
+        what="a revoke's copies never deleted, only forgotten",
+        edits=[
+            (
+                ALBUM_SERVICE,
+                "        await storage.delete(bucket, key)\n",
+                "        pass\n",
+            )
+        ],
+        expect=["test_a_revoke_leaves_him_nothing"],
+    ),
+]
+
+
 CASES: list[tuple[Case, list[str]]] = (
     [(c, T51_SELECTION) for c in T51]
     + [(c, T54_SELECTION) for c in T54]
@@ -10305,6 +10593,7 @@ CASES: list[tuple[Case, list[str]]] = (
     + [(c, T69_SELECTION) for c in T69]
     + [(c, T76_SELECTION) for c in T76]
     + [(c, P740_SELECTION) for c in P740]
+    + [(c, T84_SELECTION) for c in T84]
 )
 
 # The fifty-connection fixture's own message when Postgres refuses a connection.

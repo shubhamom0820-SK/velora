@@ -86,11 +86,15 @@ async def photo(
     kind: PhotoKind = PhotoKind.PUBLIC,
     status: ReviewStatus = ReviewStatus.APPROVED,
     matched: bool | None = None,
+    scored: bool = True,
 ) -> Photo:
     """A photo as moderation leaves one: an approved public one with its public
-    copy; `matched`, its badge comparison's result (D-393), if one was made."""
+    copy, an approved private one with its scored copy (D-700) unless `scored`
+    is False, as one approved before D-700 is; `matched`, its badge
+    comparison's result (D-393), if one was made."""
     photo_id = uuid.uuid4()
     public = kind is PhotoKind.PUBLIC and status is ReviewStatus.APPROVED
+    private = kind is PhotoKind.PRIVATE and status is ReviewStatus.APPROVED
     moderation: dict[str, Any] = {"provider": "sightengine", "faces": 1}
     if matched is not None:
         moderation["selfie_match"] = {"matched": matched, "decided_by": "seed"}
@@ -101,6 +105,7 @@ async def photo(
         position=place if kind is PhotoKind.PUBLIC else None,
         raw_key=f"raw/{user.id}/{photo_id}",
         public_key=f"p/{photo_id}.jpg" if public else None,
+        scored_key=f"scored/{user.id}/{photo_id}.jpg" if private and scored else None,
         status=status,
         moderation=moderation,
     )

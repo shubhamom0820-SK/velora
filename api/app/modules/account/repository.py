@@ -153,8 +153,9 @@ async def files_to_erase(
     found: list[tuple[Literal["public", "private"], str]] = []
     for model, name, bucket in erasure.FILES:
         column = getattr(model, name)
+        naming = (getattr(model, c) == user_id for c in erasure.columns_of(model))
         keys = await session.scalars(
-            select(column).where(model.user_id == user_id, column.is_not(None))
+            select(column).where(or_(*naming), column.is_not(None))
         )
         found.extend((bucket, key) for key in keys)
     return found

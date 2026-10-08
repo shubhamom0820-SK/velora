@@ -718,6 +718,25 @@ async def _a_row_naming_them_everywhere(
     for statement in both_ways:
         for a, b in ((minor, other), (other, minor)):
             await db.execute(text(statement), {"a": a, "b": b, "t": thread})
+    # Album copies both ways (T-8.4, D-730): the minor's photo for the other,
+    # and the other's for the minor.
+    others_photo = await db.scalar(
+        text(
+            "insert into photos (user_id, kind, raw_key) "
+            "values (:o, 'private', 'raw/other') returning id"
+        ),
+        {"o": other},
+    )
+    for owner, owned in ((minor, photo), (other, others_photo)):
+        await db.execute(
+            text(
+                "insert into album_copies (request_id, photo_id, owner_id, "
+                "viewer_id, file_key) select id, :p, owner_id, requester_id, "
+                "'album/' || id || '/' || gen_random_uuid() || '.jpg' "
+                "from album_requests where owner_id = :owner"
+            ),
+            {"p": owned, "owner": owner},
+        )
     theirs = [
         "insert into thread_clears (user_id, thread_id, cleared_at) values (:m, :t, now())",
         "insert into thread_clears (user_id, thread_id, cleared_at) values (:o, :t, now())",
@@ -1115,5 +1134,6 @@ def test_every_storage_key_on_a_deleted_table_is_in_the_file_list() -> None:
             ("photos", "scored_key"),
             ("photos", "blur_key"),
             ("data_exports", "file_key"),
+            ("album_copies", "file_key"),
         }
     )

@@ -25,11 +25,19 @@ image at a time, which bounds the worker's memory (D-088's 1 GB machine).
 from __future__ import annotations
 
 import io
+import math
 import warnings
 from dataclasses import dataclass
 from typing import Final, Literal
 
-from PIL import Image, ImageFilter, ImageOps, UnidentifiedImageError
+from PIL import (
+    Image,
+    ImageDraw,
+    ImageFilter,
+    ImageFont,
+    ImageOps,
+    UnidentifiedImageError,
+)
 
 ImageType = Literal["image/jpeg", "image/png", "image/webp"]
 ACCEPTED_TYPES: tuple[ImageType, ...] = ("image/jpeg", "image/png", "image/webp")
@@ -169,4 +177,65 @@ def blur(data: bytes) -> bytes:
     )
     out = io.BytesIO()
     spread.save(out, "JPEG", quality=BLUR_QUALITY)
+    return out.getvalue()
+
+
+# --- The album's watermark (T-8.4) -----------------------------------------------------
+
+# The viewer's `@username`, tiled across the whole photo at this angle, so no
+# crop of any part of it leaves the name behind.
+WATERMARK_ANGLE: Final = 30
+# About 20% opaque (T-8.4): white letters edged in black, so the name reads on
+# a light photo and a dark one alike.
+WATERMARK_ALPHA: Final = 51
+# The letters' height against the photo's longest side, and their floor.
+WATERMARK_SCALE: Final = 24
+WATERMARK_MIN_SIZE: Final = 14
+
+
+def watermark(data: bytes, text: str) -> bytes:
+    """`data`, an approved private photo's scored copy this server wrote
+    (`reencode`'s JPEG), with `text` tiled over every part of it diagonally at
+    about 20% opacity, encoded afresh as a JPEG. Raises `UnreadableImage`."""
+    try:
+        with warnings.catch_warnings():
+            warnings.simplefilter("error", Image.DecompressionBombWarning)
+            with Image.open(io.BytesIO(data), formats=["JPEG"]) as image:
+                if image.width * image.height > MAX_PIXELS:
+                    raise TooManyPixels
+                image.load()
+                photo = _rgb(image).convert("RGBA")
+    except (Image.DecompressionBombError, Image.DecompressionBombWarning):
+        raise TooManyPixels from None
+    except (UnidentifiedImageError, OSError, SyntaxError, ValueError, EOFError):
+        raise UnreadableImage from None
+    width, height = photo.size
+    size = max(WATERMARK_MIN_SIZE, max(width, height) // WATERMARK_SCALE)
+    font = ImageFont.load_default(size=size)
+    left, top, right, bottom = font.getbbox(text, stroke_width=1)
+    step_x = round(right - left) + size * 2
+    step_y = round(bottom - top) + size * 2
+    # A square the photo's diagonal across: turned by any angle, it still
+    # covers every pixel of the photo at its centre.
+    side = math.isqrt(width**2 + height**2) + 1 + max(step_x, step_y)
+    layer = Image.new("RGBA", (side, side), (0, 0, 0, 0))
+    draw = ImageDraw.Draw(layer)
+    for row, y in enumerate(range(0, side, step_y)):
+        # Every other row shifted half a step, so the names interleave.
+        for x in range(-(step_x // 2) * (row % 2), side, step_x):
+            draw.text(
+                (x, y),
+                text,
+                font=font,
+                fill=(255, 255, 255, WATERMARK_ALPHA),
+                stroke_width=1,
+                stroke_fill=(0, 0, 0, WATERMARK_ALPHA),
+            )
+    turned = layer.rotate(WATERMARK_ANGLE, resample=Image.Resampling.BICUBIC)
+    x0, y0 = (side - width) // 2, (side - height) // 2
+    marked = Image.alpha_composite(
+        photo, turned.crop((x0, y0, x0 + width, y0 + height))
+    )
+    out = io.BytesIO()
+    marked.convert("RGB").save(out, "JPEG", quality=JPEG_QUALITY, optimize=True)
     return out.getvalue()

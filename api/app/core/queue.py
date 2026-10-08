@@ -43,6 +43,9 @@ MATCH_PHOTO = "match_photo"
 # T-6.7 (D-543): an approved public photo's blurred copy, for Liked you.
 # Nobody waits on it, so it has no wake.
 BLUR_PHOTO = "blur_photo"
+# T-8.4 (D-730): a granted album request's watermarked copies, made or, once
+# the request is revoked, deleted. Nobody waits on it, so it has no wake.
+WATERMARK_ALBUM = "watermark_album"
 # T-9.6 (D-502): a copy of a user's own data, written to the private bucket;
 # and its file deleted when its link expires, 24 hours after it was ready.
 EXPORT_DATA = "export_data"

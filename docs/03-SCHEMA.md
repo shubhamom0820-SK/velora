@@ -318,9 +318,20 @@ the row (D-611): a clearing is a view, not a moderation record, and never touche
 | requester_id | uuid fk users | |
 | owner_id | uuid fk users | |
 | status | album_req_t default 'pending' | |
-| credits_charged | int not null default 0 | refunded on decline; check `>= 0` |
-| decided_at | timestamptz null | |
+| credits_charged | int not null default 0 | what he paid; spent, never returned on a decline or revoke (D-230); check `>= 0` |
+| decided_at | timestamptz null | her last answer: the grant, the decline, or the revoke (D-731) |
 Unique `(requester_id, owner_id) where status in ('pending','granted')`. Check `requester_id <> owner_id`.
+A decline or revoke frees the pair, but the same man can't ask her again for `album_reask_days`
+(30, `app_config`) after its `decided_at` (D-731, T-8.4).
+
+### album_copies  (T-8.4, D-730)
+`id uuid pk, request_id uuid fk album_requests, photo_id uuid fk photos, owner_id uuid fk users,
+viewer_id uuid fk users, file_key text not null unique, created_at`. Unique `(request_id, photo_id)`;
+indexes on `owner_id` and `viewer_id`. One private photo watermarked for one granted request's
+viewer, at `album/{request_id}/{photo_id}.jpg` in the private bucket, rendered from the photo's
+`scored_key`, never `raw_key` (D-700). The row is written only once its file is, and deleted only
+once its file is gone, read back: so a revoke, the erasure (D-503) and an under-18 refusal (D-078)
+find every copy by its `file_key`, both people's. The downgrade refuses while any row exists.
 
 ### kudos
 `id uuid pk, from_id uuid fk users, to_id uuid fk users, kind kudos_t, thread_id uuid fk threads, created_at`.
@@ -616,6 +627,8 @@ rewarding it with nothing and a missing row skipping it with a warning, never fa
 and `referral_rewards_max=10`, how many referrals one referrer is paid for, ever, a missing row
 paying no referrer. Since P-740 (D-840), `referral_reward_velas=0`: referrals are paused, and
 `POST /referrals/apply` is refused while the reward isn't above 0, a missing row included.
+And by T-8.4's: `album_reask_days=30`, the days after she declines or revokes his album request
+before he may ask her again, read fresh at each request (D-731).
 Two settings are also promised in copy, in `web/src/i18n/en.ts`, written out because copy is a
 promise, not a computation. Change the copy with the setting:
 - `thread_hours`: the landing page ("Threads last an hour", "1-hour", T-2.1), `/terms` ("lasts

@@ -12,7 +12,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.enums import BanKind
 from app.modules.account.models import DataExport
-from app.modules.album.models import AlbumRequest
+from app.modules.album.models import AlbumCopy, AlbumRequest
 from app.modules.auth.models import BannedIdentity, Session
 from app.modules.discovery.models import ProfileView
 from app.modules.gifts.models import GiftSend
@@ -97,6 +97,8 @@ UNDERAGE_DELETES = (
     Attached(Swipe, ("swiper_id", "target_id")),
     Attached(ProfileView, ("viewer_id", "viewed_id")),
     Attached(Block, ("blocker_id", "blocked_id")),
+    # Before the requests and photos they name (T-8.4, D-730).
+    Attached(AlbumCopy, ("owner_id", "viewer_id")),
     Attached(AlbumRequest, ("requester_id", "owner_id")),
     Attached(Referral, ("referee_id", "referrer_id")),
     Attached(RefundRequest, ("user_id",)),
@@ -149,6 +151,7 @@ UNDERAGE_FILES = (
     FileColumn(Photo, "scored_key", "private"),
     FileColumn(Photo, "blur_key", "public"),
     FileColumn(DataExport, "file_key", "private"),
+    FileColumn(AlbumCopy, "file_key", "private"),
 )
 
 
@@ -159,8 +162,10 @@ async def files_of(
     found: list[tuple[Literal["public", "private"], str]] = []
     for file in UNDERAGE_FILES:
         column = getattr(file.model, file.column)
+        attached = next(a for a in UNDERAGE_DELETES if a.model is file.model)
+        naming = (getattr(file.model, c) == user_id for c in attached.columns)
         keys = await session.scalars(
-            select(column).where(file.model.user_id == user_id, column.is_not(None))
+            select(column).where(or_(*naming), column.is_not(None))
         )
         found.extend((file.bucket, key) for key in keys)
     return found

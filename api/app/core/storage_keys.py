@@ -76,9 +76,12 @@ def parse_voice_upload_key(key: str) -> VoiceKey | None:
     return VoiceKey(thread_id, message_id, _KIND_OF[found.group(3)])
 
 
-def album_key(photo_id: UUID, viewer_id: UUID) -> str:
-    """A private-album photo watermarked for one viewer, in the private bucket (T-8.4)."""
-    return f"album/{_id(photo_id)}/{_id(viewer_id)}.jpg"
+def album_key(request_id: UUID, photo_id: UUID) -> str:
+    """A private photo watermarked for one granted album request's viewer, in
+    the private bucket (T-8.4, D-730). Under the request's id, never the
+    viewer's: a man who asks again after a revoke gets new keys, so the old
+    request's late cleanup can't delete the new request's copies."""
+    return f"album/{_id(request_id)}/{_id(photo_id)}.jpg"
 
 
 def export_key(user_id: UUID, export_id: UUID) -> str:

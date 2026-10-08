@@ -1279,6 +1279,91 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/album-requests": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Ask */
+        post: operations["ask_v1_album_requests_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/album-requests/incoming": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Incoming */
+        get: operations["incoming_v1_album_requests_incoming_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/album-requests/{request_id}/decide": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Decide */
+        post: operations["decide_v1_album_requests__request_id__decide_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/album-requests/{request_id}/revoke": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Revoke */
+        post: operations["revoke_v1_album_requests__request_id__revoke_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/users/{user_id}/album": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Album */
+        get: operations["album_v1_users__user_id__album_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/ws/ticket": {
         parameters: {
             query?: never;
@@ -1411,6 +1496,63 @@ export interface components {
             /** Next Cursor */
             next_cursor: string | null;
         };
+        /**
+         * Album
+         * @description `GET /users/{id}/album` (D-732): the viewer's latest request to her, or
+         *     null if he never asked, and his copies of her photos, empty unless it is
+         *     granted.
+         */
+        Album: {
+            status: components["schemas"]["AlbumRequestStatus"] | null;
+            /** Photos */
+            photos: components["schemas"]["AlbumPhoto"][];
+        };
+        /** AlbumPhoto */
+        AlbumPhoto: {
+            /** Url */
+            url: string;
+        };
+        /**
+         * AlbumRequest
+         * @description A request, as either of its two people sees it: who asked, and never
+         *     what he paid (his wallet's history has that).
+         */
+        AlbumRequest: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            requester: components["schemas"]["CardLite"];
+            /**
+             * Owner Id
+             * Format: uuid
+             */
+            owner_id: string;
+            status: components["schemas"]["AlbumRequestStatus"];
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /** Decided At */
+            decided_at: string | null;
+        };
+        /**
+         * AlbumRequestPage
+         * @description `Page<AlbumRequest>`: newest first, by `(created_at, id)`.
+         */
+        AlbumRequestPage: {
+            /** Items */
+            items: components["schemas"]["AlbumRequest"][];
+            /** Next Cursor */
+            next_cursor: string | null;
+        };
+        /**
+         * AlbumRequestStatus
+         * @enum {string}
+         */
+        AlbumRequestStatus: "pending" | "granted" | "declined" | "revoked";
         /** ApplyReferral */
         ApplyReferral: {
             /** Code */
@@ -1570,6 +1712,23 @@ export interface components {
             cleared: number;
         };
         /**
+         * CreateAlbumRequest
+         * @description Whose album. The price is never the browser's (rule 6): only what the
+         *     screen showed, compared and never charged (P-56, D-600).
+         */
+        CreateAlbumRequest: {
+            /**
+             * Owner Id
+             * Format: uuid
+             */
+            owner_id: string;
+            /**
+             * Shown Price
+             * @default 0
+             */
+            shown_price: number;
+        };
+        /**
          * DataExport
          * @description A copy of the user's own data (D-502). `url` is a link to the file,
          *     signed until `expires_at`, only while it is `ready`; otherwise null.
@@ -1594,6 +1753,11 @@ export interface components {
             expires_at: string | null;
             /** Url */
             url: string | null;
+        };
+        /** DecideAlbumRequest */
+        DecideAlbumRequest: {
+            /** Grant */
+            grant: boolean;
         };
         /**
          * DeletionScheduled
@@ -5173,6 +5337,166 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["GiftCounts"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    ask_v1_album_requests_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateAlbumRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AlbumRequest"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    incoming_v1_album_requests_incoming_get: {
+        parameters: {
+            query?: {
+                cursor?: string | null;
+                limit?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AlbumRequestPage"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    decide_v1_album_requests__request_id__decide_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                request_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["DecideAlbumRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AlbumRequest"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    revoke_v1_album_requests__request_id__revoke_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                request_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    album_v1_users__user_id__album_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                user_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Album"];
                 };
             };
             /** @description Validation Error */

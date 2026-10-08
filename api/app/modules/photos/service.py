@@ -43,7 +43,13 @@ from app.core.providers.moderation import (
     Scores,
 )
 from app.core.providers.storage import ObjectNotFound, StorageProvider
-from app.core.queue import BLUR_PHOTO, MATCH_PHOTO, MODERATE_PHOTO, Queue
+from app.core.queue import (
+    BLUR_PHOTO,
+    MATCH_PHOTO,
+    MODERATE_PHOTO,
+    WATERMARK_ALBUM,
+    Queue,
+)
 from app.core.storage_keys import (
     blurred_photo_key,
     public_photo_key,
@@ -51,6 +57,8 @@ from app.core.storage_keys import (
     raw_key,
     scored_key,
 )
+from app.modules.album import repository as album_repository
+from app.modules.album import rules as album_rules
 from app.modules.onboarding import service as onboarding_service
 from app.modules.photos import moderation as moderation_rules
 from app.modules.photos import repository
@@ -432,9 +440,12 @@ async def delete_photo(
     *,
     storage: StorageProvider,
     settings: Settings,
+    queue: Queue,
 ) -> None:
     """Remove a photo of the user's own: rejected, as `user_deleted`, so its
-    place is free; its public copy, if any, removed from the public bucket.
+    place is free; its public copy, if any, removed from the public bucket;
+    a private one's watermarked copies deleted from every album she granted,
+    by `watermark_album` (T-8.4, D-730).
     The private copy and the row stay (soft, as T-4.3 says). Removing it twice
     is the same as once. The last public photo may go, past the `photos` step
     too: nobody needs one (D-392, T-4.12). The face photo goes the same way,
@@ -443,6 +454,7 @@ async def delete_photo(
     lowers a finished profile's completeness at once (P-210)."""
     public_key: str | None = None
     blur_key: str | None = None
+    albums: list[UUID] = []
     async with session.begin():
         user = await users_service.locked_user(session, user.id)
         photo = await repository.photo_for_update(session, user.id, photo_id)
@@ -459,9 +471,17 @@ async def delete_photo(
         public_key, blur_key = photo.public_key, photo.blur_key
         if photo.kind is PhotoKind.PUBLIC:
             await onboarding_service.refresh_completeness(session, user)
+        if photo.kind is PhotoKind.PRIVATE:
+            albums = await album_repository.granted_requests(session, user.id)
     for key in (public_key, blur_key):
         if key:
             await storage.delete(settings.R2_BUCKET_PUBLIC, key)
+    for request_id in albums:
+        await queue.enqueue(
+            WATERMARK_ALBUM,
+            job_id=album_rules.photo_job_id(request_id, photo_id),
+            request_id=str(request_id),
+        )
 
 
 # --- Showing the face photo (T-4.12, D-391) -------------------------------------------
