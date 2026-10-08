@@ -155,9 +155,9 @@ counted, never for your own profile or a refusal.
 | POST | /threads/{id}/extend | ✅ | `Idempotency-Key` → `Thread` (10 Velas, adding 24 hours to what is left, D-250; from expired the same 10 re-opens it, D-253; a Knot or a woman `NOT_ALLOWED`) | T-7.6 |
 | POST | /threads/{id}/knot | ✅ | → `Thread` (sets your tap; converts when both) | T-7.7 |
 | DELETE | /threads/{id}/knot | ✅ | → `Thread` (untie → active, a fresh hour) | T-7.7 |
-| POST | /threads/{id}/clear | ✅ | → 204 (one-sided) | T-7.8 |
-| POST | /threads/clear | ✅ | `{thread_ids[]}` or `{expired: true}` → `{cleared}` | T-7.8 |
-| DELETE | /threads/{id}/clear | ✅ | → 204 (undo / restore) | T-7.8 |
+| POST | /threads/{id}/clear | ✅ | → 204: hidden from my chats alone, through its newest message (D-006, D-610); new messages bring it back. The other person, the messages and the Thread unchanged, nobody told. Again, 204. `NOT_FOUND` unless it is yours, and across a block. 60 a minute, shared with the two below | T-7.8 |
+| POST | /threads/clear | ✅ | `{thread_ids}` (1–100) or `{expired: true}`, one of them → `{cleared}`: of the ids, those that are yours and no block stands across, the rest skipped; of `expired`, those in my list expired by the clock (D-560, D-611). Anything else `VALIDATION_ERROR` | T-7.8 |
+| DELETE | /threads/{id}/clear | ✅ | → 204: the clearing gone, the whole history back (D-611); never cleared, 204. `NOT_FOUND` unless it is yours, and across a block | T-7.8 |
 | POST | /media/voice-upload-url | ✅ | `{thread_id}` → `{media_key, put_url}` (women only) | T-7.9 |
 | POST | /messages/{id}/unlock | ✅ | → `{url}` (5 Velas, men) | T-7.9 |
 | GET | /messages/{id}/media | ✅ | → `{url}` (signed, 10 min, only if unlocked or sender) | T-7.9 |

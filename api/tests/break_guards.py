@@ -7552,6 +7552,261 @@ T67: list[tuple[Case, list[str]]] = [
     ),
 ]
 
+# --- T-7.8: clearing --------------------------------------------------------------
+
+T78_SELECTION = [
+    "tests/modules/threads/test_clear.py",
+    "tests/modules/threads/test_clear_race.py",
+]
+THREADS_SCHEMAS = "app/modules/threads/schemas.py"
+THREADS_ROUTER = "app/modules/threads/router.py"
+CLEAR_TEST = "test_clear.py::"
+UNTOUCHED = "test_after_he_clears_she_sees_everything_and_nothing_is_touched"
+CHOSEN = "test_chosen_ids_clear_mine_and_skip_the_rest"
+EXPIRED = "test_clear_expired_takes_those_in_my_list_expired_by_the_clock"
+ONLY_MINE = "test_only_my_threads_and_never_across_a_block"
+
+T78: list[Case] = [
+    Case(
+        id="t78-01-anyones-thread",
+        what="D-006: a clearing reaching a Thread that isn't yours",
+        edits=[
+            (
+                THREADS_REPOSITORY,
+                (
+                    "    return and_(\n"
+                    "        or_(Thread.user_low == viewer_id, Thread.user_high == viewer_id),\n"
+                ),
+                "    return and_(\n        true(),\n",
+            )
+        ],
+        expect=[f"{ONLY_MINE}[theirs-clear]", CHOSEN, EXPIRED],
+    ),
+    Case(
+        id="t78-02-across-a-block",
+        what="a clearing reaching a Thread across a block, either way",
+        edits=[
+            (
+                THREADS_REPOSITORY,
+                "        ~blocked_either_way(viewer_id, _other(viewer_id)),\n    )\n",
+                "    )\n",
+            )
+        ],
+        expect=[
+            f"{ONLY_MINE}[blocked by me-clear]",
+            f"{ONLY_MINE}[blocking me-clear]",
+            CHOSEN,
+            EXPIRED,
+        ],
+    ),
+    Case(
+        id="t78-03-stamped-at-the-tap",
+        what="D-610: the clearing stamped with its own time, not the newest message",
+        edits=[
+            (
+                THREADS_REPOSITORY,
+                "func.coalesce(newest, Thread.created_at)",
+                "func.now()",
+            )
+        ],
+        expect=[
+            "test_a_message_begun_before_a_clearing_and_written_after_shows",
+            "test_cleared_at_is_the_newest_message_never_the_tap",
+        ],
+    ),
+    Case(
+        id="t78-04-no-lock",
+        what="D-610: a clearing that never holds the Thread, so never waits for a send",
+        edits=[
+            (
+                THREADS_REPOSITORY,
+                (
+                    "        .where(Thread.id.in_(thread_ids), _mine(viewer_id))\n"
+                    "        .order_by(Thread.id)\n"
+                    "        .with_for_update(of=Thread)\n"
+                ),
+                (
+                    "        .where(Thread.id.in_(thread_ids), _mine(viewer_id))\n"
+                    "        .order_by(Thread.id)\n"
+                ),
+            )
+        ],
+        expect=[
+            "test_a_message_waiting_on_a_clearing_shows",
+            "test_a_message_a_clearing_waited_on_is_hidden",
+        ],
+    ),
+    Case(
+        id="t78-05-expired-means-any",
+        what="'Clear expired' clearing live Threads and Knots too",
+        edits=[
+            (
+                THREADS_REPOSITORY,
+                (
+                    "            or_(\n"
+                    "                Thread.status == ThreadStatus.EXPIRED,\n"
+                    "                and_(Thread.status == ThreadStatus.ACTIVE, Thread.expires_at <= now),\n"
+                    "            ),\n"
+                ),
+                "",
+            )
+        ],
+        expect=[EXPIRED],
+    ),
+    Case(
+        id="t78-06-expired-by-status-alone",
+        what="D-560: 'Clear expired' reading the status column, never the clock",
+        edits=[
+            (
+                THREADS_REPOSITORY,
+                "                and_(Thread.status == ThreadStatus.ACTIVE, Thread.expires_at <= now),\n",
+                "",
+            )
+        ],
+        expect=[EXPIRED],
+    ),
+    Case(
+        id="t78-07-expired-past-the-list",
+        what="'Clear expired' counting Threads already hidden from my list",
+        edits=[
+            (
+                THREADS_REPOSITORY,
+                (
+                    "            or_(Thread.last_message_at > cleared, cleared.is_(None)),\n"
+                    "        )\n"
+                    "        .order_by(Thread.id)\n"
+                ),
+                "        )\n        .order_by(Thread.id)\n",
+            )
+        ],
+        expect=[EXPIRED],
+    ),
+    Case(
+        id="t78-08-restore-for-both",
+        what="D-006: undoing my clearing undoing theirs too",
+        edits=[
+            (
+                THREADS_REPOSITORY,
+                "            ThreadClear.user_id == viewer_id, ThreadClear.thread_id == thread_id\n",
+                "            ThreadClear.thread_id == thread_id\n",
+            )
+        ],
+        expect=["test_restoring_mine_leaves_hers"],
+    ),
+    Case(
+        id="t78-09-restore-anyones",
+        what="a restore answering for a Thread that isn't yours, or across a block",
+        edits=[
+            (
+                THREADS_SERVICE,
+                (
+                    "        if await repository.my_thread(session, thread_id, user.id) is None:\n"
+                    "            raise _not_found()\n"
+                    "        await repository.restore("
+                ),
+                "        await repository.restore(",
+            )
+        ],
+        expect=[
+            f"{ONLY_MINE}[theirs-restore]",
+            f"{ONLY_MINE}[nobody's-restore]",
+            f"{ONLY_MINE}[blocked by me-restore]",
+            f"{ONLY_MINE}[blocking me-restore]",
+        ],
+    ),
+    Case(
+        id="t78-10-clearing-marks-read",
+        what="rule 12: a clearing touching the messages (her 'Read' changes)",
+        edits=[
+            (
+                THREADS_REPOSITORY,
+                (
+                    "            set_={ThreadClear.cleared_at: upsert.excluded.cleared_at},\n"
+                    "        )\n"
+                    "    )\n"
+                ),
+                (
+                    "            set_={ThreadClear.cleared_at: upsert.excluded.cleared_at},\n"
+                    "        )\n"
+                    "    )\n"
+                    "    await session.execute(\n"
+                    "        update(Message)\n"
+                    "        .where(Message.thread_id.in_(thread_ids))\n"
+                    "        .values(read_at=func.now())\n"
+                    "    )\n"
+                ),
+            )
+        ],
+        expect=[UNTOUCHED],
+    ),
+    Case(
+        id="t78-11-clearing-tells",
+        what="D-006: a clearing announced as an event",
+        edits=[
+            (
+                THREADS_SERVICE,
+                "        await repository.clear(session, user.id, [thread_id])\n",
+                (
+                    "        await repository.clear(session, user.id, [thread_id])\n"
+                    '        events.queue(session, user.id, "thread.cleared", {})\n'
+                ),
+            )
+        ],
+        expect=[UNTOUCHED],
+    ),
+    Case(
+        id="t78-12-both-at-once",
+        what="a bulk body with both thread_ids and expired taken",
+        edits=[
+            (
+                THREADS_SCHEMAS,
+                "        if (self.thread_ids is None) == (self.expired is None):\n",
+                "        if self.thread_ids is None and self.expired is None:\n",
+            )
+        ],
+        expect=[f"{CLEAR_TEST}test_a_bad_body_is_a_validation_error[body3]"],
+    ),
+    Case(
+        id="t78-13-expired-false",
+        what="a bulk body of expired: false taken",
+        edits=[
+            (
+                THREADS_SCHEMAS,
+                (
+                    "        if self.expired is False:\n"
+                    '            raise ValueError("expired can only be true")\n'
+                ),
+                "",
+            )
+        ],
+        expect=[f"{CLEAR_TEST}test_a_bad_body_is_a_validation_error[body2]"],
+    ),
+    Case(
+        id="t78-14-no-cap",
+        what="a bulk body of any number of ids taken",
+        edits=[
+            (
+                THREADS_SCHEMAS,
+                "        default=None, min_length=1, max_length=CLEAR_MAX\n",
+                "        default=None, min_length=1\n",
+            )
+        ],
+        expect=[f"{CLEAR_TEST}test_a_bad_body_is_a_validation_error[body4]"],
+    ),
+    Case(
+        id="t78-15-no-rate-limit",
+        what="rule 9: clearing without a rate limit",
+        edits=[
+            (
+                THREADS_ROUTER,
+                'user_rate_limit("threads_clear", limit=CLEARS_PER_MINUTE, window_s=60)',
+                'user_rate_limit("threads_clear", limit=10_000, window_s=60)',
+            )
+        ],
+        expect=["test_clearing_and_restoring_share_one_rate_limit"],
+    ),
+]
+
 CASES: list[tuple[Case, list[str]]] = (
     [(c, T51_SELECTION) for c in T51]
     + [(c, T54_SELECTION) for c in T54]
@@ -7587,6 +7842,7 @@ CASES: list[tuple[Case, list[str]]] = (
     + [(c, T65_SELECTION) for c in T65]
     + [(c, P79_SELECTION) for c in P79]
     + T67
+    + [(c, T78_SELECTION) for c in T78]
 )
 
 # The fifty-connection fixture's own message when Postgres refuses a connection.

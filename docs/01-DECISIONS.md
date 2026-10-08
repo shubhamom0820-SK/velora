@@ -4637,6 +4637,61 @@ the photo's id.
 Approved by the founder with Claude's plan for T-6.7 (Q7 its backfill), 8 October 2026, on the
 advisor's recommendation (Claude, in a separate chat), relayed; written up by Claude.
 
+### D-610 · A clearing is stamped with the newest message, under the Thread's lock — Locked
+**The decision (T-7.8):** `thread_clears.cleared_at` is the newest message's `created_at` in the
+Thread when the clearing runs, or the Thread's opening before any message: a point in the
+messages' own clock, never the time of the tap. The clearing takes the Thread's row `FOR UPDATE`,
+the lock every send takes (T-7.3), and reads the newest message in a statement of its own after
+the lock is granted, so it sees what a send it waited for wrote. Everything that existed when it
+ran is hidden from the one who cleared; everything written after it shows (03-SCHEMA: "if a new
+message arrives after `cleared_at`, it reappears showing only messages newer than it").
+
+**Why:** a message's `created_at` is its send's transaction start (the database's `now()`), taken
+before the send waits for the Thread's row. A clearing stamped with its own time would hide for
+good a message whose send began just before the tap and was written just after it: the clearer
+never saw it, and it would never come back. The newest message's own stamp can't fall after a
+message written later under the same lock. It reads no Python clock, so a frozen test clock
+can't skew it either. `test_clear_race.py` forces the three ways a clearing and a send meet,
+each overlap seen by Postgres itself (`pg_blocking_pids`).
+
+**What remains, accepted:** two sends and a clearing within the same instant can still hide one
+message from the clearer, when a send whose transaction began first takes the lock after
+another's. The message is kept, the other person sees it, and a restore (D-611) shows it. It
+is T-7.3's stamp, not the clearing's, and needs nothing now.
+
+**Rejected:** `cleared_at = now()` (the case above); a clearing outside the Thread's lock (it
+races a send under way); restamping messages after the lock (T-7.3's send, out of scope, and the
+residue above doesn't earn it).
+
+Approved by the founder on the advisor's recommendation (Claude, in a separate chat), relayed, 8
+October 2026, as Claude's plan for T-7.8 proposed it; written up by Claude.
+
+### D-611 · Restoring a clearing brings back the whole history; bulk clearing skips what isn't yours — Locked
+**The decision (T-7.8):**
+- **`DELETE /threads/{id}/clear` deletes the clearing row:** every message shows again, those
+  before an earlier clearing too, not one step back. A clearing is the person's own view, never a
+  moderation record (D-503 already erases them with the account), so deleting it keeps rule 12;
+  the messages were never touched. Again, or on a Thread never cleared, it changes nothing (204).
+- **`POST /threads/clear {thread_ids}` skips an id that isn't yours, or one across a block,** and
+  counts only those cleared, never refusing the rest: a block landing while she is in select mode
+  mustn't stop the others clearing. Each skipped id is as unknown as one nobody holds.
+- **`{expired: true}` clears the Threads in your list that have expired by the clock** (D-560:
+  `expired`, or `active` past `expires_at` before the cron catches up), never one already hidden
+  with nothing newer; so its count is the prototype's "Clear expired (n)". Knots and private
+  messages never expire, so it never reaches them.
+- **Nothing tells the other person,** and nothing about the Thread or its messages changes: not
+  `read_at` (their "Read"), not the status, expiry or knot taps (D-097, T-7.6, T-7.7 untouched).
+
+**Why:** the undo toast (T-7.10) and the You tab's restore (T-9.8) both mean "show me my chat
+again"; the whole history coming back is that, and an earlier clearing to step back to would need
+a column for a case nobody asked for.
+
+**Rejected:** restoring one step (a `previous_cleared_at` column and a migration); refusing the
+whole bulk request on one id (`NOT_FOUND`).
+
+Approved by the founder on the advisor's recommendation (Claude, in a separate chat), relayed, 8
+October 2026, as Claude's plan for T-7.8 proposed it; written up by Claude.
+
 ## Adding a decision
 
 Append `D-0NN · Title — Locked|Open`, with Decision, Why, Rejected. Never edit a Locked entry —

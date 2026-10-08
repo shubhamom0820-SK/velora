@@ -75,6 +75,7 @@ def test_case_ids_are_unique_and_name_their_task() -> None:
         "t65",
         "p79",
         "t67",
+        "t78",
     }
     assert len([i for i in ids if i.startswith("t51-")]) == 35
     assert len([i for i in ids if i.startswith("t54-")]) == 6

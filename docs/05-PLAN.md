@@ -3026,10 +3026,23 @@ prices don't depend on the web photos step, and the hold is lifted.
 - [ ] **Commit:** `feat(threads): tie and untie knot [T-7.7]`
 
 ### T-7.8 · Clearing
-- [ ] **Needs:** T-7.2
-- [ ] `POST /threads/{id}/clear`, `POST /threads/clear` (ids or `expired: true`), `DELETE /threads/{id}/clear` (restore). Upsert `thread_clears`. Never touches `messages`.
-- [ ] Test: after A clears, B still sees everything; admin still sees everything.
-- [ ] **Commit:** `feat(threads): one-sided clearing [T-7.8]`
+- [x] **Needs:** T-7.2
+- [x] `POST /threads/{id}/clear`, `POST /threads/clear` (ids or `expired: true`), `DELETE /threads/{id}/clear` (restore). Upsert `thread_clears`. Never touches `messages`.
+- [x] Test: after A clears, B still sees everything; admin still sees everything.
+  **Built as D-610 and D-611** (the founder's answers, 8 October 2026): a clearing holds the
+  Thread's row as a send does and is stamped with the newest message's `created_at` (the opening
+  before any), never the tap's time, so a message written after it always shows; restoring
+  deletes the row and the whole history comes back; a bulk clear skips ids that aren't yours or
+  are across a block, and `expired: true` takes the Threads in your list expired by the clock.
+  After A clears, B's list, unread count, Thread and messages page are equal to the byte, every
+  message row and the Thread row are unchanged (`to_jsonb`), nothing is published or notified,
+  and a read with no clearing applied (how T-9.1 and T-9.5 must read, noted on both) finds every
+  message, `body_raw` included. `test_clear_race.py` forces the three ways a clearing and a send
+  meet, each wait seen by Postgres (`pg_blocking_pids`). **Broken once each** (`uv run python -m
+  tests.break_guards t78-`): fifteen cases, each red in 1 of 1, every file restored and none
+  differing by SHA-256 after. P-510 (`GET /threads/cleared`, for T-9.8) and P-511 (the
+  prototype's 7-day auto-clear, after beta) filed.
+- [x] **Commit:** `feat(threads): one-sided clearing [T-7.8]`
 
 ### T-7.9 · Voice notes
 - [ ] **Needs:** T-7.3, T-4.1
@@ -3264,6 +3277,12 @@ number** per account gets its 5 each, one Thread's worth, and is **accepted**, k
 - [ ] `POST /reports` (≤ 10/day, details ≤ 500, optional `also_block`), `POST /blocks`, `DELETE /blocks/{id}`, `GET /blocks`.
 - [ ] Block effects, each with a test: removed from both discovery feeds, search, likes; profile → 404 both ways; threads hidden for both and sending → `BLOCKED`; realtime events stop; existing album grants revoked.
 - [ ] Reported person is never told who reported.
+- [ ] **A report's evidence is the whole Thread, whatever the reporter cleared** (T-7.8, D-006,
+  D-610): read the Thread's messages from `messages` by `thread_id`, never through
+  `messages.service.list_messages` or anything that applies `thread_clears.cleared_at`, which
+  shows a person their own view. Clearing never touches `messages`, so nothing is lost; a test
+  clears, then reports, and finds every message. A block hides a Thread separately from a
+  clearing: unblocking brings it back with the clearing still in place.
 - [ ] **Commit:** `feat(safety): reports and blocks [T-9.1]`
 
 ### T-9.2 · Fraud scoring v1
@@ -3305,6 +3324,9 @@ number** per account gets its 5 each, one Thread's worth, and is **accepted**, k
 - [ ] API: all `/admin/*` routes in `04-API.md`, `require_role(moderator)`; Vela grants and bans `admin` only; every call writes `audit_log`; viewing messages of a thread logs who looked and why (reason required).
 - [ ] **Vela grants (`/admin/users/{id}/credits`):** a grant can't reach a woman, because the database refuses it (D-076). A negative `delta`, an admin correction, has no ledger reason today, since `admin_grant` is a credit (D-077). Add a debit reason for it here, an enum addition. **Make `admin_grant`'s ref required here:** it is optional (T-5.1) only while its callers are the seed and `make_user`; an admin's grant names the `audit_log` row its call writes, or it is a grant nobody can trace. That is a migration on `ck_ledger_entries_ref_required` and a change to `wallet/rules.py`, which the seed and `make_user` must then follow (at the direction of the advisor directing Sprint 5, 3 October 2026).
 - [ ] Web `/admin`: metrics tiles, report queue with SLA timer (24 h), user search + detail (photos, reports, fraud signals, ledger, threads), moderation queue (approve/reject), actions with confirmation dialogs, audit log.
+- [ ] **`GET /admin/threads/{id}/messages` shows what either person cleared** (T-7.8, D-006): it
+  reads `messages` by `thread_id` with no viewer's `cleared_at`, as 04-API's "includes `body_raw` +
+  cleared" says; T-7.8's test reads the same way and finds every message after a clearing.
 - [ ] **A moderator's approve or reject changes a profile's completeness (P-210):** call `onboarding.service.refresh_completeness` in the same transaction, under the user's row lock, as `photos.service._record` and `delete_photo` do, or discovery ranks that profile by a stale number (D-032).
 - [ ] Web `/admin` renders only for `role in (moderator, admin)`, read through `useMe()`; anyone else
   gets the 404 page — replacing T-1.22's `next dev`-only gate (from P-30). **This gate is UX, not
@@ -5906,3 +5928,18 @@ The number comes from the session's own block, given in its brief, from P-100 up
   `asyncUtilTimeout` once in `vitest.setup.ts`, which costs a passing test nothing, and prove it
   red at today's 1 s under a forced load. Filed by Claude landing P-330, 8 October 2026; its
   session's block, P-530 to P-539.
+- [ ] P-510 · `GET /threads/cleared`: the chats I cleared, for T-9.8's "cleared chats with
+  restore" (the prototype's "Cleared chats (n)" with "Restore all", 08-DESIGN's You tab). Worst
+  case: T-9.8 reaches its row and no API lists a cleared chat, so a person who cleared one by
+  mistake past the 5-second undo can't find it to restore it; it is kept (D-006) and unreachable.
+  T-7.8 built clear, bulk clear and restore (D-611) and no list; this adds `Page<ThreadRow>` of
+  Threads I cleared with nothing newer (D-270), and "Restore all" as a loop or a bulk `DELETE`,
+  whichever T-9.8 wants. Belongs on T-9.8's Needs line. Filed by Claude building T-7.8, 8 October
+  2026, at the founder's direction; its session's block, P-510 to P-519.
+- [ ] P-511 · The prototype's auto-clear: an expired Thread more than 7 days past its expiry
+  cleared from each person's chats by itself. **After beta, no deadline** (the founder, 8 October
+  2026). Worst case without it: a Threads tab fills with long-dead Threads until its owner taps
+  "Clear expired". The prototype does it on the client; built, it is a cron writing
+  `thread_clears` through T-7.8's `repository.clear` (D-610's stamp), a clearing of each person's
+  own (D-006), never a Knot, and a restore (D-611) undoes it. Filed by Claude building T-7.8, 8
+  October 2026; its session's block, P-510 to P-519.

@@ -1,4 +1,5 @@
-"""Opening a Thread (T-7.1).
+"""Opening a Thread (T-7.1); listing them (T-7.2); clearing one from your own
+chats (T-7.8).
 
 `POST /v1/threads`, from a match (`thread_open`) or as a private message
 (`dm_open`, with its first message; D-231). One Thread per pair, forever: if
@@ -318,3 +319,46 @@ async def get_thread(
         if thread is None:
             raise _not_found()
         return view_of(thread, user)
+
+
+# --- Clearing (T-7.8) ---------------------------------------------------------------
+
+
+async def clear(session: AsyncSession, user: User, thread_id: UUID) -> None:
+    """Clear one of `user`'s Threads from their chats, theirs alone (D-006):
+    the other person, the messages and the Thread itself are as they were.
+    Again changes nothing. Anyone else's, or one across a block, is
+    `NOT_FOUND`."""
+    async with session.begin():
+        if not await repository.lock_mine(session, user.id, [thread_id]):
+            raise _not_found()
+        await repository.clear(session, user.id, [thread_id])
+
+
+async def clear_many(
+    session: AsyncSession, user: User, request: schemas.ClearThreadsRequest
+) -> schemas.Cleared:
+    """Clear the chosen Threads, or every expired one in `user`'s list, at
+    once. An id that isn't theirs, or is across a block, is skipped and not
+    counted: one block landing in select mode never refuses the rest."""
+    async with session.begin():
+        if request.expired:
+            ids = await repository.lock_expired(session, user.id, clock.now())
+        else:
+            assert request.thread_ids is not None
+            ids = await repository.lock_mine(
+                session, user.id, sorted(set(request.thread_ids))
+            )
+        if ids:
+            await repository.clear(session, user.id, ids)
+    return schemas.Cleared(cleared=len(ids))
+
+
+async def restore(session: AsyncSession, user: User, thread_id: UUID) -> None:
+    """Undo `user`'s clearing of a Thread: its whole history shows again
+    (D-611). One never cleared changes nothing. Anyone else's, or one across a
+    block, is `NOT_FOUND`."""
+    async with session.begin():
+        if await repository.my_thread(session, thread_id, user.id) is None:
+            raise _not_found()
+        await repository.restore(session, user.id, thread_id)

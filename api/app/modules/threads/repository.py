@@ -1,4 +1,4 @@
-"""SQL for threads (T-7.1, T-7.2). No rules here: the service decides."""
+"""SQL for threads (T-7.1, T-7.2, T-7.8). No rules here: the service decides."""
 
 from __future__ import annotations
 
@@ -12,8 +12,10 @@ from sqlalchemy import (
     Row,
     Text,
     Uuid,
+    and_,
     case,
     cast,
+    delete,
     func,
     insert,
     literal,
@@ -24,6 +26,7 @@ from sqlalchemy import (
     tuple_,
     update,
 )
+from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import aliased
 
@@ -277,3 +280,92 @@ async def my_thread(
         )
     )
     return found
+
+
+# --- Clearing (T-7.8) ---------------------------------------------------------------
+
+
+def _mine(viewer_id: UUID) -> Any:
+    """The viewer's Threads that no block stands across."""
+    return and_(
+        or_(Thread.user_low == viewer_id, Thread.user_high == viewer_id),
+        ~blocked_either_way(viewer_id, _other(viewer_id)),
+    )
+
+
+async def lock_mine(
+    session: AsyncSession, viewer_id: UUID, thread_ids: Sequence[UUID]
+) -> list[UUID]:
+    """Those of `thread_ids` that are the viewer's, held until the transaction
+    ends, as a send holds one: a clear waits for a send under way, and a send
+    for the clear. In id order, so two clears never wait on each other."""
+    found = await session.scalars(
+        select(Thread.id)
+        .where(Thread.id.in_(thread_ids), _mine(viewer_id))
+        .order_by(Thread.id)
+        .with_for_update(of=Thread)
+    )
+    return list(found)
+
+
+async def lock_expired(
+    session: AsyncSession, viewer_id: UUID, now: datetime
+) -> list[UUID]:
+    """The viewer's expired Threads in their list, held as `lock_mine` holds
+    them. Expired by the clock (D-560): an active Thread whose `expires_at`
+    has passed is one, though the cron hasn't caught its status up. One
+    already cleared with nothing newer isn't in the list, so isn't here."""
+    cleared = _cleared_at(viewer_id)
+    found = await session.scalars(
+        select(Thread.id)
+        .where(
+            _mine(viewer_id),
+            or_(
+                Thread.status == ThreadStatus.EXPIRED,
+                and_(Thread.status == ThreadStatus.ACTIVE, Thread.expires_at <= now),
+            ),
+            # In my list: T-7.2's rule, nothing newer than my clearing hidden.
+            or_(Thread.last_message_at > cleared, cleared.is_(None)),
+        )
+        .order_by(Thread.id)
+        .with_for_update(of=Thread)
+    )
+    return list(found)
+
+
+async def clear(
+    session: AsyncSession, viewer_id: UUID, thread_ids: Sequence[UUID]
+) -> None:
+    """Clear `thread_ids` for the viewer alone (D-006), each through its newest
+    message, or its opening before any (D-610): a message written later, by
+    the database's clock as messages are, shows. Call it once the Threads are
+    held, in a statement of its own, so it sees what a send it waited for
+    wrote. Writes `thread_clears` and nothing else."""
+    newest = (
+        select(func.max(Message.created_at))
+        .where(Message.thread_id == Thread.id)
+        .scalar_subquery()
+    )
+    through = select(
+        literal(viewer_id, Uuid), Thread.id, func.coalesce(newest, Thread.created_at)
+    ).where(Thread.id.in_(thread_ids))
+    upsert = pg_insert(ThreadClear).from_select(
+        [ThreadClear.user_id, ThreadClear.thread_id, ThreadClear.cleared_at], through
+    )
+    await session.execute(
+        upsert.on_conflict_do_update(
+            index_elements=[ThreadClear.user_id, ThreadClear.thread_id],
+            set_={ThreadClear.cleared_at: upsert.excluded.cleared_at},
+        )
+    )
+
+
+async def restore(session: AsyncSession, viewer_id: UUID, thread_id: UUID) -> None:
+    """The viewer's clearing of the Thread, gone: the whole history shows again
+    (D-611). A clearing is a view, never a moderation record (D-503 erases
+    them)."""
+    await session.execute(
+        delete(ThreadClear).where(
+            ThreadClear.user_id == viewer_id, ThreadClear.thread_id == thread_id
+        )
+    )

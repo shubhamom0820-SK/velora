@@ -968,6 +968,41 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/threads/clear": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Clear Threads */
+        post: operations["clear_threads_v1_threads_clear_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/threads/{thread_id}/clear": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Clear Thread */
+        post: operations["clear_thread_v1_threads__thread_id__clear_post"];
+        /** Restore Thread */
+        delete: operations["restore_thread_v1_threads__thread_id__clear_delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/threads/{thread_id}/messages": {
         parameters: {
             query?: never;
@@ -1239,6 +1274,26 @@ export interface components {
          * @enum {string}
          */
         ClaimStatus: "open" | "granted" | "refunded" | "rejected";
+        /**
+         * ClearThreadsRequest
+         * @description `{thread_ids}`, the chats chosen in select mode, or `{expired: true}`,
+         *     every expired Thread in my list ("Clear expired"): one or the other.
+         */
+        ClearThreadsRequest: {
+            /** Thread Ids */
+            thread_ids?: string[] | null;
+            /** Expired */
+            expired?: boolean | null;
+        };
+        /**
+         * Cleared
+         * @description How many of the request's Threads are now cleared for you: of the ids,
+         *     those that are yours; of `expired`, those that were in your list.
+         */
+        Cleared: {
+            /** Cleared */
+            cleared: number;
+        };
         /**
          * DataExport
          * @description A copy of the user's own data (D-502). `url` is a link to the file,
@@ -3954,6 +4009,97 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["Thread"];
                 };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    clear_threads_v1_threads_clear_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ClearThreadsRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Cleared"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    clear_thread_v1_threads__thread_id__clear_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                thread_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    restore_thread_v1_threads__thread_id__clear_delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                thread_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
             /** @description Validation Error */
             422: {

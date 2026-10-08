@@ -301,7 +301,10 @@ Unique `(sender_id, client_msg_id)`. Index `(thread_id, created_at desc)`.
 ### thread_clears  (one-sided hide)
 `user_id uuid fk users, thread_id uuid fk threads, cleared_at timestamptz, pk(user_id, thread_id)`.
 A cleared thread is hidden from that user's list; if a new message arrives after `cleared_at`,
-it reappears showing only messages newer than `cleared_at`.
+it reappears showing only messages newer than `cleared_at`. `cleared_at` is the Thread's newest
+message's `created_at` when the clearing ran (its opening, before any), read under the Thread's
+row lock, never the time of the tap (D-610, T-7.8). Clearing again moves it on; restoring deletes
+the row (D-611): a clearing is a view, not a moderation record, and never touches `messages`.
 
 ---
 

@@ -88,10 +88,14 @@ class Thread(Timestamps, Base):
 
 
 class ThreadClear(CreatedAt, Base):
-    """A one-sided hide (D-006). `cleared_at` is the update timestamp.
+    """A one-sided hide (D-006). `cleared_at` is the newest message's
+    `created_at` when the clearing ran, or the Thread's opening before any
+    (D-610, T-7.8): a point in the messages' own clock, never the time of the
+    tap, so a message written after the clearing always shows.
 
     If a message arrives after `cleared_at`, the thread reappears for that user
     showing only messages newer than it. The other person sees everything.
+    Restoring deletes the row (D-611).
     """
 
     __tablename__ = "thread_clears"

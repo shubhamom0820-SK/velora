@@ -108,3 +108,35 @@ class ThreadRow(BaseModel):
 class ThreadRowPage(Page[ThreadRow]):
     """`Page<ThreadRow>`: newest first, by the last message or, before any,
     the opening, then id."""
+
+
+# --- Clearing (T-7.8) ---------------------------------------------------------------
+
+CLEAR_MAX = 100
+
+
+class ClearThreadsRequest(BaseModel):
+    """`{thread_ids}`, the chats chosen in select mode, or `{expired: true}`,
+    every expired Thread in my list ("Clear expired"): one or the other."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    thread_ids: list[UUID] | None = Field(
+        default=None, min_length=1, max_length=CLEAR_MAX
+    )
+    expired: bool | None = None
+
+    @model_validator(mode="after")
+    def _one_or_the_other(self) -> Self:
+        if (self.thread_ids is None) == (self.expired is None):
+            raise ValueError("send thread_ids, or expired: true")
+        if self.expired is False:
+            raise ValueError("expired can only be true")
+        return self
+
+
+class Cleared(BaseModel):
+    """How many of the request's Threads are now cleared for you: of the ids,
+    those that are yours; of `expired`, those that were in your list."""
+
+    cleared: int
