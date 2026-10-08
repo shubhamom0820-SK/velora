@@ -50,6 +50,18 @@ const FILTERS_TEST = "src/components/discover/FiltersSheet.test.tsx";
 const FILTERS_SHEET = "src/components/discover/FiltersSheet.tsx";
 const FILTER_PARAMS = "src/components/discover/filterParams.ts";
 const SHEET_TEST = "src/components/ui/Sheet.test.tsx";
+const CHATS = "src/components/chats/ChatsScreen.tsx";
+const CHATS_TEST = "src/components/chats/ChatsScreen.test.tsx";
+const THREADS_HOOKS = "src/lib/queries/threads.ts";
+const THREADS_HOOKS_TEST = "src/lib/queries/threads.test.tsx";
+const TICKER = "src/lib/ticker.ts";
+const TICKER_TEST = "src/lib/ticker.test.ts";
+const COUNTDOWN = "src/components/ui/Countdown.tsx";
+const COUNTDOWN_TEST = "src/components/ui/Countdown.test.tsx";
+const HER_ROWS = "draws no countdown and no expired state on her rows";
+const ONE_TICKER = "runs one 1 s interval for every reader";
+const TAKEN_OUT = "takes the row out at once, then offers Undo";
+const COUNTS = "counts one page of each tier";
 const ASKS_ALL = "asks the API with every filter in the URL";
 const BADGE_COUNTS = "counts each intent and each toggle on the Filters button";
 const SHOW_WRITES = "Show people writes the draft to the URL";
@@ -1056,6 +1068,167 @@ export const CASES: BreakCase[] = [
       "says none of the claims anywhere but the two named keys",
       "says what the toggles filter on",
     ],
+  },
+  // --- T-7.10: the chats list. Her list says nothing about time (P-460) ---
+  {
+    id: "t710-01-her-countdown",
+    file: "src/components/chats/ChatRow.tsx",
+    old: "man && !knotted && row.expires_at !== null",
+    new: "!knotted && row.expires_at !== null",
+    run: [CHATS_TEST],
+    expect: [HER_ROWS],
+  },
+  {
+    id: "t710-02-her-clear-expired",
+    file: CHATS,
+    old: '{man && tier === "threads" && !selecting',
+    new: '{tier === "threads" && !selecting',
+    run: [CHATS_TEST],
+    expect: ["offers her no Clear expired and no footer"],
+  },
+  {
+    id: "t710-03-her-footer",
+    file: CHATS,
+    old: '      {man && (\n        <p className="text-small text-mute px-',
+    new: '      {true && (\n        <p className="text-small text-mute px-',
+    run: [CHATS_TEST],
+    expect: ["offers her no Clear expired and no footer"],
+  },
+  {
+    id: "t710-04-a-blacklist-gate",
+    file: CHATS,
+    old: 'const man = useMe().data?.gender === "male";',
+    new: 'const man = useMe().data?.gender !== "female";',
+    run: [CHATS_TEST],
+    expect: ["shows nobody a countdown while it isn't yet known"],
+  },
+  {
+    id: "t710-05-a-ticker-per-reader",
+    file: TICKER,
+    old: "  if (timer === undefined) {",
+    new: "  if (true) {",
+    run: [TICKER_TEST],
+    expect: [ONE_TICKER],
+  },
+  {
+    id: "t710-06-the-ticker-never-stops",
+    file: TICKER,
+    old: "      clearInterval(timer);\n",
+    new: "",
+    run: [TICKER_TEST],
+    expect: [ONE_TICKER],
+  },
+  {
+    id: "t710-07-urgent-at-ten",
+    file: COUNTDOWN,
+    old: "leftMs < URGENT_MS",
+    new: "leftMs <= URGENT_MS",
+    run: [COUNTDOWN_TEST],
+    expect: ["fills --accent under ten minutes, and not at ten"],
+  },
+  {
+    id: "t710-08-extended-at-the-hour",
+    file: COUNTDOWN,
+    old: "  if (leftMs > HOUR_MS) {",
+    new: "  if (leftMs >= HOUR_MS) {",
+    run: [COUNTDOWN_TEST],
+    expect: ["reads a full hour as the hour, not as Extended"],
+  },
+  {
+    id: "t710-09-ran-out-by-status",
+    file: CHATS,
+    old: "      Date.parse(row.expires_at) <= now,",
+    new: '      row.status === "expired",',
+    run: [CHATS_TEST],
+    expect: ["counts Clear expired by the clock"],
+  },
+  {
+    id: "t710-10-undo-never-restores",
+    file: CHATS,
+    old: "              restore.mutate(row.id, {",
+    new: "              clearOne.mutate(row.id, {",
+    run: [CHATS_TEST],
+    expect: [TAKEN_OUT],
+  },
+  {
+    id: "t710-11-undo-held-too-long",
+    file: CHATS,
+    old: "const UNDO_MS = 5000;",
+    new: "const UNDO_MS = 8000;",
+    run: [CHATS_TEST],
+    expect: ["offers Undo for exactly 5 s"],
+  },
+  {
+    id: "t710-12-refused-row-left-out",
+    file: THREADS_HOOKS,
+    old: "      for (const [key, data] of before ?? []) client.setQueryData(key, data);\n",
+    new: "",
+    run: [CHATS_TEST],
+    expect: ["puts the row back and says so when the clear is refused"],
+  },
+  {
+    id: "t710-13-row-kept-until-answered",
+    file: THREADS_HOOKS,
+    old: "    onMutate: (id) => takeOut(client, id),\n",
+    new: "",
+    run: [CHATS_TEST],
+    expect: [TAKEN_OUT],
+  },
+  {
+    id: "t710-14-search-untrimmed",
+    file: CHATS,
+    old: "setQ(text.trim().slice(0, THREADS_Q_MAX))",
+    new: "setQ(text.slice(0, THREADS_Q_MAX))",
+    run: [CHATS_TEST],
+    expect: ["asks by name, trimmed, and never sends an empty search"],
+  },
+  {
+    id: "t710-15-empty-search-sent",
+    file: THREADS_HOOKS,
+    old: '          q: q === "" ? undefined : q,',
+    new: "          q,",
+    run: [THREADS_HOOKS_TEST],
+    expect: ["q only when it says something"],
+  },
+  {
+    id: "t710-16-search-uncapped",
+    file: CHATS,
+    old: "setQ(text.trim().slice(0, THREADS_Q_MAX))",
+    new: "setQ(text.trim())",
+    run: [CHATS_TEST],
+    expect: ["never sends more than the API takes: 50 characters"],
+  },
+  {
+    id: "t710-17-select-past-the-cap",
+    file: CHATS,
+    old: "const atCap = selected.size >= CLEAR_MAX;",
+    new: "const atCap = selected.size > CLEAR_MAX;",
+    run: [CHATS_TEST],
+    expect: ["takes at most 100 at a time"],
+  },
+  {
+    id: "t710-18-a-smaller-page",
+    file: THREADS_HOOKS,
+    old: "export const THREADS_PAGE = 50;",
+    new: "export const THREADS_PAGE = 20;",
+    run: [CHATS_TEST, THREADS_HOOKS_TEST],
+    expect: [COUNTS, "50 a page"],
+  },
+  {
+    id: "t710-19-a-knots-filter-on-threads",
+    file: CHATS,
+    old: 'const listFilter = tier === "knots" ? filter : "all";',
+    new: "const listFilter = filter;",
+    run: [CHATS_TEST],
+    expect: ["a filter chosen there never reaches Threads"],
+  },
+  {
+    id: "t710-20-never-more",
+    file: CHATS,
+    old: "more: first.next_cursor !== null",
+    new: "more: false",
+    run: [CHATS_TEST],
+    expect: [COUNTS],
   },
 ];
 

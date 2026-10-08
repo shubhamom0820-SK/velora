@@ -168,6 +168,9 @@ and `PriceTag`, which draws the number alone, "5", hidden from screen readers, t
 the price in words. It never says "free": a woman's buttons carry no tag at all (§8, D-002), so
 the row above is superseded there. `Sheet` gained a `chrome` tone and a `lead` above its title for
 the match sheet ✦.
+**Built by T-7.10:** `Countdown`, as §8's pill: "41m left", "22h left" past the hour, filled
+`--accent` under ten minutes, "Ran out" (not §4's "Expired"). Every one reads one shared 1 s
+clock, `src/lib/ticker.ts`. A man's alone: no screen draws one for a woman (D-097, P-460).
 
 Feature components live in `src/components/<feature>/` (discover, chat, wallet, profile, admin).
 

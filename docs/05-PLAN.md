@@ -3129,9 +3129,26 @@ prices don't depend on the web photos step, and the hold is lifted.
 - [x] **Commit:** `feat(messages): voice notes and unlocks [T-7.9]`
 
 ### T-7.10 · Web chat list
-- [ ] **Needs:** T-7.2, T-7.8, and **P-460**: her rows draw no countdown and no expired state
-- [ ] Threads / Knots tabs with counts; live countdown per row (one shared 1 s ticker, not one per row); Knots filters; search; select mode + bulk clear; "Clear expired (n)"; trash per row with 5 s undo toast; unread dots; empty states.
-- [ ] **Commit:** `feat(web): chats list [T-7.10]`
+- [x] **Needs:** T-7.2, T-7.8, and **P-460**: her rows draw no countdown and no expired state
+- [x] Threads / Knots tabs with counts; live countdown per row (one shared 1 s ticker, not one per row); Knots filters; search; select mode + bulk clear; "Clear expired (n)"; trash per row with 5 s undo toast; unread dots; empty states.
+  **Built 9 October 2026** (the founder's answers, on the advisor's recommendation, relayed):
+  `src/components/chats/` from 08-DESIGN §8, never the prototype. **Her list says nothing about
+  time (P-460):** her rows draw no `Countdown` and no expired state whatever `status` or
+  `expires_at` they carry, and she gets no "Clear expired" and no footer; the gate is an
+  allowlist (`gender === "male"`), so while `me` loads nobody sees a countdown. Every countdown
+  reads one shared clock, `src/lib/ticker.ts` (`useNow`), started by the first reader and
+  stopped after the last. `Countdown` (§4) says "41m left" (minutes rounded up), "22h left"
+  past the hour (an Extended Thread), fills `--accent` under ten minutes and says "Ran out",
+  by the clock (D-560). A tab's count is one page of its tier, 50 (the API's largest), and
+  "50+" beyond (Q1). A row opens `/chats/{id}`, T-7.11's screen (Q2). His footer is the
+  one-hour line, landed after T-7.6 (Q3). A clear takes the row out at once and offers Undo for
+  5 s once the server has it; Undo is `DELETE /threads/{id}/clear` (Q4), which brings back
+  history from an earlier clearing too: P-620. Select mode clears up to 100 at once, as the API
+  takes. Search is by name only, as `q` is (T-7.2), trimmed, never empty, at most 50.
+  **Broken once each, 9 October 2026** (`node scripts/break-guards.mts t710-`, log in the main
+  checkout's `out/t-7.10-break-guards.log`): twenty cases, each red in 1 of 1, every file
+  restored byte for byte.
+- [x] **Commit:** `feat(web): chats list [T-7.10]`
 
 ### T-7.11 · Web conversation
 - [ ] **Needs:** T-7.3, T-7.7, T-7.9, and **P-56**: its paid buttons send the price they showed
@@ -5975,6 +5992,10 @@ The number comes from the session's own block, given in its brief, from P-100 up
   expired state, and the client reads nothing from a null. Found writing T-7.6; filed by Claude,
   8 October 2026; its session's block, P-460 to P-469.
   **Placed 8 October 2026 (the audit, P-490):** on T-7.10's and T-7.12's Needs lines.
+  **T-7.10's half built 9 October 2026:** her chats list draws no countdown, no expired state,
+  no "Clear expired" and no footer, and a test gives her rows an `expires_at` to prove the
+  screen's own gate (`t710-01` to `t710-04` red when broken). T-7.12's half, the client reading
+  nothing from her null, stays open.
 - [ ] P-450 · Add Hindi and Hinglish words to the message filters. **Before REL-1,** the first
   time strangers message each other. Worst case: a man writes "paytm kar do", "number do" or a
   Hindi slur, in the language most of our users write in, and it reaches her unmasked and
@@ -6175,3 +6196,11 @@ The number comes from the session's own block, given in its brief, from P-100 up
   built (T-7.6, D-642): the warning and the expiry go to whoever sees the expiry, a man, so both
   men are told. Found writing T-7.6's plan; filed by Claude, 8 October 2026; its session's block,
   P-540 to P-549.
+- [ ] P-620 · Undo of a clear restores the previous clear point, not none. **An API change,
+  before beta** (the founder, 9 October 2026). Worst case: someone clears a chat, a new message
+  brings it back, they clear it again and tap Undo, and the whole history returns, including
+  messages they had cleared before and chose not to see again. T-7.10's Undo is `DELETE
+  /threads/{id}/clear`, which removes the clearing altogether (D-611), so the earlier one goes
+  with it. Wanted: a clear remembers the point it replaced, and Undo puts that point back, or
+  none if there was none. Found planning T-7.10; filed by Claude, 9 October 2026, at the
+  founder's direction; its session's block, P-620 to P-629.

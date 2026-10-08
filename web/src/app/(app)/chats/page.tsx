@@ -1,11 +1,11 @@
+import type { Metadata } from "next";
+
+import { ChatsScreen } from "@/components/chats/ChatsScreen";
 import { t } from "@/i18n/t";
 
-/** Placeholder until the chats list (T-7.10). It sits in the app shell's `<main>` (T-5.6). */
+export const metadata: Metadata = { title: t("chats.title") };
+
+/** The chats list (T-7.10), inside the app shell's `<main>` (T-5.6). */
 export default function ChatsPage() {
-  return (
-    <div className="text-ink flex flex-1 flex-col items-center justify-center gap-2 p-6">
-      <h1 className="text-title-1">{t("placeholder.chats")}</h1>
-      <p className="text-body text-mute">{t("placeholder.comingSoon")}</p>
-    </div>
-  );
+  return <ChatsScreen />;
 }

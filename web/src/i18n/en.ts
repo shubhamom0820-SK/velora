@@ -54,7 +54,6 @@ export const en = {
   placeholder: {
     comingSoon: "Coming soon.",
     login: "Sign in",
-    chats: "Chats",
     you: "You",
     admin: "Admin",
   },
@@ -257,6 +256,60 @@ export const en = {
     emptyBody: "When someone likes you, they'll be here.",
     failed: "We couldn't load who liked you",
     loadingMore: "Loading more",
+  },
+  // The chats list (T-7.10, 08-DESIGN §8): Threads and Knots. Her list says
+  // nothing about time, expiry or price (D-097, D-554, P-460): no countdown, no
+  // "Clear expired", no footer. Drafted by Claude, for the founder's review.
+  chats: {
+    title: "Chats",
+    threads: "Threads",
+    knots: "Knots",
+    tabCount: "{tab}, {count}",
+    tabCountOver: "{tab}, more than {count}",
+    filters: "Show",
+    filterAll: "All",
+    filterUnread: "Unread",
+    filterRecent: "Recent",
+    search: "Search by name",
+    select: "Select",
+    done: "Done",
+    selectRow: "Select the chat with {name}",
+    selectLimit: "You can clear up to {max} at a time.",
+    clearSelected: {
+      one: "Clear 1 chat",
+      other: "Clear {count} chats",
+    },
+    clearExpired: "Clear expired ({count})",
+    clearRow: "Clear the chat with {name}",
+    // 08-DESIGN §6: "Cleared from your chats", never "Deleted".
+    cleared: "Cleared from your chats",
+    clearedMany: {
+      one: "1 chat cleared from your chats",
+      other: "{count} chats cleared from your chats",
+    },
+    undo: "Undo",
+    clearFailed: "We couldn't clear that just now. Try again.",
+    restoreFailed: "We couldn't bring it back just now. Try again.",
+    deletedAccount: "Deleted account",
+    voiceNote: "Voice note",
+    noMessages: "No messages yet",
+    unread: {
+      one: "1 unread message",
+      other: "{count} unread messages",
+    },
+    knot: "Knot",
+    emptyThreads: "No threads yet",
+    emptyThreadsBody: "When you match with someone, your Thread shows here.",
+    emptyKnots: "No knots yet",
+    emptyKnotsBody: "When you both tie the knot, the chat moves here, to stay.",
+    emptyAction: "Go to Discover",
+    noResults: "No chats match",
+    noResultsBody: "Try another name or filter.",
+    failed: "We couldn't load your chats",
+    loadingMore: "Loading more",
+    // His alone (08-DESIGN §8). Copy follows app_config.thread_hours (P-14):
+    // 1 since T-7.6, restarted by her messages (D-097).
+    footer: "A Thread lasts an hour from her last message. Knots last.",
   },
   // The balance pill, the wallet screen and the store sheet (T-5.5). Users see
   // Velas, never "credits" (D-049). Drafted by Claude, for the founder's review.
@@ -1097,5 +1150,12 @@ export const en = {
     pinProgress: "{count} of {max} digits entered",
     pinDelete: "Delete",
     otpDigit: "Digit {n} of {total}",
+    // A Thread's time left (Countdown, 08-DESIGN §8): "Ran out", never
+    // "Expired" (§4's example is the 24-hour Thread's).
+    countdown: {
+      hours: "{hours}h left",
+      minutes: "{minutes}m left",
+      out: "Ran out",
+    },
   },
 } as const;

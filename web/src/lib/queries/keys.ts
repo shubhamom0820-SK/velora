@@ -43,6 +43,11 @@ export const queryKeys = {
   // `likes()` is the prefix of the count's key too (T-6.7).
   likes: () => ["likes"] as const,
   likesCount: () => ["likes", "count"] as const,
+  // `threads()` is the prefix of every list's key (T-7.10), so a clearing
+  // asks every tab, filter and search again.
+  threads: () => ["threads"] as const,
+  threadList: (tier: string, filter: string, q: string) =>
+    ["threads", "list", tier, filter, q] as const,
   profile: (id: string) => ["profiles", id] as const,
   profileByUsername: (username: string) =>
     ["profiles", "by-username", username] as const,

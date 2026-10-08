@@ -30,8 +30,8 @@ describe("the web's breaking runs (T-4.6)", () => {
     const ids = CASES.map((c) => c.id);
 
     expect(new Set(ids).size).toBe(ids.length);
-    expect(ids.every((id) => /^t(?:4(?:[5-8]|12)|811|6[5-9])-/.test(id))).toBe(
-      true,
-    );
+    expect(
+      ids.every((id) => /^t(?:4(?:[5-8]|12)|811|6[5-9]|710)-/.test(id)),
+    ).toBe(true);
   });
 });

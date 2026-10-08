@@ -18,6 +18,7 @@ import { Button } from "@/components/ui/Button";
 import { ButtonLink } from "@/components/ui/ButtonLink";
 import { Badge } from "@/components/ui/Badge";
 import { Chip } from "@/components/ui/Chip";
+import { Countdown } from "@/components/ui/Countdown";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { ErrorState } from "@/components/ui/ErrorState";
 import { Field } from "@/components/ui/Field";
@@ -58,6 +59,10 @@ export function UiGallery() {
   const [onlineNow, setOnlineNow] = useState(false);
   const [picked, setPicked] = useState(INTERESTS);
   const [matches, setMatches] = useState(true);
+  // Countdowns from the moment the page opened: each phase, ticking.
+  const [opened] = useState(() => Date.now());
+  const inMinutes = (minutes: number) =>
+    new Date(opened + minutes * 60_000).toISOString();
   const [messages, setMessages] = useState(false);
   const [sheetOpen, setSheetOpen] = useState(false);
   const [chromeSheetOpen, setChromeSheetOpen] = useState(false);
@@ -160,6 +165,15 @@ export function UiGallery() {
             7
           </Badge>
         </div>
+      </Section>
+
+      <Section title="Countdown">
+        <Row>
+          <Countdown expiresAt={inMinutes(22 * 60 + 30)} />
+          <Countdown expiresAt={inMinutes(41)} />
+          <Countdown expiresAt={inMinutes(8)} />
+          <Countdown expiresAt={inMinutes(-5)} />
+        </Row>
       </Section>
 
       <Section title="Chip">

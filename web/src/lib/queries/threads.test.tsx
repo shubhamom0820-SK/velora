@@ -6,7 +6,13 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { fakeApi, json } from "@/lib/testing/fakeApi";
 
 import { makeQueryClient } from "./QueryProvider";
-import { useExtendThread, useReopenThread } from "./threads";
+import {
+  useClearThreads,
+  useExtendThread,
+  useReopenThread,
+  useRestoreThread,
+  useThreads,
+} from "./threads";
 import { useWallet } from "./wallet";
 
 const THREAD = {
@@ -88,5 +94,80 @@ describe.each([
         "GET /v1/wallet",
       ]),
     );
+  });
+});
+
+/** A client of its own, for T-7.10's hooks, retrying nothing. */
+function freshWrapper() {
+  const client = makeQueryClient();
+  client.setDefaultOptions({ queries: { retry: false } });
+  function Wrapper({ children }: { children: ReactNode }) {
+    return (
+      <QueryClientProvider client={client}>{children}</QueryClientProvider>
+    );
+  }
+  return Wrapper;
+}
+
+describe("the chats list's hooks (T-7.10)", () => {
+  it("asks for a tier and filter, 50 a page, q only when it says something, then the next page by its cursor", async () => {
+    const api = fakeApi({
+      "GET /v1/threads": (call) =>
+        json(200, {
+          items: [],
+          next_cursor: call.query.has("cursor") ? null : "c2",
+        }),
+    });
+    const { result } = renderHook(() => useThreads("knots", "recent", ""), {
+      wrapper: freshWrapper(),
+    });
+
+    await waitFor(() => expect(result.current.isSuccess).toBe(true));
+    const first = api.calls[0]!.query;
+    expect(Object.fromEntries(first)).toEqual({
+      tier: "knots",
+      filter: "recent",
+      limit: "50",
+    });
+
+    await act(() => result.current.fetchNextPage());
+    expect(api.calls[1]!.query.get("cursor")).toBe("c2");
+  });
+
+  it("asks nothing while it isn't enabled", async () => {
+    const api = fakeApi({
+      "GET /v1/threads": () => json(200, { items: [], next_cursor: null }),
+    });
+    renderHook(() => useThreads("threads", "all", "pri", false), {
+      wrapper: freshWrapper(),
+    });
+
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    expect(api.calls).toHaveLength(0);
+  });
+
+  it("restores by DELETE, and clears several in one request", async () => {
+    const api = fakeApi({
+      "DELETE /v1/threads/t1/clear": () => json(204),
+      "POST /v1/threads/clear": () => json(200, { cleared: 1 }),
+    });
+    const restore = renderHook(() => useRestoreThread(), {
+      wrapper: freshWrapper(),
+    });
+    const many = renderHook(() => useClearThreads(), {
+      wrapper: freshWrapper(),
+    });
+
+    await act(() => restore.result.current.mutateAsync("t1"));
+    const answer = await act(() =>
+      many.result.current.mutateAsync({ expired: true }),
+    );
+
+    expect(api.sent()).toEqual([
+      "DELETE /v1/threads/t1/clear",
+      "POST /v1/threads/clear",
+    ]);
+    expect(api.calls[1]!.body).toEqual({ expired: true });
+    expect(answer).toEqual({ cleared: 1 });
   });
 });

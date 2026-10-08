@@ -1,7 +1,16 @@
-import { useMutation } from "@tanstack/react-query";
+import {
+  useInfiniteQuery,
+  useMutation,
+  useQueryClient,
+  type InfiniteData,
+  type QueryClient,
+  type QueryKey,
+} from "@tanstack/react-query";
 
 import { api } from "@/lib/api";
 import type { components } from "@/types/api";
+
+import { queryKeys } from "./keys";
 
 export type Thread = components["schemas"]["Thread"];
 
@@ -48,5 +57,134 @@ export function useExtendThread() {
   return useMutation({
     mutationFn: buyTime("extend"),
     meta: { touchesWallet: true },
+  });
+}
+
+export type ThreadRow = components["schemas"]["ThreadRow"];
+type ThreadRowPage = components["schemas"]["ThreadRowPage"];
+export type Tier = "threads" | "knots";
+export type ThreadFilter = "all" | "unread" | "recent";
+
+/**
+ * A page of the chats list: the API's largest (1 to 50, `core/pagination`), so
+ * a tab's count reads one page, and "50+" beyond it (T-7.10).
+ */
+export const THREADS_PAGE = 50;
+
+/** A search is 1 to 50 characters (`GET /threads?q=`); anything else the API refuses. */
+export const THREADS_Q_MAX = 50;
+
+/** One request clears 1 to 100 chosen chats (`POST /threads/clear`). */
+export const CLEAR_MAX = 100;
+
+/**
+ * The chats list (`GET /threads`, T-7.2): one tier, newest first, a page at a
+ * time. `q` is sent only when it says something, as the API takes it (1 to 50
+ * characters); never a cleared Thread with nothing newer, never across a block.
+ */
+export function useThreads(
+  tier: Tier,
+  filter: ThreadFilter,
+  q: string,
+  enabled = true,
+) {
+  return useInfiniteQuery({
+    queryKey: queryKeys.threadList(tier, filter, q),
+    enabled,
+    queryFn: ({ pageParam, signal }) =>
+      api.get("/v1/threads", {
+        query: {
+          tier,
+          filter,
+          q: q === "" ? undefined : q,
+          cursor: pageParam,
+          limit: THREADS_PAGE,
+        },
+        signal,
+      }),
+    initialPageParam: null as string | null,
+    getNextPageParam: (page) => page.next_cursor,
+  });
+}
+
+type Snapshot = [QueryKey, InfiniteData<ThreadRowPage> | undefined][];
+
+/** Takes `id` out of every list now, and returns what was there to put back. */
+async function takeOut(client: QueryClient, id: string): Promise<Snapshot> {
+  const lists = [...queryKeys.threads(), "list"];
+  await client.cancelQueries({ queryKey: lists });
+  const before = client.getQueriesData<InfiniteData<ThreadRowPage>>({
+    queryKey: lists,
+  });
+  client.setQueriesData<InfiniteData<ThreadRowPage>>(
+    { queryKey: lists },
+    (data) =>
+      data && {
+        ...data,
+        pages: data.pages.map((page) => ({
+          ...page,
+          items: page.items.filter((row) => row.id !== id),
+        })),
+      },
+  );
+  return before;
+}
+
+/**
+ * Clears one Thread from my chats (`POST /threads/{id}/clear`, T-7.8): mine
+ * alone, through its newest message; the other person sees no change. The row
+ * leaves the list at once and comes back if the API refuses.
+ */
+export function useClearThread() {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) =>
+      api.post("/v1/threads/{thread_id}/clear", {
+        params: { thread_id: id },
+      }),
+    onMutate: (id) => takeOut(client, id),
+    onError: (_error, _id, before) => {
+      for (const [key, data] of before ?? []) client.setQueryData(key, data);
+    },
+    // Not awaited: the screen's toast never waits on the list's refetch.
+    onSettled: () => {
+      void client.invalidateQueries({ queryKey: queryKeys.threads() });
+    },
+  });
+}
+
+/**
+ * Undo (`DELETE /threads/{id}/clear`, D-611): the clearing gone and the
+ * history back. It removes the clearing altogether, so an earlier one goes with
+ * it: P-620.
+ */
+export function useRestoreThread() {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) =>
+      api.delete("/v1/threads/{thread_id}/clear", {
+        params: { thread_id: id },
+      }),
+    // Not awaited: the screen's toast never waits on the list's refetch.
+    onSettled: () => {
+      void client.invalidateQueries({ queryKey: queryKeys.threads() });
+    },
+  });
+}
+
+/**
+ * Clears several (`POST /threads/clear`): the chats chosen in select mode, or
+ * `expired`, every Thread in my list expired by the clock, as the server
+ * counts them (D-560). Answers how many it cleared.
+ */
+export function useClearThreads() {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: (what: { thread_ids: string[] } | { expired: true }) =>
+      api.post("/v1/threads/clear", { body: what }),
+    // Not awaited: the screen's toast never waits on the list's refetch.
+    onSettled: () => {
+      void client.invalidateQueries({ queryKey: queryKeys.threads() });
+    },
   });
 }
