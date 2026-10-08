@@ -36,6 +36,7 @@ from app.modules.payments.router import router as payments_router
 from app.modules.photos.router import router as photos_router
 from app.modules.pricing.router import router as pricing_router
 from app.modules.profiles.router import router as profiles_router
+from app.modules.swipes.router import router as swipes_router
 from app.modules.users.router import router as users_router
 from app.modules.verification.router import router as verification_router
 from app.modules.waitlist.router import router as waitlist_router
@@ -156,6 +157,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.include_router(admin_router, prefix="/v1")
     app.include_router(discovery_router, prefix="/v1")
     app.include_router(account_router, prefix="/v1")
+    app.include_router(swipes_router, prefix="/v1")
     for sign_in_router, served_for in SIGN_IN_PATHS:
         if settings.AUTH_PHONE_PROVIDER in served_for:
             app.include_router(sign_in_router, prefix="/v1")

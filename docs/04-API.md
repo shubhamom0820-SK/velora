@@ -101,7 +101,7 @@ further rule, computed from the shown photos' records, never `is_verified` alone
 | Method | Path | Auth | Body → Response | Task |
 |---|---|---|---|---|
 | GET | /discover | ✅ | `?feed=foryou|new|online&intent_ids=&verified=&cursor=&limit=` → `Page<Card>` (`intent_ids`: any overlap, D-041, 1 to 10 known ids, repeated as `intent_ids=1&intent_ids=2`; `verified=true`: the badge, D-393) | T-6.2 |
-| POST | /swipes | ✅ | `{target_id, dir}` → `{matched, match_id?, swipes_left}` | T-6.4 |
+| POST | /swipes | ✅ | `{target_id, dir}` (`like`, `pass`, `super`) → `{matched, match_id, swipes_left}` (`swipes_left` null for anyone uncapped, a woman). Once per pair: `ALREADY_EXISTS`. Only someone the feed could show you, the radius aside: else `NOT_FOUND` (D-492). A man's like and pass count toward `swipe_daily_limit_men` by the IST day, a Super Like doesn't: `SWIPE_LIMIT_REACHED`. A Super Like is 5 Velas for a man (402 if he can't), free for a woman. 120 a minute | T-6.4 |
 | GET | /users/{id} | ✅ | → `PublicProfile`; `NOT_FOUND` for nobody and every refusal alike (D-493) | T-6.3 |
 | GET | /users/by-username/{u} | ✅ | → `PublicProfile` | T-6.6 |
 | GET | /search | ✅ | `?q=&cursor=&limit=` → `Page<CardLite>` (`@` prefix = username lookup) | T-6.6 |
@@ -276,7 +276,7 @@ fake order is paid by calling it, for T-8.2's tests and T-8.7's local checkout.
 | `NOT_ALLOWED` | 422 | man sending voice note, kudos too early, woman sending a gift, verifying a PIN when none is set (D-069), a woman's store or order (D-076) |
 | `GIFT_LIMIT_REACHED` | 429 | free gifts used up today; `details.resets_at`. D-231 charges the sixteenth send a week rather than refusing it, so T-8.9 says whether this keeps a case |
 | `GIFT_COOLDOWN` | 429 | same gift to same person too soon; `details.retry_after_s` |
-| `SWIPE_LIMIT_REACHED` | 429 | daily cap |
+| `SWIPE_LIMIT_REACHED` | 429 | a man's daily cap (D-492); `details.limit`, `details.resets_at` (the next IST midnight) |
 | `RATE_LIMITED` | 429 | `details.retry_after_s` |
 | `OTP_INVALID` / `OTP_EXPIRED` / `OTP_TOO_MANY` | 400/400/429 | `OTP_INVALID`: `details.attempts_left`. `OTP_TOO_MANY`: 5 wrong for one code, or 10 for one phone in 24 h (D-066) |
 | `FIREBASE_TOKEN_INVALID` | 401 | bad signature, an unknown key, expired, wrong audience or issuer, not a phone sign-in, a sign-in over 5 minutes old, or already used: one answer for all (D-085) |

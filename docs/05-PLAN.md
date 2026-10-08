@@ -2717,10 +2717,14 @@ prices don't depend on the web photos step, and the hold is lifted.
 - [x] **Commit:** `feat(profiles): public profile [T-6.3]`
 
 ### T-6.4 · Swipes and matching
-- [ ] **Needs:** T-6.3, T-5.1
-- [ ] `POST /swipes {target_id, dir}`: men's daily cap from `app_config` (IST day, Redis counter) → `SWIPE_LIMIT_REACHED`; `super` debits price (women free) via wallet; duplicate swipe → `ALREADY_EXISTS`.
-- [ ] If `like`/`super` and the target already liked me → create `matches` row (ordered pair), publish `match.created` to both, notification.
-- [ ] **Commit:** `feat(swipes): swipe, daily cap, super like, match [T-6.4]`
+- [x] **Needs:** T-6.3, T-5.1
+- [x] `POST /swipes {target_id, dir}`: men's daily cap from `app_config` (IST day, Redis counter) → `SWIPE_LIMIT_REACHED`; `super` debits price (women free) via wallet; duplicate swipe → `ALREADY_EXISTS`.
+- [x] If `like`/`super` and the target already liked me → create `matches` row (ordered pair), publish `match.created` to both, notification.
+  **Built as D-492:** only someone the feed could show you, the radius aside; a man's like and
+  pass count, a Super Like doesn't; the place given back when nothing is written; the pair locked,
+  so two likes at once make one match (`test_race.py` forces it). Breaking runs `t64-01` to
+  `t64-14` each red, `t64-06` (the lock) red in 3 of 3. P-47's cache came with it.
+- [x] **Commit:** `feat(swipes): swipe, daily cap, super like, match [T-6.4]`
 
 
 ### T-6.5 · Web discover deck

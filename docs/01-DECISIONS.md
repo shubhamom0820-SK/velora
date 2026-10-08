@@ -3990,6 +3990,34 @@ keeping a name reserved forever would keep identifying data the person asked us 
 retiring erased names forever (keeps identifying data).
 
 Approved by the founder on the advisor's recommendation, relayed, 8 October 2026.
+### D-492 · Who may be swiped, and what counts toward men's daily cap — Locked (values tunable)
+**Decision (T-6.4).** `POST /v1/swipes` takes a like, a pass or a Super Like on **someone the feed
+could show the swiper**: discovery's `visible_to`, mutual (each wants the other's gender), every
+exclusion of 02-ARCHITECTURE §8, **without the radius**, so someone found by their `@username`
+across India may still be liked; anyone else, yourself included, is the one `NOT_FOUND`. One swipe
+per pair, ever: a second, whichever way, is `ALREADY_EXISTS`, and charges nothing.
+
+**The cap is a man's alone:** `app_config`'s `swipe_daily_limit_men` (50), by the IST day, reset
+at IST midnight, read through P-47's cache. **A like and a pass count; a Super Like doesn't**: it
+is its own, paid action (D-250), 5 Velas for a man through `pricing.charge` and so the wallet's
+`debit()` (rule 5), nothing for a woman (D-002), its ledger row's ref the other person, once per
+pair (03-SCHEMA). Over the cap: `SWIPE_LIMIT_REACHED`, with `details.limit` and
+`details.resets_at`. The count lives in Redis, one key per man per IST day; a swipe takes its
+place before the transaction and gives it back if nothing is written (a duplicate, a refusal, a
+402), so the count is of swipes made. `swipes_left` is null for anyone uncapped.
+
+**A like or Super Like back makes the pair's match**, once (`matches`' unique pair, the order the
+database's own), and each of them is told: `match.created` on their socket, `{match_id,
+user_id}`, and an in-app notification of kind `match` (T-9.4 sends the pushes). The pair is
+locked for the transaction (an advisory lock on the ordered pair), so two people liking each other
+at once are one after the other, and the second makes the match; `test_race.py` forces the overlap.
+
+**Rejected:** the radius on a swipe (a profile reached by link could never be liked); counting the
+Super Like (it is paid, and D-250 says it isn't swiping); counting swipes in the database (two
+swipes at once on different people could both take the last place).
+
+The founder's approval, 8 October 2026, of Claude's Q5 in T-6.2's plan, a Super Like not counting,
+on the advisor's recommendation (Claude, in a separate chat), relayed by the founder.
 
 ---
 

@@ -174,6 +174,7 @@ Envelope, both directions: `{ "type": "…", "id": "<uuid>", "data": { … } }`
 | `thread.expired` | expired |
 | `knot.requested` / `knot.accepted` / `knot.untied` | knot state changes |
 | `wallet.updated` | balance changed |
+| `match.created` | a like or Super Like met one back (T-6.4): `{match_id, user_id}`, the other person, to both |
 | `album.decided` | album request granted / declined |
 
 | Client → server | Effect |

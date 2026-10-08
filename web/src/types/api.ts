@@ -746,6 +746,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/swipes": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Swipe */
+        post: operations["swipe_v1_swipes_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/auth/otp/send": {
         parameters: {
             query?: never;
@@ -1392,6 +1409,33 @@ export interface components {
              * Format: uuid
              */
             photo_id: string;
+        };
+        /**
+         * SwipeDirection
+         * @enum {string}
+         */
+        SwipeDirection: "like" | "pass" | "super";
+        /** SwipeRequest */
+        SwipeRequest: {
+            /**
+             * Target Id
+             * Format: uuid
+             */
+            target_id: string;
+            dir: components["schemas"]["SwipeDirection"];
+        };
+        /**
+         * SwipeResult
+         * @description Whether it made a match, the match's id if so, and how many of today's
+         *     swipes a man has left (null for anyone uncapped, a woman).
+         */
+        SwipeResult: {
+            /** Matched */
+            matched: boolean;
+            /** Match Id */
+            match_id: string | null;
+            /** Swipes Left */
+            swipes_left: number | null;
         };
         /**
          * ThreadStatus
@@ -2770,6 +2814,39 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["DataExport"];
+                };
+            };
+        };
+    };
+    swipe_v1_swipes_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SwipeRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SwipeResult"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };

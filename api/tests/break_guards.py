@@ -4793,6 +4793,234 @@ P47: list[tuple[Case, list[str]]] = [
     ),
 ]
 
+# --- T-6.4: swipes, the daily cap, the Super Like, the match --------------------------
+
+T64: list[tuple[Case, list[str]]] = [
+    (
+        Case(
+            id="t64-01-no-cap",
+            what="the men's daily cap never refusing",
+            edits=[
+                (
+                    "app/modules/swipes/service.py",
+                    "        if await counter.take(redis, user_id, day, limit) is None:\n",
+                    "        if await counter.take(redis, user_id, day, limit * 0 + 10**6) is None:\n",
+                )
+            ],
+            expect=["test_the_cap_is_app_configs_and_the_next_swipe_is_refused"],
+        ),
+        ["tests/modules/swipes/test_swipe.py"],
+    ),
+    (
+        Case(
+            id="t64-02-no-place-given-back",
+            what="a refused swipe keeping its place in the count",
+            edits=[
+                (
+                    "app/modules/swipes/service.py",
+                    "            await counter.give_back(redis, user_id, day)\n",
+                    "            pass\n",
+                )
+            ],
+            expect=[
+                "test_a_swipe_not_written_gives_its_place_back[duplicate]",
+                "test_a_swipe_not_written_gives_its_place_back[nobody]",
+                "test_a_swipe_not_written_gives_its_place_back[blocked]",
+            ],
+        ),
+        ["tests/modules/swipes/test_swipe.py"],
+    ),
+    (
+        Case(
+            id="t64-03-super-counted",
+            what="D-492: a Super Like counted toward the cap",
+            edits=[
+                (
+                    "app/modules/swipes/rules.py",
+                    "COUNTED: Final = frozenset({SwipeDirection.LIKE, SwipeDirection.PASS})\n",
+                    "COUNTED: Final = frozenset(SwipeDirection)\n",
+                )
+            ],
+            expect=["test_a_super_like_doesnt_count_and_goes_past_the_cap"],
+        ),
+        ["tests/modules/swipes/test_swipe.py"],
+    ),
+    (
+        Case(
+            id="t64-04-women-capped",
+            what="a woman given the men's cap",
+            edits=[
+                (
+                    "app/modules/swipes/rules.py",
+                    "    return gender is Gender.MALE\n",
+                    "    return gender is not None\n",
+                )
+            ],
+            expect=["test_a_woman_has_no_cap_and_no_count"],
+        ),
+        ["tests/modules/swipes/test_swipe.py"],
+    ),
+    (
+        Case(
+            id="t64-05-utc-day",
+            what="the cap's day by UTC, not IST",
+            edits=[
+                (
+                    "app/modules/swipes/service.py",
+                    "    day = clock.today_ist()\n",
+                    "    day = clock.now().date()\n",
+                )
+            ],
+            expect=["test_the_count_starts_again_at_ist_midnight"],
+        ),
+        ["tests/modules/swipes/test_swipe.py"],
+    ),
+    (
+        Case(
+            id="t64-06-no-pair-lock",
+            what="two likes at once each missing the other's",
+            edits=[
+                (
+                    "app/modules/swipes/repository.py",
+                    '            "SELECT pg_advisory_xact_lock(:lock, hashtext("\n',
+                    '            "SELECT pg_advisory_xact_lock_shared(:lock, hashtext("\n',
+                )
+            ],
+            expect=["test_two_likes_at_once_make_one_match"],
+        ),
+        ["tests/modules/swipes/test_race.py"],
+    ),
+    (
+        Case(
+            id="t64-07-woman-charged",
+            what="D-002: a woman's Super Like debited",
+            edits=[
+                (
+                    "app/modules/swipes/service.py",
+                    "        await pricing_service.charge(\n            session, user, LedgerReason.SUPER_LIKE, ref=Ref(RefType.USER, target_id)\n        )\n",
+                    "        from app.modules.wallet import service as wallet_service\n\n        await wallet_service.debit(\n            session, user.id, 5, LedgerReason.SUPER_LIKE, ref=Ref(RefType.USER, target_id)\n        )\n",
+                )
+            ],
+            expect=["test_a_womans_super_like_is_free_and_writes_no_ledger_row"],
+        ),
+        ["tests/modules/swipes/test_swipe.py"],
+    ),
+    (
+        Case(
+            id="t64-08-super-free-for-men",
+            what="a man's Super Like never charged",
+            edits=[
+                (
+                    "app/modules/swipes/service.py",
+                    "        await pricing_service.charge(\n            session, user, LedgerReason.SUPER_LIKE, ref=Ref(RefType.USER, target_id)\n        )\n",
+                    "        pass\n",
+                )
+            ],
+            expect=[
+                "test_a_mans_super_like_debits_five_through_the_wallet",
+                "test_a_super_like_he_cant_afford_is_402_and_writes_nothing",
+            ],
+        ),
+        ["tests/modules/swipes/test_swipe.py"],
+    ),
+    (
+        Case(
+            id="t64-09-no-duplicate-check",
+            what="a second swipe left to the primary key",
+            edits=[
+                (
+                    "app/modules/swipes/service.py",
+                    "    if await repository.direction_of(session, user.id, target_id) is not None:\n",
+                    "    if False:\n",
+                )
+            ],
+            expect=[
+                "test_one_swipe_per_pair_ever[like-pass]",
+                "test_a_second_super_like_is_already_exists_and_charges_once",
+            ],
+        ),
+        ["tests/modules/swipes/test_swipe.py"],
+    ),
+    (
+        Case(
+            id="t64-10-match-on-a-pass",
+            what="a pass taken as a like",
+            edits=[
+                (
+                    "app/modules/swipes/rules.py",
+                    "LIKES: Final = frozenset({SwipeDirection.LIKE, SwipeDirection.SUPER})\n",
+                    "LIKES: Final = frozenset(SwipeDirection)\n",
+                )
+            ],
+            expect=[
+                "test_a_pass_either_way_makes_no_match[pass-like]",
+                "test_a_pass_either_way_makes_no_match[like-pass]",
+            ],
+        ),
+        ["tests/modules/swipes/test_swipe.py"],
+    ),
+    (
+        Case(
+            id="t64-11-anyone-swipeable",
+            what="D-492: anyone swipeable, the feed's rule ignored",
+            edits=[
+                (
+                    "app/modules/swipes/service.py",
+                    "    if not await repository.is_swipeable(session, viewer, target_id):\n",
+                    "    if False:\n",
+                )
+            ],
+            expect=["test_nobody_the_feed_could_never_show_you_can_be_swiped"],
+        ),
+        ["tests/modules/swipes/test_swipe.py"],
+    ),
+    (
+        Case(
+            id="t64-12-seeking-ignored",
+            what="D-492: a swipe on someone who doesn't want your gender",
+            edits=[
+                (
+                    "app/modules/swipes/repository.py",
+                    "        .where(User.id == target_id, *visible_to(viewer, mutual=True))\n",
+                    "        .where(User.id == target_id, *visible_to(viewer, mutual=False))\n",
+                )
+            ],
+            expect=["test_nobody_the_feed_could_never_show_you_can_be_swiped"],
+        ),
+        ["tests/modules/swipes/test_swipe.py"],
+    ),
+    (
+        Case(
+            id="t64-13-nobody-notified",
+            what="a match with no notification",
+            edits=[
+                (
+                    "app/modules/swipes/service.py",
+                    "        notifications_repository.add(session, one, MATCH_NOTIFICATION, payload)\n",
+                    "",
+                )
+            ],
+            expect=["test_a_like_back_makes_one_match_and_tells_both[like-like]"],
+        ),
+        ["tests/modules/swipes/test_swipe.py"],
+    ),
+    (
+        Case(
+            id="t64-14-nothing-published",
+            what="a match nobody's socket hears of",
+            edits=[
+                (
+                    "app/modules/swipes/service.py",
+                    "        events.queue(session, one, MATCH_CREATED, payload)\n",
+                    "",
+                )
+            ],
+            expect=["test_a_match_is_published_to_both"],
+        ),
+        ["tests/modules/swipes/test_race.py"],
+    ),
+]
+
 CASES: list[tuple[Case, list[str]]] = (
     [(c, T51_SELECTION) for c in T51]
     + [(c, T54_SELECTION) for c in T54]
@@ -4814,6 +5042,7 @@ CASES: list[tuple[Case, list[str]]] = (
     + T63
     + [(c, T96_SELECTION) for c in T96]
     + P47
+    + T64
 )
 
 # The fifty-connection fixture's own message when Postgres refuses a connection.
