@@ -1,5 +1,6 @@
-"""SQL for finishing onboarding (T-4.8): what the requirements read. No rules
-here: the service decides."""
+"""SQL for finishing onboarding (T-4.8): what the requirements read, and the
+welcome grant's claim on a number (T-8.11). No rules here: the service
+decides."""
 
 from __future__ import annotations
 
@@ -7,9 +8,11 @@ from typing import Any
 from uuid import UUID
 
 from sqlalchemy import Select, func, select
+from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.enums import PhotoKind, ReviewStatus
+from app.modules.onboarding.models import WelcomeGrant
 from app.modules.photos.models import Photo
 from app.modules.profiles.models import Profile, ProfileIntent, ProfileInterest
 
@@ -59,6 +62,19 @@ async def approved_public_photo_count(session: AsyncSession, user_id: UUID) -> i
             Photo.public_key.is_not(None),
         ),
     )
+
+
+async def claim_welcome(session: AsyncSession, phone_hash: str, user_id: UUID) -> bool:
+    """Record that this number received its welcome, for this account: True
+    if it hadn't, False if it had, on this account or any before it. One
+    statement, so two claims on one number can't both see it free."""
+    claimed = await session.scalar(
+        insert(WelcomeGrant)
+        .values(phone_hash=phone_hash, user_id=user_id)
+        .on_conflict_do_nothing(index_elements=[WelcomeGrant.phone_hash])
+        .returning(WelcomeGrant.phone_hash)
+    )
+    return claimed is not None
 
 
 async def _scalar_count(session: AsyncSession, query: Select[Any]) -> int:

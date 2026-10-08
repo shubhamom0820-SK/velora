@@ -149,7 +149,8 @@ pin → selfie → done`. The API rejects discovery/threads calls with `ONBOARDI
 `done`. Women cannot reach `done` without an approved selfie verification:
 `POST /me/onboarding/complete` moves `selfie` to `done` once every requirement is met, and for anyone but
 a man only with a matched selfie; a trigger refuses any write that moves anyone else to `done`
-unmatched (T-4.8, D-310). Each step's endpoint works at its step (advancing it) and after it (an
+unmatched (T-4.8, D-310). In the same transaction a man reaching `done` is given welcome Velas
+through `wallet.credit(welcome)`, once per phone number, ever (`welcome_grants`, T-8.11, D-470). Each step's endpoint works at its step (advancing it) and after it (an
 edit that doesn't advance), and refuses before it with `ONBOARDING_INCOMPLETE` and the current step
 (D-068). `gender` and `dob` are immutable once set (T-1.9's trigger), and a date of birth under 18
 deletes the account, keeping only the number's hash (D-072).

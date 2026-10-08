@@ -114,6 +114,10 @@ async def test_the_app_role_reads_and_writes_rows(as_app: AsyncConnection) -> No
         ("payments", "truncate payments"),
         ("messages", "delete from messages where false"),
         ("reports", "delete from reports where false"),
+        # T-8.11 (D-470): a number's welcome, once recorded, is kept.
+        ("welcome_grants", "update welcome_grants set user_id = user_id where false"),
+        ("welcome_grants", "delete from welcome_grants where false"),
+        ("welcome_grants", "truncate welcome_grants"),
     ],
 )
 async def test_guarded_writes_are_refused(
@@ -273,6 +277,7 @@ async def test_no_refuse_change_trigger_is_reachable_by_the_app_role(
         "ledger_entries",
         "audit_log",
         "payments",
+        "welcome_grants",
     }
     assert reachable == []
 

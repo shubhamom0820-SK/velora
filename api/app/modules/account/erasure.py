@@ -108,17 +108,16 @@ KEPT: dict[tuple[str, str], str] = {
     ("album_requests", "owner_id"): "a paid action's record (the ledger names it)",
     ("referrals", "referee_id"): "a reward's record (the ledger names it)",
     ("referrals", "referrer_id"): "a reward's record (the ledger names it)",
+    # T-8.11 (D-470, P-371): the number's welcome, so a later account on it,
+    # after this erasure, gets none. Append-only besides.
+    ("welcome_grants", "user_id"): "one welcome per number, ever (D-470)",
 }
 
 # Kept tables a planned task builds, named now so the erasure can never be
 # changed to clear them without someone reading why. Each leaves this list for
 # KEPT when its table exists, or the check names it.
-KEPT_WHEN_BUILT: dict[str, str] = {
-    # T-8.11 (D-470, P-371): a hash of every number that received welcome
-    # Velas, so a later account on the number gets none. If T-8.11 names the
-    # table otherwise, it renames this entry.
-    "welcome_grants": "one welcome per number, ever (T-8.11, D-470)",
-}
+# T-8.11's `welcome_grants` was the first, and is in KEPT since it was built.
+KEPT_WHEN_BUILT: dict[str, str] = {}
 
 # Every stored file behind an erased row, deleted and read back before the
 # rows go. A test holds it to the schema: every `*_key` column on an erased

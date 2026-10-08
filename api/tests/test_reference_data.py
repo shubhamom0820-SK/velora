@@ -35,7 +35,7 @@ COUNTS = {
     "action_prices": 9,
     "credit_packs": 8,
     "gifts": 6,
-    "app_config": 11,
+    "app_config": 12,
     "interests": 24,
     "areas": 17,
 }
@@ -208,6 +208,9 @@ async def test_app_config_seeds(db: AsyncSession) -> None:
         # T-7.1, D-098: a woman's limits by the IST day, never prices.
         "women_new_men_daily_limit": 30,
         "women_private_messages_daily_limit": 30,
+        # T-8.11, D-470: every new man's welcome. A missing row skips the grant
+        # with only a warning (D-530), so this is what notices a lost one.
+        "welcome_velas": 5,
     }
 
 

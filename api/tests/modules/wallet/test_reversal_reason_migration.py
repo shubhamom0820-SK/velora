@@ -100,7 +100,10 @@ async def test_the_reasons_refuse_to_go_down_once_the_ledger_holds_one(
         "ledger keeps every row (T-1.12), so they can't leave ledger_reason_t "
         "(D-521)"
     )
-    assert (await _labels(await db.connection()))[-2:] == ADDED
+    # Still in the type, wherever a later task's reasons put them (T-8.11's
+    # `welcome` comes after).
+    labels = await _labels(await db.connection())
+    assert [label for label in labels if label in ADDED] == ADDED
 
 
 async def test_with_the_shape_in_place_its_check_refuses_first(

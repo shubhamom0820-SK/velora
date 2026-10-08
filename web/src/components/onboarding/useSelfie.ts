@@ -3,8 +3,11 @@
 import { useQueryClient } from "@tanstack/react-query";
 import { useEffect, useRef, useState } from "react";
 
+import { useToast } from "@/components/ui/useToast";
+import { t } from "@/i18n/t";
 import { ApiError } from "@/lib/api";
 import type { CameraFailure } from "@/lib/camera";
+import { creditsCount } from "@/lib/credits";
 import { queryKeys } from "@/lib/queries/keys";
 import { useCompleteOnboarding } from "@/lib/queries/onboarding";
 import {
@@ -85,6 +88,7 @@ export function useSelfie({ alreadyMatched }: { alreadyMatched: boolean }) {
   const submit = useSubmitSelfie();
   const complete = useCompleteOnboarding();
   const advance = useAdvance();
+  const toast = useToast();
 
   // The minute of asking is counted per selfie being compared, per round:
   // asked until that round's minute is up.
@@ -230,11 +234,25 @@ export function useSelfie({ alreadyMatched }: { alreadyMatched: boolean }) {
   /**
    * "Continue" after a match, or a man's "Skip for now": the server finishes
    * sign-up and the person goes where its `Me` says, the app; or it says what
-   * is still needed, shown with the way back (T-4.8).
+   * is still needed, shown with the way back (T-4.8). A balance on finishing
+   * is a new man's welcome Velas (T-8.11, D-470): nothing else can credit him
+   * before `done`, so the toast says what the server gave, or nothing.
    */
   function finish() {
     complete.mutate(undefined, {
-      onSuccess: advance,
+      onSuccess: (me) => {
+        if (me.balance > 0) {
+          toast.show({
+            message: t(
+              me.balance === 1
+                ? "onboarding.selfie.welcome.one"
+                : "onboarding.selfie.welcome.other",
+              { count: creditsCount(me.balance) },
+            ),
+          });
+        }
+        advance(me);
+      },
       onError: (error) => {
         // The server knows of no match: `Me` and the latest say what it has.
         if (

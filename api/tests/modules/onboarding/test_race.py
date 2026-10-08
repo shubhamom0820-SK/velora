@@ -13,17 +13,27 @@ put back afterwards to what a fresh man is, never onboarded: rows naming an
 intent or an interest would stop those catalogues' downgrades
 (`test_migrations_round_trip`), and a location would join the seed's checks of
 every located profile.
+
+**No welcome Velas here (T-8.11):** finishing gives a man his welcome, and a
+committed `welcome` ledger row and `welcome_grants` row could never be taken
+back, and would stop both migrations' downgrades for every later test. So this
+test reads `welcome_velas` as 0, which writes neither; the lock it proves is
+unchanged. `test_welcome.py` forces two completions' overlap inside the
+rolled-back session instead.
 """
 
 from __future__ import annotations
 
 import asyncio
 import uuid
+from typing import Any
 
+import pytest
 from sqlalchemy import delete, select, text, update
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession
 
 from app.core.enums import OnboardingStep, PhotoKind, ReviewStatus, Seeking
+from app.modules.admin import service as admin_service
 from app.modules.onboarding import service
 from app.modules.photos.models import Photo
 from app.modules.profiles import repository as profiles_repository
@@ -125,8 +135,16 @@ async def _waiting_on_a_lock(engine: AsyncEngine) -> int:
 
 
 async def test_finishing_waits_for_the_photos_decision(
-    test_engine: AsyncEngine,
+    test_engine: AsyncEngine, monkeypatch: pytest.MonkeyPatch
 ) -> None:
+    config_int = admin_service.config_int
+
+    async def no_welcome(session: AsyncSession, key: str, **kwargs: Any) -> int:
+        if key == "welcome_velas":
+            return 0  # nothing committed that can't be taken back (above)
+        return await config_int(session, key, **kwargs)
+
+    monkeypatch.setattr(admin_service, "config_int", no_welcome)
     man, photo_id = await _ready_but_the_photo(test_engine)
 
     async def finish() -> str:
@@ -165,3 +183,12 @@ async def test_finishing_waits_for_the_photos_decision(
     assert blocked == 1  # the overlap was forced: the finish waited on the row
     assert step == "done"
     assert completeness == 50
+    async with AsyncSession(test_engine) as session:
+        welcome = await session.scalar(
+            text(
+                "select count(*) from ledger_entries "
+                "where user_id = :u and reason = 'welcome'"
+            ),
+            {"u": man},
+        )
+    assert welcome == 0

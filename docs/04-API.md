@@ -35,7 +35,7 @@ named `<T>Page` (`LedgerEntryPage`). `limit` is 1 to 50, 20 when absent; outside
 | PUT | /me/username | 🔐 | `{username}` → `Me` or `USERNAME_TAKEN` | T-3.7 |
 | PUT | /me/interests | 🔐 | `{interest_ids[5]}` → `Me` | T-3.8 |
 | POST | /me/pin/skip | 🔐 | → `Me`, moving `pin` → `selfie` (D-069) | T-3.9 |
-| POST | /me/onboarding/complete | 🔐 | → `Me`, moving `selfie` → `done` (D-310). Every requirement met, or `PROFILE_INCOMPLETE` naming each one missing; a matched selfie for anyone but a man, or `VERIFICATION_REQUIRED`. Before `selfie`, `ONBOARDING_INCOMPLETE`; once `done`, `Me` unchanged. Sets `completeness` | T-4.8 |
+| POST | /me/onboarding/complete | 🔐 | → `Me`, moving `selfie` → `done` (D-310). Every requirement met, or `PROFILE_INCOMPLETE` naming each one missing; a matched selfie for anyone but a man, or `VERIFICATION_REQUIRED`. Before `selfie`, `ONBOARDING_INCOMPLETE`; once `done`, `Me` unchanged. Sets `completeness`. As a man reaches `done`, `app_config.welcome_velas` (5) credited as `welcome`, once per phone number, ever, so `Me.balance` says it; never a woman, and nothing about it ever refuses the request (D-470, D-530) | T-4.8, T-8.11 |
 | PUT | /me/location | 🔐 | `{lat, lng}`, inside India's box, or `{area_id}`, stored at its centroid → `Me` (D-220). Either is stored as its point of the 0.01° grid, never exactly (D-490). A position takes the nearest area within 2 km of the exact position, or none. From the `username` step on, never moving it; before, `ONBOARDING_INCOMPLETE`. Outside the box, or an area that isn't one: `VALIDATION_ERROR`. 10 an hour per user | T-4.10 |
 | PATCH | /me/settings | ✅ | `{is_hidden?, hide_age?, hide_distance?, show_kudos?, show_gifts?}`, each `true` or `false` only → `Me`. A field it doesn't know, or nothing to set, is `VALIDATION_ERROR`: a typo in a privacy switch never looks like it worked | T-9.6 |
 | POST | /me/pause | ✅ | → 204: `paused`, hidden from everyone and sent no notifications (T-9.4) until resumed. Twice is once | T-9.6 |
@@ -207,7 +207,7 @@ nothing), `payment.failed` (a `created` row becomes `failed`, never anchored), `
 logged. The Velas always come from the `payments` row, never the webhook (rule 6).
 
 `LedgerEntry` (T-5.3): `id`, `delta`, `balance_after`, `reason` (`LedgerReason`, every value, with
-`purchase_reversal` and `purchase_restored` since T-8.2) and
+`purchase_reversal` and `purchase_restored` since T-8.2, `welcome` since T-8.11) and
 `created_at`. Never its ref or its key. The web turns `reason` into words from `en.ts` (D-033,
 P-26); the API sends the enum only. Entries from one transaction share `created_at`, so among them
 the order is by `id`: stable, though not the order they were written. Whatever the cursor, the

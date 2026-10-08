@@ -13,7 +13,7 @@ and `purchase_restored`), so for them the caller names the event: a client's
 `Idempotency-Key` only ever fills that part.
 
 The database pins the same directions and ref types (migrations 97ddae55f597,
-a1d7de534ef7 and fb0a7ce8dd16, `ck_ledger_entries_*`), and
+a1d7de534ef7, fb0a7ce8dd16 and a7e4f06d6b3f, `ck_ledger_entries_*`), and
 `tests/modules/wallet/test_guards.py` proves the two agree, reason by reason.
 Change one, change both.
 """
@@ -45,7 +45,8 @@ class RefType(StrEnum):
     MESSAGE = "message"
     # The other person: `swipes` and `liked_you_reveals` key on the pair, with
     # no id of their own. So a man super-likes a woman, and reveals one, once
-    # ever (one swipe per pair; the founder, 3 October 2026).
+    # ever (one swipe per pair; the founder, 3 October 2026). For `welcome`,
+    # the man himself (D-470).
     USER = "user"
 
 
@@ -94,6 +95,9 @@ RULES: dict[LedgerReason, Rule] = {
     LedgerReason.PURCHASE_RESTORED: Rule(
         CREDIT, RefType.PAYMENT, caller_names_event=True
     ),
+    # D-470: the man himself is the event, so one account holds one, ever.
+    # Only `onboarding` writes it, at `done`.
+    LedgerReason.WELCOME: Rule(CREDIT, RefType.USER),
 }
 
 # Nothing writes it until a task gives it a meaning, and its name reads as

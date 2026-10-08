@@ -1117,7 +1117,7 @@ export interface components {
          * LedgerReason
          * @enum {string}
          */
-        LedgerReason: "purchase" | "purchase_bonus" | "referral_reward" | "admin_grant" | "refund" | "gift" | "refund_banned_partner" | "refund_album_declined" | "thread_open" | "dm_open" | "thread_reopen" | "voice_unlock" | "album_request" | "super_like" | "liked_you_reveal" | "thread_extend" | "dm_message" | "purchase_reversal" | "purchase_restored";
+        LedgerReason: "purchase" | "purchase_bonus" | "referral_reward" | "admin_grant" | "refund" | "gift" | "refund_banned_partner" | "refund_album_declined" | "thread_open" | "dm_open" | "thread_reopen" | "voice_unlock" | "album_request" | "super_like" | "liked_you_reveal" | "thread_extend" | "dm_message" | "purchase_reversal" | "purchase_restored" | "welcome";
         /**
          * Me
          * @description The age, never the date of birth, and no phone number: no screen shows

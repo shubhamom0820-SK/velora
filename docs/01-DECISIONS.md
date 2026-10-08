@@ -3621,6 +3621,13 @@ The grant is the founder's decision, 8 October 2026, in the words above. Its sha
 advisor's (Claude, in a separate chat), relayed by the founder; the ledger's shape is Claude's.
 P-371's answers are the founder's, on the advisor's recommendation, relayed the same day.
 
+**Built 8 October 2026 (T-8.11).** `onboarding.complete()` grants it as the step moves to `done`:
+the number claimed in `welcome_grants` (`INSERT ... ON CONFLICT DO NOTHING`, one statement), then
+`wallet.credit(welcome)`, in one transaction under the user's row lock. Migrations acfda05a9f20
+(the reason), a7e4f06d6b3f (its shape), 39e51f5fb85a (`welcome_grants`, append-only, its
+downgrade refused while it holds a row) and 105ae9a99be1 (`welcome_velas`). What happens when
+the setting is missing, the backfill and the line a new man sees: D-530.
+
 ### D-480 · Variant B is shown A's packs until T-10.4; no man ever gets an empty store — Locked
 **The decision (the founder, 8 October 2026, on the advisor's recommendation, Claude in a separate
 chat, relayed by the founder):** a man is still put in price-test variant A or B by a hash of his
@@ -3971,6 +3978,8 @@ and deletes everything; the erasure happens to an account that may have lived fo
 
 Approved by the founder on the advisor's recommendation, relayed, 8 October 2026; the welcome
 entry at the founder's direction.
+**Built 8 October 2026 (T-8.11):** `welcome_grants` exists under that name, and is in `KEPT` by its
+one column keyed to users, `user_id`; `KEPT_WHEN_BUILT` is empty, its check kept for the next.
 
 ### D-504 · A deleted account's unspent Velas are lost at the erasure — Locked
 **The decision (T-9.6):** a man's unspent Velas are lost when his account is erased, with no
@@ -4244,6 +4253,34 @@ none.
 **Rejected:** the same data for both and the screen hiding it.
 
 ---
+
+### D-530 · Welcome Velas: a missing setting skips with a warning, no backfill, and a toast — Locked
+**The decision (T-8.11; the founder, 8 October 2026, on the advisor's recommendation, Claude in a
+separate chat, relayed by the founder):** three things D-470 left to T-8.11's plan.
+1. **A missing `welcome_velas` row skips the grant and logs a warning,** and never fails a
+   sign-up: `onboarding.welcome_config_missing` at warning level, naming the user and the key. A
+   value that isn't a whole number is treated the same, and a negative one skips with
+   `onboarding.welcome_config_negative`. **Its worst case:** a skip is silent to the man, so a
+   lost row grants nobody until someone reads the warning. What notices a row lost by a
+   migration is `tests/test_reference_data.py`, which holds the migrated database to
+   `welcome_velas = 5`; a row deleted by hand in production is only the warning.
+2. **No backfill** for men already at `done`: before launch they are test and seed accounts. The
+   dev seed writes `done` directly, never through `complete()`, so seed men get nothing.
+3. **One line tells a new man about his Velas:** a toast as he finishes, "5 Velas are in your
+   wallet, to start you off." (one Vela in the singular), the number his balance in the `Me`
+   that finishing returns, never written into the copy. Nothing else can credit a man before
+   `done`, so a balance then is his welcome; at 0 (his number had its welcome, or the grant is
+   off) there is no toast. Inside D-262's rule (`claims.test.ts`).
+
+**Why:** a sign-up that fails over a setting costs a real person; a skipped grant costs 5 Velas
+and is logged. The toast's words are Claude's draft, approved as written.
+
+**Rejected:** failing the sign-up when the row is missing (a person locked out over our
+configuration); a default of 5 in code when the row is missing (a second source for a tunable
+number); backfilling existing men.
+
+The founder's approval, 8 October 2026, of the advisor's three recommendations as T-8.11's plan
+put them, relayed by the founder.
 
 ## Adding a decision
 

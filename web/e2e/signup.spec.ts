@@ -244,6 +244,12 @@ test("J1: a new man signs up all the way to Discover, with no selfie", async ({
   await barredFromTheApp(page);
   await unlock(page, PIN);
   await page.getByRole("button", { name: "Skip for now" }).click();
+  // His welcome Velas, granted by the API as he finished (T-8.11, D-470).
+  await expect(
+    page
+      .getByRole("status")
+      .filter({ hasText: "5 Velas are in your wallet, to start you off." }),
+  ).toBeVisible();
   await inTheApp(page);
 
   // And again after a reload, in the app this time.

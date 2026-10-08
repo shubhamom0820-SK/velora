@@ -33,6 +33,10 @@ vi.mock("next/navigation", () => ({
   usePathname: () => "/onboarding/selfie",
 }));
 
+// The toast lives in the root layout; here, what the step asks it to show.
+const toast = vi.hoisted(() => ({ show: vi.fn(), dismiss: vi.fn() }));
+vi.mock("@/components/ui/useToast", () => ({ useToast: () => toast }));
+
 // jsdom draws nothing: taking a frame is camera.test.ts's. Here it hands back
 // a JPEG once the camera has shown one.
 vi.mock("@/lib/camera", async (importOriginal) => ({
@@ -165,6 +169,7 @@ const calls = (api: ReturnType<typeof fakeApi>, route: string) =>
 beforeEach(() => {
   vi.stubEnv("NEXT_PUBLIC_API_URL", "https://api.test");
   nav.push.mockReset();
+  toast.show.mockReset();
   URL.createObjectURL = vi.fn(() => PREVIEW);
   URL.revokeObjectURL = vi.fn();
 });
@@ -249,6 +254,59 @@ describe("who may skip it (D-008)", () => {
     await waitFor(() => expect(nav.push).toHaveBeenCalledWith("/discover"));
     expect(api.sent()).toEqual(["GET /v1/verification/latest", COMPLETE]);
     expect(client.getQueryData<Me>(["me"])?.onboarding_step).toBe("done");
+  });
+
+  it("a new man is told of his welcome Velas, the number the server's (T-8.11)", async () => {
+    fakeApi({
+      "GET /v1/verification/latest": NONE,
+      [COMPLETE]: () =>
+        json(200, me({ gender: "male", onboarding_step: "done", balance: 5 })),
+    });
+    renderStep(me({ gender: "male" }));
+
+    await userEvent.click(
+      await screen.findByRole("button", { name: "Skip for now" }),
+    );
+
+    await waitFor(() => expect(nav.push).toHaveBeenCalledWith("/discover"));
+    expect(toast.show).toHaveBeenCalledExactlyOnceWith({
+      message: "5 Velas are in your wallet, to start you off.",
+    });
+  });
+
+  it("one Vela is one, in the singular", async () => {
+    fakeApi({
+      "GET /v1/verification/latest": NONE,
+      [COMPLETE]: () =>
+        json(200, me({ gender: "male", onboarding_step: "done", balance: 1 })),
+    });
+    renderStep(me({ gender: "male" }));
+
+    await userEvent.click(
+      await screen.findByRole("button", { name: "Skip for now" }),
+    );
+
+    await waitFor(() =>
+      expect(toast.show).toHaveBeenCalledExactlyOnceWith({
+        message: "1 Vela is in your wallet, to start you off.",
+      }),
+    );
+  });
+
+  it("a number that had its welcome finishes with no toast (P-371)", async () => {
+    fakeApi({
+      "GET /v1/verification/latest": NONE,
+      [COMPLETE]: () =>
+        json(200, me({ gender: "male", onboarding_step: "done", balance: 0 })),
+    });
+    renderStep(me({ gender: "male" }));
+
+    await userEvent.click(
+      await screen.findByRole("button", { name: "Skip for now" }),
+    );
+
+    await waitFor(() => expect(nav.push).toHaveBeenCalledWith("/discover"));
+    expect(toast.show).not.toHaveBeenCalled();
   });
 
   it("can skip after a rejection too", async () => {

@@ -486,8 +486,8 @@ export const CASES: BreakCase[] = [
   {
     id: "t48-finish-02-the-answer-not-followed",
     file: "src/components/onboarding/useSelfie.ts",
-    old: "      onSuccess: advance,\n",
-    new: "      onSuccess: () => undefined,\n",
+    old: "        advance(me);\n",
+    new: "",
     run: [SELFIE_TEST],
     expect: [
       "a man can",
@@ -613,6 +613,23 @@ export const CASES: BreakCase[] = [
     new: "{live && (",
     run: [STEP_TEST],
     expect: ["can't change once the selfie matched"],
+  },
+  // T-8.11 (D-470, D-530): the welcome toast says only what the server gave.
+  {
+    id: "t811-toast-01-shown-at-nothing",
+    file: "src/components/onboarding/useSelfie.ts",
+    old: "        if (me.balance > 0) {\n",
+    new: "        if (me.balance >= 0) {\n",
+    run: [SELFIE_TEST],
+    expect: ["a number that had its welcome finishes with no toast"],
+  },
+  {
+    id: "t811-toast-02-one-velas",
+    file: "src/components/onboarding/useSelfie.ts",
+    old: "              me.balance === 1\n",
+    new: "              me.balance === 0\n",
+    run: [SELFIE_TEST],
+    expect: ["one Vela is one, in the singular"],
   },
 ];
 

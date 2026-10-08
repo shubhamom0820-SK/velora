@@ -31,6 +31,10 @@ import { SignIn } from "./SignIn";
 import { USERNAME_CHECK_DELAY_MS, UsernameStep } from "./UsernameStep";
 
 const nav = vi.hoisted(() => ({ push: vi.fn(), replace: vi.fn() }));
+// The toast lives in the root layout (the selfie step's welcome, T-8.11).
+vi.mock("@/components/ui/useToast", () => ({
+  useToast: () => ({ show: vi.fn(), dismiss: vi.fn() }),
+}));
 vi.mock("next/navigation", () => ({
   useRouter: () => ({
     push: nav.push,

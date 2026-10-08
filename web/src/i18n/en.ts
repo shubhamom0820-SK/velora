@@ -32,6 +32,8 @@ const ledgerReasons = {
   // words, 8 October 2026.
   purchase_reversal: "Purchase reversed",
   purchase_restored: "Purchase restored",
+  // T-8.11 (D-470): every new man's Velas when he finishes sign-up.
+  welcome: "Welcome Velas",
 } as const satisfies Record<LedgerReason, string>;
 
 /**
@@ -361,6 +363,13 @@ export const en = {
       // (D-264), and stays.
       private:
         "Other people on {app} never see your selfie. Our team may look at it to check a comparison.",
+      // T-8.11 (D-470, D-530): a toast as a new man finishes, the number
+      // his balance from the API, never written here. The founder's
+      // approval, 8 October 2026, of Claude's draft.
+      welcome: {
+        one: "{count} Vela is in your wallet, to start you off.",
+        other: "{count} Velas are in your wallet, to start you off.",
+      },
       intro: "We'll open your front camera",
       openCamera: "Open camera",
       skip: "Skip for now",
@@ -827,7 +836,8 @@ export const en = {
           "Changed your mind? Sign in again within 29 days and your account comes back as it was.",
         messages:
           "Your messages stay in the other person's chat, shown as from “Deleted account”, and we keep them as moderation records. Otherwise, deleting an account could be used to destroy evidence someone has reported.",
-        kept: "We also keep your history of Velas and payments, any reports and moderation records about you, and a hashed copy of your phone number, so that deleting an account can't be used to escape a ban or a report.",
+        // D-051; the welcome Velas: D-470, T-8.11.
+        kept: "We also keep your history of Velas and payments, any reports and moderation records about you, and a hashed copy of your phone number, so that deleting an account can't be used to escape a ban or a report, or to collect the welcome Velas again.",
         // D-504 (the founder, 8 October 2026); /refunds says it too.
         velas:
           "Velas left in your balance are lost when your account is erased: they have no cash value, and we don't refund them. Sign in again before then and they come back with your account.",

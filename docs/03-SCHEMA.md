@@ -43,7 +43,8 @@ ledger_reason_t   ('purchase','purchase_bonus','referral_reward','admin_grant','
                    'thread_open','dm_open','thread_reopen','voice_unlock','album_request',
                    'super_like','liked_you_reveal',
                    'thread_extend','dm_message',   -- T-5.2's (D-251)
-                   'purchase_reversal','purchase_restored')   -- T-8.2's (D-521)
+                   'purchase_reversal','purchase_restored',   -- T-8.2's (D-521)
+                   'welcome')   -- T-8.11's (D-470)
 payment_status_t  ('created','paid','failed','refunded')
 fraud_band_t      ('normal','monitor','shadow','freeze')
 ban_kind_t        ('phone_hash','device_id')
@@ -105,6 +106,21 @@ Index: `(user_id) where revoked_at is null`.
 | value | text | hash |
 | reason | text | e.g. `underage`, `ban` |
 Unique `(kind, value)`.
+
+### welcome_grants  (T-8.11, D-470, P-371)
+| column | type | notes |
+|---|---|---|
+| phone_hash | text pk | the number's HMAC, as `users.phone_hash` holds it (D-061) |
+| user_id | uuid fk users, unique | the account that received the grant |
+| created_at | timestamptz | |
+
+One row per number that received welcome Velas, so it gets them once, ever. The grant claims the
+number here (`INSERT ... ON CONFLICT DO NOTHING`) before it credits, in `onboarding.complete()`'s
+transaction; a later account on the number, once T-9.6 has erased the first, finds it claimed and
+gets nothing. Append-only: triggers `welcome_grants_no_update_delete` and
+`welcome_grants_no_truncate` reuse T-1.12's `refuse_change()`, and the app role has no UPDATE or
+DELETE. The erasure keeps it (D-503); an under-18 refusal can't meet a row, since the grant comes
+after `dob` (D-078). Its downgrade refuses while it holds a row.
 
 ### data_exports  (T-9.6, D-502)
 | column | type | notes |
@@ -423,6 +439,7 @@ wipe the money record. Both raise `restrict_violation` (23001) (T-1.12).
 | `super_like`, `liked_you_reveal` | debit | `user` | the other person: once per pair, ever, as a swipe is (the founder, 3 October 2026) |
 | `purchase_reversal` | debit | `payment` | named by the caller: the refund's or dispute's own Razorpay id, one per refund or dispute (T-8.2, D-521) |
 | `purchase_restored` | credit | `payment` | named by the caller: the same id as the reversal it gives back (D-520) |
+| `welcome` | credit | `user` | the man himself: one per account, ever, inside the per-event index; one per number by `welcome_grants` (T-8.11, D-470) |
 
 - `ck_ledger_entries_reason_direction`: credits positive, debits negative. Both lists are
   allowlists, so a reason added to `ledger_reason_t` can't be written until a migration names it.
@@ -557,6 +574,8 @@ number, ₹100 a day at D-035's unconfirmed ₹0.20 an SMS (D-066); and, by T-8.
 D-482).
 And by T-7.1's (D-553): `women_new_men_daily_limit=30` and `women_private_messages_daily_limit=30`,
 a woman's two daily limits (D-098), by the IST day: limits, never prices.
+And by T-8.11's: `welcome_velas=5`, every new man's Velas at `done`, once per number, 0 turning
+the grant off; a missing row skips it with a warning, never failing a sign-up (D-470, D-530).
 Two settings are also promised in copy, in `web/src/i18n/en.ts`, written out because copy is a
 promise, not a computation. Change the copy with the setting:
 - `thread_hours`: the landing page ("Threads last a day", "24-hour", T-2.1), `/terms` ("lasts

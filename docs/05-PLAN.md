@@ -3088,50 +3088,50 @@ refused. What that leaves is P-371, answered by the founder on 8 October 2026:
 **re-registering** on the same number once T-9.6 has anonymised the old account would grant again,
 and is **closed** here, by a kept hash of every number that received a grant (below); **a fresh
 number** per account gets its 5 each, one Thread's worth, and is **accepted**, knowingly (D-470).
-- [ ] **Needs:** T-5.1, T-4.8
-- [ ] **Config:** `app_config.welcome_velas`, 5, by a data migration of this task's own (rule
+- [x] **Needs:** T-5.1, T-4.8
+- [x] **Config:** `app_config.welcome_velas`, 5, by a data migration of this task's own (rule
   11), `ON CONFLICT DO NOTHING` like T-1.14's. 03-SCHEMA's `app_config` seeds take it. Tunable
   (D-470): at 0 the service writes nothing and never calls `credit()`, whose `delta <> 0` would
   refuse it.
-- [ ] **Enum and migration:** `welcome` in `ledger_reason_t`, rebuilt both ways as
+- [x] **Enum and migration:** `welcome` in `ledger_reason_t`, rebuilt both ways as
   `4a7e20790605` did (D-251), the downgrade refusing once the ledger holds a `welcome` row. A
   credit, `ref_type` `user` (the man himself), inside the one-per-event index (D-470): named in
   the direction and `ref_type` checks, which are allowlists, in `wallet/rules.py`, and in
   `tests/modules/wallet/test_guards.py` and `test_reason_migration.py`. 03-SCHEMA's enum and
   ledger-shape table change with it.
-- [ ] **Once per number:** a hash of every number that received a grant (the HMAC
+- [x] **Once per number:** a hash of every number that received a grant (the HMAC
   `users.phone_hash` holds, D-061), kept where T-9.6's anonymisation never clears it, as D-072
   keeps one. The grant checks it first, and a later account on that number gets nothing. This
   task names the table and 03-SCHEMA takes it; if it carries a key to `users`, D-078's test makes
   it choose deleted or kept. **`/privacy` says why the hash is kept** ("so that deleting an
   account can't be used to escape a ban or a report", `en.ts`): this task adds the welcome reason
   there, in the same commit (D-051's note).
-- [ ] **The grant, in `onboarding.complete()`'s transaction,** as the step moves to `done`:
+- [x] **The grant, in `onboarding.complete()`'s transaction,** as the step moves to `done`:
   `wallet.service.credit()` with `welcome`, key `{user_id}:welcome:{user_id}`, for a man only
   (gender `male`, an allowlist the service checks first). A woman is skipped by the service,
   since leaving her to D-076's trigger would abort her sign-up. Never a default balance (rules 5,
   6). Nothing for D-078: the grant comes after `dob`, so no under-18 account can hold one (D-470).
-- [ ] **Tests, each guard broken once:** a man finishing gets 5 (balance 5, one `welcome` row); a
+- [x] **Tests, each guard broken once:** a man finishing gets 5 (balance 5, one `welcome` row); a
   woman finishing gets 0 and no row, and her sign-up completes; `done` twice gives one grant, with
   two completions forced to overlap; `welcome_velas` 0 gives no grant and no row; grant, delete
   the account, sign up again on the number after T-9.6's 30 days: no second grant (P-371).
   T-9.6 comes after this task, so until it lands the test stands in for its anonymisation by
   freeing the number from the old account, and T-9.6 runs it through its own (its pointer).
-- [ ] **T-9.6's erasure already keeps the hash table by name** (D-503): `welcome_grants`, in
+- [x] **T-9.6's erasure already keeps the hash table by name** (D-503): `welcome_grants`, in
   `KEPT_WHEN_BUILT` in `api/app/modules/account/erasure.py`. Name the table that, or rename the
   entry; once the table exists, the check asks for it to move to `KEPT`. T-9.6 came first, so
   this task's test (grant, delete, sign up again after 30 days, no second grant) runs through the
   real erasure, `account.service.erase_due_accounts`, with no stand-in.
-- [ ] **Types and copy:** `make types`, since `LedgerReason` gains `welcome` (rule 10), and a
+- [x] **Types and copy:** `make types`, since `LedgerReason` gains `welcome` (rule 10), and a
   history label for it in `en.ts`, whose `satisfies Record<LedgerReason, string>` fails `tsc`
   without one.
-- [ ] **For this task's plan, the advisor's recommendation** (Claude, in a separate chat, relayed
+- [x] **For this task's plan, the advisor's recommendation** (Claude, in a separate chat, relayed
   by the founder, 8 October 2026; not decided here): a missing `welcome_velas` row skips the grant
   and logs a warning, and never fails sign-up; no backfill for men already `done`, since before
   launch they are test and seed accounts; and one line telling a new man about his 5 Velas,
   inside D-262's rule (`claims.test.ts`). The worst case of the first, for the plan to weigh: a
   skip is silent, so a lost row grants nobody until someone reads the warning.
-- [ ] **Commit:** `feat(onboarding): welcome Velas for new men [T-8.11]`
+- [x] **Commit:** `feat(onboarding): welcome Velas for new men [T-8.11]`
 
 ---
 

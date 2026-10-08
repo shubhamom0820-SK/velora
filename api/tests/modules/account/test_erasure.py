@@ -98,22 +98,28 @@ async def test_a_new_table_keyed_to_users_fails_until_it_is_listed(
     assert problems[0].startswith("D-503: [('d503_probe', 'user_id')] hold a key")
 
 
-async def test_the_welcome_hash_is_kept_by_name_before_it_exists(
-    db: AsyncSession,
-) -> None:
+async def test_the_welcome_hash_is_kept(db: AsyncSession) -> None:
     """P-371, D-470: T-8.11's hash of every number that received welcome Velas
-    survives the erasure. Named now, so no change to the erasure can clear it
-    unread; once T-8.11 builds it, the check asks for it in KEPT."""
-    assert "welcome_grants" in erasure.KEPT_WHEN_BUILT
+    survives the erasure, so a later account on the number gets none. Named in
+    KEPT before it existed (T-9.6), and moved there when T-8.11 built it."""
+    assert erasure.KEPT_WHEN_BUILT == {}
+    assert ("welcome_grants", "user_id") in erasure.KEPT
     erased_tables = {e.model.__tablename__ for e in erasure.ERASED}
     assert "welcome_grants" not in erased_tables
     assert "banned_identities" not in erased_tables
+    assert await _problems(db) == []
 
-    await db.execute(text("create table welcome_grants (phone_hash text primary key)"))
+
+async def test_a_table_built_while_named_for_later_must_move_to_kept(
+    db: AsyncSession, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The check T-9.6 left for planned tables still fires for the next one."""
+    monkeypatch.setattr(erasure, "KEPT_WHEN_BUILT", {"d503_later": "a probe"})
+    await db.execute(text("create table d503_later (id int primary key)"))
 
     assert await _problems(db) == [
         (
-            "D-503: ['welcome_grants'] exist now: move each from KEPT_WHEN_BUILT to "
+            "D-503: ['d503_later'] exist now: move each from KEPT_WHEN_BUILT to "
             "KEPT, by its columns keyed to users (or say why it has none)"
         )
     ]
@@ -237,6 +243,10 @@ async def _everywhere(
             "values (:pay, :m, 'pack-30', 150000, 30, :order, :order)"
         ),
         "insert into refund_requests (user_id, payment_id) values (:m, :pay)",
+        (
+            "insert into welcome_grants (phone_hash, user_id) "
+            "select phone_hash, id from users where id = :m"
+        ),
     ]
     v.update(export=export, pay=uuid.uuid4(), order=f"order_{uuid.uuid4().hex}")
     for statement in statements:

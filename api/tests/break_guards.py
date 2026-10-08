@@ -4399,15 +4399,18 @@ T96: list[Case] = [
     ),
     Case(
         id="t96-03-the-welcome-hash-unnamed",
-        what="D-503, P-371: T-8.11's table dropped from the kept-when-built list",
+        what="D-503, P-371: T-8.11's table dropped from the kept list (built since)",
         edits=[
             (
                 ERASURE96,
-                '    "welcome_grants": "one welcome per number, ever (T-8.11, D-470)",\n',
+                '    ("welcome_grants", "user_id"): "one welcome per number, ever (D-470)",\n',
                 "",
             )
         ],
-        expect=["test_the_welcome_hash_is_kept_by_name_before_it_exists"],
+        expect=[
+            "test_every_column_keyed_to_users_is_erased_or_kept",
+            "test_the_welcome_hash_is_kept",
+        ],
     ),
     Case(
         id="t96-04-an-export-file-left-behind",
@@ -5544,6 +5547,221 @@ T71: list[Case] = [
     ),
 ]
 
+# --- T-8.11: welcome Velas, once per number ---------------------------------------
+
+ONBOARDING_SERVICE = "app/modules/onboarding/service.py"
+ONBOARDING_RULES = "app/modules/onboarding/rules.py"
+ONBOARDING_REPO = "app/modules/onboarding/repository.py"
+WELCOME_REASON = "alembic/versions/20261008_acfda05a9f20_ledger_reason_for_welcome.py"
+WELCOME_SHAPE = "alembic/versions/20261008_a7e4f06d6b3f_ledger_shape_names_welcome.py"
+WELCOME_GRANTS = "alembic/versions/20261008_39e51f5fb85a_welcome_grants.py"
+WELCOME_SETTING = "alembic/versions/20261008_105ae9a99be1_welcome_velas.py"
+ERASURE = "app/modules/account/erasure.py"
+USERS_REPO = "app/modules/users/repository.py"
+T811_SELECTION = [
+    "tests/modules/onboarding",
+    "tests/modules/wallet/test_guards.py",
+    "tests/modules/wallet/test_welcome_reason_migration.py",
+    "tests/modules/account/test_erasure.py",
+    "tests/modules/users/test_dob_gender.py",
+    "tests/test_app_role.py",
+    "tests/test_reference_data.py",
+]
+SKIPS = "test_a_missing_or_broken_setting_skips_with_a_warning_and_never_fails_sign_up"
+RE_SIGN_UP = "test_grant_delete_wait_out_the_erasure_sign_up_again_is_no_second_grant"
+
+T811: list[Case] = [
+    Case(
+        id="t811-01-a-woman-credited",
+        what="D-470, D-076: the grant's allowlist lets a woman through",
+        edits=[
+            (
+                ONBOARDING_RULES,
+                "WELCOME_GENDERS: Final = frozenset({Gender.MALE})\n",
+                "WELCOME_GENDERS: Final = frozenset({Gender.MALE, Gender.FEMALE})\n",
+            )
+        ],
+        expect=["test_a_woman_finishing_gets_nothing_and_finishes"],
+    ),
+    Case(
+        id="t811-02-zero-credited",
+        what="D-470: welcome_velas at 0 still reaches credit()",
+        edits=[(ONBOARDING_SERVICE, "    if amount <= 0:\n", "    if amount < 0:\n")],
+        expect=["test_welcome_velas_at_zero_gives_nothing"],
+    ),
+    Case(
+        id="t811-03-missing-row-fails-sign-up",
+        what="D-530: a missing welcome_velas row fails the sign-up",
+        edits=[
+            (
+                ONBOARDING_SERVICE,
+                "    except admin_service.MissingConfig:\n",
+                "    except LookupError:\n",
+            )
+        ],
+        expect=[f"{SKIPS}[no row]", f"{SKIPS}[not a number]"],
+    ),
+    Case(
+        id="t811-04-claim-ignored",
+        what="P-371: a number already given its welcome is credited again",
+        edits=[
+            (
+                ONBOARDING_SERVICE,
+                "    if not await repository.claim_welcome(session, user.phone_hash, user.id):\n",
+                "    if not await repository.claim_welcome(session, user.phone_hash, user.id) and False:\n",
+            )
+        ],
+        expect=[RE_SIGN_UP, "test_a_number_already_claimed_gets_nothing"],
+    ),
+    Case(
+        id="t811-05-claim-not-one-statement",
+        what="P-371: the claim inserts without ON CONFLICT, so a claimed number fails",
+        edits=[
+            (
+                ONBOARDING_REPO,
+                "        .on_conflict_do_nothing(index_elements=[WelcomeGrant.phone_hash])\n",
+                "",
+            )
+        ],
+        expect=[
+            RE_SIGN_UP,
+            "test_a_number_already_claimed_gets_nothing",
+            "test_two_completions_overlapping_are_one_grant",
+        ],
+    ),
+    Case(
+        id="t811-06-welcome-not-a-credit",
+        what="D-077: the direction CHECK left without welcome",
+        edits=[
+            (
+                WELCOME_SHAPE,
+                'CREDITS = (*CREDITS_BEFORE, "welcome")\n',
+                "CREDITS = CREDITS_BEFORE\n",
+            )
+        ],
+        expect=[
+            "test_each_reason_has_one_direction_in_the_database",
+            "test_a_man_finishing_gets_five_velas_once",
+        ],
+    ),
+    Case(
+        id="t811-07-welcome-repeats",
+        what="D-470: welcome left out of the one-per-event index",
+        edits=[
+            (
+                WELCOME_SHAPE,
+                '    "purchase_restored",\n)\n\nCREDITS =',
+                '    "purchase_restored",\n    "welcome",\n)\n\nCREDITS =',
+            )
+        ],
+        expect=["test_one_entry_per_event_except_the_reasons_that_repeat"],
+    ),
+    Case(
+        id="t811-08-reason-downgrade-unrefused",
+        what="D-470: the reason's downgrade runs with a welcome row in the ledger",
+        edits=[(WELCOME_REASON, "    if used:\n", "    if False:\n")],
+        expect=["test_the_reason_refuses_to_go_down_once_the_ledger_holds_one"],
+    ),
+    Case(
+        id="t811-09-table-downgrade-unrefused",
+        what="P-371: welcome_grants dropped while it holds numbers",
+        edits=[(WELCOME_GRANTS, "    if held:\n", "    if False:\n")],
+        expect=["test_the_table_refuses_to_go_down_while_it_holds_a_number"],
+    ),
+    Case(
+        id="t811-10-triggers-dropped",
+        what="P-371: welcome_grants without refuse_change()",
+        edits=[
+            (
+                WELCOME_GRANTS,
+                "    for name, when, level in GUARDS:\n",
+                "    for name, when, level in ():\n",
+            )
+        ],
+        expect=[
+            "test_a_welcome_once_recorded_is_never_changed_or_removed[update]",
+            "test_a_welcome_once_recorded_is_never_changed_or_removed[delete]",
+            "test_a_welcome_once_recorded_is_never_changed_or_removed[truncate]",
+        ],
+    ),
+    Case(
+        id="t811-11-app-role-may-delete",
+        what="P-371: the app role keeps UPDATE and DELETE on welcome_grants",
+        edits=[
+            (
+                WELCOME_GRANTS,
+                '    op.execute(sa.text(f"revoke update, delete on welcome_grants from {APP_ROLE}"))\n',
+                "",
+            )
+        ],
+        expect=[
+            "test_guarded_writes_are_refused[welcome_grants-update",
+            "test_guarded_writes_are_refused[welcome_grants-delete",
+            "test_no_refuse_change_trigger_is_reachable_by_the_app_role",
+        ],
+    ),
+    Case(
+        id="t811-12-erasure-erases-the-hash",
+        what="P-371: the erasure lists welcome_grants among what it deletes",
+        edits=[
+            (
+                ERASURE,
+                "from app.modules.photos.models import Photo\n",
+                (
+                    "from app.modules.onboarding.models import WelcomeGrant\n"
+                    "from app.modules.photos.models import Photo\n"
+                ),
+            ),
+            (
+                ERASURE,
+                '    Erased(Session, ("user_id",)),\n',
+                '    Erased(Session, ("user_id",)),\n    Erased(WelcomeGrant, ("user_id",)),\n',
+            ),
+        ],
+        expect=[
+            "test_every_column_keyed_to_users_is_erased_or_kept",
+            "test_the_welcome_hash_is_kept",
+            RE_SIGN_UP,
+        ],
+    ),
+    Case(
+        id="t811-13-under-18-split-forgets-it",
+        what="D-072, D-078: welcome_grants dropped from UNDERAGE_KEEPS",
+        edits=[
+            (
+                USERS_REPO,
+                '    "welcome_grants": "given at done, after dob (D-470); a number\'s welcome, kept",\n',
+                "",
+            )
+        ],
+        expect=["test_every_table_keyed_to_users_is_one_d072_deletes_or_one_it_keeps"],
+    ),
+    Case(
+        id="t811-14-the-setting-lost",
+        what="D-530: the data migration seeds no welcome_velas row",
+        edits=[
+            (
+                WELCOME_SETTING,
+                'WELCOME_VELAS = ("welcome_velas", 5)\n',
+                'WELCOME_VELAS = ("welcome_velas_lost", 5)\n',
+            )
+        ],
+        expect=["test_app_config_seeds", "test_a_man_finishing_gets_five_velas_once"],
+    ),
+    Case(
+        id="t811-15-the-race-commits-a-welcome",
+        what="tests/committed.py: the onboarding race test commits a welcome row",
+        edits=[
+            (
+                "tests/modules/onboarding/test_race.py",
+                "            return 0  # nothing committed that can't be taken back (above)\n",
+                "            pass\n",
+            )
+        ],
+        expect=["test_finishing_waits_for_the_photos_decision"],
+    ),
+]
+
 CASES: list[tuple[Case, list[str]]] = (
     [(c, T51_SELECTION) for c in T51]
     + [(c, T54_SELECTION) for c in T54]
@@ -5568,6 +5786,7 @@ CASES: list[tuple[Case, list[str]]] = (
     + T64
     + [(c, T82_SELECTION) for c in T82]
     + [(c, T71_SELECTION) for c in T71]
+    + [(c, T811_SELECTION) for c in T811]
 )
 
 # The fifty-connection fixture's own message when Postgres refuses a connection.

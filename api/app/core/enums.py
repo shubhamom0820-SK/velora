@@ -144,6 +144,8 @@ class LedgerReason(StrEnum):
     # refund that fails or a dispute that is won gives them back.
     PURCHASE_REVERSAL = "purchase_reversal"
     PURCHASE_RESTORED = "purchase_restored"
+    # D-470, T-8.11: every new man's Velas at sign-up, once per number.
+    WELCOME = "welcome"
 
 
 class PaymentStatus(StrEnum):

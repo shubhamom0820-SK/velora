@@ -1,7 +1,7 @@
 """What finishing onboarding asks (T-4.8, D-310): what a profile must hold to
 go from `selfie` to `done`, who may finish without a matched selfie, who may
-leave the `photos` step without a face photo (T-4.12, D-391), and the
-profile's completeness. No I/O: the service reads, these decide, and the dev
+leave the `photos` step without a face photo (T-4.12, D-391), the
+profile's completeness, and who is given welcome Velas (T-8.11, D-470). No I/O: the service reads, these decide, and the dev
 seed holds its finished profiles to the same rules.
 """
 
@@ -43,6 +43,16 @@ MAY_FINISH_UNMATCHED: Final = frozenset({Gender.MALE})
 # An allowlist, as above: anyone else, a woman or someone with no gender, needs
 # one, pending or approved. The server's rule, not the screen's.
 MAY_LEAVE_PHOTOS_WITHOUT_A_FACE_PHOTO: Final = frozenset({Gender.MALE})
+
+# Who is given welcome Velas at `done` (D-470): men only. An allowlist, as
+# above, checked before anything is read or written: a woman left to D-076's
+# trigger would have her whole sign-up aborted, so she is skipped here and
+# finishes as before.
+WELCOME_GENDERS: Final = frozenset({Gender.MALE})
+
+# `app_config`'s key for how many (D-470): 0 turns the grant off; a missing row
+# skips it with a warning, never failing a sign-up (D-530).
+WELCOME_VELAS_KEY: Final = "welcome_velas"
 
 # Completeness (D-310): every finished profile meets the requirements, so they
 # count 50; each approved public photo after the first adds 10, the five more
@@ -96,6 +106,11 @@ def needs_a_face_photo(gender: Gender | None) -> bool:
     """Whether leaving the `photos` step needs a face photo, pending or
     approved (T-4.12)."""
     return gender not in MAY_LEAVE_PHOTOS_WITHOUT_A_FACE_PHOTO
+
+
+def gets_welcome_velas(gender: Gender | None) -> bool:
+    """Whether finishing gives welcome Velas, once the number hasn't had them."""
+    return gender in WELCOME_GENDERS
 
 
 def completeness(approved_photos: int) -> int:

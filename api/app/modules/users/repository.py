@@ -126,6 +126,7 @@ UNDERAGE_KEEPS = {
     "messages": "rule 12",
     "payments": "rule 12; money",
     "reports": "rule 12",
+    "welcome_grants": "given at done, after dob (D-470); a number's welcome, kept",
 }
 
 
