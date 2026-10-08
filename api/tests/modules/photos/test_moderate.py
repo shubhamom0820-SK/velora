@@ -160,7 +160,63 @@ async def test_an_approved_private_photo_never_reaches_the_public_bucket(
 
     after = await _fresh(db, photo.id)
     assert (after.status, after.public_key) == (ReviewStatus.APPROVED, None)
-    assert [bucket for bucket, _ in storage.objects] == [PRIVATE]
+    assert {bucket for bucket, _ in storage.objects} == {PRIVATE}
+
+
+async def test_an_approved_private_photo_is_kept_scored_where_no_upload_url_reaches(
+    db: AsyncSession, make_user: MakeUser
+) -> None:
+    """P-79, D-700: the bytes scored go to `scored_key` as well, a key under a
+    prefix no presigned PUT is ever made for, so T-8.4's album has a copy
+    nobody could have replaced after it was scored."""
+    storage, moderation = FakeStorage(), FakeModeration()
+    user, _ = await make_user()
+    photo = await _pending(db, storage, user, kind=PhotoKind.PRIVATE)
+
+    assert await _moderate(db, photo, storage, moderation) == "approved"
+
+    after = await _fresh(db, photo.id)
+    [scored] = moderation.checked
+    assert after.scored_key == f"scored/{user.id}/{photo.id}.jpg"
+    assert not after.scored_key.startswith("raw/")
+    assert after.scored_key != after.raw_key
+    assert storage.objects[(PRIVATE, after.scored_key)].data == scored
+    assert set(storage.objects) == {
+        (PRIVATE, photo.raw_key),
+        (PRIVATE, after.scored_key),
+    }
+
+
+async def test_a_private_photos_scored_copy_survives_a_second_put_before_or_after(
+    db: AsyncSession, make_user: MakeUser
+) -> None:
+    """The hole P-79 closes: the upload URL lasts 5 minutes and outlives
+    `complete`. A PUT while Sightengine is asked, and another after the
+    approval, both land on the upload's key; the scored copy, and the link
+    its owner is given, stay the bytes that were scored."""
+    storage = FakeStorage()
+    user, _ = await make_user()
+    photo = await _pending(db, storage, user, kind=PhotoKind.PRIVATE)
+
+    class Swapped(FakeModeration):
+        async def check(self, image: bytes) -> Any:
+            await storage.put_bytes(PRIVATE, photo.raw_key, b"swapped", "image/jpeg")
+            return await super().check(image)
+
+    moderation = Swapped()
+    assert await _moderate(db, photo, storage, moderation) == "approved"
+    await storage.put_bytes(PRIVATE, photo.raw_key, b"after", "image/jpeg")
+
+    after = await _fresh(db, photo.id)
+    assert after.scored_key is not None
+    assert storage.objects[(PRIVATE, after.scored_key)].data == moderation.checked[0]
+    async with Sessions(db)() as session:
+        shown = await service.owners_photo(
+            session, user, photo.id, storage=storage, settings=make_test_settings()
+        )
+    assert (
+        shown.url == f"fake-storage://{PRIVATE}/{after.scored_key}?method=GET&ttl=600"
+    )
 
 
 async def test_the_public_copy_is_what_was_scored_even_if_the_upload_changed(
@@ -183,6 +239,31 @@ async def test_the_public_copy_is_what_was_scored_even_if_the_upload_changed(
     assert storage.objects[(PUBLIC, f"p/{photo.id}.jpg")].data == moderation.checked[0]
 
 
+@pytest.mark.parametrize(
+    ("kind", "outcome"),
+    [
+        (PhotoKind.PRIVATE, "nudity"),
+        (PhotoKind.PUBLIC, "approved"),
+        (PhotoKind.VERIFICATION, "approved"),
+    ],
+)
+async def test_only_an_approved_private_photo_gets_a_scored_copy(
+    db: AsyncSession, make_user: MakeUser, kind: PhotoKind, outcome: str
+) -> None:
+    """A rejected private photo is shown to nobody, a public one's shown copy
+    is its public copy, and the face photo is its owner's alone (D-391)."""
+    storage, moderation = FakeStorage(), FakeModeration()
+    if outcome != "approved":
+        moderation.next = f"reject:{outcome}"
+    user, _ = await make_user()
+    photo = await _pending(db, storage, user, kind=kind)
+
+    assert await _moderate(db, photo, storage, moderation) == outcome
+
+    assert (await _fresh(db, photo.id)).scored_key is None
+    assert [key for _, key in storage.objects if key.startswith("scored/")] == []
+
+
 # --- Rejected --------------------------------------------------------------------------
 
 
@@ -201,7 +282,7 @@ async def test_a_rejected_photo_keeps_only_its_reencoded_copy_privately(
 
     after = await _fresh(db, photo.id)
     assert (after.status, after.reject_reason) == (ReviewStatus.REJECTED, reason)
-    assert after.public_key is None
+    assert (after.public_key, after.scored_key) == (None, None)
     assert list(storage.objects) == [(PRIVATE, photo.raw_key)]
     assert storage.objects[(PRIVATE, photo.raw_key)].data == moderation.checked[0]
     assert await _signals(db, user) == []
@@ -602,7 +683,9 @@ async def test_a_located_photo_is_stored_with_no_location_anywhere(
     assert await _moderate(db, photo, storage, moderation) == "approved"
 
     copies = [stored.data for stored in storage.objects.values()] + moderation.checked
-    assert len(copies) == (3 if kind is PhotoKind.PUBLIC else 2)
+    # The upload re-encoded, the bytes scored, and the shown copy: a public
+    # photo's public copy, a private one's scored copy (P-79, D-700).
+    assert len(copies) == 3
     for data in copies:
         header = data[: data.index(b"\xff\xda")]
         for mark in (b"Exif", b"GPS", b"xmp", b"ICC_PROFILE", located.MAKE.encode()):

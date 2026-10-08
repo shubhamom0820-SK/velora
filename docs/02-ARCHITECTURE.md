@@ -371,8 +371,10 @@ rule 3, T-8.2) or a charge no Velas were granted for (T-8.3, D-580).
    (no EXIF, XMP, ICC or anything appended survives); **write it over the upload**, so no
    original with its location is kept; score it with Sightengine (`nudity-2.1`, `face-age`,
    `text`, the plain image API only, D-094). Approved → the bytes scored written to
-   `velora-public/p/{photo_id}.jpg`, status `approved`; the face photo stays private, its
-   re-encoded copy the one the selfie is compared with. Rejected → status `rejected` with a
+   `velora-public/p/{photo_id}.jpg`, status `approved`; a private photo's to
+   `velora-private/scored/{user_id}/{photo_id}.jpg` (`scored_key`), which no upload URL reaches,
+   so a PUT after approval never changes what T-8.4's album shows (P-79, D-700); the face photo
+   stays private, its re-encoded copy the one the selfie is compared with. Rejected → status `rejected` with a
    reason (`nudity`, `no_face` for the face photo only (D-392, T-4.12), `text_overlay`; `other`
    or `too_large` if it can't be read, its file deleted), the re-encoded copy kept privately for
    review. A possible minor (`minor_suspected`, D-093) → rejected, a `fraud_events` score kept,

@@ -36,6 +36,9 @@ class Photo(Timestamps, Base):
     position: Mapped[int | None] = mapped_column(SmallInteger)
     raw_key: Mapped[str] = mapped_column(Text, nullable=False)
     public_key: Mapped[str | None] = mapped_column(Text)
+    # An approved private photo's scored copy (P-79, D-700): what anyone but
+    # its owner is ever shown, never the upload a second PUT could replace.
+    scored_key: Mapped[str | None] = mapped_column(Text)
     status: Mapped[ReviewStatus] = mapped_column(
         pg_enum(ReviewStatus),
         nullable=False,

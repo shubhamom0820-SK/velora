@@ -44,7 +44,7 @@ from app.core.providers.moderation import (
 )
 from app.core.providers.storage import ObjectNotFound, StorageProvider
 from app.core.queue import MATCH_PHOTO, MODERATE_PHOTO, Queue
-from app.core.storage_keys import public_photo_key, public_url, raw_key
+from app.core.storage_keys import public_photo_key, public_url, raw_key, scored_key
 from app.modules.onboarding import service as onboarding_service
 from app.modules.photos import moderation as moderation_rules
 from app.modules.photos import repository
@@ -337,11 +337,15 @@ def owner_reason(reason: str | None) -> str | None:
 
 async def _out(photo: Photo, storage: StorageProvider, settings: Settings) -> PhotoOut:
     """The photo for its owner, with where to view it: an approved public photo
-    at the CDN; any other live one by a signed link to the private copy, 10
-    minutes; a rejected one, whose file may be gone, by none."""
+    at the CDN; an approved private one by a signed link to its scored copy,
+    what anyone else is shown (P-79, D-700); any other live one by a signed
+    link to the private copy, 10 minutes; a rejected one, whose file may be
+    gone, by none."""
     url: str | None = None
     if photo.status is ReviewStatus.APPROVED and photo.public_key:
         url = public_url(settings, photo.public_key)
+    elif photo.status is ReviewStatus.APPROVED and photo.scored_key:
+        url = await storage.presign_get(settings.R2_BUCKET_PRIVATE, photo.scored_key)
     elif photo.status is not ReviewStatus.REJECTED:
         url = await storage.presign_get(settings.R2_BUCKET_PRIVATE, photo.raw_key)
     return PhotoOut(
@@ -582,7 +586,10 @@ async def moderate(
     - approved: a public photo's copy goes to the public bucket, from the
       bytes that were scored, never from the private copy, which a second PUT
       could have replaced since; and, if it shows a face and a selfie is kept,
-      it is queued for comparison with that selfie, for the badge (D-393);
+      it is queued for comparison with that selfie, for the badge (D-393); a
+      private photo's, from the same bytes, to `scored_key` in the private
+      bucket, which no upload URL covers, so a PUT inside the URL's 5 minutes
+      never changes what T-8.4's album shows (P-79, D-700);
     - rejected: the re-encoded copy stays, privately, for T-9.5's review;
     - rejected as a possible minor's (D-093): a `fraud_events` signal, and the
       image and every copy deleted, each read back as gone;
@@ -705,6 +712,14 @@ async def _record(
                 )
             )
             locked.public_key = key
+        if locked.kind is PhotoKind.PRIVATE:
+            key = scored_key(locked.user_id, locked.id)
+            await _stored(
+                storage.put_bytes(
+                    settings.R2_BUCKET_PRIVATE, key, clean.data, "image/jpeg"
+                )
+            )
+            locked.scored_key = key
         locked.status = ReviewStatus.APPROVED
         if locked.kind is PhotoKind.PUBLIC:
             await onboarding_service.refresh_completeness(session, user)

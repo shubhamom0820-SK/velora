@@ -166,6 +166,7 @@ def test_every_storage_key_on_an_erased_table_is_in_the_file_list() -> None:
         == {
             ("photos", "raw_key"),
             ("photos", "public_key"),
+            ("photos", "scored_key"),
             ("data_exports", "file_key"),
         }
     )
@@ -203,6 +204,15 @@ async def _everywhere(
             "values (:m, 'public', 0, :raw, :pub, 'approved') returning id"
         ),
         {**v, "raw": raw, "pub": public},
+    )
+    # An approved private photo: its upload and its scored copy (P-79, D-700).
+    private_raw, scored = f"raw/{me}/c", f"scored/{me}/c.jpg"
+    await db.execute(
+        text(
+            "insert into photos (user_id, kind, raw_key, scored_key, status) "
+            "values (:m, 'private', :raw, :scored, 'approved')"
+        ),
+        {**v, "raw": private_raw, "scored": scored},
     )
     export = f"exports/{me}/b.json"
     statements = [
@@ -273,7 +283,13 @@ async def _everywhere(
     for statement in both_ways:
         for a, b in ((me, other), (other, me)):
             await db.execute(text(statement), {**v, "a": a, "b": b})
-    for bucket, key in ((PRIVATE, raw), (PUBLIC, public), (PRIVATE, export)):
+    for bucket, key in (
+        (PRIVATE, raw),
+        (PUBLIC, public),
+        (PRIVATE, private_raw),
+        (PRIVATE, scored),
+        (PRIVATE, export),
+    ):
         await storage.put_bytes(bucket, key, b"data", "application/octet-stream")
     await db.flush()
 

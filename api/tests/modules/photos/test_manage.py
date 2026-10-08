@@ -32,6 +32,7 @@ class Stored:
     id: uuid.UUID
     raw_key: str
     public_key: str | None
+    scored_key: str | None = None
 
 
 def _bearer(token: str) -> dict[str, str]:
@@ -61,14 +62,20 @@ async def _photo(
     position: int | None = 0,
     status: ReviewStatus = ReviewStatus.APPROVED,
 ) -> Stored:
-    """A photo as moderation would leave it: its private copy stored, and an
-    approved public one's public copy too. Returned as a snapshot, since a
-    request's commit expires the ORM object a test holds."""
+    """A photo as moderation would leave it: its private copy stored, an
+    approved public one's public copy too, and an approved private one's
+    scored copy (P-79, D-700). Returned as a snapshot, since a request's
+    commit expires the ORM object a test holds."""
     photo_id = uuid.uuid4()
     raw = f"raw/{user.id}/{photo_id}"
     public_key = (
         f"p/{photo_id}.jpg"
         if kind is PhotoKind.PUBLIC and status is ReviewStatus.APPROVED
+        else None
+    )
+    scored_key = (
+        f"scored/{user.id}/{photo_id}.jpg"
+        if kind is PhotoKind.PRIVATE and status is ReviewStatus.APPROVED
         else None
     )
     photo = Photo(
@@ -78,6 +85,7 @@ async def _photo(
         position=position,
         raw_key=raw,
         public_key=public_key,
+        scored_key=scored_key,
         status=status,
     )
     db.add(photo)
@@ -85,7 +93,9 @@ async def _photo(
     await fake_providers.storage.put_bytes(PRIVATE, raw, JPEG, "image/jpeg")
     if public_key:
         await fake_providers.storage.put_bytes(PUBLIC, public_key, JPEG, "image/jpeg")
-    return Stored(photo_id, raw, public_key)
+    if scored_key:
+        await fake_providers.storage.put_bytes(PRIVATE, scored_key, JPEG, "image/jpeg")
+    return Stored(photo_id, raw, public_key, scored_key)
 
 
 async def _fresh(db: AsyncSession, photo_id: uuid.UUID) -> Photo:
@@ -136,15 +146,18 @@ async def test_the_owner_sees_every_live_photo_and_where_to_view_it(
     photos = await _list(client, token)
 
     assert [p["id"] for p in photos] == [str(main.id), str(pending.id), str(private.id)]
-    # Approved and public: the CDN. Anything else: a signed link, 10 minutes.
+    # Approved and public: the CDN. Approved and private: a signed link to its
+    # scored copy, never the upload a second PUT could have replaced (P-79).
+    # Anything else: a signed link to the upload, 10 minutes.
     assert photos[0]["url"] == f"/{main.public_key}"
     assert (
         photos[1]["url"]
         == f"fake-storage://{PRIVATE}/{pending.raw_key}?method=GET&ttl=600"
     )
+    assert private.scored_key == f"scored/{user.id}/{private.id}.jpg"
     assert (
         photos[2]["url"]
-        == f"fake-storage://{PRIVATE}/{private.raw_key}?method=GET&ttl=600"
+        == f"fake-storage://{PRIVATE}/{private.scored_key}?method=GET&ttl=600"
     )
 
 

@@ -18,6 +18,12 @@ def raw_key(user_id: UUID, photo_id: UUID) -> str:
     return f"raw/{_id(user_id)}/{_id(photo_id)}"
 
 
+def scored_key(user_id: UUID, photo_id: UUID) -> str:
+    """An approved private photo, re-encoded: the bytes moderation scored, in
+    the private bucket, under a prefix no upload URL ever covers (P-79, D-700)."""
+    return f"scored/{_id(user_id)}/{_id(photo_id)}.jpg"
+
+
 def public_photo_key(photo_id: UUID) -> str:
     """An approved public photo, re-encoded, in the public bucket (T-4.4)."""
     return f"p/{_id(photo_id)}.jpg"

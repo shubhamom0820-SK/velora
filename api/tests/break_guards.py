@@ -7185,6 +7185,143 @@ T65: list[Case] = [
     ),
 ]
 
+# --- P-79: an approved private photo's scored copy, out of the upload URL's reach ---
+
+P79_SELECTION = [
+    "tests/modules/photos/test_moderate.py",
+    "tests/modules/photos/test_manage.py",
+    "tests/modules/photos/test_scored_copy_migration.py",
+    "tests/core/test_storage_keys.py",
+    "tests/modules/account/test_erasure.py",
+    "tests/modules/users/test_dob_gender.py",
+]
+PHOTOS_SERVICE = "app/modules/photos/service.py"
+STORAGE_KEYS = "app/core/storage_keys.py"
+SCORED_COPY = "alembic/versions/20261008_8243172d0af6_a_private_photos_scored_copy.py"
+KEPT_SCORED = (
+    "test_an_approved_private_photo_is_kept_scored_where_no_upload_url_reaches"
+)
+SECOND_PUT = "test_a_private_photos_scored_copy_survives_a_second_put_before_or_after"
+
+P79: list[Case] = [
+    Case(
+        id="p79-01-the-scored-copy-never-written",
+        what="the row names a scored copy that moderation never stored",
+        edits=[
+            (
+                PHOTOS_SERVICE,
+                (
+                    "            key = scored_key(locked.user_id, locked.id)\n"
+                    "            await _stored(\n"
+                    "                storage.put_bytes(\n"
+                    '                    settings.R2_BUCKET_PRIVATE, key, clean.data, "image/jpeg"\n'
+                    "                )\n"
+                    "            )\n"
+                ),
+                "            key = scored_key(locked.user_id, locked.id)\n",
+            )
+        ],
+        expect=[KEPT_SCORED, SECOND_PUT],
+    ),
+    Case(
+        id="p79-02-the-scored-copy-at-the-uploads-key",
+        what="P-79's hole: the scored copy written over the upload, as before",
+        edits=[
+            (
+                PHOTOS_SERVICE,
+                "            key = scored_key(locked.user_id, locked.id)\n",
+                "            key = locked.raw_key\n",
+            )
+        ],
+        expect=[KEPT_SCORED, SECOND_PUT],
+    ),
+    Case(
+        id="p79-03-the-key-under-the-upload-prefix",
+        what="the scored key built as the upload's key, which the PUT URL covers",
+        edits=[
+            (
+                STORAGE_KEYS,
+                '    return f"scored/{_id(user_id)}/{_id(photo_id)}.jpg"\n',
+                '    return f"raw/{_id(user_id)}/{_id(photo_id)}"\n',
+            )
+        ],
+        expect=[
+            "test_each_kind_of_file_has_its_shape",
+            "test_a_scored_copy_is_never_under_the_upload_prefix",
+            KEPT_SCORED,
+            SECOND_PUT,
+        ],
+    ),
+    Case(
+        id="p79-04-every-approved-kind-scored",
+        what="a scored copy for the face photo too, which nobody else is shown",
+        edits=[
+            (
+                PHOTOS_SERVICE,
+                "        if locked.kind is PhotoKind.PRIVATE:\n",
+                "        if locked.kind is not PhotoKind.PUBLIC:\n",
+            )
+        ],
+        expect=[
+            "test_only_an_approved_private_photo_gets_a_scored_copy[verification-approved]"
+        ],
+    ),
+    Case(
+        id="p79-05-the-owner-shown-the-upload",
+        what="an approved private photo's owner given a link to the upload",
+        edits=[
+            (
+                PHOTOS_SERVICE,
+                (
+                    "    elif photo.status is ReviewStatus.APPROVED and photo.scored_key:\n"
+                    "        url = await storage.presign_get(settings.R2_BUCKET_PRIVATE, photo.scored_key)\n"
+                ),
+                "",
+            )
+        ],
+        expect=[
+            "test_the_owner_sees_every_live_photo_and_where_to_view_it",
+            SECOND_PUT,
+        ],
+    ),
+    Case(
+        id="p79-06-erasure-leaves-the-scored-copy",
+        what="D-500's erasure without the scored copy in its file list",
+        edits=[(ERASURE96, '    (Photo, "scored_key", "private"),\n', "")],
+        expect=[
+            "test_every_storage_key_on_an_erased_table_is_in_the_file_list",
+            "test_an_account_deleted_29_days_ago_is_erased_and_kept_exactly_as_d051_says",
+        ],
+    ),
+    Case(
+        id="p79-07-underage-leaves-the-scored-copy",
+        what="D-078's deletion without the scored copy in its file list",
+        edits=[
+            (
+                "app/modules/users/repository.py",
+                '    FileColumn(Photo, "scored_key", "private"),\n',
+                "",
+            )
+        ],
+        expect=[
+            "test_every_storage_key_on_a_deleted_table_is_in_the_file_list",
+            "test_under_eighteen_queues_its_files_deletion_before_the_rows_go",
+        ],
+    ),
+    Case(
+        id="p79-08-the-downgrade-drops-scored-copies",
+        what="the column dropped while files hang off it, out of every deletion's sight",
+        edits=[
+            (
+                SCORED_COPY,
+                "    if held:\n",
+                "    if False:\n",
+            )
+        ],
+        expect=["test_the_downgrade_refuses_while_a_scored_copy_exists"],
+    ),
+]
+
 CASES: list[tuple[Case, list[str]]] = (
     [(c, T51_SELECTION) for c in T51]
     + [(c, T54_SELECTION) for c in T54]
@@ -7218,6 +7355,7 @@ CASES: list[tuple[Case, list[str]]] = (
     + [(c, T74_SELECTION) for c in T74]
     + [(c, P56_SELECTION) for c in P56]
     + [(c, T65_SELECTION) for c in T65]
+    + [(c, P79_SELECTION) for c in P79]
 )
 
 # The fifty-connection fixture's own message when Postgres refuses a connection.

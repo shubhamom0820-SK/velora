@@ -14,6 +14,7 @@ from app.core.storage_keys import (
     public_photo_key,
     public_url,
     raw_key,
+    scored_key,
     voice_key,
 )
 from tests.conftest import make_test_settings
@@ -25,6 +26,7 @@ B = uuid.UUID("22222222-2222-4222-8222-222222222222")
 def test_each_kind_of_file_has_its_shape() -> None:
     assert raw_key(A, B) == f"raw/{A}/{B}"
     assert public_photo_key(B) == f"p/{B}.jpg"
+    assert scored_key(A, B) == f"scored/{A}/{B}.jpg"
     assert voice_key(A, B) == f"voice/{A}/{B}.webm"
     assert album_key(A, B) == f"album/{A}/{B}.jpg"
     assert export_key(A, B) == f"exports/{A}/{B}.json"
@@ -38,6 +40,8 @@ def test_anything_but_a_uuid_is_refused(smuggled: Any) -> None:
         lambda: raw_key(smuggled, B),
         lambda: raw_key(A, smuggled),
         lambda: public_photo_key(smuggled),
+        lambda: scored_key(smuggled, B),
+        lambda: scored_key(A, smuggled),
         lambda: voice_key(smuggled, B),
         lambda: album_key(A, smuggled),
         lambda: export_key(smuggled, B),
@@ -56,3 +60,10 @@ def test_a_public_key_is_served_from_the_cdn() -> None:
     assert public_url(settings, public_photo_key(B)) == (
         f"https://cdn.staging.veloraapp.co.in/p/{B}.jpg"
     )
+
+
+def test_a_scored_copy_is_never_under_the_upload_prefix() -> None:
+    """P-79, D-700: a presigned PUT is only ever made for `raw_key`, so the
+    scored copy of the same photo is out of its reach."""
+    assert not scored_key(A, B).startswith("raw/")
+    assert not scored_key(A, B).startswith(raw_key(A, B))

@@ -3104,7 +3104,7 @@ prices don't depend on the web photos step, and the hold is lifted.
 - [ ] **Needs:** T-4.4, T-5.1; **P-79**: an approved private photo can't be swapped for an unmoderated one through its upload URL; and **P-301**: a private photo's served copy is the bytes moderation scored
 - [ ] Requests (debit 1 for men, D-231: viewing private pictures; `credits_charged` stored), incoming list for owner, decide (grant → enqueue `watermark_album`; decline → nothing is returned, D-230), revoke (delete watermarked copies, status `revoked`).
 - [ ] **A decline returns nothing** (D-230, superseding D-050's refund on a decline). `refund_album_declined` stays unused, never repurposed.
-- [ ] `watermark_album`: for each private photo render a copy with the viewer's `@username` tiled diagonally at ~20% opacity.
+- [ ] `watermark_album`: for each private photo render a copy with the viewer's `@username` tiled diagonally at ~20% opacity, **from its `scored_key`, never `raw_key`** (D-700); a photo with none is left out.
 - [ ] `GET /users/{id}/album` → signed URLs of the viewer's copies only.
 - [ ] **The price shown (P-56, D-600):** the album request takes `shown_price` and passes it to `charge(..., shown=)`. Test `PRICE_CHANGED` with nothing charged or written, and its web sends the price it displayed, from `/prices`.
 - [ ] **Commit:** `feat(album): requests, grants, watermarking [T-8.4]`
@@ -4857,7 +4857,7 @@ The number comes from the session's own block, given in its brief, from P-100 up
   its test. Broken once each: `duration-150` in `AppShell.tsx` failed the shell's test; the
   can't-read rule off failed its five cases; every class allowed failed 20 of its 21 named classes
   (`text-[13px]` is caught as an arbitrary value first) and the `cx()` case. Restored by file copy, SHA-256 checked, all 43 green.
-- [ ] P-79 · Stop an approved private photo being swapped for an unmoderated one. **Before T-8.4**
+- [x] P-79 · Stop an approved private photo being swapped for an unmoderated one. **Before T-8.4**
   (on its Needs line), which first shows private photos to anyone but their owner. Worst case: a
   private photo passes moderation, its owner PUTs a nude, or a photo carrying their home's
   location, to the same presigned URL, and T-8.4's album shows it to the people they granted.
@@ -4876,6 +4876,19 @@ The number comes from the session's own block, given in its brief, from P-100 up
   Found building T-4.4. **P-79 to P-81 predate the P-number blocks** (CLAUDE.md): they were on
   `main` before that rule, and keep their numbers, since renumbering risks the stale reference the
   rule exists to prevent (the founder, 4 October 2026).
+  **Built 8 October 2026, as D-700, with a column** (the founder, on the advisor's
+  recommendation): `photos.scored_key` (migration `8243172d0af6`, whose downgrade refuses while a
+  row has one), `scored/{user_id}/{photo_id}.jpg` in the private bucket, written from the scored
+  bytes when a private photo is approved; the owner's link to an approved private photo is signed
+  for it. A column, since the erasure's and D-078's file lists are held by their tests to every
+  `*_key` column, so both carry it (both tests now delete one). Tested in `test_moderate.py`: the
+  copy is the bytes scored, outside `raw/`, and a PUT while Sightengine is asked and another after
+  approval change neither it nor the owner's link; a rejected private photo, a public photo and
+  the face photo get none. Broken once each (`tests.break_guards p79-`, log in
+  `out/p79-break-guards.log`): the copy never written, written at the upload's key, the key
+  helper under `raw/`, every approved kind given one, the owner shown the upload, either file
+  list without it, and the downgrade not refusing: 8 of 8 red, every file restored, SHA-256
+  checked. Private photos approved before this have no scored copy; T-8.4 shows only rows that do.
 - [ ] P-80 · Keep query values out of the API's database errors. **Before real users** (on
   T-9.15's Needs line). Worst case: a failed query's error, logged with its parameters, carries a
   phone number's hash, an encrypted number or a storage key into Fly's logs (rule 15). Seen
@@ -5616,7 +5629,7 @@ The number comes from the session's own block, given in its brief, from P-100 up
   `faces >= 1`, a kept selfie and no `selfie_match` for its verification, queued one at a time
   (P-281); or `match_photo` with more tries, spaced wider. Filed by Claude while building T-4.12,
   8 October 2026; its session's block, P-300 to P-309.
-- [ ] P-301 · Make a private photo's served copy the bytes moderation scored, as a public photo's
+- [x] P-301 · Make a private photo's served copy the bytes moderation scored, as a public photo's
   is. **Before T-8.4 serves private photos to anyone.** Worst case: a presigned PUT URL lasts five
   minutes and outlives `complete` (P-79); for a public photo T-4.4 publishes the scored bytes, so
   a second PUT over the raw key changes nothing anyone sees, but a private photo has no second
@@ -5628,6 +5641,8 @@ The number comes from the session's own block, given in its brief, from P-100 up
   object. Found building T-4.12; filed by Claude, 8 October 2026; its session's block, P-300 to
   P-309.
   **Placed 8 October 2026 (the audit, P-490):** on T-8.4's Needs line.
+  **Closed 8 October 2026 by P-79's build (D-700):** the first option, the same change; its
+  evidence is on P-79.
 - [x] P-370 · Move the `liked_you_reveal` row from 20 to 1 Vela, by a data migration. **Before
   T-6.7, on its Needs line.** Worst case first: the founder set the reveal at 1 Vela (8 October
   2026, D-004's note), but the price is a row, and every database holds 20, written by T-1.14's

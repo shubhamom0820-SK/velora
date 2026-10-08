@@ -196,6 +196,7 @@ enforced in the service. Index `(intent_id)`: discovery filters on intent, match
 | position | smallint | 0–5 for public; the lowest approved place is the main one, 0 or not: the server never closes a gap (P-75, D-494) |
 | raw_key | text | private bucket key |
 | public_key | text null | set when approved (public kind only) |
+| scored_key | text null | set when approved (private kind only): the bytes moderation scored, in the private bucket at `scored/{user_id}/{photo_id}.jpg`, where no upload URL reaches; all a private photo is ever shown from (P-79, D-700) |
 | status | review_status_t default 'pending' | |
 | reject_reason | text null | |
 | moderation | jsonb | every score the decision read (T-4.4): provider, models, `minor` (the highest face's, kept below the threshold too, so D-101's is revisited from real scores), `explicit`, `faces`, `artificial_faces`, `text_artificial`; never the image or the request. A selfie's (T-4.5, D-263): `threshold`, `decided_by` (`wake`, `queue`, or `seed`), `provider`, `faces`, `best`, and `compared` (the face photo's id and cosine similarity, exactly; D-391); later `review` (the founder's `same`/`different`, D-264). A public photo's, from T-4.12: `from_photo_id` when it was made from the face photo, and `selfie_match` (D-393: `verification_id`, `provider`, `similarity`, `threshold`, `matched`, `decided_by`, `at`; the seed's says only `matched` and `decided_by: seed`), which the badge reads and never a rejection |

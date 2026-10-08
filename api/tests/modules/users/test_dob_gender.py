@@ -876,9 +876,10 @@ CHECK_FILES_AFTER = timedelta(seconds=60)
 async def _photos_with_files(
     db: AsyncSession, fake_providers: FakeProviders, minor: uuid.UUID
 ) -> list[list[str]]:
-    """Two photos, one approved with a public copy, each file in storage. A
-    user at the dob step can't have them (D-068): this is the defence behind
-    that rule, so it is tested with them there."""
+    """Three photos, one approved with a public copy, one private with a
+    scored copy (P-79, D-700), each file in storage. A user at the dob step
+    can't have them (D-068): this is the defence behind that rule, so it is
+    tested with them there."""
     stored: list[list[str]] = []
     for position, public in ((0, True), (1, False)):
         photo_id = uuid.uuid4()
@@ -903,6 +904,22 @@ async def _photos_with_files(
                 "velora-public", public_key, b"x", "image/jpeg"
             )
             stored.append(["velora-public", public_key])
+    photo_id = uuid.uuid4()
+    raw, scored = f"raw/{minor}/{photo_id}", f"scored/{minor}/{photo_id}.jpg"
+    db.add(
+        Photo(
+            id=photo_id,
+            user_id=minor,
+            kind=PhotoKind.PRIVATE,
+            raw_key=raw,
+            scored_key=scored,
+        )
+    )
+    for key in (raw, scored):
+        await fake_providers.storage.put_bytes(
+            "velora-private", key, b"x", "image/jpeg"
+        )
+        stored.append(["velora-private", key])
     await db.flush()
     return sorted(stored)
 
@@ -974,7 +991,7 @@ async def test_a_refusal_whose_deletion_cant_be_queued_fails_whole(
 
     assert response.status_code == 500
     assert await _count(db, User, id=minor_id) == 1
-    assert await _count(db, Photo, user_id=minor_id) == 2
+    assert await _count(db, Photo, user_id=minor_id) == 3
     assert await _count(db, BannedIdentity) == 0
 
 
@@ -1084,6 +1101,7 @@ def test_every_storage_key_on_a_deleted_table_is_in_the_file_list() -> None:
         == {
             ("photos", "raw_key"),
             ("photos", "public_key"),
+            ("photos", "scored_key"),
             ("data_exports", "file_key"),
         }
     )

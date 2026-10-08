@@ -4542,6 +4542,35 @@ springs are each a small library's worth, and the stack already names these two)
 transitions alone (a release can't continue the finger's velocity); Framer Motion (not the
 pinned stack, and larger).
 
+### D-700 · An approved private photo's scored copy at a key of its own: `photos.scored_key` — Locked
+**The decision (P-79 and P-301; the founder, 4 October 2026 for the separate key, 8 October 2026
+for the column, on the advisor's recommendation):** when moderation approves a private photo, the
+re-encoded bytes Sightengine scored are written to `scored/{user_id}/{photo_id}.jpg` in the private
+bucket, and the row's new `scored_key` names it. Anything that shows a private photo reads that
+key and never `raw_key`: T-8.4's album renders only from it, and the owner's own link to an
+approved private photo is signed for it, so the owner sees what a viewer would.
+
+**Why:** a presigned PUT URL lasts five minutes (D-027) and outlives `complete`, and moderation
+wrote the scored bytes back over the upload (T-4.4, D-092). A PUT after approval, inside those
+minutes, replaced the approved photo with bytes nobody scored, and a private photo had no other
+copy. A public photo was already safe: its shown copy is `p/{photo_id}.jpg`, written from the
+scored bytes. No PUT URL is ever made for anything outside `raw/`, so the scored copy is out of
+the upload's reach, which closes the hole rather than narrowing it.
+
+**A column, not a key worked out from the id:** the erasure's file list (D-500) and D-078's are
+held by their tests to every `*_key` column on the tables they take, so the column puts the new
+file on both lists or fails. A key derived in code would have needed both lists changed by hand,
+with nothing to say so. The migration's downgrade refuses while any row has one.
+
+**Not set** for a rejected private photo (shown to nobody), a public photo (its public copy is the
+shown one) or the face photo (its owner's alone, D-391). Private photos approved before this
+change have none; T-8.4 shows only rows that do.
+
+**Rejected:** a key derived from the photo's id with no column (above); revoking the URL at
+`complete` by moving the object (one more copy step on every upload, and a PUT racing the move
+still lands); T-8.4 re-moderating each album photo when granted (a Sightengine call per grant, and
+the window reopens at every grant).
+
 ## Adding a decision
 
 Append `D-0NN · Title — Locked|Open`, with Decision, Why, Rejected. Never edit a Locked entry —
