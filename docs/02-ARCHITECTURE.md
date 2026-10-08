@@ -181,6 +181,7 @@ Envelope, both directions: `{ "type": "…", "id": "<uuid>", "data": { … } }`
 | `wallet.updated` | balance changed |
 | `match.created` | a like or Super Like met one back (T-6.4): `{match_id, user_id}`, the other person, to both |
 | `album.decided` | album request granted / declined |
+| `gift.received` | a gift sent to you (T-8.9): `{gift_send_id, gift_id, user_id}`, the sender |
 
 | Client → server | Effect |
 |---|---|
@@ -303,7 +304,8 @@ on a shared CI runner fails at random), its numbers in T-6.2's tick.
    the price from `action_prices` inside that transaction, with no cache, so it charges the price
    as it is now: 0 for a woman, the row's value for a man (T-5.2). Only above 0 does it call
    `wallet.debit()`, and nothing else may, but gift sending (T-8.9, priced from `gifts`); a test
-   holds that as an allowlist. **It is given the price the screen showed** (`shown`, the request's
+   holds that as an allowlist, and since P-152 `debit()` itself refuses any other caller when it
+   runs (D-651). **It is given the price the screen showed** (`shown`, the request's
    `shown_price`, 0 when absent) and refuses with `PRICE_CHANGED` when the price now differs,
    before any debit: compared, never charged (P-56, D-600).
 2. `wallet.debit(session, user_id, amount, reason, ref=Ref(...))` locks the wallet row, checks

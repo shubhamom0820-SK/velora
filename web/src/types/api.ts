@@ -1143,6 +1143,74 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/gifts": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Gifts */
+        get: operations["list_gifts_v1_gifts_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/gifts/send": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Send Gift */
+        post: operations["send_gift_v1_gifts_send_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/me/gifts": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Received Gifts */
+        get: operations["received_gifts_v1_me_gifts_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/users/{user_id}/gifts": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Gift Counts */
+        get: operations["gift_counts_v1_users__user_id__gifts_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/ws/ticket": {
         parameters: {
             query?: never;
@@ -1484,6 +1552,76 @@ export interface components {
         /** GenderSet */
         GenderSet: {
             gender: components["schemas"]["Gender"];
+        };
+        /**
+         * Gift
+         * @description One gift on sale: its price in Velas is the row's (D-016, D-252).
+         */
+        Gift: {
+            /** Id */
+            id: string;
+            /** Label */
+            label: string;
+            /** Asset */
+            asset: string;
+            /** Credits */
+            credits: number;
+        };
+        /**
+         * GiftCatalogue
+         * @description `GET /gifts` (D-652): the gifts, and what this man has left of the
+         *     week's free sends (D-231, D-650). A woman sends none, so both are null.
+         */
+        GiftCatalogue: {
+            /** Gifts */
+            gifts: components["schemas"]["Gift"][];
+            /** Free Sends Left */
+            free_sends_left: number | null;
+            /** Free Sends Reset At */
+            free_sends_reset_at: string | null;
+        };
+        /** GiftCount */
+        GiftCount: {
+            /** Gift Id */
+            gift_id: string;
+            /** Count */
+            count: number;
+        };
+        /**
+         * GiftCounts
+         * @description `GET /users/{id}/gifts`: how many of each, never from whom. Empty when
+         *     she has turned `show_gifts` off, to everyone but herself.
+         */
+        GiftCounts: {
+            /** Counts */
+            counts: components["schemas"]["GiftCount"][];
+        };
+        /**
+         * GiftSend
+         * @description A gift as its sender sees it: what he paid included.
+         */
+        GiftSend: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Gift Id */
+            gift_id: string;
+            /**
+             * Recipient Id
+             * Format: uuid
+             */
+            recipient_id: string;
+            /** Credits Charged */
+            credits_charged: number;
+            /** Thread Id */
+            thread_id: string | null;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
         };
         /**
          * GiveKudosRequest
@@ -2072,6 +2210,35 @@ export interface components {
             checks: components["schemas"]["ReadinessChecks"];
         };
         /**
+         * ReceivedGift
+         * @description A gift as she sees it: who sent it, never what he paid (D-652).
+         */
+        ReceivedGift: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Gift Id */
+            gift_id: string;
+            sender: components["schemas"]["CardLite"];
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+        };
+        /**
+         * ReceivedGiftPage
+         * @description `Page<ReceivedGift>`: newest first, by `(created_at, id)`.
+         */
+        ReceivedGiftPage: {
+            /** Items */
+            items: components["schemas"]["ReceivedGift"][];
+            /** Next Cursor */
+            next_cursor: string | null;
+        };
+        /**
          * RefundRequestCreate
          * @description Which payment, and what broke. No words of his: the gateway's record is
          *     what the admin reads (D-580).
@@ -2188,6 +2355,25 @@ export interface components {
             seeking: components["schemas"]["Seeking"];
             /** Intent Ids */
             intent_ids: number[];
+        };
+        /**
+         * SendGiftRequest
+         * @description Who and which gift. The price is never the browser's (rule 6): only
+         *     what the screen showed, compared and never charged (P-56, D-600).
+         */
+        SendGiftRequest: {
+            /**
+             * Recipient Id
+             * Format: uuid
+             */
+            recipient_id: string;
+            /** Gift Id */
+            gift_id: string;
+            /**
+             * Shown Price
+             * @default 0
+             */
+            shown_price: number;
         };
         /**
          * SendMessageRequest
@@ -4645,6 +4831,124 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["VoiceUpload"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_gifts_v1_gifts_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GiftCatalogue"];
+                };
+            };
+        };
+    };
+    send_gift_v1_gifts_send_post: {
+        parameters: {
+            query?: never;
+            header: {
+                "Idempotency-Key": string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SendGiftRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GiftSend"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    received_gifts_v1_me_gifts_get: {
+        parameters: {
+            query?: {
+                cursor?: string | null;
+                limit?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReceivedGiftPage"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    gift_counts_v1_users__user_id__gifts_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                user_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GiftCounts"];
                 };
             };
             /** @description Validation Error */

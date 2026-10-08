@@ -1,7 +1,7 @@
-"""Only `pricing.service.charge` calls `wallet.service.debit()` (T-5.2), so no
-literal price can reach a debit: every paid action is priced from its row.
-Gift sending (T-8.9, priced from `gifts`) joins the list when it is built, and
-not before: an entry naming code that doesn't exist fails here too.
+"""Only `pricing.service.charge` and gift sending (T-8.9, priced from `gifts`)
+call `wallet.service.debit()` (T-5.2), so no literal price can reach a debit:
+every paid action is priced from its row. An entry naming code that doesn't
+exist fails here too.
 
 An allowlist of (file, function), never a list of who may not: anything that
 reaches `debit` from `app/` or `seed/` and isn't named fails. It is proved as
@@ -10,10 +10,13 @@ way a caller could reach it. A blacklist can't be tested with the names you
 already know.
 
 The scan reads source, so code that builds the name at run time
-(`getattr(m, "de" + "bit")`) gets past it; review catches that, not this. It
-finds `debit` however it is imported or renamed, any attribute called `debit`
-on anything, `getattr(..., "debit")`, and a star import of the wallet service.
-Tests aren't scanned: they prove the wallet by calling it.
+(`getattr(m, "de" + "bit")`) gets past it. Since P-152 (D-651) `debit` itself
+refuses any caller but these two when it runs, and the last cases here prove it
+against exactly that caller, which the scan is shown not to see. The scan stays
+as the second layer: it finds `debit` however it is imported or renamed, any
+attribute called `debit` on anything, `getattr(..., "debit")`, and a star
+import of the wallet service. Tests aren't scanned: they prove the wallet by
+calling it, which `debit` allows them (they never ship, `.dockerignore`).
 
 **`reverse()` the same way (T-8.2, D-520):** it takes what the balance holds
 and never refuses, so a priced action reaching it would take Velas for free.
@@ -23,13 +26,28 @@ Only payments' webhook, taking back a payment whose money went back, calls it.
 from __future__ import annotations
 
 import ast
+import asyncio
+import uuid
 from pathlib import Path
+from types import ModuleType
+from typing import Any
 
 import pytest
+from sqlalchemy import func, select
+from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.enums import LedgerReason
+from app.modules.wallet import service as wallet_service
+from app.modules.wallet.models import LedgerEntry, Wallet
+from app.modules.wallet.rules import Ref, RefType
+from app.modules.wallet.service import WalletMisuse
+from tests.conftest import MakeUser
 from tests.infra import API_DIR
 
-ALLOWED = {("app/modules/pricing/service.py", "charge")}
+ALLOWED = {
+    ("app/modules/pricing/service.py", "charge"),
+    ("app/modules/gifts/service.py", "_send_in"),
+}
 REVERSE_ALLOWED = {("app/modules/payments/webhooks.py", "_reverse_once")}
 
 WALLET_SERVICE = "app.modules.wallet.service"
@@ -213,3 +231,127 @@ def test_a_reverse_caller_nobody_has_named_is_found(tmp_path: Path, way: str) ->
 
     assert found == {(SOMEWHERE, SCOPES.get(way, "buy"))}
     assert not found <= REVERSE_ALLOWED
+
+
+# --- At run time (P-152, D-651) ------------------------------------------------------
+
+
+def _module_of(path: str) -> str:
+    return path.removesuffix(".py").replace("/", ".")
+
+
+def test_the_run_time_list_is_the_scans() -> None:
+    """One list in two places: the scan's files and `debit`'s modules name the
+    same functions, so neither can grow alone."""
+    assert {
+        (_module_of(path), scope) for path, scope in ALLOWED
+    } == wallet_service.DEBIT_CALLERS
+
+
+# Reaches the debit by a name built at run time, from a module nobody named.
+BUILT_AT_RUN_TIME = """
+from app.core.enums import LedgerReason
+from app.modules.wallet import service
+
+async def buy(session, user_id, ref):
+    pay = getattr(service, "de" + "bit")
+    return await pay(session, user_id, 5, LedgerReason.THREAD_OPEN, ref=ref)
+"""
+
+
+def _loaded(name: str, source: str) -> ModuleType:
+    """`source` run as the module `name`, as if it lived in `app/`."""
+    module = ModuleType(name)
+    # The test's own source, never input: the point is a module the scan never read.
+    exec(compile(source, f"<{name}>", "exec"), module.__dict__)  # noqa: S102
+    return module
+
+
+async def _moved(db: AsyncSession, user_id: uuid.UUID) -> tuple[int, int]:
+    entries = await db.scalar(
+        select(func.count())
+        .select_from(LedgerEntry)
+        .where(LedgerEntry.user_id == user_id, LedgerEntry.reason != "admin_grant")
+    )
+    balance = await db.scalar(select(Wallet.balance).where(Wallet.user_id == user_id))
+    return int(entries or 0), int(balance or 0)
+
+
+async def test_a_debit_by_a_name_built_at_run_time_is_refused(
+    db: AsyncSession, make_user: MakeUser, tmp_path: Path
+) -> None:
+    """The case P-152 names: the scan can't see this caller, and `debit`
+    refuses it anyway, having written nothing."""
+    (tmp_path / SOMEWHERE).parent.mkdir(parents=True)
+    (tmp_path / SOMEWHERE).write_text(BUILT_AT_RUN_TIME)
+    assert debit_callers(tmp_path, "app") == set()  # the scan's blind spot
+
+    man, _ = await make_user(credits=10)
+    module = _loaded(_module_of(SOMEWHERE), BUILT_AT_RUN_TIME)
+    with pytest.raises(WalletMisuse, match=r"P-152"):
+        await module.buy(db, man.id, Ref(RefType.THREAD, uuid.uuid4()))
+
+    assert await _moved(db, man.id) == (0, 10)
+
+
+@pytest.mark.parametrize(
+    ("module", "function"),
+    [
+        # A listed function's name, in a module nobody listed.
+        ("app.modules.never_named_2031.service", "charge"),
+        # A listed module, with a function nobody listed.
+        ("app.modules.pricing.service", "charge_twice"),
+        ("app.modules.gifts.service", "send_gift"),
+        # Only the package `tests` is test code, not a name starting with it.
+        ("testsuite_2031.service", "buy"),
+    ],
+)
+async def test_the_list_names_a_function_in_its_module(
+    db: AsyncSession, make_user: MakeUser, module: str, function: str
+) -> None:
+    man, _ = await make_user(credits=10)
+    source = f"""
+from app.core.enums import LedgerReason
+from app.modules.wallet import service
+
+async def {function}(session, user_id, ref):
+    return await service.debit(session, user_id, 5, LedgerReason.THREAD_OPEN, ref=ref)
+"""
+    loaded = _loaded(module, source)
+    with pytest.raises(WalletMisuse, match=r"P-152"):
+        await getattr(loaded, function)(db, man.id, Ref(RefType.THREAD, uuid.uuid4()))
+
+    assert await _moved(db, man.id) == (0, 10)
+
+
+async def test_a_debit_with_no_caller_of_its_own_is_refused(
+    db: AsyncSession, make_user: MakeUser
+) -> None:
+    """Started as a task, `debit` is awaited by the event loop: a caller
+    nobody named, so refused, even from a test."""
+    man, _ = await make_user(credits=10)
+    ref = Ref(RefType.THREAD, uuid.uuid4())
+    task: asyncio.Task[Any] = asyncio.create_task(
+        wallet_service.debit(db, man.id, 5, LedgerReason.THREAD_OPEN, ref=ref)
+    )
+    with pytest.raises(WalletMisuse, match=r"P-152"):
+        await task
+
+    assert await _moved(db, man.id) == (0, 10)
+
+
+async def test_a_listed_caller_passes(db: AsyncSession, make_user: MakeUser) -> None:
+    """The check refuses by who calls, nothing else: the same source, loaded
+    as pricing's `charge`, debits."""
+    man, _ = await make_user(credits=10)
+    source = """
+from app.core.enums import LedgerReason
+from app.modules.wallet import service
+
+async def charge(session, user_id, ref):
+    return await service.debit(session, user_id, 5, LedgerReason.THREAD_OPEN, ref=ref)
+"""
+    loaded = _loaded("app.modules.pricing.service", source)
+    await loaded.charge(db, man.id, Ref(RefType.THREAD, uuid.uuid4()))
+
+    assert await _moved(db, man.id) == (1, 5)

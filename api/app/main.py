@@ -30,6 +30,8 @@ from app.modules.auth.router import router as auth_router
 from app.modules.discovery.router import router as discovery_router
 from app.modules.e2e.router import payments_router as e2e_payments_router
 from app.modules.e2e.router import router as e2e_router
+from app.modules.gifts.router import router as gifts_router
+from app.modules.gifts.service import GiftCache
 from app.modules.health.router import router as health_router
 from app.modules.kudos.router import router as kudos_router
 from app.modules.likes.router import router as likes_router
@@ -140,6 +142,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     # yet: startup succeeds with a dependency down, and /readyz reports it.
     app.state.settings = settings
     app.state.config_cache = ConfigCache()
+    app.state.gift_cache = GiftCache()
     app.state.engine = build_engine(
         settings.DATABASE_URL,
         pool_size=settings.DB_POOL_SIZE,
@@ -173,6 +176,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.include_router(messages_router, prefix="/v1")
     app.include_router(kudos_router, prefix="/v1")
     app.include_router(media_router, prefix="/v1")
+    app.include_router(gifts_router, prefix="/v1")
     app.include_router(realtime_router, prefix="/v1")
     # The socket, at the root (02-ARCHITECTURE §6): `wss://api…/ws`.
     app.include_router(realtime_gateway)

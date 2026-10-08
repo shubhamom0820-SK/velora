@@ -24,7 +24,8 @@ since a debit of 0 raises. The shown price is compared, never charged: what is
 debited is always the row's price (rule 6). `shown` is a required argument, so
 a new paid action can't forget to compare. It and gift sending (T-8.9, priced from `gifts`) are the only callers
 of `wallet.service.debit()`, so no literal price can reach it;
-tests/modules/pricing/test_debit_callers.py holds that, as an allowlist.
+tests/modules/pricing/test_debit_callers.py holds that, as an allowlist, and
+`debit()` itself refuses any other caller when it runs (P-152, D-651).
 """
 
 from __future__ import annotations

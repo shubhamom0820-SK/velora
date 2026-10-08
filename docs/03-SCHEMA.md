@@ -352,7 +352,8 @@ Fifteen free sends a week replace `gift_free_daily_limit` (`app_config`).
 | gift_id | text fk gifts | |
 | credits_charged | int not null default 0 | copied at send time; check `>= 0` |
 | thread_id | uuid null fk threads | set if a thread already existed |
-| created_at | timestamptz | |
+| idempotency_key | text not null | the sender's `Idempotency-Key`; unique per sender, `uq_gift_sends_sender_id_idempotency_key` (T-8.9, D-653). A send from before it got its own id |
+| created_at | timestamptz | the clock's now at send, which the cooldown and the week (D-650) read |
 Indexes: `(recipient_id, created_at desc)`, `(sender_id, created_at desc)`,
 `(sender_id, recipient_id, gift_id, created_at desc)` for the cooldown check.
 Check `sender_id <> recipient_id`. No check pins prices to particular values — prices are data (D-016).
@@ -622,7 +623,7 @@ Unique ignores case (citext). No format check in the database: T-2.3 validates i
 
 - `interests` — 24 rows
 - `intents` — 10 rows (P-25, D-041)
-- `gifts` — 6 rows (D-016)
+- `gifts` — 6 rows (D-016); four active since T-5.2 (D-252)
 - `action_prices`, `credit_packs`, `app_config` — from D-004 / D-005 / §8
 - `areas` — 40 neighbourhoods for the launch city
 - **dev only** (`make seed`, T-1.15): the 20 prototype profiles (10 women, 10 men), a test man,

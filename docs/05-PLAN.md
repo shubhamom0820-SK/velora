@@ -3199,29 +3199,48 @@ prices don't depend on the web photos step, and the hold is lifted.
 - [x] **Commit:** `feat(kudos): positive-only notes [T-8.5]`
 
 ### T-8.9 · Gifts
-- [ ] **Needs:** T-5.1, T-6.3
-- [ ] `GET /gifts` (active, sorted, cached 60 s).
-- [ ] `POST /gifts/send {recipient_id, gift_id}` with `Idempotency-Key`. Rules, each with a test:
+- [x] **Needs:** T-5.1, T-6.3
+- [x] `GET /gifts` (active, sorted, cached 60 s).
+- [x] `POST /gifts/send {recipient_id, gift_id}` with `Idempotency-Key`. Rules, each with a test:
   recipient must be a woman with onboarding `done` (else `NOT_ALLOWED`); sender must be a man
   (women sending → `NOT_ALLOWED`); blocked either way → `BLOCKED`; frozen sender → `ACCOUNT_FROZEN`;
   fifteen free sends a week, then each send costs its gift's price (D-231: the daily cap and
   `gift_free_daily_limit` are gone, so this task says whether `GIFT_LIMIT_REACHED` keeps a case,
   and proposes where the week starts);
   same gift to the same person inside `gift_same_recipient_cooldown_h` → `GIFT_COOLDOWN`.
-- [ ] Paid gifts: `wallet.debit(reason="gift", ref_type="gift_send")` **in the same transaction**
+  **Answered 8 October 2026 (the founder, on the advisor's recommendation):** the week starts
+  Monday 00:00 IST and `GIFT_LIMIT_REACHED` is retired, never sent (D-650). Whom: anyone a private
+  message could reach (D-550), else `NOT_FOUND`, a block never revealed, in place of `BLOCKED`
+  and of `NOT_ALLOWED` for a woman not `done`; reachable but not a woman, `NOT_ALLOWED` (D-653).
+  A frozen sender is refused by `deps.current_user` before the route runs (`ACCOUNT_FROZEN`).
+- [x] Paid gifts: `wallet.debit(reason="gift", ref_type="gift_send")` **in the same transaction**
   as the `gift_sends` insert. Price read from the `gifts` row, never a literal.
-- [ ] **Name gift sending in the debit's allowlist:** `ALLOWED` in
+- [x] **Name gift sending in the debit's allowlist:** `ALLOWED` in
   `api/tests/modules/pricing/test_debit_callers.py` (T-5.2). Until it is named, that test fails on
   any call to `wallet.service.debit` outside `pricing.service.charge`, this task's included. The
   free sends' setting is `app_config.gift_free_weekly_limit` (15, T-5.2). **The allowlist reads
   source, so it can't see a name built at run time: P-152,** worth doing here, where it is next
-  touched.
-- [ ] Links `thread_id` if an active or knotted thread already exists. Never creates a thread.
-- [ ] Publishes `gift.received` on the socket and a notification (respects prefs).
-- [ ] `GET /me/gifts` (received, paginated, sender card) and `GET /users/{id}/gifts` (counts only,
-  hidden when `show_gifts` is false).
-- [ ] **The price shown (P-56, D-600):** `POST /gifts/send` takes `shown_price`; a gift debits outside `charge()` (priced from `gifts`), so it compares by hand with `pricing.service.price_changed()`, before the debit. A free send this week is a price of 0. Test `PRICE_CHANGED` with nothing charged or written, and its web sends the price it displayed, from `/prices`.
-- [ ] **Commit:** `feat(gifts): catalogue, sending, limits [T-8.9]`
+  touched. **Both done:** `("app/modules/gifts/service.py", "_send_in")` is in `ALLOWED`, and
+  `debit()` refuses any other caller when it runs (D-651), proved against a name built at run time.
+- [x] Links `thread_id` if an active or knotted thread already exists. Never creates a thread.
+- [x] Publishes `gift.received` on the socket and a notification (respects prefs).
+  **No setting in `notification_prefs` names gifts,** and pushes are T-9.4's: the in-app `gift`
+  row is written as Threads' and matches' are, and which setting governs its push is **P-550**, on
+  T-9.4's line.
+- [x] `GET /me/gifts` (received, paginated, sender card) and `GET /users/{id}/gifts` (counts only,
+  hidden when `show_gifts` is false). **And `GET /gifts` carries his free sends left and when they
+  come back** (D-652); she never sees what a gift cost. The send keeps its `Idempotency-Key`
+  (`gift_sends.idempotency_key`, migration `5978faceb05b`, D-653).
+- [x] **The price shown (P-56, D-600):** `POST /gifts/send` takes `shown_price`; a gift debits outside `charge()` (priced from `gifts`), so it compares by hand with `pricing.service.price_changed()`, before the debit. A free send this week is a price of 0. Test `PRICE_CHANGED` with nothing charged or written, and its web sends the price it displayed, from `/prices`.
+  **The web half is T-8.10's** (this task has no screen): pointer on its line, which sends the
+  price `GET /gifts` showed, since gifts aren't in `/prices`.
+- **Broken once each, 8 October 2026** (`uv run python -m tests.break_guards t89- p152-`): T-8.9's
+  twenty-nine and P-152's five, each red in 1 of 1, every file restored and none differing by
+  SHA-256 after. Among them: the sender's lock removed (both forced races red: two free sends past
+  the limit, and the same key breaking on its unique constraint), the week read from the UTC date,
+  the price from a literal table, a refused debit leaving its send, and `debit()`'s check removed,
+  trusting a function's name in any module, or passing any module named `tests…`.
+- [x] **Commit:** `feat(gifts): catalogue, sending, limits [T-8.9]`
 
 ### T-8.10 · Web gifts
 - [ ] **Needs:** T-8.9, T-5.5
@@ -3230,6 +3249,11 @@ prices don't depend on the web photos step, and the hold is lifted.
 - [ ] Sending: optimistic disable, success toast, balance updates from `wallet.updated`.
   `GIFT_LIMIT_REACHED` / `GIFT_COOLDOWN` → friendly inline copy with when they can send again.
   `INSUFFICIENT_CREDITS` → store sheet.
+  **From T-8.9 (D-650, D-652):** `GIFT_LIMIT_REACHED` is retired, never sent: past the week's free
+  sends a gift costs its price. The sheet reads `GET /gifts`'s `free_sends_left` and
+  `free_sends_reset_at`, and sends `shown_price`, the price it displayed: 0 while a free send is
+  left, else the gift's `credits` from `GET /gifts`, never from `/prices` (gifts aren't in it).
+  `PRICE_CHANGED` shows the new price again (D-600).
 - [ ] Received gifts row on her own profile and in You tab; toggle `show_gifts` in privacy settings.
 - [ ] Notification opens the sender's profile.
 - [ ] **Commit:** `feat(web): gifts on profile [T-8.10]`
@@ -3364,6 +3388,9 @@ number** per account gets its 5 each, one Thread's worth, and is **accepted**, k
 - [ ] VAPID keys; `POST/DELETE /push/subscriptions`; `send_push` worker (drop subscriptions on 404/410); notification prefs; in-app `notifications` list. Kinds: match, message (only if not connected), like, knot requested/accepted, thread expiring, album decided, low balance.
 - [ ] **A paused account is sent nothing** (T-9.6): no push and no in-app notification while
   `paused`. A deleted one has no push subscriptions left (`DELETE /me` drops them).
+- [ ] **P-550: gifts.** T-8.9 writes a `gift` notification (`{gift_send_id, gift_id, user_id}`)
+  for every gift received, and no setting names gifts: decide which one governs its push, and add
+  `gift` to the kinds above.
 - [ ] Web: Serwist service worker (push + notificationclick → open the right route), permission asked **after the first match**, not on load; generic-text option; iOS note when not installed.
 - [ ] Update `/privacy` (T-2.2) to say what push notifications carry and who delivers them.
 - [ ] **Commit:** `feat(notifications): web push and in-app list [T-9.4]`
@@ -5193,7 +5220,7 @@ The number comes from the session's own block, given in its brief, from P-100 up
   **Deadline missed, 8 October 2026 (the audit, P-490):** "Now" was 5 October 2026. **Now when no
   session is running tests** (raising `max_connections` restarts the Docker Postgres every worktree
   shares). Nothing above changes.
-- [ ] P-152 · Make the debit's allowlist hold against a caller it can't see named. **Not tonight**
+- [x] P-152 · Make the debit's allowlist hold against a caller it can't see named. **Not tonight**
   (the advisor, 5 October 2026); worth doing where it is next touched, T-8.9, which names gift
   sending in it. Worst case: a caller reaches `wallet.service.debit` through a name built at run
   time (`getattr(module, "de" + "bit")`, an `importlib` lookup, a handler table filled by
@@ -5207,6 +5234,13 @@ The number comes from the session's own block, given in its brief, from P-100 up
   can build), or a `debit` no other module can import, with the source scan kept as a second
   layer. Found in T-5.2, whose report named it; the advisor ranked it first of that report's three
   worries. Filed from this session's block (P-150 to P-159).
+  **Done in T-8.9, 8 October 2026 (D-651):** `wallet.service.debit()` reads the frame that awaits
+  it and refuses with `WalletMisuse`, before any row is read, unless it is `pricing.service.charge`
+  or gift sending's `_send_in` (`DEBIT_CALLERS`), or test code, which never ships. Proved in
+  `tests/modules/pricing/test_debit_callers.py` against a module built at run time that reaches
+  `debit` by `getattr(service, "de" + "bit")`: the scan passes its source, and the run refuses it
+  with nothing written. Also refused: a listed name in an unlisted module, an unlisted name in a
+  listed one, and a debit started as a task. A test holds the scan's list and `DEBIT_CALLERS` equal.
 - [x] P-143 · Refuse `make hooks` anywhere but the clone's main checkout. **Done, 4 October 2026,**
   at the direction of the advisor directing Sprint 5. Worst case, as it happened: git's hooks are
   shared by every checkout of a clone, and `pre-commit install` pins the pre-commit hook to the
@@ -6054,3 +6088,11 @@ The number comes from the session's own block, given in its brief, from P-100 up
   leaves a `voice/…` copy no message keeps. Sweep both on a cron: an upload older than its URL's 5
   minutes and a grace, and a `voice/` file no `messages.media_key` names. Filed by Claude building
   T-7.9, 8 October 2026; its session's block.
+- [ ] P-550 · Say which notification setting governs a gift, and push it. **In T-9.4.** Worst case:
+  T-8.9 writes a `gift` notification for every gift a woman receives, and no setting in
+  `notification_prefs` names gifts, so when T-9.4 sends pushes, a woman who turned off what she
+  thought covered them is still pushed each one, or the gift kind is left out of the push worker
+  and none arrives at all. T-9.4's kinds list has no gift. Decide there whether `like` governs it or
+  a `gift` column is added (a migration, and `Prefs` in 04-API), and that a paused woman is sent
+  nothing (T-9.6). Filed by Claude building T-8.9, 8 October 2026; its session's block, P-550 to
+  P-559.

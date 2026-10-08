@@ -807,7 +807,10 @@ async def test_a_finished_album_request_frees_the_pair(
             "kudos",
             "(from_id, to_id, kind, thread_id) values (:u, :u, 'genuinely_funny', :t)",
         ),
-        ("gift_sends", "(sender_id, recipient_id, gift_id) values (:u, :u, :g)"),
+        (
+            "gift_sends",
+            "(sender_id, recipient_id, gift_id, idempotency_key) values (:u, :u, :g, 'k')",
+        ),
         ("blocks", "(blocker_id, blocked_id) values (:u, :u)"),
         ("reports", "(reporter_id, reported_id, reason) values (:u, :u, 'fake')"),
         # A self-referral would farm credits on both sides of one account.
@@ -850,8 +853,9 @@ async def test_gift_send_charge_is_never_negative(db: AsyncSession) -> None:
 
     refusal = await _check_refused(
         db,
-        "insert into gift_sends (sender_id, recipient_id, gift_id, credits_charged) "
-        "values (:s, :r, :g, -2)",
+        "insert into gift_sends "
+        "(sender_id, recipient_id, gift_id, credits_charged, idempotency_key) "
+        "values (:s, :r, :g, -2, 'k')",
         {"s": low, "r": high, "g": gift_id},
     )
 
@@ -918,12 +922,31 @@ async def test_a_gift_send_needs_a_real_gift(db: AsyncSession) -> None:
 
     state = await _rejected(
         db,
-        "insert into gift_sends (sender_id, recipient_id, gift_id) "
-        "values (:s, :r, 'no-such-gift')",
+        "insert into gift_sends (sender_id, recipient_id, gift_id, idempotency_key) "
+        "values (:s, :r, 'no-such-gift', 'k')",
         {"s": low, "r": high},
     )
 
     assert state == FOREIGN_KEY_VIOLATION
+
+
+async def test_a_gift_send_keeps_its_key_once_per_sender(db: AsyncSession) -> None:
+    """T-8.9: the sender's `Idempotency-Key`, required, one send per key per
+    sender (D-653); another sender's same key is his own."""
+    low, high = await _pair(db)
+    gift_id = await _gift(db)
+    sql = (
+        "insert into gift_sends (sender_id, recipient_id, gift_id, idempotency_key) "
+        "values (:s, :r, :g, :k)"
+    )
+    await db.execute(text(sql), {"s": low, "r": high, "g": gift_id, "k": "key-1"})
+    await db.execute(text(sql), {"s": high, "r": low, "g": gift_id, "k": "key-1"})
+
+    again = await _rejected(db, sql, {"s": low, "r": high, "g": gift_id, "k": "key-1"})
+    keyless = await _rejected(db, sql, {"s": low, "r": high, "g": gift_id, "k": None})
+
+    assert again == UNIQUE_VIOLATION
+    assert keyless == "23502"  # not_null_violation
 
 
 # Reports.

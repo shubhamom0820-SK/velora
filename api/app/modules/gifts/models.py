@@ -18,6 +18,7 @@ from sqlalchemy import (
     Integer,
     SmallInteger,
     Text,
+    UniqueConstraint,
     text,
     true,
 )
@@ -63,10 +64,14 @@ class GiftSend(CreatedAt, Base):
     )
     # Set if a thread already existed between the two.
     thread_id: Mapped[uuid.UUID | None] = uuid_fk("threads.id", nullable=True)
+    # The sender's `Idempotency-Key`: one send per key per sender (T-8.9), as
+    # an order's is per user (D-481). The ledger's key is built from `id`.
+    idempotency_key: Mapped[str] = mapped_column(Text, nullable=False)
 
     __table_args__ = (
         CheckConstraint("sender_id <> recipient_id", name="not_self"),
         CheckConstraint("credits_charged >= 0", name="credits_charged_non_negative"),
+        UniqueConstraint("sender_id", "idempotency_key"),
         Index(
             "ix_gift_sends_recipient_id_created_at",
             "recipient_id",

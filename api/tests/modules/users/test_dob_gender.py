@@ -701,7 +701,10 @@ async def _a_row_naming_them_everywhere(
             "insert into kudos (from_id, to_id, kind, thread_id) "
             "values (:a, :b, 'great_conversation', :t)"
         ),
-        "insert into gift_sends (sender_id, recipient_id, gift_id) values (:a, :b, 'coffee')",
+        (
+            "insert into gift_sends (sender_id, recipient_id, gift_id, idempotency_key) "
+            "values (:a, :b, 'coffee', 'k')"
+        ),
         "insert into liked_you_reveals (viewer_id, liker_id) values (:a, :b)",
         "insert into swipes (swiper_id, target_id, dir) values (:a, :b, 'like')",
         (
@@ -1081,10 +1084,18 @@ async def test_a_refusal_with_no_files_queues_nothing(
     assert fake_queue.jobs == []
 
 
+# `*_key` columns that name no file, each with why: a client's request key.
+NOT_FILES = {
+    # The sender's `Idempotency-Key` (T-8.9, D-653).
+    ("gift_sends", "idempotency_key"),
+}
+
+
 def test_every_storage_key_on_a_deleted_table_is_in_the_file_list() -> None:
     """D-078: any file stored behind a user row joins the list, read before
     the rows go. A `*_key` column on a table the deletion takes, left off the
-    list, would leave its file behind: this fails first."""
+    list, would leave its file behind: this fails first. `NOT_FILES` names
+    the ones that hold no file, one by one, never by a pattern."""
     listed = {
         (f.model.__tablename__, f.column) for f in users_repository.UNDERAGE_FILES
     }
@@ -1093,7 +1104,7 @@ def test_every_storage_key_on_a_deleted_table_is_in_the_file_list() -> None:
         for attached in users_repository.UNDERAGE_DELETES
         for column in attached.model.__table__.columns
         if column.name.endswith("_key")
-    }
+    } - NOT_FILES
 
     assert (
         listed

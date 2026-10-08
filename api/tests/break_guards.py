@@ -8822,6 +8822,517 @@ T79: list[Case] = [
 ]
 
 
+# --- T-8.9: gifts (D-650, D-652, D-653) --------------------------------------------
+
+T89_SELECTION = [
+    "tests/modules/gifts",
+    "tests/test_schema.py",
+]
+GIFTS_SERVICE = "app/modules/gifts/service.py"
+GIFTS_REPO = "app/modules/gifts/repository.py"
+GIFTS_RULES = "app/modules/gifts/rules.py"
+GIFTS_MODELS = "app/modules/gifts/models.py"
+GIFTS_KEY = "alembic/versions/20261008_5978faceb05b_gift_sends_idempotency_key.py"
+REACH = (
+    "    if recipient_id == user.id or not await discovery_service.can_reach(\n"
+    "        session, user, recipient_id, mutual=True\n"
+    "    ):\n"
+)
+
+T89: list[Case] = [
+    Case(
+        id="t89-01-a-woman-sends",
+        what="D-016: a woman's send let through",
+        edits=[
+            (
+                GIFTS_SERVICE,
+                "    if user.gender is not Gender.MALE:\n        raise _not_allowed()\n    async with session.begin():\n",
+                "    async with session.begin():\n",
+            )
+        ],
+        expect=["test_a_woman_sending_is_not_allowed"],
+    ),
+    Case(
+        id="t89-02-reach-never-asked",
+        what="D-653: anyone sent a gift, across a block, hidden or not done",
+        edits=[(GIFTS_SERVICE, REACH, "    if recipient_id == user.id:\n")],
+        expect=[
+            "test_a_block_either_way_is_not_found_never_revealed[she blocked him]",
+            "test_a_block_either_way_is_not_found_never_revealed[he blocked her]",
+            "test_someone_he_cant_reach_is_not_found[not done]",
+            "test_someone_he_cant_reach_is_not_found[hidden]",
+            "test_someone_he_cant_reach_is_not_found[paused]",
+            "test_someone_he_cant_reach_is_not_found[frozen by moderation]",
+            "test_someone_he_cant_reach_is_not_found[seeking women]",
+        ],
+    ),
+    Case(
+        id="t89-03-reach-not-mutual",
+        what="D-653: a woman who doesn't want men sent one anyway",
+        edits=[
+            (
+                GIFTS_SERVICE,
+                "        session, user, recipient_id, mutual=True\n",
+                "        session, user, recipient_id, mutual=False\n",
+            )
+        ],
+        expect=["test_someone_he_cant_reach_is_not_found[seeking women]"],
+    ),
+    Case(
+        id="t89-04-a-man-gifted",
+        what="D-016: a gift to a man he can reach",
+        edits=[
+            (
+                GIFTS_SERVICE,
+                "    if await threads_repository.gender_of(session, recipient_id) is not Gender.FEMALE:\n        raise _not_allowed()\n",
+                "",
+            )
+        ],
+        expect=["test_a_man_he_can_reach_is_not_allowed"],
+    ),
+    Case(
+        id="t89-05-a-retired-gift-sold",
+        what="D-252: smile and wave, retired, sold again",
+        edits=[
+            (
+                GIFTS_SERVICE,
+                "    if gift is None or not gift.active:\n",
+                "    if gift is None:\n",
+            )
+        ],
+        expect=[
+            "test_a_gift_not_on_sale_is_not_found[smile]",
+            "test_a_gift_not_on_sale_is_not_found[wave]",
+        ],
+    ),
+    Case(
+        id="t89-06-no-cooldown",
+        what="D-016: the same gift to the same woman, again and again",
+        edits=[
+            (
+                GIFTS_SERVICE,
+                "    if wait := rules.cooldown_left(last, now, hours):\n        raise rules.cooldown(wait)\n",
+                "",
+            )
+        ],
+        expect=[
+            "test_the_same_gift_to_the_same_woman_waits_the_cooldown",
+            "test_a_paid_send_waits_the_cooldown_too",
+        ],
+    ),
+    Case(
+        id="t89-07-cooldown-a-literal",
+        what="the cooldown's hours written in the code, not read from app_config",
+        edits=[
+            (
+                GIFTS_SERVICE,
+                "    hours = await admin_service.config_int(session, rules.COOLDOWN_KEY, cache=config)\n",
+                "    hours = 24\n",
+            )
+        ],
+        expect=["test_the_same_gift_to_the_same_woman_waits_the_cooldown"],
+    ),
+    Case(
+        id="t89-08-every-send-free",
+        what="D-231: past the week's fifteen, still free",
+        edits=[
+            (
+                GIFTS_SERVICE,
+                "    price = rules.price_of(gift.credits, free_used=used, free_limit=limit)\n",
+                "    price = 0\n",
+            )
+        ],
+        expect=[
+            "test_fifteen_free_sends_write_no_ledger_row_and_the_sixteenth_pays_the_row",
+            "test_the_free_sends_are_the_setting_never_a_number",
+            "test_too_few_velas_takes_the_send_back_too",
+        ],
+    ),
+    Case(
+        id="t89-09-free-sends-a-literal",
+        what="the week's free sends written in the code, not read from app_config",
+        edits=[
+            (
+                GIFTS_SERVICE,
+                "    limit = await admin_service.config_int(session, rules.FREE_WEEKLY_KEY, cache=config)\n",
+                "    limit = 15\n",
+            )
+        ],
+        expect=[
+            "test_the_free_sends_are_the_setting_never_a_number",
+            "test_send.py::test_the_week_starts_monday_at_midnight_ist",
+        ],
+    ),
+    Case(
+        id="t89-10-the-week-in-utc",
+        what="D-650: the week read from the UTC date, not India's",
+        edits=[
+            (
+                GIFTS_RULES,
+                "    today = now.astimezone(IST).date()\n",
+                "    today = now.date()\n",
+            )
+        ],
+        expect=[
+            "test_send.py::test_the_week_starts_monday_at_midnight_ist",
+            "test_rules.py::test_the_week_starts_monday_at_midnight_ist",
+        ],
+    ),
+    Case(
+        id="t89-11-free-sends-never-come-back",
+        what="D-650: free sends counted forever, not from this week's Monday",
+        edits=[
+            (
+                GIFTS_REPO,
+                "            GiftSend.credits_charged == 0,\n            GiftSend.created_at >= since,\n",
+                "            GiftSend.credits_charged == 0,\n",
+            )
+        ],
+        expect=["test_send.py::test_the_week_starts_monday_at_midnight_ist"],
+    ),
+    Case(
+        id="t89-12-price-a-literal",
+        what="D-016: the price from a table in the code, not the gifts row",
+        edits=[
+            (
+                GIFTS_SERVICE,
+                "    price = rules.price_of(gift.credits, free_used=used, free_limit=limit)\n",
+                '    price = rules.price_of(\n        {"coffee": 5, "rose": 10, "chocolate": 15, "teddy": 20}[gift.id],\n        free_used=used,\n        free_limit=limit,\n    )\n',
+            )
+        ],
+        expect=[
+            "test_fifteen_free_sends_write_no_ledger_row_and_the_sixteenth_pays_the_row",
+            "test_the_catalogue_is_held_a_minute_and_a_send_reads_the_row",
+        ],
+    ),
+    Case(
+        id="t89-13-shown-never-compared",
+        what="D-600: a man charged a price he wasn't shown",
+        edits=[
+            (
+                GIFTS_SERVICE,
+                "    if price != request.shown_price:\n        raise pricing_service.price_changed(price)\n",
+                "",
+            )
+        ],
+        expect=[
+            "test_a_price_other_than_the_one_shown_is_refused_with_nothing_written",
+            "test_send.py::test_the_week_starts_monday_at_midnight_ist",
+            "test_the_catalogue_is_held_a_minute_and_a_send_reads_the_row",
+        ],
+    ),
+    Case(
+        id="t89-14-absent-skips",
+        what="D-600: a send without shown_price let through, failing open",
+        edits=[
+            (
+                GIFTS_SERVICE,
+                "    if price != request.shown_price:\n",
+                "    if request.shown_price and price != request.shown_price:\n",
+            )
+        ],
+        expect=[
+            "test_a_price_other_than_the_one_shown_is_refused_with_nothing_written[0-rose-None-10]",
+            "test_send.py::test_the_week_starts_monday_at_midnight_ist",
+        ],
+    ),
+    Case(
+        id="t89-15-never-debited",
+        what="rule 5: a paid send with no debit",
+        edits=[
+            (
+                GIFTS_SERVICE,
+                "    if price > 0:\n        await wallet_service.debit(\n            session,\n            user.id,\n            price,\n            LedgerReason.GIFT,\n            ref=Ref(RefType.GIFT_SEND, row.id),\n        )\n",
+                "",
+            )
+        ],
+        expect=[
+            "test_fifteen_free_sends_write_no_ledger_row_and_the_sixteenth_pays_the_row",
+            "test_too_few_velas_takes_the_send_back_too",
+            "test_the_same_key_again_is_the_same_send_charged_once",
+        ],
+    ),
+    Case(
+        id="t89-16-a-refused-debit-kept-the-send",
+        what="rule 5: the send kept when its debit is refused",
+        edits=[
+            (
+                GIFTS_SERVICE,
+                "    if price > 0:\n        await wallet_service.debit(\n            session,\n            user.id,\n            price,\n            LedgerReason.GIFT,\n            ref=Ref(RefType.GIFT_SEND, row.id),\n        )\n",
+                "    if price > 0:\n        try:\n            await wallet_service.debit(\n                session,\n                user.id,\n                price,\n                LedgerReason.GIFT,\n                ref=Ref(RefType.GIFT_SEND, row.id),\n            )\n        except AppError:\n            pass\n",
+            )
+        ],
+        expect=["test_too_few_velas_takes_the_send_back_too"],
+    ),
+    Case(
+        id="t89-17-the-key-never-looked-up",
+        what="D-653: a retry with the same key, a second send",
+        edits=[
+            (
+                GIFTS_SERVICE,
+                "    existing = await repository.by_key(session, user.id, key)\n",
+                "    existing = None\n",
+            )
+        ],
+        expect=[
+            "test_the_same_key_again_is_the_same_send_charged_once",
+            "test_one_key_twice_at_once_is_one_send",
+        ],
+    ),
+    Case(
+        id="t89-18-a-key-reused-for-another-gift",
+        what="D-653: a key sent again for another gift returns the first",
+        edits=[
+            (
+                GIFTS_SERVICE,
+                "        if (existing.recipient_id, existing.gift_id) != (\n",
+                "        if False and (existing.recipient_id, existing.gift_id) != (\n",
+            )
+        ],
+        expect=[
+            "test_the_same_key_for_another_send_already_exists[another gift]",
+            "test_the_same_key_for_another_send_already_exists[another woman]",
+        ],
+    ),
+    Case(
+        id="t89-19-no-sender-lock",
+        what="D-653: two sends at once, each counting the same free sends",
+        edits=[
+            (
+                GIFTS_REPO,
+                '    await session.execute(\n        text("SELECT pg_advisory_xact_lock(:lock, hashtext(CAST(:s AS text)))"),\n        {"lock": SENDER_LOCK, "s": str(sender_id)},\n    )\n',
+                "    return None\n",
+            )
+        ],
+        expect=[
+            "test_two_sends_at_once_share_one_free_send",
+            "test_one_key_twice_at_once_is_one_send",
+        ],
+    ),
+    Case(
+        id="t89-20-an-expired-thread-linked",
+        what="an expired Thread linked to a gift, by its status or by the clock",
+        edits=[
+            (
+                GIFTS_SERVICE,
+                "    if thread is None or threads_rules.has_expired(thread, now):\n",
+                "    if thread is None:\n",
+            )
+        ],
+        expect=[
+            "test_a_live_thread_is_linked_and_none_is_ever_opened[expired-False]",
+            "test_a_live_thread_is_linked_and_none_is_ever_opened[expired by the clock-False]",
+        ],
+    ),
+    Case(
+        id="t89-21-she-is-never-told",
+        what="gift.received never queued",
+        edits=[
+            (
+                GIFTS_SERVICE,
+                "    events.queue(session, recipient_id, GIFT_RECEIVED, payload)\n",
+                "",
+            )
+        ],
+        expect=["test_a_free_send_moves_no_vela_and_she_is_told"],
+    ),
+    Case(
+        id="t89-22-gifts-across-a-block-listed",
+        what="her list showing gifts from someone a block stands between",
+        edits=[
+            (
+                GIFTS_REPO,
+                "            ~blocked_either_way(recipient_id, sender.id),\n",
+                "",
+            )
+        ],
+        expect=[
+            "test_gifts_from_across_a_block_are_left_out[she blocked him]",
+            "test_gifts_from_across_a_block_are_left_out[he blocked her]",
+        ],
+    ),
+    Case(
+        id="t89-23-show-gifts-ignored",
+        what="show_gifts off, her counts shown anyway",
+        edits=[
+            (
+                GIFTS_SERVICE,
+                "            if not await repository.shows_gifts(session, user_id):\n                return schemas.GiftCounts(counts=[])\n",
+                "",
+            )
+        ],
+        expect=["test_show_gifts_off_hides_them_from_all_but_her"],
+    ),
+    Case(
+        id="t89-24-counts-across-a-block",
+        what="D-493: her counts read across a block",
+        edits=[
+            (
+                GIFTS_SERVICE,
+                "            if not await discovery_service.can_reach(\n                session, user, user_id, mutual=False\n            ):\n                raise _not_found()\n",
+                "",
+            )
+        ],
+        expect=["test_counts_across_a_block_are_not_found"],
+    ),
+    Case(
+        id="t89-25-catalogue-never-held",
+        what="P-47: the catalogue read on every request",
+        edits=[
+            (
+                GIFTS_SERVICE,
+                "    if cache.gifts is not None and cache.at is not None and now - cache.at < CACHED_FOR:\n",
+                "    if False:\n",
+            )
+        ],
+        expect=["test_the_catalogue_is_held_a_minute_and_a_send_reads_the_row"],
+    ),
+    Case(
+        id="t89-26-catalogue-held-forever",
+        what="P-47: the catalogue never read again",
+        edits=[
+            (
+                GIFTS_SERVICE,
+                "    if cache.gifts is not None and cache.at is not None and now - cache.at < CACHED_FOR:\n",
+                "    if cache.gifts is not None:\n",
+            )
+        ],
+        expect=["test_the_catalogue_is_held_a_minute_and_a_send_reads_the_row"],
+    ),
+    Case(
+        id="t89-27-retired-gifts-shown",
+        what="D-252: smile and wave on sale in the catalogue",
+        edits=[
+            (
+                GIFTS_REPO,
+                "        select(Gift).where(Gift.active).order_by(Gift.sort, Gift.id)\n",
+                "        select(Gift).order_by(Gift.sort, Gift.id)\n",
+            )
+        ],
+        expect=[
+            "test_a_man_sees_the_four_and_his_free_sends_left",
+            "test_a_woman_sees_the_gifts_and_no_free_sends",
+        ],
+    ),
+    Case(
+        id="t89-28-key-not-unique",
+        what="D-653: the key no longer unique per sender (migration and model)",
+        edits=[
+            (
+                GIFTS_KEY,
+                '    op.create_unique_constraint(\n        "uq_gift_sends_sender_id_idempotency_key",\n        "gift_sends",\n        ["sender_id", "idempotency_key"],\n    )\n',
+                "",
+            ),
+            (
+                GIFTS_KEY,
+                '    op.drop_constraint(\n        "uq_gift_sends_sender_id_idempotency_key", "gift_sends", type_="unique"\n    )\n',
+                "",
+            ),
+            (
+                GIFTS_MODELS,
+                '        UniqueConstraint("sender_id", "idempotency_key"),\n',
+                "",
+            ),
+        ],
+        expect=["test_a_gift_send_keeps_its_key_once_per_sender"],
+    ),
+    Case(
+        id="t89-29-no-backfill",
+        what="the migration failing on a send from before it",
+        edits=[
+            (
+                GIFTS_KEY,
+                '    op.execute("UPDATE gift_sends SET idempotency_key = id::text")\n',
+                "",
+            )
+        ],
+        expect=[
+            "test_a_send_from_before_gets_its_id_as_its_key_and_going_back_keeps_it"
+        ],
+    ),
+]
+
+# --- P-152: debit() checks who awaits it (D-651) -------------------------------------
+
+P152_SELECTION = [
+    "tests/modules/pricing/test_debit_callers.py",
+    "tests/modules/gifts/test_send.py",
+]
+P152: list[Case] = [
+    Case(
+        id="p152-01-never-checked",
+        what="D-651: debit() awaited by anyone, a name built at run time included",
+        edits=[
+            (
+                SERVICE,
+                "    if not _may_debit(sys._getframe(1)):\n",
+                "    if False and not _may_debit(sys._getframe(1)):\n",
+            )
+        ],
+        expect=[
+            "test_a_debit_by_a_name_built_at_run_time_is_refused",
+            "test_the_list_names_a_function_in_its_module",
+            "test_a_debit_with_no_caller_of_its_own_is_refused",
+        ],
+    ),
+    Case(
+        id="p152-02-the-name-alone",
+        what="D-651: a listed function's name trusted in any module",
+        edits=[
+            (
+                SERVICE,
+                "    return (module, caller.f_code.co_qualname) in DEBIT_CALLERS\n",
+                "    return caller.f_code.co_qualname in {name for _, name in DEBIT_CALLERS}\n",
+            )
+        ],
+        expect=[
+            "test_the_list_names_a_function_in_its_module[app.modules.never_named_2031.service-charge]"
+        ],
+    ),
+    Case(
+        id="p152-03-tests-a-prefix",
+        what="D-651: any module whose name starts with tests passed as test code",
+        edits=[
+            (
+                SERVICE,
+                '    if module == TESTS_PACKAGE or module.startswith(TESTS_PACKAGE + "."):\n',
+                "    if module.startswith(TESTS_PACKAGE):\n",
+            )
+        ],
+        expect=[
+            "test_the_list_names_a_function_in_its_module[testsuite_2031.service-buy]"
+        ],
+    ),
+    Case(
+        id="p152-04-the-lists-drift",
+        what="D-651: debit()'s list grown without the scan's",
+        edits=[
+            (
+                SERVICE,
+                '        ("app.modules.gifts.service", "_send_in"),\n    }\n',
+                '        ("app.modules.gifts.service", "_send_in"),\n        ("app.modules.threads.service", "_open_in"),\n    }\n',
+            )
+        ],
+        expect=["test_the_run_time_list_is_the_scans"],
+    ),
+    Case(
+        id="p152-05-gift-sending-unlisted",
+        what="D-651: gift sending left off debit()'s list",
+        edits=[
+            (
+                SERVICE,
+                '        ("app.modules.gifts.service", "_send_in"),\n    }\n',
+                "    }\n",
+            )
+        ],
+        expect=[
+            "test_the_run_time_list_is_the_scans",
+            "test_fifteen_free_sends_write_no_ledger_row_and_the_sixteenth_pays_the_row",
+        ],
+    ),
+]
+
+
 CASES: list[tuple[Case, list[str]]] = (
     [(c, T51_SELECTION) for c in T51]
     + [(c, T54_SELECTION) for c in T54]
@@ -8862,6 +9373,8 @@ CASES: list[tuple[Case, list[str]]] = (
     + [(c, T75_SELECTION) for c in T75]
     + [(c, T85_SELECTION) for c in T85]
     + [(c, T79_SELECTION) for c in T79]
+    + [(c, T89_SELECTION) for c in T89]
+    + [(c, P152_SELECTION) for c in P152]
 )
 
 # The fifty-connection fixture's own message when Postgres refuses a connection.

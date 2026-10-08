@@ -29,13 +29,24 @@ back: the same steps, but at step 6 it takes what the balance holds, down to 0,
 never refusing, and writes nothing when that is 0. Only `purchase_reversal`,
 and only `payments` calls it (`tests/modules/pricing/test_debit_callers.py`).
 
+**Who may call `debit()` is checked each time it runs (P-152, D-651):** the
+function that awaits it must be `pricing.service.charge` or gift sending's
+`_send_in`, the two that price from a row, or test code, which never ships
+(`.dockerignore`). Anything else is refused before a row is read, a caller
+reaching it by a name built at run time included, which the source scan in
+`tests/modules/pricing/test_debit_callers.py` can't see. The scan stays, as the
+second layer, and a test holds the two lists equal.
+
 The owner's two reads, `balance()` and `ledger()`, are at the end (T-5.3).
 """
 
 from __future__ import annotations
 
+import sys
 from dataclasses import dataclass
 from datetime import datetime
+from types import FrameType
+from typing import Final
 from uuid import UUID
 
 import structlog
@@ -86,6 +97,32 @@ class _NothingToTake(Exception):
 # refused on a low balance (`debit`).
 REVERSIBLE = frozenset({LedgerReason.PURCHASE_REVERSAL})
 
+# (module, function) of everything that may await `debit()` (P-152, D-651): the
+# two that price from a row, `action_prices` and `gifts`. An allowlist, so a
+# caller nobody has named is refused, however it found the function.
+DEBIT_CALLERS: Final = frozenset(
+    {
+        ("app.modules.pricing.service", "charge"),
+        ("app.modules.gifts.service", "_send_in"),
+    }
+)
+# Tests prove the wallet by calling it directly. They never ship: the image
+# leaves `tests/` out (`.dockerignore`), so no deployed code has this name.
+TESTS_PACKAGE: Final = "tests"
+
+
+def _may_debit(caller: FrameType | None) -> bool:
+    """Whether the frame awaiting `debit()` is one it answers to. None, or a
+    frame from the event loop, is a call nobody named: refused."""
+    if caller is None:
+        return False
+    module = caller.f_globals.get("__name__")
+    if not isinstance(module, str):
+        return False
+    if module == TESTS_PACKAGE or module.startswith(TESTS_PACKAGE + "."):
+        return True
+    return (module, caller.f_code.co_qualname) in DEBIT_CALLERS
+
 
 async def credit(
     session: AsyncSession,
@@ -115,7 +152,13 @@ async def debit(
     event: str | None = None,
 ) -> LedgerResult:
     """Take `amount` from a man's balance for `reason`, or raise
-    `INSUFFICIENT_CREDITS` (402) having written nothing."""
+    `INSUFFICIENT_CREDITS` (402) having written nothing. Only `DEBIT_CALLERS`
+    may await it (P-152, D-651)."""
+    if not _may_debit(sys._getframe(1)):
+        raise WalletMisuse(
+            "debit() is awaited only by pricing.service.charge and gift sending, "
+            "which price from a row (P-152, D-651)"
+        )
     return await _apply(session, user_id, amount, reason, Direction.DEBIT, ref, event)
 
 

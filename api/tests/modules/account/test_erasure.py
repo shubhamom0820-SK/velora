@@ -270,7 +270,10 @@ async def _everywhere(
             "insert into kudos (from_id, to_id, kind, thread_id) "
             "values (:a, :b, 'great_conversation', :t)"
         ),
-        "insert into gift_sends (sender_id, recipient_id, gift_id) values (:a, :b, 'coffee')",
+        (
+            "insert into gift_sends (sender_id, recipient_id, gift_id, idempotency_key) "
+            "values (:a, :b, 'coffee', 'k')"
+        ),
         "insert into liked_you_reveals (viewer_id, liker_id) values (:a, :b)",
         "insert into swipes (swiper_id, target_id, dir) values (:a, :b, 'like')",
         (

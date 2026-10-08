@@ -121,7 +121,8 @@ If any of these fails, nothing ships.
 6. **Women never pay** (T-9.9): every paid action by a woman → zero ledger entries.
 6b. **Free sends stay free** (T-8.9, D-231): each of a week's fifteen free sends creates a
     `gift_sends` row and **zero** ledger entries; the sixteenth creates exactly one, with the price
-    from the `gifts` table.
+    from the `gifts` table. `tests/modules/gifts/test_send.py`, marked `critical`; the week is
+    D-650's, from Monday 00:00 IST.
 6c. **A woman has no ledger rows** (T-5.1, D-076): the database refuses any ledger row, and any
     non-zero balance, for a user whose gender isn't `male`, including one with no gender yet.
     Proved by breaking each trigger, and by turning each into a blacklist.

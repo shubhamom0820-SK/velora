@@ -121,6 +121,8 @@ gifts a week are free, in place of the prices above and `gift_free_daily_limit =
 catalogue's shape is open, on T-5.2's Needs line.
 **Superseded in part, 4 October 2026, by D-231:** four gifts at 5, 10, 15 and 20 replace the six,
 with no free kind, and fifteen free sends a week replace the daily cap. The rest stands.
+**Built 8 October 2026 by T-8.9:** the week from Monday 00:00 IST and no limit refusal (D-650);
+whom a man may gift, `NOT_FOUND` across a block rather than `BLOCKED` (D-653).
 
 ### D-007 · Kudos, not reviews — Locked
 After a few messages the sender may pick one of four fixed positive notes. It goes privately to
@@ -4867,6 +4869,91 @@ separate chat, relayed by the founder):**
 
 **Rejected:** charging first and recording after (two taps both read "not unlocked"); refusing an
 unlock in an expired Thread; `402` for a locked file (nothing is being bought by fetching it).
+
+### D-650 · A gift week starts Monday 00:00 IST, and the free sends running out is never a refusal — Locked (values tunable)
+**The decision (T-8.9; the founder, 8 October 2026, on the advisor's recommendation, Claude in a
+separate chat, relayed by the founder):**
+- **The week of D-231's fifteen free sends is a calendar week from Monday 00:00 IST** (Sunday
+  18:30 UTC), as the daily limits roll over at 00:00 IST (`clock.today_ist`). A send is free while
+  the sender has fewer free sends (`credits_charged = 0`) than `gift_free_weekly_limit` since this
+  week's Monday; then each costs its gift's price. `gifts/rules.py` holds it.
+- **`GIFT_LIMIT_REACHED` keeps no case and is retired** from 04-API. Under D-231 the sixteenth
+  send costs its price rather than being refused, and D-016 puts no cap on paid gifts. A screen
+  showing the free sends left reads `GET /gifts` (D-652); one that thinks a send is free when it
+  isn't is refused with `PRICE_CHANGED` at the price (D-600), never charged a surprise.
+- **The cooldown (D-016) holds for free and paid alike:** the same gift to the same woman inside
+  `gift_same_recipient_cooldown_h` is `GIFT_COOLDOWN` with `retry_after_s`, whole seconds rounded
+  up so waiting what it says is always enough.
+
+**Why:** one reset time the web can show ("free sends come back Monday"); a rolling seven days
+has none, and each send would come back at its own moment.
+
+**Rejected:** a rolling seven days; keeping `GIFT_LIMIT_REACHED` as a cap on paid sends, which
+D-016 never had.
+
+### D-651 · `wallet.service.debit()` checks who awaits it, each time it runs — Locked
+**The decision (P-152, T-8.9; the founder, 8 October 2026, on the advisor's recommendation,
+Claude in a separate chat, relayed by the founder):** `debit()` reads the frame that awaits it and
+refuses with `WalletMisuse` (a 500), before any row is read, unless that frame's `(module,
+function)` is in `DEBIT_CALLERS`: `pricing.service.charge` and gift sending's `_send_in`, the two
+that price from a row (`action_prices`, `gifts`). Test code (a module under `tests.`) may call it,
+since tests prove the wallet by calling it; tests never ship (`.dockerignore` leaves `tests/` out
+of the image), so no deployed module has that name. Anything else is refused however it reached
+the function: a name built at run time (`getattr(m, "de" + "bit")`), an `importlib` lookup, a
+handler table, a wrapper, or a task the event loop awaits.
+
+T-5.2's source scan (`tests/modules/pricing/test_debit_callers.py`) stays, as the second layer: it
+names a caller at review, before anything runs. A test holds its list and `DEBIT_CALLERS` equal,
+and the scan's own blind spot is proved in the same file: a module whose source the scan passes
+is refused at run time, having written nothing.
+
+**Why:** P-152's worst case: a caller the scan can't see charges a man a literal price no row
+holds, and `test_only_charge_reaches_the_debit` stays green. D-084's lesson: prove the stronger
+guard against the caller the weaker can't see.
+
+**Rejected:** a value only the two callers can build (any importer can build it too, by the same
+computed name); a `debit` no other module can import (Python has no such thing short of a
+separate process); keeping the scan alone.
+
+### D-652 · `GET /gifts` carries the week's free sends; she never sees what a gift cost — Locked
+**The decision (T-8.9; the founder, 8 October 2026, on the advisor's recommendation, Claude in a
+separate chat, relayed by the founder):**
+- **`GET /gifts` → `GiftCatalogue {gifts: Gift[], free_sends_left, free_sends_reset_at}`**, not a
+  bare `Gift[]`: T-8.10's sheet shows the free sends left this week. `gifts` (active, by `sort`)
+  is held 60 s per app (`app.state.gift_cache`, P-47's minute); the free sends are read fresh, per
+  man. For anyone but a man both are null: nobody else sends.
+- **A send is priced fresh, inside its transaction,** never from the held catalogue, so a screen
+  showing a price changed within the minute is refused with `PRICE_CHANGED` (D-600).
+- **Two views of a send.** Its sender gets `GiftSend` (`credits_charged` included, what he
+  paid). She gets `ReceivedGift {id, gift_id, sender: CardLite, created_at}` in `GET /me/gifts`,
+  never what he paid or whether the send was free. `GET /users/{id}/gifts` is counts only.
+
+**Why:** what he paid is his business; whether a gift was one of his free sends would tell her
+how many he has sent this week.
+
+**Rejected:** a separate endpoint for the free sends (two calls for one sheet); an HTTP cache on
+`GET /gifts` (the free count is per user, so a shared cache would show another man's).
+
+### D-653 · Whom a man may gift, and the send's key — Locked
+**The decision (T-8.9; the founder, 8 October 2026, on the advisor's recommendation, Claude in a
+separate chat, relayed by the founder):**
+- **Whom:** anyone he could send a private message to (D-550: D-493's rule, each wanting the
+  other's gender). Anyone else is `NOT_FOUND`, the same answer as an id nobody holds: nobody, a
+  block either way, not `done`, hidden, paused, frozen, or not wanting men. Someone he can reach
+  who isn't a woman is `NOT_ALLOWED`; so is any sender but a man. This replaces T-8.9's planned
+  `BLOCKED` and "onboarding `done`, else `NOT_ALLOWED`": the first would tell him she blocked him,
+  the second that an account he can't see exists. Her profile, where the gift button lives,
+  already answers `NOT_FOUND` across a block (D-493).
+- **The key:** `gift_sends.idempotency_key`, the sender's `Idempotency-Key`, unique per sender
+  (`uq_gift_sends_sender_id_idempotency_key`, migration `5978faceb05b`). The same key again
+  returns that send and writes nothing, before the cooldown or the price is read; with another
+  gift or woman, `ALREADY_EXISTS` (as an order's key, D-481). The ledger's own key, built from the
+  send's id, is still what stops a double charge (02-ARCHITECTURE §3).
+- **Two sends at once** are one after the other: the sender's advisory lock (89) is taken first,
+  so the second counts the first's free send and finds its key.
+
+**Rejected:** `BLOCKED` (reveals a block); a Redis replay store (the row must exist anyway, and a
+store would be a second source of truth).
 
 ## Adding a decision
 
