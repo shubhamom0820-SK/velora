@@ -3072,12 +3072,23 @@ prices don't depend on the web photos step, and the hold is lifted.
 - [x] **Commit:** `feat(threads): the 1-hour Thread, expiry, re-open and Extend [T-7.6]`
 
 ### T-7.7 · Tie the knot
-- [ ] **Needs:** T-7.6
-- [ ] `POST /threads/{id}/knot`: set my `*_knot_at`; if both set → `knotted`, `knotted_at`, `expires_at = null`, publish `knot.accepted` to both; else publish `knot.requested` to the other. Works on `expired` threads too (converts directly if both).
-- [ ] `DELETE /threads/{id}/knot`: untie → `active`, a fresh hour (`now + thread_hours`, T-7.6), clear both taps, notify.
+- [x] **Needs:** T-7.6
+- [x] `POST /threads/{id}/knot`: set my `*_knot_at`; if both set → `knotted`, `knotted_at`, `expires_at = null`, publish `knot.accepted` to both; else publish `knot.requested` to the other. Works on `expired` threads too (converts directly if both).
+- [x] `DELETE /threads/{id}/knot`: untie → `active`, a fresh hour (`now + thread_hours`, T-7.6), clear both taps, notify.
   **A private message's Knot untied never expires again** (D-550, T-7.1): `expires_at` stays
   null, as the CHECK allows only for origin `dm`; a match's gets a fresh `thread_hours`.
-- [ ] **Commit:** `feat(threads): tie and untie knot [T-7.7]`
+  **Built 9 October 2026 as D-770** (the founder's answers to its plan, on the advisor's
+  recommendation, relayed): untying a Thread that isn't a Knot returns it unchanged, so tap,
+  untie, tap asks her once; a tap with a deleted account is `ACCOUNT_DELETED`, nothing written;
+  `knot_requested` and `knot_accepted` notifications, an untie the event alone; the "Knot tied"
+  sheet and the web's hooks go to T-7.11 (P-670). Tapping and untying hold the Thread's row,
+  30 a minute between them. The races are forced on committed rows (`test_knot_race.py`): two
+  taps at once make one Knot, and the minute's sweep, in either order with the last tap, never
+  expires it. **Broken once each** (`uv run python -m tests.break_guards t77-`): sixteen cases,
+  each red in 1 of 1, every file restored and none differing by SHA-256 after. T-7.6's `t76-09`
+  and `t76-10` anchored on lines untying repeats; both were re-anchored on `_buy_time`'s own
+  `until` and went red again.
+- [x] **Commit:** `feat(threads): tie and untie knot [T-7.7]`
 
 ### T-7.8 · Clearing
 - [x] **Needs:** T-7.2
@@ -3155,6 +3166,9 @@ prices don't depend on the web photos step, and the hold is lifted.
   (before the web's paid buttons, the founder, 8 October 2026); and **P-520**: a real recording
   from each browser read by T-7.9's measuring, or every iPhone user's voice note may be refused
 - [ ] Bubbles, day separators, "Sent/Read" on my last message, typing dots, voice player (locked card with price for men), icebreakers when empty, knot bar (tie / waiting), expired panel (re-open · 2 / tie), header with countdown or "Knotted · permanent", ⋯ → profile menu.
+- [ ] **P-670: the "Knot tied ✦" sheet** (08-DESIGN §8, headed T-7.7 there) when the second tap
+  makes the Knot, and the `useTieKnot` / `useUntieKnot` hooks in `src/lib/queries/threads.ts`
+  for `POST` and `DELETE /threads/{id}/knot` (T-7.7, D-770).
 - [ ] Composer: text (Enter sends, Shift+Enter newline), mic for women (MediaRecorder, hold or tap-to-record, 60 s cap, preview before send). Optimistic send with `client_msg_id`; failed → retry.
 - [ ] Rejected message → inline explanation, text kept in composer.
 - [ ] **Her side of an expired Thread (D-097):** readable, and otherwise silent: no prompt, and no sign that money stands between her message and his reply. An expired Thread accepts her sends, so her composer keeps working; the re-open price is his alone.
@@ -6299,3 +6313,8 @@ The number comes from the session's own block, given in its brief, from P-100 up
   in `notification_prefs` that governs its push (as P-550 asks for gifts), and nothing to a paused
   woman. Filed by Claude building T-8.4, 9 October 2026, at the founder's direction; its session's
   block, P-630 to P-639.
+- [ ] P-670 · The "Knot tied ✦" sheet and the web's tie and untie hooks go to T-7.11 — 08-DESIGN
+  §8 heads the sheet T-7.7, but T-7.7's items are the API alone, and the knot bar that leads to
+  the sheet is T-7.11's. Placed on T-7.11 as an item, the founder's answer (D-770); open until
+  T-7.11 builds the sheet and ticks it. Filed by Claude building T-7.7, 9 October 2026; its
+  session's block, P-670 to P-679.

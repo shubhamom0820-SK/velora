@@ -177,7 +177,9 @@ Envelope, both directions: `{ "type": "…", "id": "<uuid>", "data": { … } }`
 | `thread.opened` | someone opened a thread with you |
 | `thread.expiring` | `thread_warn_minutes` (10) left; to him only, never her (T-7.6) |
 | `thread.expired` | expired; to him only (T-7.6) |
-| `knot.requested` / `knot.accepted` / `knot.untied` | knot state changes |
+| `knot.requested` | the other tapped "Tie the knot": `{thread_id, user_id}`, the tapper; to the other alone (T-7.7) |
+| `knot.accepted` | both have tapped, so the Thread is a Knot: `{thread_id, knotted_at}`, to both (T-7.7) |
+| `knot.untied` | the other untied the Knot: `{thread_id}`, to the other alone; no expiry in it (D-554, T-7.7) |
 | `wallet.updated` | balance changed |
 | `match.created` | a like or Super Like met one back (T-6.4): `{match_id, user_id}`, the other person, to both |
 | `album.decided` | album request granted / declined (T-8.4): `{album_request_id, user_id, granted}`, `user_id` the owner, to the requester |

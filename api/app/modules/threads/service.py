@@ -1,5 +1,6 @@
 """Opening a Thread (T-7.1); listing them (T-7.2); clearing one from your own
-chats (T-7.8); its hour bought and run out (T-7.6, at the end).
+chats (T-7.8); its hour bought and run out (T-7.6); the knot tied and untied
+(T-7.7, at the end).
 
 `POST /v1/threads`, from a match (`thread_open`) or as a private message
 (`dm_open`, with its first message; D-231). One Thread per pair, forever: if
@@ -64,6 +65,13 @@ THREAD_NOTIFICATION = "thread"
 THREAD_EXPIRING = "thread.expiring"
 THREAD_EXPIRED = "thread.expired"
 EXPIRING_NOTIFICATION = "thread_expiring"
+# T-7.7: T-9.4's kinds name a knot requested and accepted; an untie is the
+# event alone (D-770).
+KNOT_REQUESTED = "knot.requested"
+KNOT_ACCEPTED = "knot.accepted"
+KNOT_UNTIED = "knot.untied"
+KNOT_REQUESTED_NOTIFICATION = "knot_requested"
+KNOT_ACCEPTED_NOTIFICATION = "knot_accepted"
 
 
 def _not_found() -> AppError:
@@ -540,3 +548,101 @@ async def _tell(
                 events.queue(session, user_id, type_, payload)
                 told.append((user_id, payload))
     return told
+
+
+# --- The knot (T-7.7) ---------------------------------------------------------------
+
+
+def _other_in(thread: Thread, user_id: UUID) -> UUID:
+    return thread.user_high if user_id == thread.user_low else thread.user_low
+
+
+async def _held(session: AsyncSession, viewer_id: UUID, thread_id: UUID) -> Thread:
+    """One of `viewer_id`'s Threads, its row held until the transaction ends,
+    so taps and untying are one after the other; anyone else's, or one across
+    a block, `NOT_FOUND`."""
+    thread = await repository.my_thread(session, thread_id, viewer_id, lock=True)
+    if thread is None:
+        raise _not_found()
+    return thread
+
+
+async def tie(session: AsyncSession, user: User, thread_id: UUID) -> schemas.Thread:
+    """`POST /threads/{id}/knot`: `user`'s tap, free (D-003), on a live or an
+    expired Thread. The second of the two makes it a Knot: no expiry, ever, and
+    `knot.accepted` to both; the first asks the other (`knot.requested`). A tap
+    already there, a Knot's included, is returned as it is and nobody is told
+    again (D-770). Holding the Thread's row, so two taps at once are one after the
+    other and the second finds the first. A deleted account is
+    `ACCOUNT_DELETED`, nothing written (D-770)."""
+    user_id = user.id
+    async with session.begin():
+        thread = await _held(session, user_id, thread_id)
+        # A Knot carries both taps, so tapping one is tapping again.
+        if rules.tapped(thread, user_id):
+            return view_of(thread, user)
+        other_id = _other_in(thread, user_id)
+        if await repository.status_of(session, other_id) is UserStatus.DELETED:
+            raise rules.account_deleted()
+        now = clock.now()
+        if user_id == thread.user_low:
+            thread.low_knot_at = now
+        else:
+            thread.high_knot_at = now
+        if rules.tied_by_both(thread):
+            thread.status = ThreadStatus.KNOTTED
+            thread.knotted_at = now
+            thread.expires_at = None
+            thread.expiry_warned_at = None
+            accepted = {"thread_id": str(thread.id), "knotted_at": now.isoformat()}
+            for one in (user_id, other_id):
+                events.queue(session, one, KNOT_ACCEPTED, accepted)
+            notifications_repository.add(
+                session,
+                other_id,
+                KNOT_ACCEPTED_NOTIFICATION,
+                {"thread_id": str(thread.id), "user_id": str(user_id)},
+            )
+        else:
+            requested = {"thread_id": str(thread.id), "user_id": str(user_id)}
+            events.queue(session, other_id, KNOT_REQUESTED, requested)
+            notifications_repository.add(
+                session, other_id, KNOT_REQUESTED_NOTIFICATION, requested
+            )
+        return view_of(thread, user)
+
+
+async def untie(
+    session: AsyncSession,
+    user: User,
+    thread_id: UUID,
+    *,
+    config: admin_service.ConfigCache | None = None,
+) -> schemas.Thread:
+    """`DELETE /threads/{id}/knot`: either of the two unties a Knot. It is
+    `active` again with both taps cleared; a Thread from a match gets a fresh
+    `thread_hours` from now, a private message none (D-550, D-560), and the
+    other is told (`knot.untied`, no notification). A Thread that isn't a Knot
+    is returned as it is, nobody told (D-770): a pending tap stays, so tapping
+    again asks nobody twice."""
+    user_id = user.id
+    async with session.begin():
+        thread = await _held(session, user_id, thread_id)
+        if thread.status is not ThreadStatus.KNOTTED:
+            return view_of(thread, user)
+        hours = await admin_service.config_int(
+            session, rules.THREAD_HOURS_KEY, cache=config
+        )
+        thread.status = ThreadStatus.ACTIVE
+        thread.expires_at = rules.untied_until(thread.origin, clock.now(), hours)
+        thread.knotted_at = None
+        thread.low_knot_at = None
+        thread.high_knot_at = None
+        thread.expiry_warned_at = None
+        events.queue(
+            session,
+            _other_in(thread, user_id),
+            KNOT_UNTIED,
+            {"thread_id": str(thread.id)},
+        )
+        return view_of(thread, user)

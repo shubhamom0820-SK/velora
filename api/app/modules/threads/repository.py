@@ -1,4 +1,4 @@
-"""SQL for threads (T-7.1, T-7.2, T-7.6, T-7.8). No rules here: the service decides."""
+"""SQL for threads (T-7.1, T-7.2, T-7.6, T-7.7, T-7.8). No rules here: the service decides."""
 
 from __future__ import annotations
 
@@ -130,6 +130,13 @@ async def gender_of(session: AsyncSession, user_id: UUID) -> Gender | None:
         select(User.gender).where(User.id == user_id)
     )
     return gender
+
+
+async def status_of(session: AsyncSession, user_id: UUID) -> UserStatus | None:
+    status: UserStatus | None = await session.scalar(
+        select(User.status).where(User.id == user_id)
+    )
+    return status
 
 
 # --- The list (T-7.2) ---------------------------------------------------------------

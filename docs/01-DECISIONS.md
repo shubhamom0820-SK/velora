@@ -5312,6 +5312,35 @@ If it no longer does, the allowance goes.
 break silently the day it did; D-761); the allowance on every page or every build (only where
 Checkout can run).
 
+### D-770 · The knot: a tap asks once, untying only a Knot, nothing tied to a deleted account — Locked
+**The decision (T-7.7; the founder, 9 October 2026, on the advisor's recommendation, Claude in a
+separate chat, relayed; T-7.7's plan, Q1 to Q4):**
+- **Untying a Thread that isn't a Knot returns it unchanged,** nobody told: a pending tap stays.
+  `DELETE /threads/{id}/knot` unties a Knot only. So tap, untie, tap asks her once: a man can't
+  re-tap to send her `knot.requested` again and again. A tap already there, a Knot's included,
+  is returned as it is the same way.
+- **A tap on a Thread with a deleted account is `ACCOUNT_DELETED`** (410, D-555's code), nothing
+  written: nobody is left to tie it back (D-051, D-500). Untying a Knot with them stays allowed.
+- **Notifications:** `knot_requested` to the other on a lone tap and `knot_accepted` to the first
+  tapper when the second makes the Knot, the two T-9.4 lists; an untie is the `knot.untied` event
+  alone, no notification.
+- **The "Knot tied" sheet and the web's tie and untie hooks are T-7.11's** (P-670), though
+  08-DESIGN §8 heads the sheet T-7.7: T-7.7 is the API.
+
+**Built with it, Claude's in the plan the founder approved:** a tap is free (D-003) and taken on
+a live or an expired Thread, by the clock or the status, and the second makes it a Knot directly;
+his lone tap on an expired Thread lets him send nothing. Either of the two unties; a Thread from a
+match gets a fresh `thread_hours` from now and a private message none (D-550, D-560), both taps,
+`knotted_at` and the warning mark cleared. Tapping and untying hold the Thread's row, so two taps
+at once are one after the other and the second finds the first; they share 30 a minute. A Knot
+carries both taps, so tie reads the taps alone. Events carry no expiry or price (D-554):
+`knot.requested {thread_id, user_id}` to the other, `knot.accepted {thread_id, knotted_at}` to
+both, `knot.untied {thread_id}` to the other.
+
+**Rejected:** a pending tap withdrawn by `DELETE`, which the prototype never offers ("Waiting for
+Priya to tie the knot too" has no undo) and which would let each withdraw and re-tap ask her
+again; a tap on a deleted account's Thread kept, a Knot that could never be granted.
+
 ## Adding a decision
 
 Append `D-0NN · Title — Locked|Open`, with Decision, Why, Rejected. Never edit a Locked entry —

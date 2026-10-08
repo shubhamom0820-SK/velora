@@ -17,6 +17,10 @@ buys it time, and who sees what of it. No I/O.
   hour from now) and Extend (`thread_extend`, `thread_extend_hours` on top of
   what is left, and from expired from now; D-250, D-253, D-560). She is never charged and never shown
   either (D-097); a Knot or a private message has no hour to buy (D-642).
+- **A Knot is granted by both** (T-7.7, D-003): each taps, free, on a live or
+  an expired Thread, and the second tap makes it permanent. Untying it gives a
+  Thread from a match a fresh hour and a private message its never-expiring
+  self back (D-550, D-560). A deleted account can't be tied to (D-770).
 """
 
 from __future__ import annotations
@@ -139,3 +143,28 @@ def time_event(reason: LedgerReason, thread_id: UUID, key: str) -> str:
 
 def not_allowed() -> AppError:
     return AppError("NOT_ALLOWED", "This Thread can't take that.", status=422)
+
+
+# --- The knot (T-7.7) ----------------------------------------------------------------
+
+
+def tapped(thread: Thread, user_id: UUID) -> bool:
+    """Whether `user_id`, one of the Thread's two, has tapped "Tie the knot"."""
+    tap = thread.low_knot_at if user_id == thread.user_low else thread.high_knot_at
+    return tap is not None
+
+
+def tied_by_both(thread: Thread) -> bool:
+    return thread.low_knot_at is not None and thread.high_knot_at is not None
+
+
+def untied_until(origin: ThreadOrigin, now: datetime, hours: int) -> datetime | None:
+    """When an untied Knot expires: a fresh hour from now for a Thread from a
+    match (D-560), never for a private message (D-550)."""
+    return expires_at(origin, now, hours)
+
+
+def account_deleted() -> AppError:
+    """D-555's code (D-770): a deleted account can't tie the knot back, so
+    nothing is tied to it."""
+    return AppError("ACCOUNT_DELETED", "They deleted their account.", status=410)

@@ -9915,7 +9915,14 @@ T76: list[Case] = [
     Case(
         id="t76-09-the-warning-kept-after-buying",
         what="a re-open or an Extend leaving the old warning's mark",
-        edits=[(THREADS_SERVICE, "        thread.expiry_warned_at = None\n", "")],
+        # Re-anchored on `until` (T-7.7): untying a Knot clears the mark too.
+        edits=[
+            (
+                THREADS_SERVICE,
+                "        thread.expires_at = until\n        thread.expiry_warned_at = None\n",
+                "        thread.expires_at = until\n",
+            )
+        ],
         expect=[
             "test_extend_adds_a_day_to_what_is_left",
             "test_reopen_is_two_and_an_hour_from_now",
@@ -9925,7 +9932,14 @@ T76: list[Case] = [
     Case(
         id="t76-10-bought-and-still-expired",
         what="a re-open or an Extend leaving the status expired",
-        edits=[(THREADS_SERVICE, "        thread.status = ThreadStatus.ACTIVE\n", "")],
+        # Re-anchored on `until` (T-7.7): untying a Knot makes it active too.
+        edits=[
+            (
+                THREADS_SERVICE,
+                "        thread.status = ThreadStatus.ACTIVE\n        thread.expires_at = until\n",
+                "        thread.expires_at = until\n",
+            )
+        ],
         expect=[
             "test_extend_from_expired_is_one_debit_and_a_day_from_now[status]",
             "test_reopen_is_two_and_an_hour_from_now[status]",
@@ -10547,6 +10561,216 @@ T84: list[Case] = [
 ]
 
 
+# --- T-7.7: the knot, tied and untied ----------------------------------------------
+
+T77_SELECTION = [
+    "tests/modules/threads/test_knot.py",
+    "tests/modules/threads/test_knot_race.py",
+]
+T77_TWO_TAPS = "test_two_taps_at_once_make_one_knot"
+T77_SECOND_TAP = "test_the_second_tap_makes_a_knot"
+T77_UNTIE = "test_untying_a_knot_gives_a_fresh_hour_from_the_setting"
+
+T77: list[Case] = [
+    Case(
+        id="t77-01-a-tap-unlocked",
+        what="a tap or an untie reading the Thread without holding it",
+        edits=[
+            (
+                THREADS_SERVICE,
+                "my_thread(session, thread_id, viewer_id, lock=True)",
+                "my_thread(session, thread_id, viewer_id, lock=False)",
+            )
+        ],
+        expect=[T77_TWO_TAPS],
+    ),
+    Case(
+        id="t77-02-two-taps-no-knot",
+        what="the second tap never making the Knot",
+        edits=[
+            (
+                THREADS_SERVICE,
+                "        if rules.tied_by_both(thread):\n",
+                "        if False:\n",
+            )
+        ],
+        expect=[
+            T77_SECOND_TAP,
+            "test_an_expired_thread_ties_straight_into_a_knot",
+            T77_TWO_TAPS,
+        ],
+    ),
+    Case(
+        id="t77-03-a-knot-keeps-its-expiry",
+        what="a Knot left with its expiry (the database's CHECK refuses it)",
+        edits=[
+            (
+                THREADS_SERVICE,
+                "            thread.knotted_at = now\n            thread.expires_at = None\n",
+                "            thread.knotted_at = now\n",
+            )
+        ],
+        expect=[T77_SECOND_TAP, "test_a_knot_has_no_hour_for_anyone_to_move"],
+    ),
+    Case(
+        id="t77-04-a-knot-keeps-its-warning",
+        what="a Knot left marked as warned",
+        edits=[
+            (
+                THREADS_SERVICE,
+                "            thread.expires_at = None\n            thread.expiry_warned_at = None\n",
+                "            thread.expires_at = None\n",
+            )
+        ],
+        expect=[T77_SECOND_TAP],
+    ),
+    Case(
+        id="t77-05-a-tap-again-asks-again",
+        what="a tap already there tapped again, and the other asked again",
+        edits=[
+            (
+                THREADS_SERVICE,
+                "        if rules.tapped(thread, user_id):\n",
+                "        if False:\n",
+            )
+        ],
+        expect=[
+            "test_a_second_tap_of_ones_own_tells_nobody_again",
+            "test_tap_untie_tap_asks_her_once",
+            "test_tapping_a_knot_returns_it_and_tells_nobody",
+        ],
+    ),
+    Case(
+        id="t77-06-tied-to-a-deleted-account",
+        what="a tap on a Thread with a deleted account written",
+        edits=[
+            (
+                THREADS_SERVICE,
+                "        if await repository.status_of(session, other_id) is UserStatus.DELETED:\n",
+                "        if False:\n",
+            )
+        ],
+        expect=["test_tying_to_a_deleted_account_is_refused"],
+    ),
+    Case(
+        id="t77-07-the-tapper-asked",
+        what="knot.requested sent to the one who tapped",
+        edits=[
+            (
+                THREADS_SERVICE,
+                "events.queue(session, other_id, KNOT_REQUESTED, requested)",
+                "events.queue(session, user_id, KNOT_REQUESTED, requested)",
+            )
+        ],
+        expect=["test_one_tap_asks_the_other_and_nothing_else_moves"],
+    ),
+    Case(
+        id="t77-08-accepted-to-one",
+        what="knot.accepted sent to the last tapper alone",
+        edits=[
+            (
+                THREADS_SERVICE,
+                "            for one in (user_id, other_id):\n",
+                "            for one in (user_id,):\n",
+            )
+        ],
+        expect=[T77_SECOND_TAP, T77_TWO_TAPS],
+    ),
+    Case(
+        id="t77-09-accepted-notifies-the-tapper",
+        what="the knot_accepted notification written for the last tapper",
+        edits=[
+            (
+                THREADS_SERVICE,
+                "                other_id,\n                KNOT_ACCEPTED_NOTIFICATION,\n",
+                "                user_id,\n                KNOT_ACCEPTED_NOTIFICATION,\n",
+            )
+        ],
+        expect=[T77_SECOND_TAP],
+    ),
+    Case(
+        id="t77-10-untie-what-isnt-a-knot",
+        what="untying a Thread that isn't a Knot",
+        edits=[
+            (
+                THREADS_SERVICE,
+                "        if thread.status is not ThreadStatus.KNOTTED:\n            return view_of(thread, user)\n",
+                "",
+            )
+        ],
+        expect=[
+            "test_untying_what_isnt_a_knot_changes_nothing",
+            "test_tap_untie_tap_asks_her_once",
+        ],
+    ),
+    Case(
+        id="t77-11-untied-for-a-literal-hour",
+        what="an untied Knot given 1 hour, not thread_hours",
+        edits=[
+            (
+                THREADS_SERVICE,
+                "rules.untied_until(thread.origin, clock.now(), hours)",
+                "rules.untied_until(thread.origin, clock.now(), 1)",
+            )
+        ],
+        expect=[T77_UNTIE],
+    ),
+    Case(
+        id="t77-12-an-untied-private-message-expires",
+        what="an untied private message given an hour",
+        edits=[
+            (
+                THREADS_RULES,
+                '    match (D-560), never for a private message (D-550)."""\n    return expires_at(origin, now, hours)\n',
+                '    match (D-560), never for a private message (D-550)."""\n    return now + timedelta(hours=hours)\n',
+            )
+        ],
+        expect=["test_untying_a_private_message_leaves_it_never_expiring"],
+    ),
+    Case(
+        id="t77-13-untied-taps-kept",
+        what="an untied Knot keeping a tap",
+        edits=[(THREADS_SERVICE, "        thread.low_knot_at = None\n", "")],
+        expect=[T77_UNTIE],
+    ),
+    Case(
+        id="t77-14-untied-warning-kept",
+        what="an untied Knot keeping an old warning mark",
+        edits=[
+            (
+                THREADS_SERVICE,
+                "        thread.high_knot_at = None\n        thread.expiry_warned_at = None\n",
+                "        thread.high_knot_at = None\n",
+            )
+        ],
+        expect=[T77_UNTIE],
+    ),
+    Case(
+        id="t77-15-the-untier-told",
+        what="knot.untied sent to the one who untied",
+        edits=[
+            (
+                THREADS_SERVICE,
+                "            _other_in(thread, user_id),\n            KNOT_UNTIED,\n",
+                "            user_id,\n            KNOT_UNTIED,\n",
+            )
+        ],
+        expect=[T77_UNTIE],
+    ),
+    Case(
+        id="t77-16-taps-unlimited",
+        what="tapping with no rate limit",
+        edits=[
+            (
+                THREADS_ROUTER,
+                '@router.post("/threads/{thread_id}/knot", dependencies=[knot_rate_limit])',
+                '@router.post("/threads/{thread_id}/knot")',
+            )
+        ],
+        expect=["test_tying_and_untying_are_rate_limited_together"],
+    ),
+]
+
 CASES: list[tuple[Case, list[str]]] = (
     [(c, T51_SELECTION) for c in T51]
     + [(c, T54_SELECTION) for c in T54]
@@ -10594,6 +10818,7 @@ CASES: list[tuple[Case, list[str]]] = (
     + [(c, T76_SELECTION) for c in T76]
     + [(c, P740_SELECTION) for c in P740]
     + [(c, T84_SELECTION) for c in T84]
+    + [(c, T77_SELECTION) for c in T77]
 )
 
 # The fifty-connection fixture's own message when Postgres refuses a connection.

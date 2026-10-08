@@ -1,5 +1,6 @@
-"""Threads (T-7.1, T-7.2, T-7.6, T-7.8): open one, list them, read one, clear one
-from your own chats, re-open or Extend one, once onboarding is done."""
+"""Threads (T-7.1, T-7.2, T-7.6, T-7.7, T-7.8): open one, list them, read one,
+clear one from your own chats, re-open or Extend one, tie or untie the knot,
+once onboarding is done."""
 
 from __future__ import annotations
 
@@ -42,6 +43,13 @@ OPENS_PER_MINUTE = 20
 # Re-opens and Extends, together: each a priced action, so a double tap and
 # then some (T-7.6).
 TIME_BUYS_PER_MINUTE = 20
+
+# Tying and untying, together: each can tell the other person, so a busy thumb
+# and then some, never a script (T-7.7).
+KNOTS_PER_MINUTE = 30
+knot_rate_limit = Depends(
+    user_rate_limit("threads_knot", limit=KNOTS_PER_MINUTE, window_s=60)
+)
 
 # Clearing, its bulk form and its undo share one bucket: a busy thumb in select
 # mode and its undo toasts, never a script.
@@ -185,3 +193,22 @@ async def extend_thread(
         shown_price=(body or BuyTimeRequest()).shown_price,
         config=config,
     )
+
+
+@router.post("/threads/{thread_id}/knot", dependencies=[knot_rate_limit])
+async def tie_knot(
+    thread_id: UUID,
+    user: Annotated[User, Depends(onboarded_user)],
+    session: Annotated[AsyncSession, Depends(get_session)],
+) -> Thread:
+    return await service.tie(session, user, thread_id)
+
+
+@router.delete("/threads/{thread_id}/knot", dependencies=[knot_rate_limit])
+async def untie_knot(
+    thread_id: UUID,
+    user: Annotated[User, Depends(onboarded_user)],
+    session: Annotated[AsyncSession, Depends(get_session)],
+    config: Annotated[ConfigCache, Depends(app_config_cache)],
+) -> Thread:
+    return await service.untie(session, user, thread_id, config=config)
