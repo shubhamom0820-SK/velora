@@ -12,6 +12,8 @@ these decide.
   the other side still gets theirs.
 - **The cap** (D-692): a referrer is paid for `referral_rewards_max` referrals,
   ever, counted under his wallet's lock; past it, the referee is still paid.
+- **Paused** (D-840): while `referral_reward_velas` isn't above 0, no code is
+  applied, so no number spends its one referee slot (D-691) on nothing.
 """
 
 from __future__ import annotations
@@ -30,6 +32,11 @@ STANDING: Final = frozenset({UserStatus.ACTIVE, UserStatus.PAUSED})
 def code_works(step: OnboardingStep, status: UserStatus) -> bool:
     """Whether a code's owner may refer anyone (D-693)."""
     return step is OnboardingStep.DONE and status in STANDING
+
+
+def running(reward_velas: int) -> bool:
+    """Whether a code may be applied now (D-840): only while it pays."""
+    return reward_velas > 0
 
 
 def is_credited(gender: Gender | None, status: UserStatus) -> bool:

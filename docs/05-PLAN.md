@@ -3338,6 +3338,10 @@ prices don't depend on the web photos step, and the hold is lifted.
 ### T-8.8 · Web album, kudos, referral UI
 - [ ] **Needs:** T-8.4, T-8.5, T-8.6
 - [ ] Album section on profile (locked / pending / granted with watermark note); incoming requests list for women with grant/decline; kudos prompt in chat after the threshold; referral code field in onboarding (optional) and share card in You tab.
+- [ ] **Referrals are paused (D-840, P-740):** while they are, build no referral code field and no
+  "invite friends" or share card, nor any copy offering a referral. `POST /referrals/apply`
+  refuses every code (`NOT_ALLOWED`, `referrals_paused`). The two referral items above wait for
+  the decision that turns referrals back on, and that one needs P-591 done first.
 - [ ] **Commit:** `feat(web): album, kudos, referrals [T-8.8]`
 
 ### T-8.11 · Welcome Velas
@@ -6179,6 +6183,8 @@ The number comes from the session's own block, given in its brief, from P-100 up
   selfie route, which costs nothing (P-590), so low in practice. A fix would reverse the reward
   in `_reverse()` when the reversed payment was the referral's trigger, which needs the trigger
   recorded on the referral. Filed by Claude building T-8.6, 8 October 2026.
+  **Moot while referrals are paused (D-840, P-740, 9 October 2026), and must be done before they
+  are turned back on:** at 0 no reward is paid, so none can outlive a chargeback.
 - [ ] P-592 · Publish what a worker's transactions queue. **Before T-7.12** (the web's socket
   client). Worst case: a referee's selfie matches in the `verify_selfie` job, the reward credits
   both men (T-8.6), and neither balance moves on screen until a reload, since `wallet.updated`
@@ -6204,3 +6210,17 @@ The number comes from the session's own block, given in its brief, from P-100 up
   with it. Wanted: a clear remembers the point it replaced, and Undo puts that point back, or
   none if there was none. Found planning T-7.10; filed by Claude, 9 October 2026, at the
   founder's direction; its session's block, P-620 to P-629.
+- [x] P-740 · Pause referrals. **Now** (the founder, 9 October 2026: "referral ka system abhi
+  roko, nahi dena abhi referral kisiko", relayed with the advisor's brief; D-840). Worst case if
+  not done: T-8.6 is live, so every man on a referral is paid 5 Velas at his selfie or first
+  purchase, against the founder's word; and if only the reward stops, a referee who applies a
+  code spends his number's one referee slot, ever (D-691), on a referral that pays nothing, so
+  he can never be paid when referrals return. A reversible migration sets
+  `app_config.referral_reward_velas` to 0 (down: 5); the reward code stays, and at 0 already pays
+  nothing (D-692); `POST /referrals/apply` refuses while the reward isn't above 0, before any
+  slot is taken; T-8.8 builds no referral field or invite card while paused; P-591 must be done
+  before referrals return. Filed by Claude, 9 October 2026; its session's block, P-740 to P-749.
+  **Done (9 October 2026):** migration `b53383c8e9b6`; apply's check and its warning in
+  `referrals/service.py`, before every other; `tests/modules/referrals/test_paused.py`; five
+  breaking cases (`p740-`), each red with its guard gone (`out/p-740-break-guards.log`). The
+  referrals tests run at 5 through their `conftest.py`.

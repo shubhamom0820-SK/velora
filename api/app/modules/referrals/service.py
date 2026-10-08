@@ -3,7 +3,9 @@ reward when the referee's selfie matches or their first purchase is captured,
 whichever comes first.
 
 **Apply** (`POST /referrals/apply`), with the user's row locked, so two at once
-take turns: before `done`; once per phone number, ever (D-691), read from the
+take turns: first, only while referrals run, the reward read fresh and above 0,
+a missing row counting as paused (D-840), so no number's slot goes on a referral
+that pays nothing; before `done`; once per phone number, ever (D-691), read from the
 referrals every account on the number ever had, which the erasure keeps; a code
 whose owner has finished onboarding and stands (D-693), never the user's own. A
 referral can exist before `dob`: an under-18 refusal deletes it, as referee or
@@ -51,6 +53,13 @@ Trigger = Literal["selfie", "purchase"]
 async def apply(session: AsyncSession, user: User, code: str) -> None:
     async with session.begin():
         user = await users_service.locked_user(session, user.id)
+        if not await _running(session):
+            raise AppError(
+                "NOT_ALLOWED",
+                "Referral codes are paused for now.",
+                status=422,
+                details={"why": "referrals_paused"},
+            )
         if user.onboarding_step is OnboardingStep.DONE:
             raise AppError(
                 "NOT_ALLOWED",
@@ -74,6 +83,18 @@ async def apply(session: AsyncSession, user: User, code: str) -> None:
             raise AppError("NOT_FOUND", "No one has that code.", status=404)
         await repository.add(session, referee_id=user.id, referrer_id=owner.id)
     log.info("referrals.applied", referee_id=str(user.id), referrer_id=str(owner.id))
+
+
+async def _running(session: AsyncSession) -> bool:
+    """Whether a code may be applied now (D-840), read fresh, never cached, so
+    a pause applies at once. A missing setting is paused, with a warning: a
+    slot spent while nothing can pay is never given back."""
+    try:
+        amount = await admin_service.config_int(session, rules.REWARD_KEY)
+    except admin_service.MissingConfig:
+        log.warning("referrals.apply_config_missing", key=rules.REWARD_KEY)
+        return False
+    return rules.running(amount)
 
 
 async def me(session: AsyncSession, user: User) -> ReferralsMe:

@@ -10163,6 +10163,102 @@ T76: list[Case] = [
     ),
 ]
 
+# --- P-740: referrals paused (D-840) --------------------------------------------
+
+PAUSE_REFERRALS = "alembic/versions/20261009_b53383c8e9b6_pause_referrals.py"
+P740_SELECTION = T86_SELECTION
+PAUSE_CHECK = (
+    "        user = await users_service.locked_user(session, user.id)\n"
+    "        if not await _running(session):\n"
+)
+SLOT_KEPT = "test_while_paused_apply_is_refused_and_the_slot_is_kept"
+PAUSED_FIRST = "test_paused_is_said_before_anything_else"
+
+P740: list[Case] = [
+    Case(
+        id="p740-1-apply-while-paused",
+        what="D-840: apply takes a code, and the number's slot, while paused",
+        edits=[
+            (
+                REFERRALS_SERVICE,
+                PAUSE_CHECK,
+                (
+                    "        user = await users_service.locked_user(session, user.id)\n"
+                    "        if False:\n"
+                ),
+            )
+        ],
+        expect=[SLOT_KEPT, PAUSED_FIRST],
+    ),
+    Case(
+        id="p740-2-zero-runs",
+        what="D-840: a reward of 0 counts as running",
+        edits=[
+            (
+                REFERRALS_RULES,
+                "    return reward_velas > 0\n",
+                "    return reward_velas >= 0\n",
+            )
+        ],
+        expect=[f"{SLOT_KEPT}[zero]"],
+    ),
+    Case(
+        id="p740-3-missing-setting-runs",
+        what="D-840: a missing referral_reward_velas lets apply through",
+        edits=[
+            (
+                REFERRALS_SERVICE,
+                (
+                    '        log.warning("referrals.apply_config_missing", key=rules.REWARD_KEY)\n'
+                    "        return False\n"
+                ),
+                (
+                    '        log.warning("referrals.apply_config_missing", key=rules.REWARD_KEY)\n'
+                    "        return True\n"
+                ),
+            )
+        ],
+        expect=[f"{SLOT_KEPT}[no row]"],
+    ),
+    Case(
+        id="p740-4-pause-after-the-code",
+        what="D-840: the pause checked last, after the code is looked up",
+        edits=[
+            (
+                REFERRALS_SERVICE,
+                PAUSE_CHECK,
+                (
+                    "        user = await users_service.locked_user(session, user.id)\n"
+                    "        if False:\n"
+                ),
+            ),
+            (
+                REFERRALS_SERVICE,
+                "        await repository.add(session, referee_id=user.id, referrer_id=owner.id)\n",
+                (
+                    "        if not await _running(session):\n"
+                    "            raise AppError(\n"
+                    '                "NOT_ALLOWED",\n'
+                    '                "Referral codes are paused for now.",\n'
+                    "                status=422,\n"
+                    '                details={"why": "referrals_paused"},\n'
+                    "            )\n"
+                    "        await repository.add(session, referee_id=user.id, referrer_id=owner.id)\n"
+                ),
+            ),
+        ],
+        expect=[PAUSED_FIRST],
+    ),
+    Case(
+        id="p740-5-migration-leaves-it-running",
+        what="D-840: the migration leaves referral_reward_velas at 5",
+        edits=[
+            (PAUSE_REFERRALS, "PAUSED, RUNNING = 0, 5\n", "PAUSED, RUNNING = 5, 5\n")
+        ],
+        expect=["test_app_config_seeds"],
+    ),
+]
+
 CASES: list[tuple[Case, list[str]]] = (
     [(c, T51_SELECTION) for c in T51]
     + [(c, T54_SELECTION) for c in T54]
@@ -10208,6 +10304,7 @@ CASES: list[tuple[Case, list[str]]] = (
     + [(c, T86_SELECTION) for c in T86]
     + [(c, T69_SELECTION) for c in T69]
     + [(c, T76_SELECTION) for c in T76]
+    + [(c, P740_SELECTION) for c in P740]
 )
 
 # The fifty-connection fixture's own message when Postgres refuses a connection.

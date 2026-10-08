@@ -217,7 +217,8 @@ async def test_app_config_seeds(db: AsyncSession) -> None:
         "welcome_velas": 5,
         # T-8.6, D-692: a referral's reward and a referrer's cap. A missing
         # reward skips it with only a warning; a missing cap pays no referrer.
-        "referral_reward_velas": 5,
+        # Paused, 0, since P-740 (D-840): no code is applied, nothing paid.
+        "referral_reward_velas": 0,
         "referral_rewards_max": 10,
     }
 

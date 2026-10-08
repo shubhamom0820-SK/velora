@@ -5112,6 +5112,40 @@ T-7.6's plan, Q3):**
   man. In a Thread between two men both are told, and neither's message restarts the hour, so it
   runs out every hour; whether it should is P-540's, not decided here.
 
+### D-840 · Referrals paused: the reward at 0, and no code applied while it is — Locked
+**The decision (P-740):** referrals are paused. Nobody is given a referral reward, and nobody can
+apply a code, until a later decision turns them back on.
+1. A reversible migration sets `app_config.referral_reward_velas` to 0 (its downgrade puts back
+   T-8.6's 5). This supersedes D-692's value only: the reward code stays as built, and at 0 it
+   already pays nothing. A referral applied before the pause is closed by its trigger with nothing,
+   as D-692 says of 0, and never held for later. None can exist outside tests: T-8.6 had reached
+   staging only, with no screen to apply a code from.
+2. While the reward isn't above 0, `POST /referrals/apply` refuses, `NOT_ALLOWED` with
+   `details.why` `referrals_paused`, before anything else is checked or written, so no number
+   spends its one referee slot (D-691) on a referral that pays nothing. The setting is read fresh,
+   never cached; a missing row counts as paused, with a warning. No new error code: apply already
+   refuses this way for `onboarding_done` and `own_code`.
+3. While paused, the web shows no referral code field and no invite or share card (T-8.8).
+4. P-591 (a reward kept after its purchase is charged back) is moot while paused, and must be done
+   before referrals are turned back on.
+5. A charged-back purchase's Velas are taken back exactly as before (T-8.2, D-520).
+
+**Why:** the founder, 9 October 2026: "referral ka system abhi roko, nahi dena abhi referral
+kisiko" (stop the referral system for now; don't give anyone a referral now). Pausing the reward
+alone would leave apply open, and an apply during the pause would use up a number's one slot,
+ever, so that number could never be paid once referrals return.
+
+**Rejected:** counting only rewarded referrals toward D-691's slot (reopens a Locked decision, and
+lets a number apply again after a referral that was rewarded with nothing); a new
+`REFERRALS_PAUSED` error code (the existing `NOT_ALLOWED` with a `why` says the same); a separate
+on/off setting beside the reward (two settings that can disagree; the reward at 0 already means
+nothing is paid).
+
+The pause is the founder's own decision, in the words above, relayed by the advisor (Claude, in a
+separate chat). Points 1 to 5 and the `NOT_ALLOWED` shape: approved by the founder on the advisor's
+recommendation, relayed by the advisor, 9 October 2026; the options and the corrections to the
+advisor's brief were Claude's, in P-740's plan.
+
 ## Adding a decision
 
 Append `D-0NN · Title — Locked|Open`, with Decision, Why, Rejected. Never edit a Locked entry —

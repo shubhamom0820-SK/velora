@@ -284,7 +284,9 @@ async def test_two_applies_at_once_take_turns_and_the_second_already_exists(
     user's row; the first to hold it then waits for the other to reach the
     number's check, which it can't while the lock holds, and goes on alone.
     The second then sees the first's referral: `ALREADY_EXISTS`. Without the
-    lock both pass the check, and the second's insert breaks the key, a 500."""
+    lock both pass the check, and the second's insert breaks the key, a 500.
+    Referrals run here (D-840): the conftest's setting is in the `db`
+    fixture's uncommitted transaction, which these connections can't see."""
     referrer_id = await fresh_man(test_engine)
     referee_id = await fresh_man(test_engine)
     async with (
@@ -328,6 +330,10 @@ async def test_two_applies_at_once_take_turns_and_the_second_already_exists(
         checking -= 1
         return await real_check(session, phone_hash)
 
+    async def running(session: AsyncSession) -> bool:
+        return True
+
+    monkeypatch.setattr(service, "_running", running)
     monkeypatch.setattr(users_service, "locked_user", lock_once_both_arrive)
     monkeypatch.setattr(repository, "number_was_referred", check_then_wait)
 

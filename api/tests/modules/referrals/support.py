@@ -32,6 +32,9 @@ SETTINGS = make_test_settings()
 APPLY = "/v1/referrals/apply"
 REWARD = "referral_reward_velas"
 REWARDS_MAX = "referral_rewards_max"
+# T-8.6's reward while referrals run (D-692); the migrated database holds 0,
+# paused (D-840).
+RUNNING = 5
 
 # `+9196` and eight digits: a block neither `make_user` (`+9198…`), the seed
 # (`+9190000…`) nor tests/committed.py (`+9197…`) uses.

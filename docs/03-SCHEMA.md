@@ -614,7 +614,8 @@ the grant off; a missing row skips it with a warning, never failing a sign-up (D
 And by T-8.6's (D-692): `referral_reward_velas=5`, each man's Velas when a referral is rewarded, 0
 rewarding it with nothing and a missing row skipping it with a warning, never failing its trigger;
 and `referral_rewards_max=10`, how many referrals one referrer is paid for, ever, a missing row
-paying no referrer.
+paying no referrer. Since P-740 (D-840), `referral_reward_velas=0`: referrals are paused, and
+`POST /referrals/apply` is refused while the reward isn't above 0, a missing row included.
 Two settings are also promised in copy, in `web/src/i18n/en.ts`, written out because copy is a
 promise, not a computation. Change the copy with the setting:
 - `thread_hours`: the landing page ("Threads last an hour", "1-hour", T-2.1), `/terms` ("lasts
