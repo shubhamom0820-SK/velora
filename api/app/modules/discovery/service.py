@@ -73,12 +73,14 @@ async def discover(
     feed: Feed,
     intent_ids: Collection[int],
     verified: bool,
+    online: bool,
     params: PageParams,
     settings: Settings,
     config: admin_service.ConfigCache | None = None,
 ) -> CardPage:
     """One page of `feed` for `user`. `intent_ids` keeps those sharing any of
-    them (D-041); `verified`, those showing the badge (D-393). With it, a
+    them (D-041); `verified`, those showing the badge (D-393); `online`, those
+    active within the Online feed's 5 minutes, in any feed (D-660). With it, a
     man's swipes left today (T-6.5), as `POST /swipes` counts them."""
     page = await _feed_page(
         session,
@@ -86,6 +88,7 @@ async def discover(
         feed=feed,
         intent_ids=intent_ids,
         verified=verified,
+        online=online,
         params=params,
         settings=settings,
         config=config,
@@ -118,6 +121,7 @@ async def _feed_page(
     feed: Feed,
     intent_ids: Collection[int],
     verified: bool,
+    online: bool,
     params: PageParams,
     settings: Settings,
     config: admin_service.ConfigCache | None,
@@ -140,7 +144,9 @@ async def _feed_page(
             as_of=as_of,
             radius_m=radius_km * 1000.0,
             new_first=feed is Feed.NEW,
-            online_since=as_of - rules.ONLINE_FOR if feed is Feed.ONLINE else None,
+            online_since=(
+                as_of - rules.ONLINE_FOR if online or feed is Feed.ONLINE else None
+            ),
             intent_ids=intent_ids,
             badge_only=verified,
             after=after,

@@ -46,6 +46,14 @@ const PROXY_TEST = "src/proxy.test.ts";
 const DECK_TEST = "src/components/discover/DiscoverScreen.test.tsx";
 const PROVIDER_TEST = "src/lib/queries/QueryProvider.test.tsx";
 const DECK = "src/components/discover/DiscoverScreen.tsx";
+const FILTERS_TEST = "src/components/discover/FiltersSheet.test.tsx";
+const FILTERS_SHEET = "src/components/discover/FiltersSheet.tsx";
+const FILTER_PARAMS = "src/components/discover/filterParams.ts";
+const SHEET_TEST = "src/components/ui/Sheet.test.tsx";
+const ASKS_ALL = "asks the API with every filter in the URL";
+const BADGE_COUNTS = "counts each intent and each toggle on the Filters button";
+const SHOW_WRITES = "Show people writes the draft to the URL";
+const DRAFT = "holds every change as a draft";
 const SHOWN =
   "shows Super's price from /prices as a number, and sends exactly it";
 const HER_DECK = "shows no price anywhere and sends 0 with her Super Like";
@@ -952,6 +960,102 @@ export const CASES: BreakCase[] = [
     new: "",
     run: [CSP_TEST],
     expect: ["leaves /share/priya to the proxy"],
+  },
+  // --- T-6.9: the filters. In the URL, one place writes them; the server applies them (D-660) ---
+  {
+    id: "t69-01-online-never-sent",
+    file: "src/lib/queries/discover.ts",
+    old: "          online: filters.online || undefined,\n",
+    new: "",
+    run: [DECK_TEST],
+    expect: [ASKS_ALL, "a change of Online now alone is a new scroll"],
+  },
+  {
+    id: "t69-02-online-left-out-of-the-key",
+    file: "src/lib/queries/keys.ts",
+    old: "        online: filters.online,\n",
+    new: "",
+    run: [DECK_TEST],
+    expect: ["a change of Online now alone is a new scroll"],
+  },
+  {
+    id: "t69-03-online-never-read",
+    file: FILTER_PARAMS,
+    old: '    online: params.get("online") === "true",',
+    new: "    online: false,",
+    run: [DECK_TEST],
+    expect: [ASKS_ALL, BADGE_COUNTS, "the empty deck's Clear filters"],
+  },
+  {
+    id: "t69-04-toggles-not-counted",
+    file: FILTER_PARAMS,
+    old: "    (filters.online ? 1 : 0)",
+    new: "    0",
+    run: [DECK_TEST, FILTERS_TEST],
+    expect: [BADGE_COUNTS, "counts one filter as one", DRAFT],
+  },
+  {
+    id: "t69-05-show-drops-verified",
+    file: FILTER_PARAMS,
+    old: '  if (filters.verified) params.set("verified", "true");\n',
+    new: "",
+    run: [DECK_TEST],
+    expect: [SHOW_WRITES],
+  },
+  {
+    id: "t69-06-empty-clear-keeps-online",
+    file: DECK,
+    old: "onClear={() => applyFilters(NO_FILTERS)}",
+    new: "onClear={() => applyFilters({ ...NO_FILTERS, online: filters.online })}",
+    run: [DECK_TEST],
+    expect: ["the empty deck's Clear filters"],
+  },
+  {
+    id: "t69-07-draft-applied-live",
+    file: FILTERS_SHEET,
+    old: "onChange={(online) => setDraft((now) => ({ ...now, online }))}",
+    new: "onChange={(online) => onApply({ ...draft, online })}",
+    run: [DECK_TEST, FILTERS_TEST],
+    expect: [DRAFT, "closing the sheet writes nothing", SHOW_WRITES],
+  },
+  {
+    id: "t69-08-sheet-starts-empty",
+    file: FILTERS_SHEET,
+    old: "useState<DiscoverFilters>(applied);",
+    new: "useState<DiscoverFilters>(NO_FILTERS);",
+    run: [DECK_TEST, FILTERS_TEST],
+    expect: ["starts from the filters applied", SHOW_WRITES],
+  },
+  {
+    id: "t69-09-clear-keeps-the-draft",
+    file: FILTERS_SHEET,
+    old: "onClick={() => setDraft(NO_FILTERS)}",
+    new: "onClick={() => setDraft(applied)}",
+    run: [DECK_TEST, FILTERS_TEST],
+    expect: ["Clear empties the draft", "when the sheet's Clear is shown"],
+  },
+  {
+    id: "t69-10-sheet-badge-not-drawn",
+    file: "src/components/ui/Sheet.tsx",
+    old: "            {badge}\n",
+    new: "",
+    run: [SHEET_TEST, FILTERS_TEST],
+    expect: [
+      "draws a badge beside its title",
+      "starts from the filters applied",
+      "counts one filter as one",
+    ],
+  },
+  {
+    id: "t69-11-the-chip-says-verified",
+    file: "src/i18n/en.ts",
+    old: '      selfie: "Selfie matched",',
+    new: '      selfie: "Verified only",',
+    run: [CLAIMS_TEST, FILTERS_TEST],
+    expect: [
+      "says none of the claims anywhere but the two named keys",
+      "says what the toggles filter on",
+    ],
   },
 ];
 

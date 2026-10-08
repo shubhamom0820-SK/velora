@@ -25,6 +25,8 @@ import { ActionRow } from "./ActionRow";
 import { Deck, type DeckHandle } from "./Deck";
 import { DiscoverEmpty } from "./DiscoverEmpty";
 import { FeedRow } from "./FeedRow";
+import { activeCount, filtersOf, hrefOf, NO_FILTERS } from "./filterParams";
+import { FiltersSheet } from "./FiltersSheet";
 import { MatchSheet, type Match } from "./MatchSheet";
 import { profileHref } from "./SwipeCard";
 
@@ -36,15 +38,6 @@ const GONE_ANYWAY: ReadonlySet<string> = new Set([
   "ALREADY_EXISTS",
   "NOT_FOUND",
 ]);
-
-/** The filters in the URL, where T-6.9's sheet writes them. */
-export function filtersOf(params: URLSearchParams): DiscoverFilters {
-  const intentIds = params
-    .getAll("intent_ids")
-    .map(Number)
-    .filter((id) => Number.isInteger(id) && id > 0);
-  return { intentIds, verified: params.get("verified") === "true" };
-}
 
 /** Whether a key press belongs to something being typed in, not the deck. */
 function typing(target: EventTarget | null): boolean {
@@ -76,7 +69,8 @@ export function DiscoverScreen() {
     () => filtersOf(new URLSearchParams(params.toString())),
     [params],
   );
-  const filtered = filters.intentIds.length > 0 || filters.verified;
+  const filterCount = activeCount(filters);
+  const [filtersOpen, setFiltersOpen] = useState(false);
   const [feed, setFeed] = useState<Feed>("foryou");
 
   const me = useMe().data;
@@ -212,8 +206,9 @@ export function DiscoverScreen() {
     return () => document.removeEventListener("keydown", onKey);
   }, []);
 
-  function clearFilters() {
-    router.replace(pathname);
+  /** The one way the deck's filters change: into the URL (filterParams). */
+  function applyFilters(next: DiscoverFilters) {
+    router.replace(hrefOf(pathname, next));
   }
 
   let body;
@@ -231,14 +226,18 @@ export function DiscoverScreen() {
       />
     );
   } else if (cards.length === 0) {
-    body = filtered ? (
-      <DiscoverEmpty kind="filters" onClear={clearFilters} />
-    ) : (
-      <DiscoverEmpty
-        kind="nobody"
-        onCheckAgain={() => void discover.refetch()}
-      />
-    );
+    body =
+      filterCount > 0 ? (
+        <DiscoverEmpty
+          kind="filters"
+          onClear={() => applyFilters(NO_FILTERS)}
+        />
+      ) : (
+        <DiscoverEmpty
+          kind="nobody"
+          onCheckAgain={() => void discover.refetch()}
+        />
+      );
   } else {
     body = (
       <Deck
@@ -253,7 +252,12 @@ export function DiscoverScreen() {
   return (
     <div className="mx-auto flex w-full max-w-130 flex-col gap-4 px-5 py-4">
       <h1 className="sr-only">{t("discover.title")}</h1>
-      <FeedRow feed={feed} onFeed={setFeed} />
+      <FeedRow
+        feed={feed}
+        onFeed={setFeed}
+        filterCount={filterCount}
+        onFilters={() => setFiltersOpen(true)}
+      />
       {body}
       <ActionRow
         onSwipe={(dir) => void deck.current?.swipe(dir)}
@@ -268,6 +272,16 @@ export function DiscoverScreen() {
         openPrice={priceOf("thread_open")}
         onClose={() => setMatch(null)}
       />
+      {filtersOpen && (
+        <FiltersSheet
+          applied={filters}
+          onClose={() => setFiltersOpen(false)}
+          onApply={(next) => {
+            setFiltersOpen(false);
+            applyFilters(next);
+          }}
+        />
+      )}
     </div>
   );
 }

@@ -914,3 +914,198 @@ describe("loading, empty and error", () => {
     ).toHaveAttribute("href", "/discover/search");
   });
 });
+
+describe("filters (T-6.9): in the URL, applied by the server", () => {
+  const INTENTS = [
+    { id: 1, slug: "serious", label: "Something serious" },
+    { id: 4, slug: "casual", label: "Casual dating" },
+  ];
+  const filtersButton = () => screen.getByRole("button", { name: /^Filters/ });
+
+  it("counts each intent and each toggle on the Filters button, and shows no badge with none", async () => {
+    nav.search = "intent_ids=1&intent_ids=4&verified=true&online=true";
+    fakeApi({
+      "GET /v1/discover": () => page([card()]),
+      "GET /v1/prices": () => json(200, PRICES),
+    });
+    let view = renderAs("male");
+    await screen.findByTestId("top-card");
+
+    expect(filtersButton()).toHaveAccessibleName(
+      t("discover.filters.openCount.other", { count: 4 }),
+    );
+    expect(screen.getByTestId("filter-count")).toHaveTextContent("4");
+    view.unmount();
+
+    nav.search = "online=true";
+    view = renderAs("male");
+    await screen.findByTestId("top-card");
+    expect(filtersButton()).toHaveAccessibleName(
+      t("discover.filters.openCount.one"),
+    );
+    view.unmount();
+
+    nav.search = "";
+    renderAs("male");
+    await screen.findByTestId("top-card");
+    expect(filtersButton()).toHaveAccessibleName(t("discover.filters.open"));
+    expect(screen.queryByTestId("filter-count")).toBeNull();
+  });
+
+  it("asks the API with every filter in the URL, Online now among them", async () => {
+    nav.search = "intent_ids=4&verified=true&online=true";
+    const api = fakeApi({
+      "GET /v1/discover": () => page([card()]),
+      "GET /v1/prices": () => json(200, PRICES),
+    });
+    renderAs("male");
+    await screen.findByTestId("top-card");
+
+    const query = reads(api.calls, "/v1/discover")[0]?.query;
+    expect(query?.getAll("intent_ids")).toEqual(["4"]);
+    expect(query?.get("verified")).toBe("true");
+    expect(query?.get("online")).toBe("true");
+  });
+
+  it("a change of Online now alone is a new scroll, asked for afresh", async () => {
+    const api = fakeApi({
+      "GET /v1/discover": () => page([card()]),
+      "GET /v1/prices": () => json(200, PRICES),
+    });
+    const { rerender } = renderAs("male");
+    await screen.findByTestId("top-card");
+
+    nav.search = "online=true";
+    rerender(
+      <QueryClientProvider client={client}>
+        <ToastProvider>
+          <DiscoverScreen />
+        </ToastProvider>
+      </QueryClientProvider>,
+    );
+
+    await waitFor(() =>
+      expect(reads(api.calls, "/v1/discover")).toHaveLength(2),
+    );
+    expect(reads(api.calls, "/v1/discover")[1]?.query.get("online")).toBe(
+      "true",
+    );
+  });
+
+  it("asks with no filter at all when the URL has none", async () => {
+    const api = fakeApi({
+      "GET /v1/discover": () => page([card()]),
+      "GET /v1/prices": () => json(200, PRICES),
+    });
+    renderAs("male");
+    await screen.findByTestId("top-card");
+
+    const query = reads(api.calls, "/v1/discover")[0]?.query;
+    expect(query?.has("intent_ids")).toBe(false);
+    expect(query?.has("verified")).toBe(false);
+    expect(query?.has("online")).toBe(false);
+  });
+
+  it("opens the sheet from the URL's filters, and Show people writes the draft to the URL, asking nothing while open", async () => {
+    nav.search = "intent_ids=1";
+    const api = fakeApi({
+      "GET /v1/discover": () => page([card()]),
+      "GET /v1/prices": () => json(200, PRICES),
+      "GET /v1/intents": () => json(200, INTENTS),
+    });
+    renderAs("male");
+    await screen.findByTestId("top-card");
+
+    await userEvent.click(filtersButton());
+    const dialog = screen.getByRole("dialog");
+    const serious = await within(dialog).findByRole("button", {
+      name: "Something serious",
+    });
+    expect(serious).toHaveAttribute("aria-pressed", "true");
+    await userEvent.click(
+      within(dialog).getByRole("button", { name: "Casual dating" }),
+    );
+    await userEvent.click(
+      within(dialog).getByRole("switch", {
+        name: t("discover.filters.selfie"),
+      }),
+    );
+    await userEvent.click(
+      within(dialog).getByRole("switch", {
+        name: t("discover.filters.online"),
+      }),
+    );
+    expect(reads(api.calls, "/v1/discover")).toHaveLength(1);
+    expect(nav.replace).not.toHaveBeenCalled();
+
+    await userEvent.click(
+      within(dialog).getByRole("button", { name: t("discover.filters.show") }),
+    );
+    expect(nav.replace).toHaveBeenCalledExactlyOnceWith(
+      "/discover?intent_ids=1&intent_ids=4&verified=true&online=true",
+    );
+    expect(screen.queryByRole("dialog")).toBeNull();
+  });
+
+  it("writes /discover alone when the sheet's Clear is shown", async () => {
+    nav.search = "intent_ids=1&verified=true&online=true";
+    fakeApi({
+      "GET /v1/discover": () => page([card()]),
+      "GET /v1/prices": () => json(200, PRICES),
+      "GET /v1/intents": () => json(200, INTENTS),
+    });
+    renderAs("male");
+    await screen.findByTestId("top-card");
+
+    await userEvent.click(filtersButton());
+    const dialog = screen.getByRole("dialog");
+    await userEvent.click(
+      within(dialog).getByRole("button", { name: t("discover.filters.clear") }),
+    );
+    await userEvent.click(
+      within(dialog).getByRole("button", { name: t("discover.filters.show") }),
+    );
+    expect(nav.replace).toHaveBeenCalledExactlyOnceWith("/discover");
+  });
+
+  it("closing the sheet writes nothing, and the keys stay with it while open", async () => {
+    nav.search = "verified=true";
+    const api = fakeApi({
+      "GET /v1/discover": () => page([card(), card()]),
+      "GET /v1/prices": () => json(200, PRICES),
+      "GET /v1/intents": () => json(200, INTENTS),
+      "POST /v1/swipes": swipeOk(),
+    });
+    renderAs("male");
+    await screen.findByTestId("top-card");
+
+    await userEvent.click(filtersButton());
+    await userEvent.click(
+      screen.getByRole("switch", { name: t("discover.filters.online") }),
+    );
+    await userEvent.keyboard("{ArrowRight}");
+    expect(swipes(api.calls)).toHaveLength(0);
+    await userEvent.keyboard("{Escape}");
+
+    expect(screen.queryByRole("dialog")).toBeNull();
+    expect(nav.replace).not.toHaveBeenCalled();
+    await userEvent.click(filtersButton());
+    expect(
+      screen.getByRole("switch", { name: t("discover.filters.online") }),
+    ).toHaveAttribute("aria-checked", "false");
+  });
+
+  it("the empty deck's Clear filters writes /discover alone, Online now included", async () => {
+    nav.search = "online=true";
+    fakeApi({
+      "GET /v1/discover": () => page([]),
+      "GET /v1/prices": () => json(200, PRICES),
+    });
+    renderAs("male");
+
+    await userEvent.click(
+      await screen.findByRole("button", { name: t("discover.empty.clear") }),
+    );
+    expect(nav.replace).toHaveBeenCalledExactlyOnceWith("/discover");
+  });
+});

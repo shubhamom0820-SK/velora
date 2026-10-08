@@ -2844,14 +2844,23 @@ prices don't depend on the web photos step, and the hold is lifted.
 - [x] **Commit:** `feat(web): profile screens and share page [T-6.8]`
 
 ### T-6.9 · Filters
-- [ ] **Needs:** T-6.5
-- [ ] Filter sheet: intent multi-select, verified only, online now; active count badge; stored in URL search params.
+- [x] **Needs:** T-6.5
+- [x] Filter sheet: intent multi-select, verified only, online now; active count badge; stored in URL search params.
   **The "verified only" chip's words follow D-262** (T-4.5), and its meaning D-393 (T-4.12, 7
   October 2026): it filters on the badge, a selfie matched to the face photo and a shown face
   that matched the selfie, never on `is_verified` alone, so it says that ("Selfie matched", or the
   founder's choice), never "Verified only", which the prototype says and
   `web/src/i18n/claims.test.ts` refuses.
-- [ ] **Commit:** `feat(web): discovery filters [T-6.9]`
+  **Built as D-660 (the founder, 8 October 2026):** "Online now" is a filter, `online=true` on
+  `GET /discover`, in any feed, not the Online feed's pill; all three filters are free for
+  everyone. The URL (`intent_ids`, `verified`, `online`) is read and written only by
+  `web/src/components/discover/filterParams.ts`, so the sheet's "Show people" and the empty deck's
+  "Clear filters" write the same way. The sheet holds a draft until "Show people"; the count is
+  each intent plus each toggle, on the Filters button and in the sheet's header. **Broken once
+  each, 8 October 2026:** web `node scripts/break-guards.mts t69-` (11 cases) and API
+  `uv run python -m tests.break_guards t69-` (2 cases), every one red in 1 of 1, every file
+  restored; T-6.2's `t62-20` re-anchored on the new line and red again.
+- [x] **Commit:** `feat(web): discovery filters [T-6.9]`
 
 ---
 

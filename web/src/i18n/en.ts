@@ -109,6 +109,30 @@ export const en = {
       online: "Online",
     },
     search: "Search",
+    // The feed row's Filters button and its sheet (T-6.9). Free for everyone
+    // (D-660). "Selfie matched" is D-393's badge in D-262's words: never
+    // "verified" (claims.test.ts).
+    filters: {
+      open: "Filters",
+      // The button read out with its badge: "Filters, 2 on".
+      openCount: {
+        one: "Filters, 1 on",
+        other: "Filters, {count} on",
+      },
+      title: "Filters",
+      count: {
+        one: "1 on",
+        other: "{count} on",
+      },
+      lookingFor: "Looking for",
+      intentsFailed: "We couldn't load what people are looking for",
+      selfie: "Selfie matched",
+      selfieBody: "Their selfie matched a photo on their profile",
+      online: "Online now",
+      onlineBody: "Active in the last few minutes",
+      clear: "Clear",
+      show: "Show people",
+    },
     deck: "People nearby",
     card: {
       // "Simran, 24", or "Simran" when she hides her age.

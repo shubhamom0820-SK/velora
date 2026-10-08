@@ -33,6 +33,8 @@ type SheetProps = {
   tone?: "surface" | "chrome";
   /** Drawn above the title, e.g. the match sheet's two people. */
   lead?: ReactNode;
+  /** Drawn beside the title, e.g. the filter sheet's count (T-6.9). */
+  badge?: ReactNode;
 };
 
 const TONES = {
@@ -40,7 +42,8 @@ const TONES = {
     panel: "border-line bg-surface",
     handle: "bg-line",
     header: "pt-2 pr-2 pl-5 md:pt-4",
-    title: "text-title-2 text-ink flex-1",
+    heading: "flex flex-1 items-center gap-2",
+    title: "text-title-2 text-ink",
     close: "text-mute",
     footer: "border-line border-t",
   },
@@ -49,6 +52,7 @@ const TONES = {
       "border-chrome-line bg-chrome bg-[image:var(--chrome-glow)] text-chrome-ink",
     handle: "bg-chrome-line",
     header: "relative flex-col px-12 pt-6 text-center",
+    heading: "flex items-center justify-center gap-2",
     title: "text-title-1 text-chrome-ink",
     close: "text-chrome-mute absolute top-1 right-2",
     footer: "",
@@ -76,6 +80,7 @@ export function Sheet({
   footer,
   tone = "surface",
   lead,
+  badge,
 }: SheetProps) {
   const look = TONES[tone];
   const titleId = useId();
@@ -156,9 +161,12 @@ export function Sheet({
         />
         <div className={cx("flex items-center gap-3", look.header)}>
           {lead}
-          <h2 id={titleId} className={look.title}>
-            {title}
-          </h2>
+          <div className={look.heading}>
+            <h2 id={titleId} className={look.title}>
+              {title}
+            </h2>
+            {badge}
+          </div>
           <button
             type="button"
             aria-label={t("ui.close")}

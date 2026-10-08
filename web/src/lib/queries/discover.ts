@@ -14,6 +14,8 @@ export type SwipeResult = components["schemas"]["SwipeResult"];
 export type DiscoverFilters = {
   intentIds: readonly number[];
   verified: boolean;
+  /** Active in the last 5 minutes, in any feed (D-660). */
+  online: boolean;
 };
 
 /** How many cards a page asks for: the deck asks for the next at 5 left. */
@@ -35,6 +37,7 @@ export function useDiscover(feed: Feed, filters: DiscoverFilters) {
           feed,
           intent_ids: [...filters.intentIds],
           verified: filters.verified || undefined,
+          online: filters.online || undefined,
           cursor: pageParam,
           limit: DISCOVER_PAGE_SIZE,
         },

@@ -25,12 +25,20 @@ export const queryKeys = {
   // (D-491).
   discover: (
     feed: string,
-    filters: { intentIds: readonly number[]; verified: boolean },
+    filters: {
+      intentIds: readonly number[];
+      verified: boolean;
+      online: boolean;
+    },
   ) =>
     [
       "discover",
       feed,
-      { intentIds: [...filters.intentIds].sort(), verified: filters.verified },
+      {
+        intentIds: [...filters.intentIds].sort(),
+        verified: filters.verified,
+        online: filters.online,
+      },
     ] as const,
   // `likes()` is the prefix of the count's key too (T-6.7).
   likes: () => ["likes"] as const,

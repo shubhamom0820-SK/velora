@@ -5025,6 +5025,29 @@ separate chat, relayed by the founder):**
 **Rejected:** `BLOCKED` (reveals a block); a Redis replay store (the row must exist anyway, and a
 store would be a second source of truth).
 
+### D-660 · "Online now" is a filter on `GET /discover`, and the filters are free — Locked
+**The decision (T-6.9; the founder, 8 October 2026, on the advisor's recommendation, Claude in a
+separate chat, relayed by the founder):**
+- **`GET /discover` takes `online=true`:** only people active within the Online feed's 5 minutes
+  (`rules.ONLINE_FOR`, the card's "Online now"), **in any feed**, so New under it keeps its order.
+  `online=true` on For you is the Online feed. It is the same condition the Online feed already
+  applied (`online_since`), now reachable from either; absent or false changes nothing.
+- **The filter sheet's three filters are free for everyone,** men and women alike: intents,
+  "Selfie matched" (D-393's badge, in D-262's words) and "Online now". "Selfie matched" is a safety
+  filter for women and stays free. If paid filters are ever wanted, that is a new task.
+- **Where they live (T-6.5, T-6.9):** in the URL's search params (`intent_ids`, `verified`,
+  `online`), read and written only by `web/src/components/discover/filterParams.ts`. The sheet
+  holds a draft until "Show people", since each change of filters is a new scroll ranked afresh
+  (D-491).
+
+**Why a filter and not the Online feed's pill:** the prototype has both, and counts the toggle
+among the filters; a toggle that was the pill would be two controls for one state, couldn't
+combine with New, and would make Clear reset the feed.
+
+**Rejected:** the toggle as a second Online pill (above); filtering in the browser (the server
+decides, and a page of 20 filtered down could be empty with more behind it); the prototype's
+"Premium filters" label (no decision prices them, and D-002's women pay nothing).
+
 ## Adding a decision
 
 Append `D-0NN · Title — Locked|Open`, with Decision, Why, Rejected. Never edit a Locked entry —

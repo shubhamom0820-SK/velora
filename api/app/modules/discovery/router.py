@@ -64,6 +64,7 @@ async def discover(
         Query(max_length=MAX_INTENT_FILTER),
     ] = [],  # noqa: B006 — FastAPI copies a query default per request
     verified: bool = False,
+    online: bool = False,
 ) -> CardPage:
     return await service.discover(
         session,
@@ -72,6 +73,7 @@ async def discover(
         feed=feed,
         intent_ids=intent_ids,
         verified=verified,
+        online=online,
         params=params,
         settings=settings,
         config=config,

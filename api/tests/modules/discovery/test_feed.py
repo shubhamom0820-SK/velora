@@ -373,6 +373,60 @@ async def test_the_online_feed_is_the_last_five_minutes_only(
     assert await ids(client, token, feed="online") == [str(edge.id), str(now.id)]
 
 
+async def test_the_online_filter_keeps_the_last_five_minutes_in_any_feed(
+    db: AsyncSession, client: AsyncClient, make_user: MakeUser, clock: ModuleType
+) -> None:
+    """D-660: T-6.9's "Online now" is a filter, so New keeps its order under it."""
+    clock.freeze(NOON)
+    _, token = await person(db, make_user, Gender.MALE, last_active_at=NOON)
+    old_online, _ = await person(
+        db,
+        make_user,
+        at=north(1),
+        created_at=NOON - timedelta(days=30),
+        last_active_at=NOON - timedelta(minutes=5),
+    )
+    new_online, _ = await person(
+        db,
+        make_user,
+        at=north(9),
+        created_at=NOON - timedelta(days=1),
+        last_active_at=NOON,
+    )
+    await person(
+        db,
+        make_user,
+        at=north(2),
+        created_at=NOON - timedelta(days=1),
+        last_active_at=NOON - timedelta(minutes=5, seconds=1),
+    )
+    await person(db, make_user, at=north(3), created_at=NOON - timedelta(days=30))
+
+    assert await ids(client, token, feed="new", online="true") == [
+        str(new_online.id),
+        str(old_online.id),
+    ]
+    assert await ids(client, token, online="true") == [
+        str(old_online.id),
+        str(new_online.id),
+    ]
+    assert await ids(client, token, online="true") == await ids(
+        client, token, feed="online"
+    )
+    assert len(await ids(client, token, online="false")) == 4
+
+
+async def test_an_online_filter_that_isnt_a_yes_or_no_is_a_validation_error(
+    db: AsyncSession, client: AsyncClient, make_user: MakeUser
+) -> None:
+    _, token = await person(db, make_user, Gender.MALE)
+
+    response = await discover(client, token, online="maybe")
+
+    assert response.status_code == 400
+    assert error(response)["code"] == "VALIDATION_ERROR"
+
+
 async def test_a_feed_that_isnt_one_is_a_validation_error(
     db: AsyncSession, client: AsyncClient, make_user: MakeUser
 ) -> None:

@@ -4175,7 +4175,11 @@ T62: list[tuple[Case, list[str]]] = [
             edits=[
                 (
                     "app/modules/discovery/service.py",
-                    "            online_since=as_of - rules.ONLINE_FOR if feed is Feed.ONLINE else None,\n",
+                    (
+                        "            online_since=(\n"
+                        "                as_of - rules.ONLINE_FOR if online or feed is Feed.ONLINE else None\n"
+                        "            ),\n"
+                    ),
                     "            online_since=None,\n",
                 )
             ],
@@ -9742,6 +9746,38 @@ T86: list[Case] = [
     ),
 ]
 
+# --- T-6.9: the Online now filter (D-660) ----------------------------------------------
+
+T69_SELECTION = ["tests/modules/discovery/test_feed.py"]
+T69_ONLINE = "test_the_online_filter_keeps_the_last_five_minutes_in_any_feed"
+
+T69: list[Case] = [
+    Case(
+        id="t69-01-online-filter-ignored",
+        what="D-660: the service keeping the last 5 minutes for the Online feed only",
+        edits=[
+            (
+                DISCOVERY_SERVICE,
+                "if online or feed is Feed.ONLINE else None",
+                "if feed is Feed.ONLINE else None",
+            )
+        ],
+        expect=[T69_ONLINE],
+    ),
+    Case(
+        id="t69-02-online-filter-dropped-by-the-router",
+        what="D-660: the router never handing the filter to the service",
+        edits=[
+            (
+                "app/modules/discovery/router.py",
+                "        online=online,\n",
+                "        online=False,\n",
+            )
+        ],
+        expect=[T69_ONLINE],
+    ),
+]
+
 CASES: list[tuple[Case, list[str]]] = (
     [(c, T51_SELECTION) for c in T51]
     + [(c, T54_SELECTION) for c in T54]
@@ -9785,6 +9821,7 @@ CASES: list[tuple[Case, list[str]]] = (
     + [(c, T89_SELECTION) for c in T89]
     + [(c, P152_SELECTION) for c in P152]
     + [(c, T86_SELECTION) for c in T86]
+    + [(c, T69_SELECTION) for c in T69]
 )
 
 # The fifty-connection fixture's own message when Postgres refuses a connection.

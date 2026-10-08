@@ -100,7 +100,7 @@ further rule, computed from the shown photos' records, never `is_verified` alone
 ## Discovery
 | Method | Path | Auth | Body → Response | Task |
 |---|---|---|---|---|
-| GET | /discover | ✅ | `?feed=foryou|new|online&intent_ids=&verified=&cursor=&limit=` → `Page<Card>` with `swipes_left` (T-6.5; `intent_ids`: any overlap, D-041, 1 to 10 known ids, repeated as `intent_ids=1&intent_ids=2`; `verified=true`: the badge, D-393) | T-6.2 |
+| GET | /discover | ✅ | `?feed=foryou|new|online&intent_ids=&verified=&online=&cursor=&limit=` → `Page<Card>` with `swipes_left` (T-6.5; `intent_ids`: any overlap, D-041, 1 to 10 known ids, repeated as `intent_ids=1&intent_ids=2`; `verified=true`: the badge, D-393; `online=true`: active in the last 5 minutes, in any feed, D-660, T-6.9) | T-6.2 |
 | POST | /swipes | ✅ | `{target_id, dir, shown_price?}` (`like`, `pass`, `super`) → `{matched, match_id, swipes_left}` (`swipes_left` null for anyone uncapped, a woman). Once per pair: `ALREADY_EXISTS`. Only someone the feed could show you, the radius aside: else `NOT_FOUND` (D-492). A man's like and pass count toward `swipe_daily_limit_men` by the IST day, a Super Like doesn't: `SWIPE_LIMIT_REACHED`. A Super Like is 5 Velas for a man (402 if he can't), free for a woman; `PRICE_CHANGED` unless `shown_price` is its price (D-600). 120 a minute | T-6.4 |
 | GET | /users/{id} | ✅ | → `PublicProfile`; `NOT_FOUND` for nobody and every refusal alike (D-493) | T-6.3 |
 | GET | /users/by-username/{u} | ✅ | → `PublicProfile`, in any case, by exactly `GET /users/{id}`'s rule (D-493); a name nobody holds, an erased one's included (D-505), the same `NOT_FOUND` | T-6.6 |

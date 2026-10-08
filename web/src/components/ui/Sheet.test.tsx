@@ -118,6 +118,25 @@ describe("Sheet", () => {
     expect(dialog.closest("[inert]")).toBeNull();
     expect(reason).toHaveValue("Rude in chat");
   });
+
+  it("draws a badge beside its title, the dialog still named by the title alone (T-6.9)", () => {
+    render(
+      <Sheet
+        open
+        onClose={() => {}}
+        title="Filters"
+        badge={<span data-testid="count">2</span>}
+      >
+        <p>body</p>
+      </Sheet>,
+    );
+
+    expect(screen.getByRole("dialog")).toHaveAccessibleName("Filters");
+    const heading = screen.getByRole("heading", { level: 2 });
+    const count = screen.getByTestId("count");
+    expect(count.parentElement).toBe(heading.parentElement);
+    expect(heading.nextElementSibling).toBe(count);
+  });
 });
 
 describe("Sheet, chrome (the match sheet, 08-DESIGN §8)", () => {

@@ -4119,6 +4119,7 @@ export interface operations {
                 feed?: components["schemas"]["Feed"];
                 intent_ids?: number[];
                 verified?: boolean;
+                online?: boolean;
                 cursor?: string | null;
                 limit?: number;
             };

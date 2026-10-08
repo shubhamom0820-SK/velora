@@ -383,6 +383,14 @@ they fill `--accent-soft` with an `--accent` border and `--accent` text. Two tog
 matched" and "Online now", each with a one-line explanation (the first's words are D-262's and its
 meaning D-393's, as T-6.9 says). "Clear" and "Show people" at the bottom. The count of active
 filters is a pill in the sheet's header.
+**As built (T-6.9, D-660):** Filters is a 40 px icon button after Search in the feed row, its count
+an `--accent` pill with `--on-accent` text at its corner, read out as "Filters, 2 on". The count is
+each intent plus each toggle on, as the prototype counts. The sheet's count is a `soft` `Badge`
+("2 on") beside its title (`Sheet`'s `badge` slot). "Looking for" heads the chips; the two toggles
+are `Toggle` rows, "Selfie matched" ("Their selfie matched a photo on their profile") and "Online
+now" ("Active in the last few minutes"). "Clear" is a ghost button and empties the draft; "Show
+people" applies it. Nothing changes behind the sheet until then. No "Premium filters": they are
+free (D-660).
 
 **Search (T-6.6).** A field inline in the chrome header, filled `--chrome-line`, `input` (16 px). In
 @ mode, a "@ username" badge in `--ink`; an exact username match carries an "Exact" badge on

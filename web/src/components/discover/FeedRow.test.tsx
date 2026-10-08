@@ -13,7 +13,12 @@ function renderRow() {
   });
   return render(
     <QueryClientProvider client={client}>
-      <FeedRow feed="foryou" onFeed={() => {}} />
+      <FeedRow
+        feed="foryou"
+        onFeed={() => {}}
+        filterCount={0}
+        onFilters={() => {}}
+      />
     </QueryClientProvider>,
   );
 }
