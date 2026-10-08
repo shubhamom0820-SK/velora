@@ -5341,6 +5341,36 @@ both, `knot.untied {thread_id}` to the other.
 Priya to tie the knot too" has no undo) and which would let each withdraw and re-tap ask her
 again; a tap on a deleted account's Thread kept, a Knot that could never be granted.
 
+### D-790 · Kudos and the album on the web: the kudos state on the profile's Thread, the requests under You, a neutral "too soon" — Locked
+**The decision (T-8.8; the founder, 9 October 2026, approving Claude's plan on the advisor's
+recommendation, Claude in a separate chat, relayed to this session):**
+- **Whether you may give kudos is the profile's to say (P-580):** `PublicProfile.thread` gains
+  `kudos`, `too_early`, `can_give` or `given`. `given` once you have given them kudos, of any kind;
+  `too_early` until D-680's conversation (the Thread has `kudos_min_messages` messages and both
+  have written); else `can_give`. Kudos the other way is theirs and changes nothing. The rule is
+  one function, `kudos.service._talked`, which `POST /kudos` and this field both read, so the
+  prompt and the give can't disagree.
+- **The kudos prompt is on the profile, `/people/[id]`,** shown only for `can_give`: four
+  buttons, one per kind, one tap gives it. The plan said "in chat", but the conversation screen is
+  T-7.11's and isn't built; T-7.11 carries the same prompt into the conversation (a pointer on its
+  line). `ALREADY_EXISTS` is taken as given, never shown as an error.
+- **Her requests are at `/you/album-requests`,** linked from the You placeholder for everyone,
+  not only women: a woman can ask for a man's album too (free for her, D-732). T-9.8 moves the
+  link into the You tab it builds.
+- **The album row reads `declined` and `revoked` exactly as never asked** (D-230, D-732): the lock
+  and "Ask to view". **`recently_declined` (D-731) is said in neutral words that never mention
+  a decline nor the person:** "You can't send a request right now. Try again later." (the
+  founder's words). `web/src/i18n/album-copy.test.ts` holds them.
+
+**Why:** the prompt shown when a tap would be refused turns a positive note into an error
+(P-580's worst case), so the API says when it would work. A "no" must not reach him through the
+refusal of his next request, or the decline the album row hides is told anyway.
+
+**Rejected:** the field on `Thread` alone (no screen reads a single Thread yet; T-7.11 may add it
+there, from the same function); waiting for T-7.11 to build the prompt (the task's other half
+would land with nothing to give kudos from); the requests list on her own profile (a profile is
+what others see); "You asked recently" (it says a previous request was answered).
+
 ## Adding a decision
 
 Append `D-0NN · Title — Locked|Open`, with Decision, Why, Rejected. Never edit a Locked entry —

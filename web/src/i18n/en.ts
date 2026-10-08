@@ -213,6 +213,34 @@ export const en = {
     album: "Private album",
     albumOne: "1 private photo",
     albumOther: "{count} private photos",
+    // The album row (T-8.8, D-732): locked, waiting or shown. A decline or a
+    // revoke reads as locked, never named (D-230). Drafted by Claude, for the
+    // founder's review.
+    albumAsk: "Ask to view · {price}",
+    albumAsking: "Asking",
+    albumPending: "Asked. Waiting for an answer.",
+    albumPreparing: "Getting the photos ready",
+    albumPhoto: "Private photo {n} of {total}",
+    albumNote:
+      "Each photo is marked with your username. They're for you alone.",
+    albumSent: "Request sent",
+    // `recently_declined` (D-731), in words that never say a decline happened
+    // nor name the person (the founder, 9 October 2026, D-790);
+    // album-copy.test.ts holds it.
+    albumTooSoon: "You can't send a request right now. Try again later.",
+    albumEmpty: "There's nothing in this album to see right now.",
+    albumUnavailable: "You can't ask to see this album.",
+    albumPriceChanged: "The price changed. It's {velas} now.",
+    albumFailed: "We couldn't send your request. Try again.",
+    albumLoadFailed: "We couldn't load the album",
+    // The kudos prompt (T-8.8, D-790): only when `POST /kudos` would take it.
+    // Drafted by Claude, for the founder's review.
+    kudosAsk: "Give {name} kudos",
+    kudosAskBody:
+      "Pick one. Their profile can show how many people chose each, never who.",
+    kudosSent: "Kudos sent",
+    kudosTooEarly: "Talk a little more first.",
+    kudosFailed: "We couldn't send kudos. Try again.",
     yours: "This is how others see your profile.",
     more: "More",
     share: "Share profile",
@@ -228,6 +256,33 @@ export const en = {
     notFound: "This profile isn't available",
     notFoundBody: "It may be hidden, or no longer here.",
     failed: "We couldn't load this profile",
+  },
+  // The requests to see your private album (T-8.8, D-732), at
+  // /you/album-requests. Drafted by Claude, for the founder's review.
+  albumRequests: {
+    title: "Album requests",
+    intro:
+      "People who asked to see your private album. Only you decide who sees it.",
+    wants: "Asked to see your album",
+    sees: "Can see your album",
+    grant: "Let them see",
+    decline: "Decline",
+    revoke: "Stop sharing",
+    revokeTitle: "Stop sharing with {name}?",
+    revokeBody:
+      "Their copies of your photos are deleted, and your album is locked to them again.",
+    cancel: "Cancel",
+    granted: "They can see your album now",
+    declined: "Request declined",
+    revoked: "Your album is locked to them again",
+    deleted: "Deleted account",
+    alreadyAnswered: "That request was already answered.",
+    gone: "That request isn't there anymore.",
+    failed: "We couldn't save that. Try again.",
+    empty: "No requests",
+    emptyBody: "When someone asks to see your private album, they'll be here.",
+    loadFailed: "We couldn't load your requests",
+    loadingMore: "Loading more",
   },
   // `/@username` for someone not signed in (T-6.8, D-544).
   share: {

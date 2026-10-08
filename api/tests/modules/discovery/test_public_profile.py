@@ -271,6 +271,8 @@ async def test_the_thread_with_me_and_the_match(
         "expires_at": None
         if status == "knotted"
         else (NOON + timedelta(hours=1)).isoformat().replace("+00:00", "Z"),
+        # No messages yet (D-790; tests/modules/kudos/test_state.py).
+        "kudos": "too_early",
     }
 
 

@@ -140,7 +140,10 @@ with none yet). Nothing in an unrevealed one, nor in the list's cursor, names th
 photo in place order; the first is `main_photo_url`), `interest_ids`, `kudos` (`{great_conversation,
 genuinely_funny, easy_to_talk_to, really_thoughtful}`, each a count; null when `show_kudos` is
 off), `album_photo_count` (approved private photos, a number, never one of them), `match_id` and
-`thread` (`{id, status, expires_at}`), what is already between the viewer and them, or null.
+`thread` (`{id, status, expires_at, kudos}`), what is already between the viewer and them, or null.
+`kudos` says whether the viewer may give them kudos (T-8.8, D-790): `given` once they have,
+`too_early` until both have written and it has `kudos_min_messages` messages (D-680), else
+`can_give`.
 Shown to anyone `visible_to` allows without seeking or the radius (a link reaches past both); a
 hidden profile only to someone it shares a match or a Thread with; your own always. Every refusal
 is `NOT_FOUND`, the same body as an id nobody holds. A view is recorded, one row per pair,

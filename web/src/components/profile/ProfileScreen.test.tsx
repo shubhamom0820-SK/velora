@@ -43,8 +43,20 @@ function her(overrides: Partial<PublicProfile> = {}): PublicProfile {
 }
 
 function routes(profile: Route, overrides: Record<string, Route> = {}) {
-  return fakeApi({ "GET /v1/users/u2": profile, ...overrides });
+  return fakeApi({
+    "GET /v1/users/u2": profile,
+    // The album row asks for its state (T-8.8): never asked, by default.
+    "GET /v1/users/u2/album": () => json(200, { status: null, photos: [] }),
+    "GET /v1/prices": () => json(200, { album_request: 1 }),
+    ...overrides,
+  });
 }
+
+const THREAD = {
+  id: "t1",
+  status: "active",
+  expires_at: null,
+} as const;
 
 function renderProfile(meId = "u1") {
   const client = new QueryClient({
@@ -204,6 +216,22 @@ describe("the profile (T-6.8)", () => {
     ).toBeNull();
   });
 
+  it("shows your own album's count as others see it, and asks nothing about it", async () => {
+    const api = routes(() => json(200, her()));
+    renderProfile("u2");
+
+    await name();
+    expect(
+      screen.getByText(t("profile.albumOther", { count: 2 })),
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", {
+        name: new RegExp(t("profile.albumAsk", { price: "" }).trim()),
+      }),
+    ).toBeNull();
+    expect(api.sent()).toEqual(["GET /v1/users/u2"]);
+  });
+
   it("shares the profile's /@username link", async () => {
     const writeText = vi.fn(() => Promise.resolve());
     vi.stubGlobal("navigator", {
@@ -253,5 +281,152 @@ describe("the profile (T-6.8)", () => {
     );
 
     expect(await name()).toBeInTheDocument();
+  });
+});
+
+describe("the kudos prompt (T-8.8, D-790)", () => {
+  const ask = () =>
+    screen.queryByRole("region", {
+      name: t("profile.kudosAsk", { name: "Simran" }),
+    });
+
+  it("shows when their Thread says kudos can be given", async () => {
+    routes(() => json(200, her({ thread: { ...THREAD, kudos: "can_give" } })));
+    renderProfile();
+
+    await name();
+    const prompt = ask();
+    expect(prompt).not.toBeNull();
+    expect(
+      within(prompt as HTMLElement)
+        .getAllByRole("button")
+        .map((b) => b.textContent),
+    ).toEqual([
+      t("profile.kudosKind.great_conversation"),
+      t("profile.kudosKind.genuinely_funny"),
+      t("profile.kudosKind.easy_to_talk_to"),
+      t("profile.kudosKind.really_thoughtful"),
+    ]);
+  });
+
+  it.each(["too_early", "given"] as const)(
+    "never shows when it says %s, so a tap is never refused (P-580)",
+    async (kudos) => {
+      routes(() => json(200, her({ thread: { ...THREAD, kudos } })));
+      renderProfile();
+
+      await name();
+      expect(ask()).toBeNull();
+    },
+  );
+
+  it("never shows with no Thread, nor on your own profile", async () => {
+    routes(() => json(200, her({ thread: null })));
+    const first = renderProfile();
+    await name();
+    expect(ask()).toBeNull();
+    first.unmount();
+
+    routes(() => json(200, her({ thread: { ...THREAD, kudos: "can_give" } })));
+    renderProfile("u2");
+    await name();
+    expect(ask()).toBeNull();
+  });
+
+  it("gives the kind tapped, and goes once the profile says given", async () => {
+    let given = false;
+    routes(
+      () =>
+        json(
+          200,
+          her({ thread: { ...THREAD, kudos: given ? "given" : "can_give" } }),
+        ),
+      {
+        "POST /v1/kudos": (call) => {
+          expect(call.body).toEqual({
+            to_id: "u2",
+            kind: "easy_to_talk_to",
+          });
+          given = true;
+          return json(201, {
+            to_id: "u2",
+            kind: "easy_to_talk_to",
+            created_at: "2026-10-09T10:00:00Z",
+          });
+        },
+      },
+    );
+    renderProfile();
+
+    await name();
+    await userEvent.click(
+      screen.getByRole("button", {
+        name: t("profile.kudosKind.easy_to_talk_to"),
+      }),
+    );
+
+    expect(await screen.findByText(t("profile.kudosSent"))).toBeInTheDocument();
+    await waitFor(() => expect(ask()).toBeNull());
+  });
+
+  it("takes kudos already given as given, never as an error", async () => {
+    let given = false;
+    routes(
+      () =>
+        json(
+          200,
+          her({ thread: { ...THREAD, kudos: given ? "given" : "can_give" } }),
+        ),
+      {
+        "POST /v1/kudos": () => {
+          given = true;
+          return envelope(409, "ALREADY_EXISTS");
+        },
+      },
+    );
+    renderProfile();
+
+    await name();
+    await userEvent.click(
+      screen.getByRole("button", {
+        name: t("profile.kudosKind.great_conversation"),
+      }),
+    );
+
+    await waitFor(() => expect(ask()).toBeNull());
+    expect(screen.queryByText(t("profile.kudosFailed"))).toBeNull();
+    expect(screen.queryByText(/ALREADY_EXISTS/)).toBeNull();
+  });
+
+  it("says too early in words, and the prompt goes when the profile agrees", async () => {
+    let early = false;
+    routes(
+      () =>
+        json(
+          200,
+          her({
+            thread: { ...THREAD, kudos: early ? "too_early" : "can_give" },
+          }),
+        ),
+      {
+        "POST /v1/kudos": () => {
+          early = true;
+          return envelope(422, "NOT_ALLOWED", { why: "too_early" });
+        },
+      },
+    );
+    renderProfile();
+
+    await name();
+    await userEvent.click(
+      screen.getByRole("button", {
+        name: t("profile.kudosKind.really_thoughtful"),
+      }),
+    );
+
+    expect(
+      await screen.findByText(t("profile.kudosTooEarly")),
+    ).toBeInTheDocument();
+    await waitFor(() => expect(ask()).toBeNull());
   });
 });

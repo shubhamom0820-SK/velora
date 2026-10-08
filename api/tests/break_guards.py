@@ -8245,11 +8245,15 @@ T85: list[Case] = [
         edits=[
             (
                 KUDOS_SERVICE,
-                "        least = await admin_service.config_int(session, MIN_MESSAGES_KEY, cache=config)\n",
-                "        least = 6\n",
+                "    least = await admin_service.config_int(session, MIN_MESSAGES_KEY, cache=config)\n",
+                "    least = 6\n",
             )
         ],
-        expect=["test_the_least_is_read_from_app_config"],
+        # The rule is shared with the profile's kudos state (T-8.8, D-790).
+        expect=[
+            "test_give.py::test_the_least_is_read_from_app_config",
+            "test_state.py::test_the_least_is_read_from_app_config",
+        ],
     ),
     Case(
         id="t85-04-too-early-allowed",
@@ -8257,11 +8261,14 @@ T85: list[Case] = [
         edits=[
             (
                 KUDOS_SERVICE,
-                "        if thread.message_count < least:\n",
-                "        if thread.message_count < 0:\n",
+                "    if thread.message_count < least:\n",
+                "    if thread.message_count < 0:\n",
             )
         ],
-        expect=["test_six_messages_are_enough_and_five_too_few"],
+        expect=[
+            "test_give.py::test_six_messages_are_enough_and_five_too_few",
+            "test_state.py::test_five_messages_are_too_early_and_six_enough",
+        ],
     ),
     Case(
         id="t85-05-only-the-giver-has-written",
@@ -8269,11 +8276,14 @@ T85: list[Case] = [
         edits=[
             (
                 KUDOS_SERVICE,
-                "        for writer in (user_id, request.to_id):\n",
-                "        for writer in (user_id,):\n",
+                "    for writer in (a, b):\n",
+                "    for writer in (a,):\n",
             )
         ],
-        expect=["test_a_one_sided_thread_is_too_early_for_either"],
+        expect=[
+            "test_give.py::test_a_one_sided_thread_is_too_early_for_either",
+            "test_state.py::test_a_one_sided_thread_is_too_early_for_either",
+        ],
     ),
     Case(
         id="t85-06-only-the-recipient-has-written",
@@ -8281,11 +8291,14 @@ T85: list[Case] = [
         edits=[
             (
                 KUDOS_SERVICE,
-                "        for writer in (user_id, request.to_id):\n",
-                "        for writer in (request.to_id,):\n",
+                "    for writer in (a, b):\n",
+                "    for writer in (b,):\n",
             )
         ],
-        expect=["test_a_one_sided_thread_is_too_early_for_either"],
+        expect=[
+            "test_give.py::test_a_one_sided_thread_is_too_early_for_either",
+            "test_state.py::test_a_one_sided_thread_is_too_early_for_either",
+        ],
     ),
     Case(
         id="t85-07-a-second-kudos-a-500",
@@ -10771,6 +10784,63 @@ T77: list[Case] = [
     ),
 ]
 
+# --- T-8.8: the profile says whether kudos can be given (D-790, P-580) ----------------
+
+T88_SELECTION = [
+    "tests/modules/kudos",
+    "tests/modules/discovery/test_public_profile.py",
+]
+
+T88: list[Case] = [
+    Case(
+        id="t88-01-given-forgotten",
+        what="P-580: the prompt coming back after kudos was given",
+        edits=[
+            (
+                KUDOS_SERVICE,
+                "    if await repository.given(session, viewer_id, other_id):\n",
+                "    if False:\n",
+            )
+        ],
+        expect=[
+            "test_given_once_given_whatever_its_kind_and_only_for_the_giver",
+            "test_what_the_profile_says_is_what_post_kudos_does",
+        ],
+    ),
+    Case(
+        id="t88-02-given-the-other-way",
+        what="kudos she gave him read as his given to her",
+        edits=[
+            (
+                KUDOS_REPOSITORY,
+                "        select(exists().where(Kudos.from_id == from_id, Kudos.to_id == to_id))\n",
+                "        select(exists().where(Kudos.from_id == to_id, Kudos.to_id == from_id))\n",
+            )
+        ],
+        expect=["test_given_once_given_whatever_its_kind_and_only_for_the_giver"],
+    ),
+    Case(
+        id="t88-03-too-early-never-said",
+        what="P-580: the prompt shown before D-680 allows it, each tap NOT_ALLOWED",
+        edits=[
+            (
+                KUDOS_SERVICE,
+                (
+                    "    if not await _talked(session, thread, viewer_id, other_id, config=config):\n"
+                    '        return "too_early"\n'
+                ),
+                "",
+            )
+        ],
+        expect=[
+            "test_state.py::test_five_messages_are_too_early_and_six_enough",
+            "test_state.py::test_a_one_sided_thread_is_too_early_for_either",
+            "test_what_the_profile_says_is_what_post_kudos_does",
+            "test_the_thread_with_me_and_the_match",
+        ],
+    ),
+]
+
 CASES: list[tuple[Case, list[str]]] = (
     [(c, T51_SELECTION) for c in T51]
     + [(c, T54_SELECTION) for c in T54]
@@ -10810,6 +10880,7 @@ CASES: list[tuple[Case, list[str]]] = (
     + T68
     + [(c, T75_SELECTION) for c in T75]
     + [(c, T85_SELECTION) for c in T85]
+    + [(c, T88_SELECTION) for c in T88]
     + [(c, T79_SELECTION) for c in T79]
     + [(c, T89_SELECTION) for c in T89]
     + [(c, P152_SELECTION) for c in P152]

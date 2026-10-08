@@ -21,4 +21,12 @@ describe("the app's placeholder routes", () => {
       expect(screen.queryByRole("main")).not.toBeInTheDocument();
     },
   );
+
+  it("links You to your album's requests, for everyone (T-8.8, D-790)", () => {
+    render(<YouPage />);
+
+    expect(
+      screen.getByRole("link", { name: t("albumRequests.title") }),
+    ).toHaveAttribute("href", "/you/album-requests");
+  });
 });

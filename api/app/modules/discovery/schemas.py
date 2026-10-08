@@ -11,6 +11,7 @@ from pydantic import BaseModel
 
 from app.core.enums import ThreadStatus
 from app.core.pagination import Page
+from app.modules.kudos.schemas import KudosState
 
 
 class Feed(StrEnum):
@@ -71,11 +72,14 @@ class KudosCounts(BaseModel):
 
 class ThreadWithMe(BaseModel):
     """The Thread between the viewer and this person, if there is one: its
-    state, and when it expires while it is active (never once knotted)."""
+    state, and when it expires while it is active (never once knotted); and
+    whether the viewer may give them kudos in it (D-790, P-580), so the web's
+    prompt shows only when giving would work."""
 
     id: UUID
     status: ThreadStatus
     expires_at: datetime | None
+    kudos: KudosState
 
 
 class PublicProfile(Card):

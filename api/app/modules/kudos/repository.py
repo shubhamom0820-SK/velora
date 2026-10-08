@@ -66,6 +66,14 @@ async def add(
     return created_at
 
 
+async def given(session: AsyncSession, from_id: UUID, to_id: UUID) -> bool:
+    """Whether `from_id` has given `to_id` kudos, of any kind."""
+    found = await session.scalar(
+        select(exists().where(Kudos.from_id == from_id, Kudos.to_id == to_id))
+    )
+    return bool(found)
+
+
 async def received(session: AsyncSession, user_id: UUID) -> dict[KudosKind, int]:
     """How many of each kind `user_id` was given. Never by whom."""
     rows = await session.execute(

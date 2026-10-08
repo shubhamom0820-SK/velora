@@ -53,6 +53,10 @@ export const queryKeys = {
   threadList: (tier: string, filter: string, q: string) =>
     ["threads", "list", tier, filter, q] as const,
   profile: (id: string) => ["profiles", id] as const,
+  // The private album (T-8.8): someone's, as the viewer may see it, and the
+  // requests to see one's own.
+  album: (id: string) => ["album", "of", id] as const,
+  albumIncoming: () => ["album", "incoming"] as const,
   profileByUsername: (username: string) =>
     ["profiles", "by-username", username] as const,
 };

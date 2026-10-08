@@ -2854,7 +2854,9 @@ export interface components {
         /**
          * ThreadWithMe
          * @description The Thread between the viewer and this person, if there is one: its
-         *     state, and when it expires while it is active (never once knotted).
+         *     state, and when it expires while it is active (never once knotted); and
+         *     whether the viewer may give them kudos in it (D-790, P-580), so the web's
+         *     prompt shows only when giving would work.
          */
         ThreadWithMe: {
             /**
@@ -2865,6 +2867,11 @@ export interface components {
             status: components["schemas"]["ThreadStatus"];
             /** Expires At */
             expires_at: string | null;
+            /**
+             * Kudos
+             * @enum {string}
+             */
+            kudos: "too_early" | "can_give" | "given";
         };
         /**
          * Turnover

@@ -3,11 +3,16 @@
 from __future__ import annotations
 
 from datetime import datetime
+from typing import Literal
 from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict
 
 from app.core.enums import Kudos as KudosKind
+
+# Whether the viewer may give kudos to the other person in their Thread (D-790,
+# P-580): what the web's prompt reads, so it never shows only to be refused.
+KudosState = Literal["too_early", "can_give", "given"]
 
 
 class GiveKudosRequest(BaseModel):

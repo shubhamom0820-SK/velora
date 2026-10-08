@@ -3172,6 +3172,10 @@ prices don't depend on the web photos step, and the hold is lifted.
 - [ ] Composer: text (Enter sends, Shift+Enter newline), mic for women (MediaRecorder, hold or tap-to-record, 60 s cap, preview before send). Optimistic send with `client_msg_id`; failed → retry.
 - [ ] Rejected message → inline explanation, text kept in composer.
 - [ ] **Her side of an expired Thread (D-097):** readable, and otherwise silent: no prompt, and no sign that money stands between her message and his reply. An expired Thread accepts her sends, so her composer keeps working; the re-open price is his alone.
+- [ ] **The kudos prompt here too (T-8.8, D-790):** T-8.8 built it on the profile, from
+  `PublicProfile.thread.kudos`, shown only for `can_give`. The conversation shows the same
+  `KudosPrompt` by that state: read the other person's profile, or add `kudos` to `Thread` from
+  `kudos.service.state`, never a second rule.
 - [ ] **Allow the microphone here (D-059):** T-2.5's Permissions-Policy has `microphone=()`, so recording is refused until this task makes it `microphone=(self)`; add `media-src` for voice notes' storage origin and `blob:` for the preview.
 - [ ] **Commit:** `feat(web): conversation screen [T-7.11]`
 
@@ -3377,17 +3381,27 @@ prices don't depend on the web photos step, and the hold is lifted.
 - [x] **Commit:** `feat(web): store and razorpay checkout [T-8.7]`
 
 ### T-8.8 · Web album, kudos, referral UI
-- [ ] **Needs:** T-8.4, T-8.5, T-8.6
-- [ ] Album section on profile (locked / pending / granted with watermark note); incoming requests list for women with grant/decline; kudos prompt in chat after the threshold; referral code field in onboarding (optional) and share card in You tab.
-- [ ] **Referrals are paused (D-840, P-740):** while they are, build no referral code field and no
+- [x] **Needs:** T-8.4, T-8.5, T-8.6
+- [x] Album section on profile (locked / pending / granted with watermark note); incoming requests list for women with grant/decline; kudos prompt in chat after the threshold; referral code field in onboarding (optional) and share card in You tab.
+- [x] **Referrals are paused (D-840, P-740):** while they are, build no referral code field and no
   "invite friends" or share card, nor any copy offering a referral. `POST /referrals/apply`
   refuses every code (`NOT_ALLOWED`, `referrals_paused`). The two referral items above wait for
   the decision that turns referrals back on, and that one needs P-591 done first.
-- [ ] **The album request sends `shown_price`,** the `album_request` price it displayed from
+- [x] **The album request sends `shown_price`,** the `album_request` price it displayed from
   `/prices` (P-56, D-600): T-8.4's API refuses anything else with `PRICE_CHANGED`, a man's absent
   field included. Its states are `GET /users/{id}/album`'s `status` (D-732); a refusal's
   `details.why` (`recently_declined`, `empty_album`) is shown in words, never as a code.
-- [ ] **Commit:** `feat(web): album, kudos, referrals [T-8.8]`
+- **As built (D-790, the founder's answers to the plan, 9 October 2026):** the album row on
+  `/people/[id]` (`AlbumSection`): locked with "Ask to view" and the `album_request` price from
+  `/prices` (a woman's "Free", 0), "Asked" while pending, his watermarked copies once granted,
+  `declined` and `revoked` read as locked; `recently_declined` in neutral words naming no decline
+  and no person (`album-copy.test.ts`). The kudos prompt on the profile too, not in chat (T-7.11
+  isn't built; a pointer on its line), from `PublicProfile.thread.kudos` (P-580). Her requests at
+  `/you/album-requests`, linked from the You placeholder for everyone. No referral field, card or
+  copy: `referrals-paused.test.ts` holds `en.ts` to it. Broken once each (`uv run python -m
+  tests.break_guards t85- t88-`, log in `out/t88-break-guards.log`): 13 of 13 red, T-8.5's
+  four talk-rule cases re-anchored to the shared `_talked`, no file differing by SHA-256 after.
+- [x] **Commit:** `feat(web): album, kudos, referrals [T-8.8]`
 
 ### T-8.11 · Welcome Velas
 **Filed 8 October 2026 (D-470):** every man gets 5 Velas when he finishes sign-up, once per phone
@@ -6185,13 +6199,15 @@ The number comes from the session's own block, given in its brief, from P-100 up
   nobody can turn on their `/@username` page, and every shared link reads "isn't public" to people
   not signed in. T-6.8 built the setting (D-544) and no screen, as the founder's addition asked.
   Filed by Claude building T-6.8, 8 October 2026; its session's block.
-- [ ] P-580 · Tell T-8.8's kudos prompt whether it can be shown. Worst case: the prompt in chat
+- [x] P-580 · Tell T-8.8's kudos prompt whether it can be shown. Worst case: the prompt in chat
   keeps coming back after kudos was given, and each tap on it is an `ALREADY_EXISTS`, so a
   positive note reads as an error; or it shows before D-680 allows it, and each tap is
   `NOT_ALLOWED`. `GET /me/kudos` says only what you were given (D-680), and nothing yet says, for a
   Thread, whether you have given its other person kudos or whether both have written. T-8.8 decides
   where that lives (a field on the Thread as you see it is one way) and builds it with the prompt.
   Filed by Claude building T-8.5, 8 October 2026; its session's block, P-580 to P-589.
+  **Done in T-8.8 (D-790):** `PublicProfile.thread.kudos` (`too_early`, `can_give`, `given`),
+  from the one rule `POST /kudos` reads; the prompt shows only for `can_give`.
 - [ ] P-520 · A real voice recording from each browser, read by T-7.9's measuring. **Before
   T-7.11** (on its Needs line). Worst case: Safari's MediaRecorder writes a fragmented MP4 that
   `core/audio.py` can't read, and every iPhone user's voice note is refused as
@@ -6274,6 +6290,14 @@ The number comes from the session's own block, given in its brief, from P-100 up
   breaking cases (`p740-`), each red with its guard gone (`out/p-740-break-guards.log`). The
   referrals tests run at 5 through their `conftest.py`. **How it is built is Open (D-840):** the
   advisor's recommendation, relayed without the founder's review; the pause itself is Locked.
+- [ ] P-690 · The referral screens, when referrals return. **With the decision that turns
+  referrals back on (D-840), after P-591.** Worst case: referrals are switched on again and the web
+  still has no field to apply a code and no card to share one, so no referee can ever apply one
+  (`POST /referrals/apply` works only before onboarding is `done`, D-691) and every man who
+  signs up meanwhile is past the window for good. T-8.8's line asked for both (the optional code
+  field in onboarding, the share card in You) and built neither, as D-840 requires while paused;
+  `web/src/i18n/referrals-paused.test.ts` must change with them, its allowlist naming the new
+  words. Filed by Claude building T-8.8, 9 October 2026; its session's block, P-690 to P-699.
 - [ ] P-660 · "Most popular" once purchases make it true. **After launch, when there are
   purchases to count.** Worst case without it: none. The store says "Best value" on the cheapest
   Vela (D-760) and no pack says "Most popular". What's missing is only the tag the founder kept on

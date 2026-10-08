@@ -39,6 +39,7 @@ from app.modules.discovery.schemas import (
     SharedProfile,
     ThreadWithMe,
 )
+from app.modules.kudos import service as kudos_service
 from app.modules.profiles import repository as profiles_repository
 from app.modules.profiles import rules as profiles_rules
 from app.modules.swipes import counter as swipe_counter
@@ -284,7 +285,10 @@ async def public_profile_in(
         thread=None
         if thread is None
         else ThreadWithMe(
-            id=thread.id, status=thread.status, expires_at=thread.expires_at
+            id=thread.id,
+            status=thread.status,
+            expires_at=thread.expires_at,
+            kudos=await kudos_service.state(session, user.id, user_id, thread),
         ),
     )
 

@@ -1,6 +1,6 @@
 "use client";
 
-import { Check, Lock, MapPin, UserX } from "lucide-react";
+import { Check, MapPin, UserX } from "lucide-react";
 
 import { EmptyState } from "@/components/ui/EmptyState";
 import { ErrorState } from "@/components/ui/ErrorState";
@@ -11,17 +11,12 @@ import { ApiError } from "@/lib/api";
 import { useMe } from "@/lib/queries/me";
 import { type PublicProfile, useProfile } from "@/lib/queries/profiles";
 
-import { intentLabel, interestLabel } from "./labels";
+import { AlbumSection } from "./AlbumSection";
+import { KudosPrompt } from "./KudosPrompt";
+import { intentLabel, interestLabel, KUDOS } from "./labels";
 import { ProfileActions } from "./ProfileActions";
 import { ProfileGallery } from "./ProfileGallery";
 import { ProfileMenu } from "./ProfileMenu";
-
-const KUDOS = [
-  "great_conversation",
-  "genuinely_funny",
-  "easy_to_talk_to",
-  "really_thoughtful",
-] as const;
 
 /**
  * A person's profile in the app (T-6.8, 08-DESIGN §8), at `/people/[id]`, the
@@ -144,6 +139,9 @@ function Profile({ person, own }: { person: PublicProfile; own: boolean }) {
             <Chips labels={interests} />
           </Section>
         )}
+        {!own && person.thread?.kudos === "can_give" && (
+          <KudosPrompt id={person.id} name={person.first_name} />
+        )}
         {person.kudos && (
           <Section title={t("profile.kudos")}>
             <ul className="bg-surface rounded-card border-line grid grid-cols-2 gap-3 border p-4">
@@ -161,14 +159,11 @@ function Profile({ person, own }: { person: PublicProfile; own: boolean }) {
           </Section>
         )}
         {person.album_photo_count > 0 && (
-          <Section title={t("profile.album")}>
-            <p className="bg-surface rounded-card border-line text-ui text-ink flex items-center gap-2 border p-4">
-              <Icon icon={Lock} size={16} className="text-mute" />
-              {person.album_photo_count === 1
-                ? t("profile.albumOne")
-                : t("profile.albumOther", { count: person.album_photo_count })}
-            </p>
-          </Section>
+          <AlbumSection
+            id={person.id}
+            count={person.album_photo_count}
+            own={own}
+          />
         )}
       </div>
       {!own && <ProfileActions id={person.id} />}

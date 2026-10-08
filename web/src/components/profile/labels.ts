@@ -13,3 +13,11 @@ export function interestLabel(id: number): string | null {
   const labels: Readonly<Record<string, string>> = en.interests;
   return labels[String(id)] ?? null;
 }
+
+/** The four kudos, in the kinds' own order (D-007, D-680). */
+export const KUDOS = [
+  "great_conversation",
+  "genuinely_funny",
+  "easy_to_talk_to",
+  "really_thoughtful",
+] as const;
