@@ -6258,7 +6258,8 @@ The number comes from the session's own block, given in its brief, from P-100 up
   **Done (9 October 2026):** migration `b53383c8e9b6`; apply's check and its warning in
   `referrals/service.py`, before every other; `tests/modules/referrals/test_paused.py`; five
   breaking cases (`p740-`), each red with its guard gone (`out/p-740-break-guards.log`). The
-  referrals tests run at 5 through their `conftest.py`.
+  referrals tests run at 5 through their `conftest.py`. **How it is built is Open (D-840):** the
+  advisor's recommendation, relayed without the founder's review; the pause itself is Locked.
 - [ ] P-660 · "Most popular" once purchases make it true. **After launch, when there are
   purchases to count.** Worst case without it: none. The store says "Best value" on the cheapest
   Vela (D-760) and no pack says "Most popular". What's missing is only the tag the founder kept on

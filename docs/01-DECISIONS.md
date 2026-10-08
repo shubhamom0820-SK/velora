@@ -5181,7 +5181,7 @@ the founder):**
 - **No notification of a new request yet:** her incoming list is where it shows. P-631 asks T-9.4
   for an `album.requested` event and notification.
 
-### D-840 · Referrals paused: the reward at 0, and no code applied while it is — Locked
+### D-840 · Referrals paused: the reward at 0, and no code applied while it is — Locked (the pause); Open (how it is built)
 **The decision (P-740):** referrals are paused. Nobody is given a referral reward, and nobody can
 apply a code, until a later decision turns them back on.
 1. A reversible migration sets `app_config.referral_reward_velas` to 0 (its downgrade puts back
@@ -5210,10 +5210,13 @@ lets a number apply again after a referral that was rewarded with nothing); a ne
 on/off setting beside the reward (two settings that can disagree; the reward at 0 already means
 nothing is paid).
 
-The pause is the founder's own decision, in the words above, relayed by the advisor (Claude, in a
-separate chat). Points 1 to 5 and the `NOT_ALLOWED` shape: approved by the founder on the advisor's
-recommendation, relayed by the advisor, 9 October 2026; the options and the corrections to the
-advisor's brief were Claude's, in P-740's plan.
+The pause is the founder's own decision, in the words above, 9 October 2026: Locked. Points 1 to 5
+and the `NOT_ALLOWED` / `referrals_paused` shape are the advisor's recommendation (Claude, in a
+separate chat), relayed by the founder without the founder's own review: Open until the founder
+approves them. They are built as written. The options and the corrections to the advisor's brief
+were Claude's, in P-740's plan. **Corrected 9 October 2026:** P-740's commit (`fa89abb`) recorded
+points 1 to 5 as the founder's approval, Locked, from a relayed line; asked, the founder said only
+the pause was the founder's.
 
 ### D-760 · At launch the store says "Best value", never "Most popular" — Locked
 **The decision (T-8.7; the founder, 9 October 2026, answering T-8.7's Needs line, relayed with the
