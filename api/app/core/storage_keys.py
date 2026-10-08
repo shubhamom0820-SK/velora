@@ -8,8 +8,11 @@ bucket; approved public photos in the public one, served from `PUBLIC_CDN_URL`.
 
 from __future__ import annotations
 
+import re
+from typing import NamedTuple
 from uuid import UUID
 
+from app.core.audio import EXTENSION, AudioType
 from app.core.config import Settings
 
 
@@ -36,9 +39,41 @@ def blurred_photo_key(blur_id: UUID) -> str:
     return f"b/{_id(blur_id)}.jpg"
 
 
-def voice_key(thread_id: UUID, message_id: UUID) -> str:
-    """A voice note, in the private bucket (T-7.9)."""
-    return f"voice/{_id(thread_id)}/{_id(message_id)}.webm"
+def voice_key(thread_id: UUID, file_id: UUID, kind: AudioType) -> str:
+    """A voice note as sent, in the private bucket (T-7.9): the bytes the
+    server measured, written by the server under a `file_id` of its own, new
+    each time. No client is ever given a URL to write here, and no write lands
+    on a file a message already keeps, so what a man unlocks can't be swapped
+    after it was checked (D-620)."""
+    return f"voice/{_id(thread_id)}/{_id(file_id)}.{EXTENSION[kind]}"
+
+
+def voice_upload_key(thread_id: UUID, message_id: UUID, kind: AudioType) -> str:
+    """A voice note as the browser PUT it, in the private bucket (T-7.9), under
+    the extension of the type it was signed for. Read once, at the send."""
+    return f"voice-uploads/{_id(thread_id)}/{_id(message_id)}.{EXTENSION[kind]}"
+
+
+class VoiceKey(NamedTuple):
+    thread_id: UUID
+    message_id: UUID
+    kind: AudioType
+
+
+_UUID = "[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}"
+_VOICE_UPLOAD = re.compile(rf"voice-uploads/({_UUID})/({_UUID})\.([a-z0-9]+)")
+_KIND_OF = {extension: kind for kind, extension in EXTENSION.items()}
+
+
+def parse_voice_upload_key(key: str) -> VoiceKey | None:
+    """What `voice_upload_key` built this key from, or None if it didn't build
+    it: a key a client sends back is read, never trusted as a path (D-620)."""
+    found = _VOICE_UPLOAD.fullmatch(key)
+    if found is None or found.group(3) not in _KIND_OF:
+        return None
+    # Lowercase hex in UUID's own layout, matched whole: the key as built.
+    thread_id, message_id = UUID(found.group(1)), UUID(found.group(2))
+    return VoiceKey(thread_id, message_id, _KIND_OF[found.group(3)])
 
 
 def album_key(photo_id: UUID, viewer_id: UUID) -> str:

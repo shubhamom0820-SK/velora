@@ -35,6 +35,7 @@ from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession
 from app.core import clock
 from app.core.enums import MessageKind, OnboardingStep, Seeking, ThreadOrigin
 from app.core.pagination import PageParams
+from app.core.providers.storage import FakeStorage
 from app.modules.messages import repository as messages_repository
 from app.modules.messages import service as messages_service
 from app.modules.messages.models import Message
@@ -45,6 +46,7 @@ from app.modules.threads import service as threads_service
 from app.modules.threads.models import Thread, ThreadClear
 from app.modules.users.models import User
 from tests.committed import fresh_man
+from tests.conftest import make_test_settings
 
 RACE_TIMEOUT_S = 10.0
 
@@ -135,6 +137,8 @@ async def _send(
             SendMessageRequest(
                 client_msg_id=uuid.uuid4(), kind=MessageKind.TEXT, body="Hello"
             ),
+            storage=FakeStorage(),
+            settings=make_test_settings(),
         )
 
 

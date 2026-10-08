@@ -10,6 +10,8 @@
   `pricing` decides that, never this module.
 - **A voice note is locked** for a man who hasn't unlocked it, and never for
   its sender (T-7.9 sells the unlock): an allowlist of who hears free.
+- **Only a woman sends one** (D-010): an allowlist, so a man and anyone with
+  no gender are refused alike.
 """
 
 from __future__ import annotations
@@ -56,3 +58,8 @@ def locked_for(
     if message.kind is not MessageKind.VOICE or message.sender_id == viewer_id:
         return False
     return gender is not Gender.FEMALE and not unlocked
+
+
+def may_send_voice(gender: Gender | None) -> bool:
+    """Whether someone of this gender may send a voice note (D-010)."""
+    return gender is Gender.FEMALE

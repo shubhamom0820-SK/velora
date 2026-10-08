@@ -33,6 +33,7 @@ from app.modules.e2e.router import router as e2e_router
 from app.modules.health.router import router as health_router
 from app.modules.kudos.router import router as kudos_router
 from app.modules.likes.router import router as likes_router
+from app.modules.media.router import router as media_router
 from app.modules.messages.router import router as messages_router
 from app.modules.onboarding.router import router as onboarding_router
 from app.modules.payments.router import router as payments_router
@@ -171,6 +172,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.include_router(threads_router, prefix="/v1")
     app.include_router(messages_router, prefix="/v1")
     app.include_router(kudos_router, prefix="/v1")
+    app.include_router(media_router, prefix="/v1")
     app.include_router(realtime_router, prefix="/v1")
     # The socket, at the root (02-ARCHITECTURE §6): `wss://api…/ws`.
     app.include_router(realtime_gateway)

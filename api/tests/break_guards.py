@@ -6328,18 +6328,8 @@ T73: list[Case] = [
         ],
         expect=["test_abuse_and_asking_for_money_are_refused_and_kept_as_a_signal"],
     ),
-    Case(
-        id="t73-15-voice-let-through",
-        what="a voice note let through before T-7.9",
-        edits=[
-            (
-                MESSAGES_SERVICE,
-                "    if request.kind is not MessageKind.TEXT:\n        raise _not_allowed()\n",
-                "    pass\n",
-            )
-        ],
-        expect=["test_a_voice_note_isnt_sendable_yet"],
-    ),
+    # t73-15 (a voice note let through before T-7.9) retired with T-7.9, which
+    # lets hers through: a man's refusal is t79-01's.
     Case(
         id="t73-16-no-new-men-limit",
         what="writing first never counted among her new men",
@@ -6442,8 +6432,11 @@ T73: list[Case] = [
         edits=[
             (
                 MESSAGES_REPOSITORY,
-                "        or_(Thread.user_low == viewer_id, Thread.user_high == viewer_id),\n",
-                "",
+                (
+                    "        Thread.id == thread_id,\n"
+                    "        or_(Thread.user_low == viewer_id, Thread.user_high == viewer_id),\n"
+                ),
+                "        Thread.id == thread_id,\n",
             )
         ],
         expect=[
@@ -6457,8 +6450,8 @@ T73: list[Case] = [
         edits=[
             (
                 MESSAGES_REPOSITORY,
-                "        ~blocked_either_way(viewer_id, _other(viewer_id)),\n",
-                "",
+                "        ~blocked_either_way(viewer_id, _other(viewer_id)),\n    )\n",
+                "    )\n",
             )
         ],
         expect=["test_someone_elses_thread_or_one_across_a_block_is_not_found"],
@@ -8330,6 +8323,505 @@ T85: list[Case] = [
     ),
 ]
 
+# --- T-7.9: voice notes, their upload, length and unlock --------------------------
+
+T79_SELECTION = [
+    "tests/modules/messages",
+    "tests/modules/media",
+    "tests/core/test_audio.py",
+    "tests/core/test_storage_keys.py",
+]
+MEDIA_SERVICE = "app/modules/media/service.py"
+AUDIO = "app/core/audio.py"
+
+T79: list[Case] = [
+    Case(
+        id="t79-01-voice-from-a-man",
+        what="a man's voice note let through (D-010's allowlist)",
+        edits=[
+            (
+                MESSAGES_RULES,
+                "    return gender is Gender.FEMALE\n",
+                "    return gender is not None\n",
+            )
+        ],
+        expect=["test_a_man_cant_send_one", "test_a_man_is_not_allowed"],
+    ),
+    Case(
+        id="t79-02-upload-url-for-a-man",
+        what="the upload URL not asking who asks",
+        edits=[
+            (
+                MEDIA_SERVICE,
+                (
+                    "    if not messages_rules.may_send_voice(user.gender):\n"
+                    '        raise AppError("NOT_ALLOWED", "That can\'t be sent here.", status=422)\n'
+                ),
+                "",
+            )
+        ],
+        expect=["test_a_man_is_not_allowed"],
+    ),
+    Case(
+        id="t79-03-upload-url-any-type",
+        what="the upload URL signing any type",
+        edits=[
+            (
+                MEDIA_SERVICE,
+                (
+                    "    if content_type not in audio.ACCEPTED_TYPES:\n"
+                    "        raise messages_service.unsupported_audio()\n"
+                    "    kind = next(t for t in audio.ACCEPTED_TYPES if t == content_type)\n"
+                ),
+                '    kind = "audio/webm"\n',
+            )
+        ],
+        expect=["test_any_other_type_is_refused_saying_which_are_accepted"],
+    ),
+    Case(
+        id="t79-04-upload-url-any-thread",
+        what="the upload URL for a Thread not hers",
+        edits=[
+            (
+                MEDIA_SERVICE,
+                (
+                    "        if thread is None:\n"
+                    '            raise AppError("NOT_FOUND", "Not found.", status=404)\n'
+                ),
+                "        pass\n",
+            )
+        ],
+        expect=[
+            "test_a_thread_not_hers_is_not_found",
+            "test_across_a_block_is_not_found",
+        ],
+    ),
+    Case(
+        id="t79-05-another-threads-key",
+        what="a key from another Thread's upload URL accepted",
+        edits=[
+            (
+                MESSAGES_SERVICE,
+                "    if parsed is None or parsed.thread_id != thread_id:\n",
+                "    if parsed is None:\n",
+            )
+        ],
+        expect=["test_a_key_her_url_didnt_give_for_this_thread_is_refused"],
+    ),
+    Case(
+        id="t79-06-size-after-reading",
+        what="an upload's size not asked before its bytes are read",
+        edits=[
+            (
+                MESSAGES_SERVICE,
+                "        if info.size > MAX_VOICE_BYTES:\n            raise _audio_too_large()\n",
+                "        assert info\n",
+            )
+        ],
+        expect=["test_over_2_mb_is_refused_before_a_byte_is_read"],
+    ),
+    Case(
+        id="t79-07-bytes-size-unchecked",
+        what="the bytes read not held to 2 MB",
+        edits=[
+            (
+                MESSAGES_SERVICE,
+                "    if len(data) > MAX_VOICE_BYTES:\n        raise _audio_too_large()\n",
+                "",
+            )
+        ],
+        expect=["test_a_file_grown_since_its_size_was_asked_is_refused"],
+    ),
+    Case(
+        id="t79-08-type-not-sniffed",
+        what="the bytes not held to the type the URL was signed for",
+        edits=[
+            (
+                MESSAGES_SERVICE,
+                "    if audio.sniff(data[: audio.SNIFF_BYTES]) != parsed.kind:\n",
+                "    if audio.sniff(data[: audio.SNIFF_BYTES]) is None and False:\n",
+            )
+        ],
+        expect=["test_bytes_that_arent_the_signed_audio_are_refused"],
+    ),
+    Case(
+        id="t79-09-a-minute-and-more",
+        what="a voice note over a minute let through",
+        edits=[
+            (
+                MESSAGES_SERVICE,
+                "    if seconds > MAX_VOICE_SECONDS:\n",
+                "    if seconds > MAX_VOICE_SECONDS + 1:\n",
+            )
+        ],
+        expect=["test_over_a_minute_is_refused"],
+    ),
+    Case(
+        id="t79-10-clients-length",
+        what="the client's duration_s stored over the measured one",
+        edits=[
+            (
+                MESSAGES_SERVICE,
+                "        duration_s=voice.duration_s,\n",
+                "        duration_s=request.duration_s or voice.duration_s,\n",
+            )
+        ],
+        expect=["test_her_voice_note_is_kept_as_measured"],
+    ),
+    Case(
+        id="t79-11-upload-key-kept",
+        what="the message keeping the upload's key, which her URL can still write",
+        edits=[
+            (
+                MESSAGES_SERVICE,
+                "        media_key=voice.media_key,\n",
+                "        media_key=voice.upload_key,\n",
+            )
+        ],
+        expect=["test_her_voice_note_is_kept_as_measured"],
+    ),
+    Case(
+        id="t79-12-kept-key-reused",
+        what="each check writing to the same kept key",
+        edits=[
+            (
+                MESSAGES_SERVICE,
+                "    media_key = voice_key(thread_id, uuid4(), parsed.kind)\n",
+                "    media_key = voice_key(thread_id, parsed.message_id, parsed.kind)\n",
+            )
+        ],
+        expect=["test_a_put_again_after_the_send_changes_nothing_kept"],
+    ),
+    Case(
+        id="t79-13-one-upload-two-notes",
+        what="one upload sent twice not refused as ALREADY_EXISTS",
+        edits=[
+            (
+                MESSAGES_SERVICE,
+                "    if await repository.message_exists(session, voice.message_id):\n",
+                "    if False:\n",
+            )
+        ],
+        expect=["test_a_put_again_after_the_send_changes_nothing_kept"],
+    ),
+    Case(
+        id="t79-14-told-unlocked",
+        what="message.new telling him her voice note is unlocked",
+        edits=[
+            (
+                MESSAGES_SERVICE,
+                "        locked = user_id == recipient_id and rules.locked_for(\n",
+                "        locked = False and rules.locked_for(\n",
+            )
+        ],
+        expect=["test_her_voice_note_is_kept_as_measured"],
+    ),
+    Case(
+        id="t79-15-recipient-gender-unsaid",
+        what="the send not saying the recipient's gender (a woman told it's locked)",
+        edits=[
+            (
+                MESSAGES_SERVICE,
+                "        recipient_gender=await repository.gender_of(session, other_id),\n",
+                "",
+            )
+        ],
+        expect=["test_a_woman_receiving_one_hears_it_free"],
+    ),
+    Case(
+        id="t79-16-upload-left-behind",
+        what="the upload not dropped once sent",
+        edits=[
+            (
+                MESSAGES_SERVICE,
+                "        await _drop_upload(storage, settings, voice.upload_key)\n",
+                "        pass\n",
+            )
+        ],
+        expect=["test_her_voice_note_is_kept_as_measured"],
+    ),
+    Case(
+        id="t79-17-unlock-free",
+        what="an unlock charging nothing",
+        edits=[
+            (
+                MESSAGES_SERVICE,
+                (
+                    "            await pricing_service.charge(\n"
+                    "                session,\n"
+                    "                user,\n"
+                    "                LedgerReason.VOICE_UNLOCK,\n"
+                ),
+                (
+                    "            await pricing_service.price_for(\n"
+                    "                session,\n"
+                    "                user,\n"
+                    "                LedgerReason.VOICE_UNLOCK,\n"
+                ),
+            ),
+            (
+                MESSAGES_SERVICE,
+                "                shown=shown,\n                ref=Ref(RefType.MESSAGE, row.id),\n",
+                "",
+            ),
+        ],
+        expect=["test_he_pays_five_once_and_hears_it"],
+    ),
+    Case(
+        id="t79-18-unlock-every-time",
+        what="every unlock charging, recorded or not",
+        edits=[
+            (
+                MESSAGES_SERVICE,
+                "        ) and await repository.add_unlock(session, user_id, row.id):\n",
+                "        ) and (await repository.add_unlock(session, user_id, row.id) or True):\n",
+            )
+        ],
+        expect=["test_unlocking_again_charges_nothing"],
+    ),
+    Case(
+        id="t79-19-unlock-unlocked",
+        what="an unlock recorded for someone it was never locked for",
+        edits=[
+            (
+                MESSAGES_SERVICE,
+                "        if rules.locked_for(\n            row, user_id, gender, unlocked=False\n        ) and",
+                "        if True and",
+            )
+        ],
+        expect=[
+            "test_its_sender_hears_it_free_with_nothing_recorded",
+            "test_a_woman_receiving_one_hears_it_free_with_nothing_recorded",
+        ],
+    ),
+    Case(
+        id="t79-20-shown-ignored",
+        what="the unlock not comparing the price he was shown (P-56)",
+        edits=[
+            (
+                MESSAGES_SERVICE,
+                "                shown=shown,\n                ref=Ref(RefType.MESSAGE, row.id),\n",
+                "                shown=5,\n                ref=Ref(RefType.MESSAGE, row.id),\n",
+            )
+        ],
+        expect=["test_a_price_he_wasnt_shown_is_refused_and_nothing_written"],
+    ),
+    Case(
+        id="t79-21-anyones-voice-note",
+        what="a voice note reached in a Thread not theirs",
+        edits=[
+            (
+                MESSAGES_REPOSITORY,
+                (
+                    "            Message.kind == MessageKind.VOICE,\n"
+                    "            or_(Thread.user_low == viewer_id, Thread.user_high == viewer_id),\n"
+                ),
+                "            Message.kind == MessageKind.VOICE,\n",
+            )
+        ],
+        expect=["test_a_text_or_anyone_elses_note_is_not_found"],
+    ),
+    Case(
+        id="t79-22-voice-across-a-block",
+        what="a voice note reached across a block",
+        edits=[
+            (
+                MESSAGES_REPOSITORY,
+                (
+                    "            or_(Thread.user_low == viewer_id, Thread.user_high == viewer_id),\n"
+                    "            ~blocked_either_way(viewer_id, _other(viewer_id)),\n"
+                    "        )\n"
+                    "    )\n"
+                    "    return found\n"
+                    "\n"
+                    "\n"
+                    "async def add_unlock("
+                ),
+                (
+                    "            or_(Thread.user_low == viewer_id, Thread.user_high == viewer_id),\n"
+                    "        )\n"
+                    "    )\n"
+                    "    return found\n"
+                    "\n"
+                    "\n"
+                    "async def add_unlock("
+                ),
+            )
+        ],
+        expect=[
+            "tests/modules/messages/test_unlock.py::test_across_a_block_is_not_found"
+        ],
+    ),
+    Case(
+        id="t79-23-file-while-locked",
+        what="a locked voice note's file handed out",
+        edits=[
+            (
+                MESSAGES_SERVICE,
+                "        if rules.locked_for(row, user.id, user.gender, unlocked):\n",
+                "        if False:\n",
+            )
+        ],
+        expect=["test_locked_its_file_is_not_allowed"],
+    ),
+    Case(
+        id="t79-24-anyones-unlock",
+        what="another man's unlock opening the file for him",
+        edits=[
+            (
+                MESSAGES_REPOSITORY,
+                "                MessageUnlock.user_id == user_id, MessageUnlock.message_id == message_id\n",
+                "                MessageUnlock.message_id == message_id\n",
+            )
+        ],
+        expect=["test_another_mans_unlock_opens_nothing_for_him"],
+    ),
+    Case(
+        id="t79-25-unlock-conflict-raises",
+        what="a second unlock breaking on the primary key",
+        edits=[
+            (
+                MESSAGES_REPOSITORY,
+                "        .on_conflict_do_nothing()\n",
+                "",
+            )
+        ],
+        expect=[
+            "test_two_unlocks_at_once_record_one_and_charge_once",
+            "test_unlocking_again_charges_nothing",
+        ],
+    ),
+    Case(
+        id="t79-26-webm-header-wins",
+        what="a WebM's stated duration believed over its blocks",
+        edits=[
+            (
+                AUDIO,
+                "    return max(stated, Fraction(last_tick)) * scale / 1_000_000_000\n",
+                "    return (stated or Fraction(last_tick)) * scale / 1_000_000_000\n",
+            )
+        ],
+        expect=["test_the_longest_length_stated_wins"],
+    ),
+    Case(
+        id="t79-27-mp4-fragments-ignored",
+        what="an MP4's fragments not counted",
+        edits=[
+            (
+                AUDIO,
+                "        lengths.append(Fraction(finish, scales[track_id]))\n",
+                "        pass\n",
+            )
+        ],
+        expect=[
+            "test_fragmented_mp4_lasts_to_where_its_fragments_end",
+            "test_the_longest_length_stated_wins",
+        ],
+    ),
+    Case(
+        id="t79-28-webm-video",
+        what="a WebM with a video track measured as audio",
+        edits=[
+            (
+                AUDIO,
+                (
+                    "            if _uint(data, start, size) != _AUDIO_TRACK:\n"
+                    '                raise ValueError("not an audio track")\n'
+                ),
+                "",
+            )
+        ],
+        expect=["test_a_file_whose_length_cant_be_told_is_refused"],
+    ),
+    Case(
+        id="t79-29-mp4-video",
+        what="an MP4 with a video track measured as audio",
+        edits=[
+            (
+                AUDIO,
+                '    if data[hdlr[0] + 8 : hdlr[0] + 12] != b"soun":\n',
+                '    if data[hdlr[0] + 8 : hdlr[0] + 12] == b"none":\n',
+            )
+        ],
+        expect=["test_a_file_whose_length_cant_be_told_is_refused"],
+    ),
+    Case(
+        id="t79-30-ogg-pre-skip",
+        what="Opus's pre-skip counted as sound",
+        edits=[
+            (
+                AUDIO,
+                "    return Fraction(last - pre_skip, _OPUS_RATE)\n",
+                "    return Fraction(last, _OPUS_RATE)\n",
+            )
+        ],
+        expect=["test_ogg_opus_lasts_to_its_last_granule_less_the_pre_skip"],
+    ),
+    Case(
+        id="t79-31-ogg-two-streams",
+        what="an Ogg with a second stream measured as one",
+        edits=[
+            (
+                AUDIO,
+                "    if any(other != serial for _, other, _ in _ogg_pages(data)):\n",
+                "    if False:\n",
+            )
+        ],
+        expect=["test_a_file_whose_length_cant_be_told_is_refused"],
+    ),
+    Case(
+        id="t79-32-empty-file-escapes",
+        what="an empty file escaping the refusal",
+        edits=[(AUDIO, "        StopIteration,\n", "")],
+        expect=["test_a_file_whose_length_cant_be_told_is_refused"],
+    ),
+    Case(
+        id="t79-33-zero-seconds",
+        what="a fraction of a second kept as 0",
+        edits=[
+            (
+                AUDIO,
+                "    return max(1, int(seconds + Fraction(1, 2)))\n",
+                "    return int(seconds + Fraction(1, 2))\n",
+            )
+        ],
+        expect=["test_lengths_are_kept_to_the_nearest_second"],
+    ),
+    Case(
+        id="t79-34-storage-before-the-thread",
+        what="storage asked about an upload before the Thread is known to be hers",
+        edits=[
+            (
+                MESSAGES_SERVICE,
+                (
+                    "    if request.kind is MessageKind.VOICE:\n"
+                    "        if not rules.may_send_voice(gender):\n"
+                ),
+                (
+                    "    if request.media_key is not None:\n"
+                    "        await storage.head(settings.R2_BUCKET_PRIVATE, request.media_key)\n"
+                    "    if request.kind is MessageKind.VOICE:\n"
+                    "        if not rules.may_send_voice(gender):\n"
+                ),
+            )
+        ],
+        expect=["test_a_thread_not_hers_is_not_found_before_storage_is_asked"],
+    ),
+    Case(
+        id="t79-35-any-upload-key",
+        what="a key of any shape read as an upload's",
+        edits=[
+            (
+                "app/core/storage_keys.py",
+                '_VOICE_UPLOAD = re.compile(rf"voice-uploads/({_UUID})/({_UUID})\\.([a-z0-9]+)")\n',
+                '_VOICE_UPLOAD = re.compile(rf"voice(?:-uploads)?/({_UUID})/({_UUID})\\.([a-z0-9]+)")\n',
+            )
+        ],
+        expect=["test_a_key_the_upload_url_never_gave_reads_as_none"],
+    ),
+]
+
+
 CASES: list[tuple[Case, list[str]]] = (
     [(c, T51_SELECTION) for c in T51]
     + [(c, T54_SELECTION) for c in T54]
@@ -8369,6 +8861,7 @@ CASES: list[tuple[Case, list[str]]] = (
     + T68
     + [(c, T75_SELECTION) for c in T75]
     + [(c, T85_SELECTION) for c in T85]
+    + [(c, T79_SELECTION) for c in T79]
 )
 
 # The fifty-connection fixture's own message when Postgres refuses a connection.

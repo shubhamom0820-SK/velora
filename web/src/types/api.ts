@@ -1058,6 +1058,40 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/messages/{message_id}/unlock": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Unlock */
+        post: operations["unlock_v1_messages__message_id__unlock_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/messages/{message_id}/media": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Media */
+        get: operations["media_v1_messages__message_id__media_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/kudos": {
         parameters: {
             query?: never;
@@ -1086,6 +1120,23 @@ export interface paths {
         get: operations["my_kudos_v1_me_kudos_get"];
         put?: never;
         post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/media/voice-upload-url": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Voice Upload Url */
+        post: operations["voice_upload_url_v1_media_voice_upload_url_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -1680,6 +1731,14 @@ export interface components {
             location: "none" | "fresh" | "stale";
         };
         /**
+         * MediaUrl
+         * @description `{url}`: a voice note's file, signed for 10 minutes (D-027).
+         */
+        MediaUrl: {
+            /** Url */
+            url: string;
+        };
+        /**
          * Message
          * @description One message, as one of the Thread's two people sees it.
          *
@@ -2133,8 +2192,10 @@ export interface components {
         /**
          * SendMessageRequest
          * @description `{client_msg_id, kind, body?, media_key?, duration_s?}`. Text: a body of
-         *     1 to 2,000 characters, not all spaces, and nothing else. A voice note's
-         *     fields are T-7.9's; until then one is refused by the service.
+         *     1 to 2,000 characters, not all spaces, and nothing else. A voice note: the
+         *     `media_key` its upload URL gave (T-7.9), and no body. Its `duration_s`, 1
+         *     to 60 (P-15), is the client's word only: the length stored is the one the
+         *     server measures from the file (D-620).
          */
         SendMessageRequest: {
             /**
@@ -2366,6 +2427,17 @@ export interface components {
             /** Threshold Paise */
             threshold_paise: number;
         };
+        /**
+         * UnlockRequest
+         * @description `{shown_price?}`: the price the locked card showed (P-56, D-600).
+         */
+        UnlockRequest: {
+            /**
+             * Shown Price
+             * @default 0
+             */
+            shown_price: number;
+        };
         /** UploadUrl */
         UploadUrl: {
             /**
@@ -2437,6 +2509,41 @@ export interface components {
             reject_reason: string | null;
             /** Attempts Left */
             attempts_left: number;
+        };
+        /**
+         * VoiceUpload
+         * @description Where to PUT the recording, for 5 minutes (D-027), with exactly these
+         *     headers; then send it as `kind=voice` with this `media_key`. The message
+         *     it becomes takes `message_id`.
+         */
+        VoiceUpload: {
+            /**
+             * Message Id
+             * Format: uuid
+             */
+            message_id: string;
+            /** Media Key */
+            media_key: string;
+            /** Put Url */
+            put_url: string;
+            /** Headers */
+            headers: {
+                [key: string]: string;
+            };
+        };
+        /**
+         * VoiceUploadRequest
+         * @description `{thread_id, content_type}`. The type only decides what the URL is
+         *     signed for; the bytes decide what is accepted, at the send (D-620).
+         */
+        VoiceUploadRequest: {
+            /**
+             * Thread Id
+             * Format: uuid
+             */
+            thread_id: string;
+            /** Content Type */
+            content_type: string;
         };
         /** WaitlistJoin */
         WaitlistJoin: {
@@ -4399,6 +4506,72 @@ export interface operations {
             };
         };
     };
+    unlock_v1_messages__message_id__unlock_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                message_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UnlockRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MediaUrl"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    media_v1_messages__message_id__media_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                message_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MediaUrl"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     give_kudos_v1_kudos_post: {
         parameters: {
             query?: never;
@@ -4448,6 +4621,39 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["app__modules__kudos__schemas__Kudos"][];
+                };
+            };
+        };
+    };
+    voice_upload_url_v1_media_voice_upload_url_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["VoiceUploadRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["VoiceUpload"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };

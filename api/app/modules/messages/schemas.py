@@ -47,8 +47,10 @@ class MessagePage(Page[Message]):
 
 class SendMessageRequest(BaseModel):
     """`{client_msg_id, kind, body?, media_key?, duration_s?}`. Text: a body of
-    1 to 2,000 characters, not all spaces, and nothing else. A voice note's
-    fields are T-7.9's; until then one is refused by the service."""
+    1 to 2,000 characters, not all spaces, and nothing else. A voice note: the
+    `media_key` its upload URL gave (T-7.9), and no body. Its `duration_s`, 1
+    to 60 (P-15), is the client's word only: the length stored is the one the
+    server measures from the file (D-620)."""
 
     model_config = ConfigDict(extra="forbid")
 
@@ -69,6 +71,11 @@ class SendMessageRequest(BaseModel):
                 raise ValueError("a text message needs a body")
             if self.media_key is not None or self.duration_s is not None:
                 raise ValueError("a text message has no media")
+        if self.kind is MessageKind.VOICE:
+            if self.media_key is None:
+                raise ValueError("a voice note needs its media_key")
+            if self.body is not None:
+                raise ValueError("a voice note has no body")
         return self
 
 
@@ -79,3 +86,17 @@ class ReadRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     up_to_message_id: UUID
+
+
+class UnlockRequest(BaseModel):
+    """`{shown_price?}`: the price the locked card showed (P-56, D-600)."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    shown_price: ShownPrice = 0
+
+
+class MediaUrl(BaseModel):
+    """`{url}`: a voice note's file, signed for 10 minutes (D-027)."""
+
+    url: str

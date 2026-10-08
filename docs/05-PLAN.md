@@ -3072,11 +3072,34 @@ prices don't depend on the web photos step, and the hold is lifted.
 - [x] **Commit:** `feat(threads): one-sided clearing [T-7.8]`
 
 ### T-7.9 · Voice notes
-- [ ] **Needs:** T-7.3, T-4.1
-- [ ] `POST /media/voice-upload-url` (women only, ≤ 60 s, ≤ 2 MB, audio/webm|ogg|mp4), then send message `kind=voice` with `media_key`, `duration_s`.
-- [ ] `POST /messages/{id}/unlock` (men, debit 5, insert `message_unlocks`, idempotent) → signed URL. `GET /messages/{id}/media` for sender or unlocked.
-- [ ] **The price shown (P-56, D-600):** `POST /messages/{id}/unlock` takes `shown_price` and passes it to `charge(..., shown=)`. Test `PRICE_CHANGED` with nothing charged or written, and its web sends the price it displayed, from `/prices`.
-- [ ] **Commit:** `feat(messages): voice notes and unlocks [T-7.9]`
+- [x] **Needs:** T-7.3, T-4.1
+- [x] `POST /media/voice-upload-url` (women only, ≤ 60 s, ≤ 2 MB, audio/webm|ogg|mp4), then send message `kind=voice` with `media_key`, `duration_s`.
+- [x] `POST /messages/{id}/unlock` (men, debit 5, insert `message_unlocks`, idempotent) → signed URL. `GET /messages/{id}/media` for sender or unlocked.
+- [x] **The price shown (P-56, D-600):** `POST /messages/{id}/unlock` takes `shown_price` and passes it to `charge(..., shown=)`. Test `PRICE_CHANGED` with nothing charged or written, and its web sends the price it displayed, from `/prices`.
+  **Built as D-620 and D-621** (the founder's answers, 8 October 2026): the server measures the
+  length from the bytes (`core/audio.py`, written by hand: Ogg Opus, WebM, MP4 with its
+  fragments; the longer of two stated lengths; unreadable refused), the client's `duration_s`
+  only checked (P-15's API bound, 1 to 60) and never stored. **Found building it:** the upload
+  URL outlives the check, so the browser PUTs to `voice-uploads/…` and the send writes the bytes
+  it measured to `voice/{thread}/{file_id}`, new each time, which no client can write: nothing
+  can be swapped in after he pays. Three new error codes: `UNSUPPORTED_AUDIO`, `AUDIO_TOO_LARGE`
+  and `AUDIO_TOO_LONG`. The unlock records first and charges
+  only a new row; an expired Thread is no bar (the founder's Q2). The price box's web half, the
+  locked card sending the price it showed, is T-7.11's (P-56 is on its Needs line). `message.new` now reaches a man
+  with a voice note locked: T-7.3's `announce` told both it was unlocked. A double unlock is
+  forced in `test_race.py`, both inside their transactions before either records it, each
+  waiting alone. T-7.3's "a voice note isn't sendable yet" test and its case `t73-15` retired
+  with this task; `t73-24` and `t73-25`'s anchors widened, as `voice_of` repeats their lines.
+  `messages.service.send` now takes `storage` and `settings`, so T-7.8's `test_clear_race.py`,
+  landed first, passes them as `test_race.py` does.
+  **Broken once each, 8 October 2026** (`uv run python -m tests.break_guards t79- t73-24
+  t73-25`): T-7.9's thirty-five cases and the two re-anchored, each red in 1 of 1, every file
+  restored and none differing by SHA-256 after. **Two guards had no test until written for the
+  run:** the bytes read held to 2 MB again (a PUT between the size and the read) and the type
+  sniffed (a Matroska file declared WebM parses as one); a test was added for each before the
+  run. A third, the round trip in `parse_voice_upload_key`, could never go red under its regex
+  and was removed.
+- [x] **Commit:** `feat(messages): voice notes and unlocks [T-7.9]`
 
 ### T-7.10 · Web chat list
 - [ ] **Needs:** T-7.2, T-7.8, and **P-460**: her rows draw no countdown and no expired state
@@ -3085,7 +3108,8 @@ prices don't depend on the web photos step, and the hold is lifted.
 
 ### T-7.11 · Web conversation
 - [ ] **Needs:** T-7.3, T-7.7, T-7.9, and **P-56**: its paid buttons send the price they showed
-  (before the web's paid buttons, the founder, 8 October 2026)
+  (before the web's paid buttons, the founder, 8 October 2026); and **P-520**: a real recording
+  from each browser read by T-7.9's measuring, or every iPhone user's voice note may be refused
 - [ ] Bubbles, day separators, "Sent/Read" on my last message, typing dots, voice player (locked card with price for men), icebreakers when empty, knot bar (tie / waiting), expired panel (re-open · 2 / tie), header with countdown or "Knotted · permanent", ⋯ → profile menu.
 - [ ] Composer: text (Enter sends, Shift+Enter newline), mic for women (MediaRecorder, hold or tap-to-record, 60 s cap, preview before send). Optimistic send with `client_msg_id`; failed → retry.
 - [ ] Rejected message → inline explanation, text kept in composer.
@@ -3624,6 +3648,8 @@ The number comes from the session's own block, given in its brief, from P-100 up
   characters but `body_raw` is unbounded, and `duration_s` accepts 0 or negative seconds. API input
   validation (T-7.x) is the primary bound; matching CHECKs would be defence in depth. Needs a new
   migration now that T-1.10 is merged (rule 11). Found in review of T-1.10.
+  **T-7.9 (8 October 2026):** `duration_s` is bounded 1 to 60 by the API and tested, and the length
+  stored is the server's measure (D-620); `body_raw` and both CHECKs stay open (the founder).
 - [ ] P-16 · Decide whether unblocking keeps history — `blocks` is one row per pair with no
   history, so unless T-9.1 designs otherwise, unblock is a `DELETE` and the fact that A blocked B is
   gone. Rule 12's explicit list doesn't name blocks, but its principle does ("nothing is hard-deleted
@@ -6011,3 +6037,20 @@ The number comes from the session's own block, given in its brief, from P-100 up
   Thread, whether you have given its other person kudos or whether both have written. T-8.8 decides
   where that lives (a field on the Thread as you see it is one way) and builds it with the prompt.
   Filed by Claude building T-8.5, 8 October 2026; its session's block, P-580 to P-589.
+- [ ] P-520 · A real voice recording from each browser, read by T-7.9's measuring. **Before
+  T-7.11** (on its Needs line). Worst case: Safari's MediaRecorder writes a fragmented MP4 that
+  `core/audio.py` can't read, and every iPhone user's voice note is refused as
+  `UNSUPPORTED_AUDIO`; or Chrome's WebM or Firefox's Ogg measures wrong and a minute's note is
+  refused as too long. T-7.9's readers are tested only on files built by hand to the specs
+  (`tests/audio_samples.py`; no ffmpeg here, and no browser recorded one). Record 5 s and 59 s in
+  Chrome, Firefox and Safari (macOS and iPhone) with T-7.11's recorder, commit them as fixtures,
+  and assert each file's measured length within a second of the recorder's. Filed by Claude
+  building T-7.9, 8 October 2026, at the founder's direction; its session's block, P-520 to P-529.
+- [ ] P-521 · Voice uploads never sent stay in the private bucket for ever. **Before beta.** Worst
+  case: the bucket fills with recordings nobody sent, each a person's voice kept with no message
+  to delete it by, against D-500's promise that what a person leaves is erased; and storage grows
+  unbounded. A URL from `POST /media/voice-upload-url` whose recording is never sent, or refused
+  at the send, leaves `voice-uploads/…`; a send refused after its check (e.g. `ALREADY_EXISTS`)
+  leaves a `voice/…` copy no message keeps. Sweep both on a cron: an upload older than its URL's 5
+  minutes and a grace, and a `voice/` file no `messages.media_key` names. Filed by Claude building
+  T-7.9, 8 October 2026; its session's block.

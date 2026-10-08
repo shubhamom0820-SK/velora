@@ -560,28 +560,6 @@ async def test_someone_elses_thread_is_not_found(
         assert error(response)["code"] == "NOT_FOUND"
 
 
-async def test_a_voice_note_isnt_sendable_yet(
-    client: AsyncClient, make_user: MakeUser, make_thread: MakeThread
-) -> None:
-    man, _ = await make_user()
-    woman, token = await make_user(Gender.FEMALE)
-    thread_id = (await make_thread(man, woman)).id
-
-    response = await client.post(
-        f"/v1/threads/{thread_id}/messages",
-        json={
-            "client_msg_id": str(uuid.uuid4()),
-            "kind": "voice",
-            "media_key": "voice/x.webm",
-            "duration_s": 10,
-        },
-        headers=bearer(token),
-    )
-
-    assert response.status_code == 422
-    assert error(response)["code"] == "NOT_ALLOWED"
-
-
 @pytest.mark.parametrize(
     "body",
     [

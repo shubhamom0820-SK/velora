@@ -6,26 +6,44 @@ Every text passes `filters` first: refused for abuse or asking for money
 Thread's first `mask_first_n_messages` (D-030). A message is written in the
 transaction that makes it true, and `message.new` goes to both people, each
 seeing it as theirs or not.
+
+A voice note (T-7.9, D-620) is a woman's alone (D-010). Her browser PUTs it
+to an upload key; at the send the server reads it, judges its type and
+measures its length by its bytes (`core.audio`), and writes those same bytes
+to the key the message keeps, which no client can write to. A man pays once
+to unlock it (`voice_unlock`, D-621), and its file is reached only by a link
+signed for 10 minutes, never inside a `Message`.
 """
 
 from __future__ import annotations
 
 from dataclasses import dataclass
 from datetime import datetime, timedelta
-from uuid import UUID
+from uuid import UUID, uuid4
 
+import structlog
 from pydantic import AwareDatetime, TypeAdapter
 from redis.asyncio import Redis
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core import clock, events
-from app.core.enums import LedgerReason, MessageKind, ThreadOrigin, UserStatus
-from app.core.errors import AppError
+from app.core import audio, clock, events
+from app.core.config import Settings
+from app.core.enums import (
+    Gender,
+    LedgerReason,
+    MessageKind,
+    ThreadOrigin,
+    UserStatus,
+)
+from app.core.errors import AppError, invalid_field
 from app.core.pagination import Cursor, PageParams
+from app.core.providers.storage import ObjectNotFound, StorageProvider
+from app.core.storage_keys import parse_voice_upload_key, voice_key
 from app.modules.admin import service as admin_service
 from app.modules.messages import filters, limits, repository, rules
 from app.modules.messages.models import Message as MessageRow
 from app.modules.messages.schemas import (
+    MediaUrl,
     Message,
     MessagePage,
     ReadRequest,
@@ -41,6 +59,13 @@ from app.modules.wallet.rules import Ref, RefType
 MASK_KEY = "mask_first_n_messages"
 MESSAGE_NEW = "message.new"
 MESSAGE_READ = "message.read"
+
+# A voice note (T-7.9): 2 MB and 60 seconds at most, the length measured.
+MAX_VOICE_BYTES = 2 * 1024 * 1024
+MAX_VOICE_SECONDS = 60
+MEDIA_TTL_S = 600  # D-027: a signed GET lasts 10 minutes
+
+log = structlog.get_logger(__name__)
 
 
 def _rejected(rule: str) -> AppError:
@@ -118,16 +143,27 @@ def view_of(
     )
 
 
-def announce(session: AsyncSession, row: MessageRow, recipient_id: UUID) -> None:
-    """`message.new` to both people, each with their own view of it."""
+def announce(
+    session: AsyncSession,
+    row: MessageRow,
+    recipient_id: UUID,
+    *,
+    recipient_gender: Gender | None = None,
+) -> None:
+    """`message.new` to both people, each with their own view of it. A voice
+    note reaches the recipient locked unless their gender says they hear it
+    free, so a caller that doesn't say never tells a man it is unlocked."""
     for user_id in (row.sender_id, recipient_id):
+        locked = user_id == recipient_id and rules.locked_for(
+            row, user_id, recipient_gender, unlocked=False
+        )
         events.queue(
             session,
             user_id,
             MESSAGE_NEW,
             {
                 "thread_id": str(row.thread_id),
-                "message": view_of(row, user_id).model_dump(mode="json"),
+                "message": view_of(row, user_id, locked=locked).model_dump(mode="json"),
             },
         )
 
@@ -150,6 +186,34 @@ def _account_deleted() -> AppError:
 
 def _not_allowed() -> AppError:
     return AppError("NOT_ALLOWED", "That can't be sent here.", status=422)
+
+
+def unsupported_audio() -> AppError:
+    """What to do, not only no (as D-089 for photos)."""
+    return AppError(
+        "UNSUPPORTED_AUDIO",
+        f"Send a {audio.ACCEPTED_NAMES} recording.",
+        status=422,
+        details={"accepted": list(audio.ACCEPTED_TYPES)},
+    )
+
+
+def _audio_too_large() -> AppError:
+    return AppError(
+        "AUDIO_TOO_LARGE",
+        "Voice notes can be up to 2 MB.",
+        status=422,
+        details={"max_bytes": MAX_VOICE_BYTES},
+    )
+
+
+def _audio_too_long() -> AppError:
+    return AppError(
+        "AUDIO_TOO_LONG",
+        "Voice notes can be up to a minute long.",
+        status=422,
+        details={"max_seconds": MAX_VOICE_SECONDS},
+    )
 
 
 def _other_of(thread: Thread, user_id: UUID) -> UUID:
@@ -191,6 +255,57 @@ class _Sent:
     new: bool
 
 
+@dataclass(frozen=True)
+class _Voice:
+    """A voice note's upload, checked: the message's id, where its bytes now
+    are, and their length in whole seconds."""
+
+    message_id: UUID
+    upload_key: str
+    media_key: str
+    duration_s: int
+
+
+async def check_voice(
+    storage: StorageProvider, settings: Settings, thread_id: UUID, upload_key: str
+) -> _Voice:
+    """Read the upload, judge it by its bytes, and keep those bytes (D-620).
+
+    In order: the key is one this Thread's upload URL gave, else
+    `VALIDATION_ERROR`; something is there, else the same; 2 MB at most, by
+    its size before a byte is read (a presigned PUT can't cap it); the bytes
+    are the type the URL was signed for; its length is told and 60 seconds at
+    most. The bytes measured are written to a key of their own, new each time,
+    where no client can write: a PUT again to the upload URL, or the same
+    upload sent twice, never changes a file a message keeps.
+    """
+    parsed = parse_voice_upload_key(upload_key)
+    if parsed is None or parsed.thread_id != thread_id:
+        raise invalid_field("media_key", "is not one this Thread's upload URL gave")
+    bucket = settings.R2_BUCKET_PRIVATE
+    try:
+        info = await storage.head(bucket, upload_key)
+        if info.size > MAX_VOICE_BYTES:
+            raise _audio_too_large()
+        data = await storage.get_bytes(bucket, upload_key)
+    except ObjectNotFound:
+        raise invalid_field("media_key", "has nothing uploaded to it") from None
+    # Read once: what was measured is what is kept, so the size is the bytes'.
+    if len(data) > MAX_VOICE_BYTES:
+        raise _audio_too_large()
+    if audio.sniff(data[: audio.SNIFF_BYTES]) != parsed.kind:
+        raise unsupported_audio()
+    try:
+        seconds = audio.whole_seconds(audio.duration(data, parsed.kind))
+    except audio.UnreadableAudio:
+        raise unsupported_audio() from None
+    if seconds > MAX_VOICE_SECONDS:
+        raise _audio_too_long()
+    media_key = voice_key(thread_id, uuid4(), parsed.kind)
+    await storage.put_bytes(bucket, media_key, data, parsed.kind)
+    return _Voice(parsed.message_id, upload_key, media_key, seconds)
+
+
 async def send(
     session: AsyncSession,
     redis: Redis,
@@ -198,25 +313,31 @@ async def send(
     thread_id: UUID,
     request: SendMessageRequest,
     *,
+    storage: StorageProvider,
+    settings: Settings,
     config: admin_service.ConfigCache | None = None,
 ) -> Message:
     """`request` sent in the Thread, by one of its two (T-7.3).
 
-    In order: a voice note isn't sendable here (T-7.9); the text passes the
+    In order: a voice note is a woman's alone (D-010); a text passes the
     filters; the same `client_msg_id` again returns the message it made, with
     nothing charged; nothing reaches a deleted account; an expired Thread
     refuses him and takes hers (D-097), by the clock (D-560); he pays what
     D-098 and D-250 say (`rules.answer_price`, and `dm_message` in a private
     message); her message moves the hour on, his never does (D-097's
-    amendment); masked while the Thread is young (D-030); both told.
+    amendment); masked while the Thread is young (D-030); both told. A voice
+    note's upload is checked once the Thread is known to be hers
+    (`check_voice`), outside any transaction: no lock waits on storage.
     """
     # Read now: a refusal rolls the session back, which expires `user`.
     user_id, gender = user.id, user.gender
     day = clock.today_ist()
-    if request.kind is not MessageKind.TEXT:
-        raise _not_allowed()
-    assert request.body is not None
-    await refuse_if_rejected(session, user_id, request.body)
+    if request.kind is MessageKind.VOICE:
+        if not rules.may_send_voice(gender):
+            raise _not_allowed()
+    else:
+        assert request.body is not None
+        await refuse_if_rejected(session, user_id, request.body)
     new_men = private = None
     async with session.begin():
         thread = await repository.thread_of(session, thread_id, user_id)
@@ -241,6 +362,9 @@ async def send(
                 private = await admin_service.config_int(
                     session, limits.PRIVATE_MESSAGES_KEY, cache=config
                 )
+    voice = None
+    if request.media_key is not None:
+        voice = await check_voice(storage, settings, thread_id, request.media_key)
     taken = limits.Taken(redis, user_id, day)
     try:
         if new_men is not None:
@@ -249,14 +373,28 @@ async def send(
             await taken.private_message(private)
         async with session.begin():
             sent = await _send_in(
-                session, user, thread_id, other_id, request, config=config
+                session, user, thread_id, other_id, request, voice, config=config
             )
     except BaseException:
         await taken.give_back()
         raise
     if not sent.new:
         await taken.give_back()
+    if voice is not None and sent.new:
+        await _drop_upload(storage, settings, voice.upload_key)
     return sent.message
+
+
+async def _drop_upload(
+    storage: StorageProvider, settings: Settings, upload_key: str
+) -> None:
+    """The upload, once its bytes are the message's: never needed again. Its
+    failing loses nothing (the message is sent), so it is logged, not raised;
+    what it leaves behind is P-521's."""
+    try:
+        await storage.delete(settings.R2_BUCKET_PRIVATE, upload_key)
+    except Exception:  # the send already succeeded
+        log.warning("voice_upload_not_deleted", exc_info=True)
 
 
 def _again(existing: MessageRow, thread_id: UUID, user_id: UUID) -> Message:
@@ -274,6 +412,7 @@ async def _send_in(
     thread_id: UUID,
     other_id: UUID,
     request: SendMessageRequest,
+    voice: _Voice | None,
     *,
     config: admin_service.ConfigCache | None,
 ) -> _Sent:
@@ -305,16 +444,19 @@ async def _send_in(
             if answer is LedgerReason.THREAD_REOPEN
             else None,
         )
-    mask_first_n = await admin_service.config_int(session, MASK_KEY, cache=config)
-    assert request.body is not None
-    row = await write_text(
-        session,
-        thread,
-        user.id,
-        request.body,
-        request.client_msg_id,
-        mask_first_n=mask_first_n,
-    )
+    if voice is not None:
+        row = await _write_voice(session, thread, user.id, voice, request)
+    else:
+        mask_first_n = await admin_service.config_int(session, MASK_KEY, cache=config)
+        assert request.body is not None
+        row = await write_text(
+            session,
+            thread,
+            user.id,
+            request.body,
+            request.client_msg_id,
+            mask_first_n=mask_first_n,
+        )
     if rules.private_message_priced(thread):
         await pricing_service.charge(
             session,
@@ -331,8 +473,41 @@ async def _send_in(
         if thread.expires_at is None or later > thread.expires_at:
             thread.expires_at = later
             thread.expiry_warned_at = None
-    announce(session, row, other_id)
+    announce(
+        session,
+        row,
+        other_id,
+        recipient_gender=await repository.gender_of(session, other_id),
+    )
     return _Sent(view_of(row, user.id), new=True)
+
+
+async def _write_voice(
+    session: AsyncSession,
+    thread: Thread,
+    sender_id: UUID,
+    voice: _Voice,
+    request: SendMessageRequest,
+) -> MessageRow:
+    """The voice note in `thread`, under the id its upload URL gave, in the
+    caller's transaction, which holds the Thread: so one upload is one
+    message, and sent again under another `client_msg_id` is refused."""
+    if await repository.message_exists(session, voice.message_id):
+        raise AppError(
+            "ALREADY_EXISTS", "That voice note was already sent.", status=409
+        )
+    row = await repository.add_voice(
+        session,
+        message_id=voice.message_id,
+        thread_id=thread.id,
+        sender_id=sender_id,
+        media_key=voice.media_key,
+        duration_s=voice.duration_s,
+        client_msg_id=request.client_msg_id,
+    )
+    thread.message_count += 1
+    thread.last_message_at = row.created_at
+    return row
 
 
 # --- Read receipts and typing (T-7.5) -----------------------------------------------
@@ -397,3 +572,78 @@ async def typing_recipient(
     async with session.begin():
         thread = await repository.thread_of(session, thread_id, user_id)
     return None if thread is None else _other_of(thread, user_id)
+
+
+# --- A voice note's file (T-7.9) -----------------------------------------------------
+
+
+async def unlock(
+    session: AsyncSession,
+    user: User,
+    message_id: UUID,
+    *,
+    shown: int,
+    storage: StorageProvider,
+    settings: Settings,
+) -> MediaUrl:
+    """`POST /messages/{id}/unlock`: a man pays once to hear the voice note
+    (D-010, D-621), then has its link.
+
+    Not a voice note in a Thread of theirs, or across a block: `NOT_FOUND`.
+    Locked for them (`rules.locked_for`): the unlock is recorded and
+    `voice_unlock` charged at the price shown (P-56) in one transaction, so a
+    refusal writes neither. Already unlocked, or never locked (its sender, a
+    woman): the link, nothing charged. An expired Thread is no bar: unlocking
+    isn't a send (D-097).
+    """
+    user_id, gender = user.id, user.gender
+    async with session.begin():
+        row = await repository.voice_of(session, message_id, user_id)
+        if row is None or row.media_key is None:
+            raise _not_found()
+        media_key = row.media_key
+        # Recorded first: a second unlock at once waits on this row, finds
+        # it, and charges nothing.
+        if rules.locked_for(
+            row, user_id, gender, unlocked=False
+        ) and await repository.add_unlock(session, user_id, row.id):
+            await pricing_service.charge(
+                session,
+                user,
+                LedgerReason.VOICE_UNLOCK,
+                shown=shown,
+                ref=Ref(RefType.MESSAGE, row.id),
+            )
+    return await _signed(storage, settings, media_key)
+
+
+async def media(
+    session: AsyncSession,
+    user: User,
+    message_id: UUID,
+    *,
+    storage: StorageProvider,
+    settings: Settings,
+) -> MediaUrl:
+    """`GET /messages/{id}/media`: the voice note's link, for its sender and
+    anyone it isn't locked for; locked, `NOT_ALLOWED` (unlock it first)."""
+    async with session.begin():
+        row = await repository.voice_of(session, message_id, user.id)
+        if row is None or row.media_key is None:
+            raise _not_found()
+        unlocked = await repository.has_unlocked(session, user.id, row.id)
+        if rules.locked_for(row, user.id, user.gender, unlocked):
+            raise AppError(
+                "NOT_ALLOWED", "Unlock this voice note to hear it.", status=422
+            )
+        media_key = row.media_key
+    return await _signed(storage, settings, media_key)
+
+
+async def _signed(
+    storage: StorageProvider, settings: Settings, media_key: str
+) -> MediaUrl:
+    url = await storage.presign_get(
+        settings.R2_BUCKET_PRIVATE, media_key, ttl=MEDIA_TTL_S
+    )
+    return MediaUrl(url=url)

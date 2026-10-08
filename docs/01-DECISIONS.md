@@ -4804,6 +4804,70 @@ D-007 left open, settled for `POST /kudos` and `GET /me/kudos`.
 its time (`{kind, created_at}`: it names the sender by when, and would need paging under D-270); a
 check for an existing kudos before the insert (two at once both pass it).
 
+### D-620 · A voice note: uploaded to a key of its own, judged and measured by its bytes, kept as measured — Locked
+**The decision (T-7.9; the founder, 8 October 2026, on the advisor's recommendation, Claude in a
+separate chat, relayed by the founder):**
+- **Hers alone (D-010), by an allowlist:** the upload URL and the send take a woman; a man, or
+  anyone with no gender, is `NOT_ALLOWED`.
+- **The upload URL** (`POST /media/voice-upload-url`, `{thread_id, content_type}`) names a fresh
+  `message_id` and a key `voice-uploads/{thread_id}/{message_id}.{webm|ogg|m4a}`, signed for
+  exactly `audio/webm`, `audio/ogg` or `audio/mp4` (anything else `UNSUPPORTED_AUDIO`) for 5
+  minutes (D-027). Only a Thread of hers, not across a block (`NOT_FOUND`); an expired one too,
+  since it takes her messages (D-097).
+- **The send judges the upload, never the browser's word.** The key must be one this Thread's URL
+  shape gave (`VALIDATION_ERROR` on `media_key`, as is nothing uploaded); its size, asked before a
+  byte is read, 2 MB at most, and the bytes read held to it again (`AUDIO_TOO_LARGE`); the bytes
+  the type the URL was signed for, by their first bytes (`UNSUPPORTED_AUDIO`); **its length
+  measured from the container** (`core/audio.py`: Ogg Opus's granule position less its pre-skip,
+  WebM's blocks' timestamps, MP4's headers and fragments), to the nearest second, 60 at most
+  (`AUDIO_TOO_LONG`). Where a container states its length twice, the longer wins; a length that
+  can't be told is refused, never let through. The client's `duration_s` is checked, 1 to 60
+  (P-15's API bound), and never stored. All of it before the send's transaction and after the
+  Thread is known to be hers, so no lock waits on storage and no answer tells an outsider what
+  another Thread holds.
+- **Kept as measured, where no client can write.** The bytes measured are written to
+  `voice/{thread_id}/{file_id}.{ext}`, `file_id` new for each check, and the message keeps that
+  key; the upload is then deleted. So a second PUT to the upload URL, still valid for its 5
+  minutes, or the same upload sent twice, never changes a file a message keeps: what a man pays
+  to unlock is what was checked. The message's id is the upload's `message_id`, so one upload is
+  one message (`ALREADY_EXISTS` for a second).
+- **`message.new` reaches the recipient locked** unless their gender says they hear it free, so a
+  caller that doesn't say never tells a man a voice note is unlocked.
+
+**Why measured:** a 2 MB Opus file holds about ten minutes; trusting `duration_s` would make the
+60-second cap the client's choice. **Why written again:** found building it: the upload URL
+outlives the check, so a file checked in place could be swapped for anything after he paid.
+
+**Rejected:** trusting `duration_s` with the 2 MB cap; a parsing library or ffprobe (CLAUDE.md
+rule 4; none reads all three containers without a native binary); checking the file in place;
+re-encoding the audio (no decoder in the stack; nothing in these containers carries a location,
+unlike a photo's EXIF).
+
+**Unverified:** the three readers are tested on files built by hand to the specs. Real Chrome,
+Firefox and Safari recordings are P-520's, on T-7.11's Needs line; Safari's fragmented MP4 is the
+riskiest. Uploads never sent stay in the bucket: P-521.
+
+### D-621 · Unlocking a voice note: once, recorded before it is charged — Locked
+**The decision (T-7.9; the founder, 8 October 2026, on the advisor's recommendation, Claude in a
+separate chat, relayed by the founder):**
+- **`POST /messages/{id}/unlock` `{shown_price?}` → `{url}`.** For whom it is locked
+  (`messages/rules.locked_for`: anyone but its sender and a woman who hasn't unlocked it), one
+  transaction records `message_unlocks` (`ON CONFLICT DO NOTHING`) and, only if the row is new,
+  charges `voice_unlock` through `pricing.service.charge(..., shown=)` (D-600), the message as its
+  ref. A refusal (`PRICE_CHANGED`, `INSUFFICIENT_CREDITS`) writes neither. Two taps at once: the
+  second waits on the first's row, finds it, and charges nothing; the ledger's per-event index is
+  the backstop beneath.
+- **Already unlocked, or never locked** (its sender, a woman): the link, nothing charged, nothing
+  recorded.
+- **An expired Thread is no bar** (the founder's answer, 8 October 2026): unlocking isn't a send,
+  and D-097 refuses only his sends.
+- **`GET /messages/{id}/media` → `{url}`** for anyone it isn't locked for; locked, `NOT_ALLOWED`.
+  Both links are signed for 10 minutes (D-027). Not a voice note in a Thread of theirs, or across
+  a block: `NOT_FOUND`, for both endpoints.
+
+**Rejected:** charging first and recording after (two taps both read "not unlocked"); refusing an
+unlock in an expired Thread; `402` for a locked file (nothing is being bought by fetching it).
+
 ## Adding a decision
 
 Append `D-0NN · Title — Locked|Open`, with Decision, Why, Rejected. Never edit a Locked entry —

@@ -8,6 +8,7 @@ from typing import Any
 from uuid import UUID
 
 from sqlalchemy import Row, case, exists, insert, or_, select, tuple_, update
+from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.enums import Gender, MessageKind, UserStatus
@@ -43,6 +44,80 @@ async def add_text(
     )
     assert row is not None
     return row
+
+
+async def add_voice(
+    session: AsyncSession,
+    *,
+    message_id: UUID,
+    thread_id: UUID,
+    sender_id: UUID,
+    media_key: str,
+    duration_s: int,
+    client_msg_id: UUID,
+) -> Message:
+    """A voice note, written now, under the id its upload URL gave (T-7.9)."""
+    row: Message | None = await session.scalar(
+        insert(Message)
+        .values(
+            id=message_id,
+            thread_id=thread_id,
+            sender_id=sender_id,
+            kind=MessageKind.VOICE,
+            media_key=media_key,
+            duration_s=duration_s,
+            client_msg_id=client_msg_id,
+        )
+        .returning(Message)
+    )
+    assert row is not None
+    return row
+
+
+async def message_exists(session: AsyncSession, message_id: UUID) -> bool:
+    found = await session.scalar(select(exists().where(Message.id == message_id)))
+    return bool(found)
+
+
+async def voice_of(
+    session: AsyncSession, message_id: UUID, viewer_id: UUID
+) -> Message | None:
+    """The voice note, if it is in a Thread the viewer is one of and no block
+    stands between its two."""
+    found: Message | None = await session.scalar(
+        select(Message)
+        .join(Thread, Thread.id == Message.thread_id)
+        .where(
+            Message.id == message_id,
+            Message.kind == MessageKind.VOICE,
+            or_(Thread.user_low == viewer_id, Thread.user_high == viewer_id),
+            ~blocked_either_way(viewer_id, _other(viewer_id)),
+        )
+    )
+    return found
+
+
+async def add_unlock(session: AsyncSession, user_id: UUID, message_id: UUID) -> bool:
+    """Record the unlock; False if it was already there. A second at once
+    waits on the first's row, then finds it (the primary key)."""
+    added = await session.scalar(
+        pg_insert(MessageUnlock)
+        .values(user_id=user_id, message_id=message_id)
+        .on_conflict_do_nothing()
+        .returning(MessageUnlock.message_id)
+    )
+    return added is not None
+
+
+async def has_unlocked(session: AsyncSession, user_id: UUID, message_id: UUID) -> bool:
+    found = await session.scalar(
+        select(
+            exists().where(
+                MessageUnlock.user_id == user_id, MessageUnlock.message_id == message_id
+            )
+        )
+    )
+    return bool(found)
 
 
 def _other(viewer_id: UUID) -> Any:
