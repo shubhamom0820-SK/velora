@@ -133,8 +133,8 @@ counted, never for your own profile or a refusal.
 | GET | /threads | ✅ | `?tier=threads|knots&filter=all|unread|recent&q=&cursor=&limit=` → `Page<ThreadRow>`: `threads` is active and expired, `knots` knotted; `unread`, something of theirs unread; `recent`, a message in the last 3 days; `q` (1–50), their first name or username, anywhere in it. Newest first by the last message, or the opening before any. Never one I cleared with nothing newer (D-006), never one with a block either way | T-7.2 |
 | POST | /threads | ✅ | `{match_id}` or `{user_id, first_message}` (1–500) → `Thread` (5 Velas from a match; 8 for a private message, D-231). One per pair: an existing one is returned, nothing charged; an expired one is `THREAD_EXPIRED` for him and returned to her (D-097). Every refusal of whom is `NOT_FOUND` (D-550). A woman past her daily limits: `RATE_LIMITED` (D-553). 20 a minute | T-7.1 |
 | GET | /threads/{id} | ✅ | → `Thread`; `NOT_FOUND` unless it is yours, and across a block | T-7.2 |
-| GET | /threads/{id}/messages | ✅ | `?cursor=&limit=` → `Page<Message>` | T-7.3 |
-| POST | /threads/{id}/messages | ✅ | `{client_msg_id, kind, body?, media_key?, duration_s?}` → `Message` | T-7.3 |
+| GET | /threads/{id}/messages | ✅ | `?cursor=&limit=` → `Page<Message>`: newest first, after my clearing only (D-006); `NOT_FOUND` unless it is yours, and across a block | T-7.3 |
+| POST | /threads/{id}/messages | ✅ | `{client_msg_id, kind, body?, media_key?, duration_s?}` → `Message`. Text 1–2000, not blank; a voice note is `NOT_ALLOWED` until T-7.9. The same `client_msg_id` again returns its message, nothing charged; used in another Thread, `ALREADY_EXISTS`. His send on an expired Thread, by the clock, is `THREAD_EXPIRED`, hers delivered (D-097, D-560). What he pays: D-551. `MESSAGE_REJECTED` (D-552), `ACCOUNT_DELETED` (D-555), `RATE_LIMITED` for her daily limits (D-553). 30 a minute | T-7.3 |
 | POST | /threads/{id}/read | ✅ | `{up_to_message_id}` → 204 | T-7.5 |
 | POST | /threads/{id}/reopen | ✅ | `Idempotency-Key` → `Thread` (expired only; 2 Velas, D-098; a fresh hour from now) | T-7.6 |
 | POST | /threads/{id}/extend | ✅ | `Idempotency-Key` → `Thread` (10 Velas, adding 24 hours to what is left, D-250; from expired the same 10 re-opens it, D-253; a Knot or a woman `NOT_ALLOWED`) | T-7.6 |
@@ -299,7 +299,8 @@ fake order is paid by calling it, for T-8.2's tests and T-8.7's local checkout.
 | `NOT_FOUND` | 404 | also used when a blocked user is looked up |
 | `USERNAME_TAKEN` | 409 | |
 | `ALREADY_EXISTS` | 409 | duplicate swipe/report/etc.; an order's `Idempotency-Key` sent again for another pack (D-481) |
-| `THREAD_EXPIRED` | 410 | his send on an expired Thread; hers is delivered (D-097) |
+| `THREAD_EXPIRED` | 410 | his send on an expired Thread; hers is delivered (D-097). Expired by the clock, though the cron hasn't caught its status up (D-560) |
+| `ACCOUNT_DELETED` | 410 | a message to someone who deleted their account (D-500, D-555) |
 | `UNDERAGE` | 422 | the account is deleted, only the number's hash kept (D-072) |
 | `IMMUTABLE_FIELD` | 422 | gender/dob change; a username after onboarding (D-068) |
 | `MESSAGE_REJECTED` | 422 | abuse or payment-solicitation filter; `details.rule` |

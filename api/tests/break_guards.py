@@ -5943,6 +5943,350 @@ T72: list[Case] = [
     ),
 ]
 
+# --- T-7.3: messages --------------------------------------------------------------
+
+T73_SELECTION = ["tests/modules/messages", "tests/modules/threads/test_open.py"]
+MESSAGES_RULES = "app/modules/messages/rules.py"
+MESSAGES_REPOSITORY = "app/modules/messages/repository.py"
+
+T73: list[Case] = [
+    Case(
+        id="t73-01-his-send-on-expired",
+        what="an expired Thread taking his send",
+        edits=[
+            (
+                MESSAGES_SERVICE,
+                "    if expired and not threads_rules.passes_an_expired_thread(user.gender):\n",
+                "    if False:\n",
+            )
+        ],
+        expect=["test_an_expired_thread_refuses_him_and_takes_hers_moving_nothing"],
+    ),
+    Case(
+        id="t73-02-expiry-by-status-alone",
+        what="expiry read from the status column, never the clock",
+        edits=[
+            (
+                THREADS_RULES,
+                (
+                    "    return (\n"
+                    "        thread.status is ThreadStatus.ACTIVE\n"
+                    "        and thread.expires_at is not None\n"
+                    "        and thread.expires_at <= now\n"
+                    "    )\n"
+                ),
+                "    return False\n",
+            )
+        ],
+        expect=[
+            "test_an_expired_thread_refuses_him_and_takes_hers_moving_nothing",
+            "test_a_thread_past_its_hour_refuses_him_before_the_cron",
+        ],
+    ),
+    Case(
+        id="t73-03-his-message-moves-the-hour",
+        what="his message moving the hour on",
+        edits=[
+            (
+                THREADS_RULES,
+                "        gender is Gender.FEMALE\n        and thread.status",
+                "        gender is not None\n        and thread.status",
+            )
+        ],
+        expect=["test_his_message_never_moves_the_hour"],
+    ),
+    Case(
+        id="t73-04-her-message-moves-nothing",
+        what="her message never moving the hour",
+        edits=[
+            (
+                MESSAGES_SERVICE,
+                "    if not expired and threads_rules.restarts_the_hour(thread, user.gender):\n",
+                "    if False:\n",
+            )
+        ],
+        expect=["test_her_message_moves_the_hour_on_and_clears_the_warning"],
+    ),
+    Case(
+        id="t73-05-her-message-revives",
+        what="her message reviving a Thread past its hour",
+        edits=[
+            (
+                MESSAGES_SERVICE,
+                "    if not expired and threads_rules.restarts_the_hour(thread, user.gender):\n",
+                "    if threads_rules.restarts_the_hour(thread, user.gender):\n",
+            )
+        ],
+        expect=["test_an_expired_thread_refuses_him_and_takes_hers_moving_nothing"],
+    ),
+    Case(
+        id="t73-06-hour-cut-short",
+        what="her message cutting a longer hour short",
+        edits=[
+            (
+                MESSAGES_SERVICE,
+                "        if thread.expires_at is None or later > thread.expires_at:\n",
+                "        if True:\n",
+            )
+        ],
+        expect=["test_her_message_never_cuts_a_longer_hour_short"],
+    ),
+    Case(
+        id="t73-07-warning-kept",
+        what="a moved hour keeping its old warning",
+        edits=[
+            (
+                MESSAGES_SERVICE,
+                "            thread.expiry_warned_at = None\n",
+                "            pass\n",
+            )
+        ],
+        expect=["test_her_message_moves_the_hour_on_and_clears_the_warning"],
+    ),
+    Case(
+        id="t73-08-answering-free",
+        what="his first message in her Thread free",
+        edits=[
+            (
+                MESSAGES_RULES,
+                "    return LedgerReason.THREAD_REOPEN if they_wrote else LedgerReason.THREAD_OPEN\n",
+                "    return None\n",
+            )
+        ],
+        expect=[
+            "test_answering_her_costs_him_the_re_open_once",
+            "test_writing_first_where_she_opened_costs_him_the_open",
+        ],
+    ),
+    Case(
+        id="t73-09-answering-at-the-open-price",
+        what="answering her charged as opening",
+        edits=[
+            (
+                MESSAGES_RULES,
+                "    return LedgerReason.THREAD_REOPEN if they_wrote else LedgerReason.THREAD_OPEN\n",
+                "    return LedgerReason.THREAD_OPEN\n",
+            )
+        ],
+        expect=["test_answering_her_costs_him_the_re_open_once"],
+    ),
+    Case(
+        id="t73-10-private-messages-free",
+        what="a private message after the first free",
+        edits=[
+            (
+                MESSAGES_RULES,
+                "        thread.origin is ThreadOrigin.DM and thread.status is not ThreadStatus.KNOTTED\n",
+                "        False\n",
+            )
+        ],
+        expect=[
+            "test_a_private_message_costs_him_two_each_and_her_nothing",
+            "test_a_retried_send_is_stored_once_and_charged_once",
+        ],
+    ),
+    Case(
+        id="t73-11-knot-charged",
+        what="a private message's Knot still charging",
+        edits=[
+            (
+                MESSAGES_RULES,
+                "        thread.origin is ThreadOrigin.DM and thread.status is not ThreadStatus.KNOTTED\n",
+                "        thread.origin is ThreadOrigin.DM\n",
+            )
+        ],
+        expect=["test_a_knot_is_free"],
+    ),
+    Case(
+        id="t73-12-no-dedupe",
+        what="a retried send stored again",
+        edits=[
+            (
+                MESSAGES_SERVICE,
+                (
+                    "        if existing is not None:\n"
+                    "            return _again(existing, thread_id, user_id)\n"
+                ),
+                "        pass\n",
+            ),
+            (
+                MESSAGES_SERVICE,
+                (
+                    "    if existing is not None:\n"
+                    "        return _Sent(_again(existing, thread_id, user.id), new=False)\n"
+                ),
+                "    pass\n",
+            ),
+        ],
+        expect=["test_a_retried_send_is_stored_once_and_charged_once"],
+    ),
+    Case(
+        id="t73-13-deleted-reached",
+        what="a message to a deleted account",
+        edits=[
+            (
+                MESSAGES_SERVICE,
+                "        if await repository.status_of(session, other_id) is UserStatus.DELETED:\n",
+                "        if False:\n",
+            )
+        ],
+        expect=["test_nothing_reaches_a_deleted_account"],
+    ),
+    Case(
+        id="t73-14-no-filters",
+        what="a send never passing the filters",
+        edits=[
+            (
+                MESSAGES_SERVICE,
+                "    await refuse_if_rejected(session, user_id, request.body)\n",
+                "    pass\n",
+            )
+        ],
+        expect=["test_abuse_and_asking_for_money_are_refused_and_kept_as_a_signal"],
+    ),
+    Case(
+        id="t73-15-voice-let-through",
+        what="a voice note let through before T-7.9",
+        edits=[
+            (
+                MESSAGES_SERVICE,
+                "    if request.kind is not MessageKind.TEXT:\n        raise _not_allowed()\n",
+                "    pass\n",
+            )
+        ],
+        expect=["test_a_voice_note_isnt_sendable_yet"],
+    ),
+    Case(
+        id="t73-16-no-new-men-limit",
+        what="writing first never counted among her new men",
+        edits=[
+            (
+                MESSAGES_SERVICE,
+                "            if thread.message_count == 0 and limits.counts_as_a_man(\n",
+                "            if False and limits.counts_as_a_man(\n",
+            )
+        ],
+        expect=["test_writing_first_to_a_man_counts_among_her_new_men"],
+    ),
+    Case(
+        id="t73-17-answering-counted",
+        what="answering him counted as writing first",
+        edits=[
+            (
+                MESSAGES_SERVICE,
+                "            if thread.message_count == 0 and limits.counts_as_a_man(\n",
+                "            if thread.message_count >= 0 and limits.counts_as_a_man(\n",
+            )
+        ],
+        expect=["test_answering_him_isnt_writing_first"],
+    ),
+    Case(
+        id="t73-18-private-uncounted",
+        what="her private messages never counted",
+        edits=[
+            (
+                MESSAGES_SERVICE,
+                "            if thread.origin is ThreadOrigin.DM:\n                private",
+                "            if False:\n                private",
+            )
+        ],
+        expect=["test_her_private_messages_are_counted"],
+    ),
+    Case(
+        id="t73-19-place-kept",
+        what="a failed send keeping her place",
+        edits=[
+            (
+                MESSAGES_SERVICE,
+                "    except BaseException:\n        await taken.give_back()\n        raise\n",
+                "    except BaseException:\n        raise\n",
+            )
+        ],
+        expect=["test_a_failed_send_gives_her_place_back"],
+    ),
+    Case(
+        id="t73-20-clearing-ignored",
+        what="messages before my clearing read",
+        edits=[
+            (
+                MESSAGES_REPOSITORY,
+                "    if since is not None:\n        query = query.where(Message.created_at > since)\n",
+                "",
+            )
+        ],
+        expect=["test_only_what_came_after_my_clearing"],
+    ),
+    Case(
+        id="t73-21-voice-open-to-men",
+        what="her voice note open to a man who hasn't unlocked it",
+        edits=[
+            (
+                MESSAGES_RULES,
+                "    return gender is not Gender.FEMALE and not unlocked\n",
+                "    return False\n",
+            )
+        ],
+        expect=["test_her_voice_note_is_locked_for_him_until_he_unlocks_it"],
+    ),
+    Case(
+        id="t73-22-unlock-ignored",
+        what="an unlocked voice note still locked",
+        edits=[
+            (
+                MESSAGES_RULES,
+                "    return gender is not Gender.FEMALE and not unlocked\n",
+                "    return gender is not Gender.FEMALE\n",
+            )
+        ],
+        expect=["test_her_voice_note_is_locked_for_him_until_he_unlocks_it"],
+    ),
+    Case(
+        id="t73-23-deleted-sender-unnamed",
+        what="a deleted account's messages not named as such",
+        edits=[
+            (
+                MESSAGES_REPOSITORY,
+                '            (sender == UserStatus.DELETED).label("from_deleted_account"),\n',
+                '            (sender == UserStatus.BANNED).label("from_deleted_account"),\n',
+            )
+        ],
+        expect=["test_a_deleted_accounts_messages_stay_and_say_so"],
+    ),
+    Case(
+        id="t73-24-anyones-thread",
+        what="anyone's Thread read and written to",
+        edits=[
+            (
+                MESSAGES_REPOSITORY,
+                "        or_(Thread.user_low == viewer_id, Thread.user_high == viewer_id),\n",
+                "",
+            )
+        ],
+        expect=[
+            "test_someone_elses_thread_is_not_found",
+            "test_someone_elses_thread_or_one_across_a_block_is_not_found",
+        ],
+    ),
+    Case(
+        id="t73-25-across-a-block",
+        what="a Thread read across a block",
+        edits=[
+            (
+                MESSAGES_REPOSITORY,
+                "        ~blocked_either_way(viewer_id, _other(viewer_id)),\n",
+                "",
+            )
+        ],
+        expect=["test_someone_elses_thread_or_one_across_a_block_is_not_found"],
+    ),
+    Case(
+        id="t73-26-no-thread-lock",
+        what="a send not holding the Thread's row",
+        edits=[(MESSAGES_REPOSITORY, "    if lock:\n", "    if False:\n")],
+        expect=["test_two_sends_at_once_are_both_counted"],
+    ),
+]
+
 CASES: list[tuple[Case, list[str]]] = (
     [(c, T51_SELECTION) for c in T51]
     + [(c, T54_SELECTION) for c in T54]
@@ -5969,6 +6313,7 @@ CASES: list[tuple[Case, list[str]]] = (
     + [(c, T71_SELECTION) for c in T71]
     + [(c, T811_SELECTION) for c in T811]
     + [(c, T72_SELECTION) for c in T72]
+    + [(c, T73_SELECTION) for c in T73]
 )
 
 # The fifty-connection fixture's own message when Postgres refuses a connection.

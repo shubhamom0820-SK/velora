@@ -247,6 +247,28 @@ async def test_an_expired_thread_refuses_him(
     assert await _ledger(db, man_id) == []
 
 
+async def test_a_thread_past_its_hour_refuses_him_before_the_cron(
+    client: AsyncClient,
+    make_user: MakeUser,
+    make_thread: MakeThread,
+    db: AsyncSession,
+    clock: ModuleType,
+) -> None:
+    """Expired by the clock, not the status column (D-560)."""
+    clock.freeze(NOON)
+    man, token = await make_user(credits=10)
+    woman, _ = await make_user(Gender.FEMALE)
+    match = await _match(db, man, woman)
+    thread = await make_thread(man, woman)
+    thread.expires_at = NOON - timedelta(minutes=1)
+    await db.flush()
+
+    response = await _open(client, token, match_id=match.id)
+
+    assert response.status_code == 410
+    assert error(response)["code"] == "THREAD_EXPIRED"
+
+
 async def test_an_expired_thread_is_returned_to_her(
     client: AsyncClient, make_user: MakeUser, make_thread: MakeThread, db: AsyncSession
 ) -> None:

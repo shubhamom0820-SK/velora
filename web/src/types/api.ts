@@ -832,6 +832,24 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/threads/{thread_id}/messages": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Messages */
+        get: operations["list_messages_v1_threads__thread_id__messages_get"];
+        put?: never;
+        /** Send Message */
+        post: operations["send_message_v1_threads__thread_id__messages_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/auth/otp/send": {
         parameters: {
             query?: never;
@@ -1239,10 +1257,64 @@ export interface components {
             location: "none" | "fresh" | "stale";
         };
         /**
+         * Message
+         * @description One message, as one of the Thread's two people sees it.
+         *
+         *     `body` is the text shown, masked where it had to be (`masked`, D-030);
+         *     never the original, which only moderation reads. A voice note never
+         *     carries its file here: `locked` says whether a man still has to unlock it,
+         *     and the file is fetched on its own (T-7.9). `client_msg_id` only on your
+         *     own messages, for the web to match its sends.
+         */
+        Message: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /**
+             * Thread Id
+             * Format: uuid
+             */
+            thread_id: string;
+            kind: components["schemas"]["MessageKind"];
+            /** Body */
+            body: string | null;
+            /** Masked */
+            masked: boolean;
+            /** Duration S */
+            duration_s: number | null;
+            /** Mine */
+            mine: boolean;
+            /** From Deleted Account */
+            from_deleted_account: boolean;
+            /** Locked */
+            locked: boolean;
+            /** Read At */
+            read_at: string | null;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /** Client Msg Id */
+            client_msg_id: string | null;
+        };
+        /**
          * MessageKind
          * @enum {string}
          */
         MessageKind: "text" | "voice" | "system";
+        /**
+         * MessagePage
+         * @description `Page<Message>`: newest first by `(created_at, id)`.
+         */
+        MessagePage: {
+            /** Items */
+            items: components["schemas"]["Message"][];
+            /** Next Cursor */
+            next_cursor: string | null;
+        };
         /**
          * OnboardingStep
          * @enum {string}
@@ -1520,6 +1592,26 @@ export interface components {
             seeking: components["schemas"]["Seeking"];
             /** Intent Ids */
             intent_ids: number[];
+        };
+        /**
+         * SendMessageRequest
+         * @description `{client_msg_id, kind, body?, media_key?, duration_s?}`. Text: a body of
+         *     1 to 2,000 characters, not all spaces, and nothing else. A voice note's
+         *     fields are T-7.9's; until then one is refused by the service.
+         */
+        SendMessageRequest: {
+            /**
+             * Client Msg Id
+             * Format: uuid
+             */
+            client_msg_id: string;
+            kind: components["schemas"]["MessageKind"];
+            /** Body */
+            body?: string | null;
+            /** Media Key */
+            media_key?: string | null;
+            /** Duration S */
+            duration_s?: number | null;
         };
         /**
          * SettingsPatch
@@ -3227,6 +3319,75 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["Thread"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_messages_v1_threads__thread_id__messages_get: {
+        parameters: {
+            query?: {
+                cursor?: string | null;
+                limit?: number;
+            };
+            header?: never;
+            path: {
+                thread_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MessagePage"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    send_message_v1_threads__thread_id__messages_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                thread_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SendMessageRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Message"];
                 };
             };
             /** @description Validation Error */

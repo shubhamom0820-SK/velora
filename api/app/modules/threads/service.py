@@ -34,7 +34,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core import clock, events
 from app.core.config import Settings
-from app.core.enums import MessageKind, ThreadOrigin, ThreadStatus, UserStatus
+from app.core.enums import MessageKind, ThreadOrigin, UserStatus
 from app.core.errors import AppError
 from app.core.pagination import Cursor, PageParams
 from app.core.storage_keys import public_url
@@ -56,15 +56,6 @@ THREAD_NOTIFICATION = "thread"
 
 def _not_found() -> AppError:
     return AppError("NOT_FOUND", "Not found.", status=404)
-
-
-def thread_expired() -> AppError:
-    """His alone (D-097): an expired Thread lets her through."""
-    return AppError(
-        "THREAD_EXPIRED",
-        "This Thread has run out. Re-open it to reply.",
-        status=410,
-    )
 
 
 def view_of(thread: Thread, viewer: User) -> schemas.Thread:
@@ -177,10 +168,10 @@ async def _open_in(
     match = await repository.pair_match(session, user.id, other_id)
     existing = await repository.pair_thread(session, user.id, other_id)
     if existing is not None:
-        if existing.status is ThreadStatus.EXPIRED and not (
+        if rules.has_expired(existing, clock.now()) and not (
             rules.passes_an_expired_thread(user.gender)
         ):
-            raise thread_expired()
+            raise rules.thread_expired()
         if match is not None:
             await repository.link_match(session, match.id, existing.id)
         return _Opened(view_of(existing, user), created=False)

@@ -2820,16 +2820,30 @@ prices don't depend on the web photos step, and the hold is lifted.
 - [x] **Commit:** `feat(threads): list [T-7.2]`
 
 ### T-7.3 · Messages
-- [ ] **Needs:** T-7.2
-- [ ] `GET /threads/{id}/messages?cursor=&limit=` (newest first, respects my `cleared_at`; voice notes locked for men without unlock → no media URL).
-- [ ] **Messages from a deleted or erased account** show as from "Deleted account" (D-051), and
+- [x] **Needs:** T-7.2
+- [x] `GET /threads/{id}/messages?cursor=&limit=` (newest first, respects my `cleared_at`; voice notes locked for men without unlock → no media URL).
+- [x] **Messages from a deleted or erased account** show as from "Deleted account" (D-051), and
   stay; sending to one is refused, with the code this task chooses (T-9.6, D-500).
-- [ ] `POST /threads/{id}/messages`: participant only; thread `expired` → `THREAD_EXPIRED` for his send, while hers is delivered (D-097: an expired Thread refuses his sends and accepts hers); text 1–2000; abuse/solicitation rules → `MESSAGE_REJECTED` (+ fraud event); masking if `message_count < mask_first_n` (store `body_raw`, set `masked`); dedupe on `client_msg_id` (return existing); update `last_message_at`, `message_count`; publish `message.new`; notify recipient if not connected.
-- [ ] **When she wrote first, he pays to answer: the 2-Vela re-open, `thread_reopen`** (D-250,
+- [x] `POST /threads/{id}/messages`: participant only; thread `expired` → `THREAD_EXPIRED` for his send, while hers is delivered (D-097: an expired Thread refuses his sends and accepts hers); text 1–2000; abuse/solicitation rules → `MESSAGE_REJECTED` (+ fraud event); masking if `message_count < mask_first_n` (store `body_raw`, set `masked`); dedupe on `client_msg_id` (return existing); update `last_message_at`, `message_count`; publish `message.new`; notify recipient if not connected.
+- [x] **When she wrote first, he pays to answer: the 2-Vela re-open, `thread_reopen`** (D-250,
   the founder, 4 October 2026; T-5.2's item 10(b)). Charged through `pricing.service.charge`
   (T-5.2), never a literal price.
-- [ ] Tests for masking patterns (+91 numbers, spaced digits, emails, UPI handles, "insta: x"), rejection, dedupe, expired.
-- [ ] **Commit:** `feat(messages): list and send with safety filters [T-7.3]`
+- [x] Tests for masking patterns (+91 numbers, spaced digits, emails, UPI handles, "insta: x"), rejection, dedupe, expired.
+  **Built as D-551 and D-555** (the founder's answers, 8 October 2026): sending to a deleted
+  account is `ACCOUNT_DELETED`; what he pays is D-551 (the opener writes free; answering her is
+  the 2-Vela re-open once, writing first where she opened is 5; each private message 2); her
+  message moves a live Thread's hour on to D-560's rule and his never does, and expiry is read
+  from the clock, in sending and in T-7.1's open path (the founder's Q7: built here, T-7.6 finds
+  it done); her daily limits (D-553) count a man when she writes first in a Thread, and every
+  private message of hers. Two sends at once hold the Thread's row in turn (`test_race.py`, the
+  overlap forced). A voice note is `NOT_ALLOWED` until T-7.9, whose media URL is never in a
+  `Message`. **"Notify recipient if not connected" is T-9.4's:** its kinds already list "message
+  (only if not connected)", and only T-7.4 can tell who is connected; this task queues
+  `message.new` to both. **A block** makes the Thread `NOT_FOUND` here, as in T-7.2's list and
+  `GET /threads/{id}`; T-9.1 decides whether sending says `BLOCKED` instead.
+  **Broken once each** (`uv run python -m tests.break_guards t73-`): twenty-six cases, each red
+  in 1 of 1, every file restored and none differing by SHA-256 after.
+- [x] **Commit:** `feat(messages): list and send with safety filters [T-7.3]`
 
 ### T-7.4 · Real-time server
 - [ ] **Needs:** T-7.3, and **P-64**: in tests `session_for_the_app` replaces `get_session`, which is what publishes, so no endpoint test sees an event; and services queue events through `core/events.py` (T-5.1), never a publish of their own
@@ -2877,6 +2891,9 @@ prices don't depend on the web photos step, and the hold is lifted.
   `THREAD_EXPIRED`, and her message is delivered and moves nothing (D-097 step 4: it stays expired
   until he re-opens). Without this, the minute between crons lets him send in a Thread that ran
   out, and lets her message revive one. T-7.3's send changes here to read it.
+  **Built in T-7.3** (the founder's Q7, 8 October 2026; D-551): her message's `max` and the
+  warning it clears, his message moving nothing, and expiry read from the clock in the send and
+  in T-7.1's open path (`threads/rules.py`'s `has_expired`). This task's tests of them stand.
 - [ ] Cron `expire_threads` (every minute, batches of 500, `FOR UPDATE SKIP LOCKED`): active
   Threads past `expires_at` → `expired`, `thread.expired` to him. Cron `warn_expiring` (every
   minute): active Threads with `thread_warn_minutes` or less left and no `expiry_warned_at` →

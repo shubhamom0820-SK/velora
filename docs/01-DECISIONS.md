@@ -4282,6 +4282,37 @@ number); backfilling existing men.
 The founder's approval, 8 October 2026, of the advisor's three recommendations as T-8.11's plan
 put them, relayed by the founder.
 
+### D-551 · What his messages cost, and what hers move — Locked
+**The decision (T-7.3; the founder, 8 October 2026: D-250 and the plan's Q4, Q5 and Q7):**
+- **The opener paid to open.** In a Thread from a match, the man who opened it (`thread_open`, 5)
+  writes free while it is live.
+- **His first message in a Thread she opened:** if she has written, the 2-Vela re-open,
+  `thread_reopen` (D-250), keyed `answer:{thread}` so it is charged once however he retries; if
+  she hasn't, `thread_open`'s 5, since a man's first message opens a Thread (D-097 step 1).
+  Otherwise a woman opening first would hand him a free Thread.
+- **A private message:** every message of his after the one that opened it costs `dm_message`
+  (2), the message as its ref (D-251), and in one she opened every message of his does (he never
+  pays 8 there). Nothing once knotted.
+- **A Knot is free** (D-003); a woman pays 0 for everything (D-098), decided by `pricing`, never
+  by the send.
+- **The hour, built here to D-560 and T-7.6's text** (the founder's Q7): her message on a live
+  Thread from a match sets `expires_at` to the later of itself and `now + thread_hours`, and
+  clears `expiry_warned_at` when it moves; his message never moves it (D-097's amendment, a), so
+  a longer hour bought by Extend is never cut short and, once it ends, the hour counts from her
+  last message (d).
+- **Expired is the clock** (D-560): a Thread whose `expires_at` has passed refuses his send with
+  `THREAD_EXPIRED` though the cron hasn't caught its status up, in sending and in opening (T-7.1's
+  open path takes the same check), and her message is delivered and moves nothing.
+
+### D-555 · Sending to a deleted account is `ACCOUNT_DELETED` — Locked
+**The decision (T-7.3, the plan's Q8, approved 8 October 2026):** a message to someone whose
+account is `deleted` (D-500) is refused with `ACCOUNT_DELETED` (410): "They deleted their
+account." Their row already says "Deleted account" (T-7.2), so the code reveals nothing new, and
+the web can say what happened rather than a generic refusal. Their messages stay, named as from a
+deleted account (D-051). Signing in again restores the account (D-500), and with it the Thread.
+
+**Rejected:** `NOT_ALLOWED` (422), which the web couldn't tell from a voice note or a gift.
+
 ## Adding a decision
 
 Append `D-0NN · Title — Locked|Open`, with Decision, Why, Rejected. Never edit a Locked entry —
