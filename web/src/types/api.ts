@@ -778,6 +778,40 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/users/by-username/{username}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Profile By Username */
+        get: operations["profile_by_username_v1_users_by_username__username__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/search": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Search */
+        get: operations["search_v1_search_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/me/settings": {
         parameters: {
             query?: never;
@@ -1747,6 +1781,46 @@ export interface components {
          * @enum {string}
          */
         Role: "user" | "moderator" | "admin";
+        /**
+         * SearchResult
+         * @description One person in search's results (T-6.6, D-540): a row, not a card. The
+         *     `Card`'s rules for each field it shares; never a distance, a date of
+         *     birth, a position or raw `is_verified`.
+         */
+        SearchResult: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** First Name */
+            first_name: string;
+            /** Age */
+            age: number | null;
+            /** Username */
+            username: string;
+            /** City */
+            city: string | null;
+            /** Main Photo Url */
+            main_photo_url: string | null;
+            /** Shows Badge */
+            shows_badge: boolean;
+            /** Is Online */
+            is_online: boolean;
+            /** Exact */
+            exact: boolean;
+        };
+        /**
+         * SearchResultPage
+         * @description `Page<SearchResult>`: `@` search's exact match first, then usernames in
+         *     order; text search's best name match first, then by id (D-540).
+         */
+        SearchResultPage: {
+            /** Items */
+            items: components["schemas"]["SearchResult"][];
+            /** Next Cursor */
+            next_cursor: string | null;
+        };
         /**
          * Seeking
          * @enum {string}
@@ -3345,6 +3419,70 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["PublicProfile"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    profile_by_username_v1_users_by_username__username__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                username: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PublicProfile"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    search_v1_search_get: {
+        parameters: {
+            query: {
+                q: string;
+                cursor?: string | null;
+                limit?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SearchResultPage"];
                 };
             };
             /** @description Validation Error */

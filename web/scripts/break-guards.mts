@@ -41,6 +41,8 @@ const CLAIMS_TEST = "src/i18n/claims.test.ts";
 const SELFIE_TEST = "src/components/onboarding/SelfieStep.test.tsx";
 const CAMERA_TEST = "src/lib/camera.test.ts";
 const VERIFICATION_TEST = "src/lib/queries/verification.test.tsx";
+const SEARCH_TEST = "src/components/search/SearchScreen.test.tsx";
+const PROXY_TEST = "src/proxy.test.ts";
 
 const HEADERS = "src/lib/security-headers.ts";
 const CONNECT = "connect: ` ${storage.privateBucket}`,";
@@ -630,6 +632,89 @@ export const CASES: BreakCase[] = [
     new: "              me.balance === 0\n",
     run: [SELFIE_TEST],
     expect: ["one Vela is one, in the singular"],
+  },
+
+  // --- T-6.6: search, and the nonce routes' CSP (D-540, D-541) ---
+  {
+    id: "t66-search-01-asks-for-every-letter",
+    file: "src/components/search/useDebounced.ts",
+    old: "const timer = setTimeout(() => setSettled(value), ms);",
+    new: "setSettled(value);\n    const timer = setTimeout(() => {}, ms);",
+    run: [SEARCH_TEST],
+    expect: ["asks once typing pauses, not for each letter"],
+  },
+  {
+    id: "t66-search-02-asks-what-the-api-refuses",
+    file: "src/components/search/searchQuery.ts",
+    old: '  if (q.length < SEARCH_TEXT_MIN) return { kind: "tooShort" };\n',
+    new: "",
+    run: [SEARCH_TEST],
+    expect: ["says why, and asks nothing"],
+  },
+  {
+    id: "t66-search-03-their-text-as-markup",
+    file: "src/components/search/SearchResultRow.tsx",
+    old: '      <span className="flex min-w-0 flex-1 flex-col">',
+    new: '      <span dangerouslySetInnerHTML={{ __html: person.first_name }} />\n      <span className="flex min-w-0 flex-1 flex-col">',
+    run: [SEARCH_TEST],
+    expect: ["renders another person's text as text, never as markup"],
+  },
+  {
+    id: "t66-search-04-a-badge-for-everyone",
+    file: "src/components/search/SearchResultRow.tsx",
+    old: "verified={person.shows_badge}",
+    new: "verified={true}",
+    run: [SEARCH_TEST],
+    expect: ["shows the badge only where the API says it shows"],
+  },
+  {
+    id: "t66-csp-01-inline-kept-beside-the-nonce",
+    file: HEADERS,
+    old: "`'nonce-${nonce}' 'strict-dynamic'`",
+    new: "`'nonce-${nonce}' 'strict-dynamic' 'unsafe-inline'`",
+    run: [CSP_TEST],
+    expect: ["differs from the static one in script-src alone"],
+  },
+  {
+    id: "t66-csp-02-a-route-left-to-the-static-policy",
+    file: "src/proxy.ts",
+    old: '    "/you/:path*",\n',
+    new: "",
+    run: [CSP_TEST],
+    expect: [
+      "has the proxy match exactly NONCE_ROUTES",
+      "leaves /you to the proxy",
+    ],
+  },
+  {
+    id: "t66-csp-03-two-policies-on-a-nonce-route",
+    file: HEADERS,
+    old: '  return `/((?!(?:${NONCE_ROUTES.join("|")})(?:/|$)).*)`;',
+    new: '  return "/(.*)";',
+    run: [CSP_TEST],
+    expect: [
+      "leaves /login to the proxy",
+      "leaves /discover/search to the proxy",
+    ],
+  },
+  {
+    id: "t66-csp-04-a-page-built-ahead-without-its-nonce",
+    file: "src/app/(app)/layout.tsx",
+    old: 'export const dynamic = "force-dynamic";',
+    new: 'export const dynamic = "auto";',
+    run: [PROXY_TEST],
+    expect: ["has (auth) and (app) force dynamic rendering"],
+  },
+  {
+    id: "t66-csp-05-served-under-no-policy",
+    file: HEADERS,
+    old: '    throw new Error("The build has no nonce policy: CSP_WITH_NONCE is unset");',
+    new: "    return template;",
+    run: [CSP_TEST, PROXY_TEST],
+    expect: [
+      "never serves a nonce route under no policy",
+      "refuses to serve a page when the build has no nonce policy",
+    ],
   },
 ];
 

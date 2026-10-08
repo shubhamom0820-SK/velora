@@ -8,6 +8,8 @@ import { vi } from "vitest";
 export type Call = {
   method: string;
   path: string;
+  /** The query string, as the api client wrote it. */
+  query: URLSearchParams;
   headers: Headers;
   credentials: RequestCredentials | undefined;
   body: unknown;
@@ -44,6 +46,7 @@ export function fakeApi(routes: Record<string, Route>) {
       const call: Call = {
         method: init?.method ?? "GET",
         path: new URL(String(input)).pathname,
+        query: new URL(String(input)).searchParams,
         headers: new Headers(init?.headers),
         credentials: init?.credentials,
         body: init?.body ? JSON.parse(String(init.body)) : undefined,

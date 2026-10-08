@@ -27,6 +27,8 @@ nothing (D-495).
 from __future__ import annotations
 
 import math
+import re
+from dataclasses import dataclass
 from datetime import timedelta
 from typing import Final
 
@@ -79,3 +81,50 @@ def distance_km(metres: float) -> int:
 
 def bio_line(about: str | None) -> str:
     return (about or "")[:BIO_LINE_CHARS]
+
+
+# --- Search (T-6.6, D-540) -----------------------------------------------------------
+
+# `q`, whole, `@` included.
+SEARCH_MAX: Final = 50
+# Text mode needs this many characters: one letter matches nearly everyone.
+SEARCH_TEXT_MIN: Final = 2
+# pg_trgm's `%`, set for the search's own transaction rather than left to the
+# database's default: a name matches at this similarity or more.
+SIMILARITY: Final = 0.3
+# After the `@`: what a username may hold (P-59), any case, 1 to 20 of them;
+# a prefix of one is the search.
+USERNAME_PREFIX: Final = re.compile(r"[A-Za-z0-9._]{1,20}")
+
+
+@dataclass(frozen=True)
+class Query:
+    """What `q` asks: `@` and a username's start, or text."""
+
+    username: bool
+    term: str
+
+
+def parse_query(q: str) -> Query | str:
+    """The search `q` asks for, or what is wrong with it."""
+    q = q.strip()
+    if q.startswith("@"):
+        term = q[1:]
+        if not USERNAME_PREFIX.fullmatch(term):
+            return "after @, 1 to 20 of a-z, 0-9, . and _"
+        return Query(username=True, term=term.lower())
+    if len(q) < SEARCH_TEXT_MIN:
+        return f"at least {SEARCH_TEXT_MIN} characters"
+    return Query(username=False, term=q)
+
+
+def like_prefix(term: str) -> str:
+    """`term` as a LIKE pattern matching what starts with it: its `\\`, `%` and
+    `_` escaped, so `@a_b` never finds `axb` (D-540)."""
+    escaped = term.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
+    return f"{escaped}%"
+
+
+def like_contains(term: str) -> str:
+    """`term` as a LIKE pattern matching what holds it anywhere, escaped."""
+    return f"%{like_prefix(term)}"

@@ -4099,8 +4099,8 @@ T62: list[tuple[Case, list[str]]] = [
             edits=[
                 (
                     "app/modules/discovery/service.py",
-                    "            radius_m=radius_km * 1000.0,\n",
-                    "            radius_m=25_000.0,\n",
+                    "            radius_m=radius_km * 1000.0,\n            new_first=",
+                    "            radius_m=25_000.0,\n            new_first=",
                 )
             ],
             expect=["test_the_radius_is_read_from_app_config_within_a_minute"],
@@ -4147,8 +4147,8 @@ T62: list[tuple[Case, list[str]]] = [
             edits=[
                 (
                     "app/modules/discovery/repository.py",
-                    "        func.ST_DWithin(Profile.location, here, radius_m),\n",
-                    "        func.ST_Distance(Profile.location, here) <= radius_m,\n",
+                    "        *visible_to(viewer, mutual=True),\n        func.ST_DWithin(Profile.location, here, radius_m),\n",
+                    "        *visible_to(viewer, mutual=True),\n        func.ST_Distance(Profile.location, here) <= radius_m,\n",
                 )
             ],
             expect=["test_a_spread_crowd_is_searched_through_the_gist_index"],
@@ -4295,8 +4295,8 @@ T63: list[tuple[Case, list[str]]] = [
             edits=[
                 (
                     "app/modules/discovery/service.py",
-                    "        if not own:\n            await repository.record_view(",
-                    "        if True:\n            await repository.record_view(",
+                    "    if not own:\n        await repository.record_view(",
+                    "    if True:\n        await repository.record_view(",
                 )
             ],
             expect=["test_my_own_profile_opens_with_nothing_between_us"],
@@ -4325,8 +4325,8 @@ T63: list[tuple[Case, list[str]]] = [
             edits=[
                 (
                     "app/modules/discovery/service.py",
-                    "            await repository.kudos_counts(session, user_id) if row.show_kudos else None\n",
-                    "            await repository.kudos_counts(session, user_id)\n",
+                    "    kudos = await repository.kudos_counts(session, user_id) if row.show_kudos else None\n",
+                    "    kudos = await repository.kudos_counts(session, user_id)\n",
                 )
             ],
             expect=["test_kudos_are_counted_and_null_when_hidden"],
@@ -5021,6 +5021,190 @@ T64: list[tuple[Case, list[str]]] = [
             expect=["test_a_match_is_published_to_both"],
         ),
         ["tests/modules/swipes/test_race.py"],
+    ),
+]
+
+# --- T-6.6: search and the username lookup ----------------------------------------
+
+DISCOVERY_REPO = "app/modules/discovery/repository.py"
+T66_SELECTION = [
+    "tests/modules/discovery/test_search.py",
+    "tests/modules/discovery/test_by_username.py",
+]
+GONE = "test_nobody_hidden_blocked_unfinished_or_held_back_is_found"
+
+T66: list[tuple[Case, list[str]]] = [
+    (
+        Case(
+            id="t66-01-wildcard",
+            what="D-540: `_` and `%` in a search reaching LIKE unescaped",
+            edits=[
+                (
+                    "app/modules/discovery/rules.py",
+                    '    escaped = term.replace("\\\\", "\\\\\\\\").replace("%", "\\\\%").replace("_", "\\\\_")\n',
+                    "    escaped = term\n",
+                )
+            ],
+            expect=["test_an_underscore_is_a_character_never_a_wildcard"],
+        ),
+        T66_SELECTION,
+    ),
+    (
+        Case(
+            id="t66-02-at-search-unfiltered",
+            what="`@` search without `visible_to`: blocked, hidden, inactive, yourself",
+            edits=[
+                (
+                    DISCOVERY_REPO,
+                    "            *visible_to(viewer, mutual=False),\n            Profile.username.ilike(",
+                    "            Profile.username.ilike(",
+                )
+            ],
+            expect=[
+                f"{GONE}[@gone]",
+                "test_only_active_accounts_are_found",
+                "test_you_never_find_yourself",
+            ],
+        ),
+        T66_SELECTION,
+    ),
+    (
+        Case(
+            id="t66-03-at-search-hidden-with-a-match",
+            what="D-493: a hidden profile let into `@` search by a shared match",
+            edits=[
+                (
+                    DISCOVERY_REPO,
+                    "            *visible_to(viewer, mutual=False),\n            Profile.username.ilike(",
+                    "            *visible_to(\n                viewer,\n                mutual=False,\n                hidden_ok=shares_a_match_or_thread(viewer.id, User.id),\n            ),\n            Profile.username.ilike(",
+                )
+            ],
+            expect=[f"{GONE}[@gone]"],
+        ),
+        T66_SELECTION,
+    ),
+    (
+        Case(
+            id="t66-04-text-search-unfiltered",
+            what="text search without `visible_to`",
+            edits=[
+                (
+                    DISCOVERY_REPO,
+                    "            *visible_to(viewer, mutual=True),\n            func.ST_DWithin(Profile.location, here, radius_m),\n            or_(*matches),",
+                    "            func.ST_DWithin(Profile.location, here, radius_m),\n            or_(*matches),",
+                )
+            ],
+            expect=[
+                f"{GONE}[Gone]",
+                "test_text_keeps_to_the_radius_and_to_who_wants_whom",
+            ],
+        ),
+        T66_SELECTION,
+    ),
+    (
+        Case(
+            id="t66-05-text-search-not-mutual",
+            what="text search past seeking, as `@` search is",
+            edits=[
+                (
+                    DISCOVERY_REPO,
+                    "            *visible_to(viewer, mutual=True),\n            func.ST_DWithin(Profile.location, here, radius_m),\n            or_(*matches),",
+                    "            *visible_to(viewer, mutual=False),\n            func.ST_DWithin(Profile.location, here, radius_m),\n            or_(*matches),",
+                )
+            ],
+            expect=["test_text_keeps_to_the_radius_and_to_who_wants_whom"],
+        ),
+        T66_SELECTION,
+    ),
+    (
+        Case(
+            id="t66-06-text-search-no-radius",
+            what="text search across India",
+            edits=[
+                (
+                    DISCOVERY_REPO,
+                    "            *visible_to(viewer, mutual=True),\n            func.ST_DWithin(Profile.location, here, radius_m),\n            or_(*matches),",
+                    "            *visible_to(viewer, mutual=True),\n            or_(*matches),",
+                )
+            ],
+            expect=["test_text_keeps_to_the_radius_and_to_who_wants_whom"],
+        ),
+        T66_SELECTION,
+    ),
+    (
+        Case(
+            id="t66-07-raw-is-verified",
+            what="D-393: a row's badge read from raw `is_verified`",
+            edits=[
+                (
+                    DISCOVERY_REPO,
+                    '            badge_of(User.id, User.is_verified).label("shows_badge"),\n',
+                    '            User.is_verified.label("shows_badge"),\n',
+                )
+            ],
+            expect=["test_the_badge_is_d393s_never_raw_is_verified"],
+        ),
+        T66_SELECTION,
+    ),
+    (
+        Case(
+            id="t66-08-similarity-unread",
+            what="D-540: the trigram threshold not the one rules.py names",
+            edits=[
+                (
+                    "app/modules/discovery/rules.py",
+                    "SIMILARITY: Final = 0.3\n",
+                    "SIMILARITY: Final = 0.9\n",
+                )
+            ],
+            expect=["test_text_finds_names_near_and_alike"],
+        ),
+        T66_SELECTION,
+    ),
+    (
+        Case(
+            id="t66-09-by-username-a-prefix",
+            what="the username lookup matching a pattern, not the name",
+            edits=[
+                (
+                    DISCOVERY_REPO,
+                    "        select(Profile.user_id).where(Profile.username == username)\n",
+                    '        select(Profile.user_id).where(Profile.username.ilike(username + "%"))\n',
+                )
+            ],
+            expect=["test_a_name_nobody_holds_is_not_found[ab_d]"],
+        ),
+        T66_SELECTION,
+    ),
+    (
+        Case(
+            id="t66-10-pair-ids-untyped",
+            what="an id read back from a query reaching least() as text",
+            edits=[
+                (
+                    DISCOVERY_REPO,
+                    "    if isinstance(value, UUID):\n        return literal(value, PG_UUID(as_uuid=True))\n    return value\n",
+                    "    return value\n",
+                )
+            ],
+            expect=["test_a_username_opens_the_same_profile_as_its_id"],
+        ),
+        T66_SELECTION,
+    ),
+    (
+        Case(
+            id="t66-11-search-unlimited",
+            what="search without its own rate limit",
+            edits=[
+                (
+                    "app/modules/discovery/router.py",
+                    "SEARCHES_PER_MINUTE = 60\n",
+                    "SEARCHES_PER_MINUTE = 10**6\n",
+                )
+            ],
+            expect=["test_search_is_limited_to_60_a_minute"],
+        ),
+        T66_SELECTION,
     ),
 ]
 
@@ -6613,6 +6797,7 @@ CASES: list[tuple[Case, list[str]]] = (
     + [(c, T72_SELECTION) for c in T72]
     + [(c, T73_SELECTION) for c in T73]
     + [(c, T83_SELECTION) for c in T83]
+    + T66
 )
 
 # The fifty-connection fixture's own message when Postgres refuses a connection.

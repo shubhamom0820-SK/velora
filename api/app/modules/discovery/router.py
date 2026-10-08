@@ -1,9 +1,11 @@
-"""`GET /v1/discover` (T-6.2): the ranked feed of people nearby; and
-`GET /v1/users/{id}` (T-6.3), one person's public profile; once onboarding is
-done.
+"""`GET /v1/discover` (T-6.2): the ranked feed of people nearby;
+`GET /v1/users/{id}` (T-6.3) and `GET /v1/users/by-username/{u}` (T-6.6), one
+person's public profile; and `GET /v1/search` (T-6.6); once onboarding is done.
 
-No rate limit of their own: `current_user`'s 300 a minute (02-ARCHITECTURE
-§12). A profile is found by its id, a UUID nobody can walk.
+No rate limit of their own but search's: `current_user`'s 300 a minute
+(02-ARCHITECTURE §12). A profile is found by its id, a UUID nobody can walk,
+or by its username, which is the link people share (D-001). Search walks
+usernames by their start, so it has its own limit.
 """
 
 from __future__ import annotations
@@ -16,17 +18,29 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import Settings
 from app.core.db import get_session
-from app.core.deps import app_config_cache, app_settings, onboarded_user
+from app.core.deps import (
+    app_config_cache,
+    app_settings,
+    onboarded_user,
+    user_rate_limit,
+)
 from app.core.pagination import PageParams, page_params
 from app.modules.admin.service import ConfigCache
-from app.modules.discovery import service
-from app.modules.discovery.schemas import CardPage, Feed, PublicProfile
+from app.modules.discovery import rules, service
+from app.modules.discovery.schemas import (
+    CardPage,
+    Feed,
+    PublicProfile,
+    SearchResultPage,
+)
 from app.modules.users.models import User
 
 router = APIRouter(tags=["discovery"])
 
 # D-041's catalogue has 10; a filter naming more than every one is no filter.
 MAX_INTENT_FILTER = 10
+# Search walks usernames by their start (D-540): a person typing, never a script.
+SEARCHES_PER_MINUTE = 60
 
 
 @router.get("/discover")
@@ -63,3 +77,32 @@ async def public_profile(
     settings: Annotated[Settings, Depends(app_settings)],
 ) -> PublicProfile:
     return await service.public_profile(session, user, user_id, settings=settings)
+
+
+@router.get("/users/by-username/{username}")
+async def profile_by_username(
+    username: str,
+    user: Annotated[User, Depends(onboarded_user)],
+    session: Annotated[AsyncSession, Depends(get_session)],
+    settings: Annotated[Settings, Depends(app_settings)],
+) -> PublicProfile:
+    return await service.profile_by_username(session, user, username, settings=settings)
+
+
+@router.get(
+    "/search",
+    dependencies=[
+        Depends(user_rate_limit("search", limit=SEARCHES_PER_MINUTE, window_s=60))
+    ],
+)
+async def search(
+    user: Annotated[User, Depends(onboarded_user)],
+    session: Annotated[AsyncSession, Depends(get_session)],
+    settings: Annotated[Settings, Depends(app_settings)],
+    config: Annotated[ConfigCache, Depends(app_config_cache)],
+    params: Annotated[PageParams, Depends(page_params)],
+    q: Annotated[str, Query(min_length=1, max_length=rules.SEARCH_MAX)],
+) -> SearchResultPage:
+    return await service.search(
+        session, user, q, params=params, settings=settings, config=config
+    )

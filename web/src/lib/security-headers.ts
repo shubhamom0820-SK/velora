@@ -12,9 +12,12 @@
  *           text, back to them, and the server allows only letters in a name
  *           and [a-z0-9._] in a username, so the worst is self-XSS behind
  *           React's escaping. Re-examine it when a screen first renders
- *           another user's text: T-6.5 today, sooner if a screen gets there
- *           first. Nonces scoped to (auth) and (app) would leave marketing
- *           static.
+ *           another user's text.
+ *   T-6.6   Done: search's rows are the first screen to render another
+ *           user's text (D-541). The sign-in and app routes (NONCE_ROUTES)
+ *           drop 'unsafe-inline' for a nonce per request and 'strict-dynamic',
+ *           set by src/proxy.ts, and render per request; every other page keeps
+ *           the static policy below and stays static.
  *   T-3.14  Done: Firebase phone sign-in, on Firebase builds only (D-085).
  *           reCAPTCHA's script, frame and connect hosts, and Firebase Auth's
  *           two API hosts. Path B builds keep the policy as it was.
@@ -134,7 +137,62 @@ function photoSources(env: BuildEnv): { connect: string; img: string } {
   };
 }
 
-export function contentSecurityPolicy(env: BuildEnv = process.env): string {
+/**
+ * The routes whose pages render other people's text, or will (D-541): the
+ * sign-in routes and the app's. Each is served with a nonce instead of
+ * 'unsafe-inline', by src/proxy.ts, whose matcher must name exactly these
+ * (a test holds it), and renders per request, since a nonce can't be baked
+ * into a static page. An allowlist (CLAUDE.md rule 16): a route not named
+ * keeps the static policy, and a new signed-in place is added here.
+ */
+export const NONCE_ROUTES = [
+  "login",
+  "onboarding",
+  "discover",
+  "chats",
+  "wallet",
+  "you",
+] as const;
+
+/** Where a build's nonce goes in `policyWithNonceSlot()`'s policy. */
+export const NONCE_SLOT = "__CSP_NONCE__";
+
+/**
+ * Every path but the nonce routes and what is under them, as a `source` in
+ * next.config's `headers()`: the pages that get the static policy.
+ */
+export function staticPolicySource(): string {
+  return `/((?!(?:${NONCE_ROUTES.join("|")})(?:/|$)).*)`;
+}
+
+/** A fresh nonce, 128 random bits in base64, for one response. */
+export function newNonce(): string {
+  const bytes = crypto.getRandomValues(new Uint8Array(16));
+  return btoa(String.fromCharCode(...bytes));
+}
+
+/**
+ * The nonce routes' policy with `NONCE_SLOT` where each response's nonce
+ * goes, built at build time from the same environment as the static policy,
+ * so the two differ only in script-src (next.config hands it to the proxy).
+ */
+export function policyWithNonceSlot(env: BuildEnv = process.env): string {
+  return contentSecurityPolicy(env, NONCE_SLOT);
+}
+
+/** `template`, a `policyWithNonceSlot()`, with `nonce` in its slot. */
+export function policyWithNonce(template: string, nonce: string): string {
+  if (!template.includes(`'nonce-${NONCE_SLOT}'`)) {
+    // Never serve a page under no policy, or under one without its nonce.
+    throw new Error("The build has no nonce policy: CSP_WITH_NONCE is unset");
+  }
+  return template.replaceAll(NONCE_SLOT, nonce);
+}
+
+export function contentSecurityPolicy(
+  env: BuildEnv = process.env,
+  nonce?: string,
+): string {
   const dev = isDev(env);
   const api = apiOrigin(env);
   const firebase = signsInByFirebase(env);
@@ -143,13 +201,15 @@ export function contentSecurityPolicy(env: BuildEnv = process.env): string {
     firebase ? ` ${sources.join(" ")}` : "";
   return [
     "default-src 'self'",
-    // 'unsafe-inline': Next writes its page data as inline scripts on every
-    // page; without it the waitlist form never hydrates (T-2.5's trial).
-    // Nonces would render every page per request, spending the performance
-    // margin. Kept at T-3.11, where the only user text on screen is the
-    // user's own; re-examined when a screen first renders another user's
-    // (D-059's amendment, T-6.5 today).
-    `script-src 'self' 'unsafe-inline'${dev ? " 'unsafe-eval'" : ""}${extra(FIREBASE.script)}`,
+    // Static pages: 'unsafe-inline'. Next writes its page data as inline
+    // scripts on every page; without it the waitlist form never hydrates
+    // (T-2.5's trial), and they render no one's text but our own.
+    // The nonce routes (D-541): this response's nonce, which Next puts on its
+    // own scripts, and 'strict-dynamic', so what those load (Next's chunks,
+    // Firebase's reCAPTCHA) runs and nothing injected does. 'self' and the
+    // hosts stay for a browser without 'strict-dynamic', which ignores them
+    // otherwise.
+    `script-src 'self' ${nonce ? `'nonce-${nonce}' 'strict-dynamic'` : "'unsafe-inline'"}${dev ? " 'unsafe-eval'" : ""}${extra(FIREBASE.script)}`,
     ...(dev ? ["style-src 'self' 'unsafe-inline'"] : []),
     // Images fall back to default-src 'self' on a build without photos.
     ...(dev || photos.img
@@ -167,7 +227,28 @@ export function contentSecurityPolicy(env: BuildEnv = process.env): string {
   ].join("; ");
 }
 
-/** Every header, for next.config's `headers()`. */
+/**
+ * next.config's `headers()`: every header but the CSP on every response; the
+ * static CSP on every page but the nonce routes, whose CSP is the proxy's.
+ * One CSP per response, never two: a second would be enforced as well.
+ */
+export function headerRules(
+  env: BuildEnv = process.env,
+): { source: string; headers: Header[] }[] {
+  const all = securityHeaders(env);
+  return [
+    {
+      source: "/(.*)",
+      headers: all.filter((h) => h.key !== "Content-Security-Policy"),
+    },
+    {
+      source: staticPolicySource(),
+      headers: all.filter((h) => h.key === "Content-Security-Policy"),
+    },
+  ];
+}
+
+/** Every header a static page is sent. */
 export function securityHeaders(env: BuildEnv = process.env): Header[] {
   return [
     { key: "Content-Security-Policy", value: contentSecurityPolicy(env) },

@@ -75,7 +75,9 @@ none says a person is verified, real, live or who they say (T-4.5). `src/lib/sit
 that only production is indexed (T-2.4), from `APP_ENV`, which `next build` refuses unless it is
 local, ci, staging or production (`src/lib/build-env.ts`, T-2.6). `src/lib/security-headers.ts` is
 the CSP and the other security headers, exactly as strict as today's pages: a task that needs more
-widens it there (D-059); HSTS covers every subdomain (D-074). `src/lib/storage-origins.ts` says
+widens it there (D-059); HSTS covers every subdomain (D-074). The sign-in and app routes
+(`NONCE_ROUTES` there) get a nonce per response in place of `'unsafe-inline'`, from `src/proxy.ts`,
+and render per request; a new signed-in place joins that list (D-541). `src/lib/storage-origins.ts` says
 where photos live by `APP_ENV`, each bucket by its path, for the CSP (T-4.6).
 `src/lib/firebase.ts` is the only code that touches the Firebase SDK (ESLint enforces it), loaded
 on demand by a Firebase build's `/login`;

@@ -20,4 +20,5 @@ export const queryKeys = {
   wallet: () => ["wallet"] as const,
   walletLedger: () => ["wallet", "ledger"] as const,
   prices: () => ["prices"] as const,
+  search: (q: string) => ["search", q] as const,
 };

@@ -370,6 +370,9 @@ filters is a pill in the sheet's header.
 **Search (T-6.6).** A field inline in the chrome header, filled `--chrome-line`, `input` (16 px). In
 @ mode, a "@ username" badge in `--ink`; an exact username match carries an "Exact" badge on
 `--accent-soft`. Result rows 64 px, their avatars 44 px.
+**As built (T-6.6, D-540):** the field sits on a `--chrome` bar at the top of the search screen,
+under the header, not inside it: the header's shape is `AppShell.tsx`'s alone (§5). The "@ username"
+badge marks the results, on the light surface, where `--ink` reads; on the bar it wouldn't.
 
 **Empty states.** A dashed `--line-strong` outline, `--corner-swipe`; the icon sitting on the
 thread; a `title-2`; `body` in `--mute`; one `--accent` action (`EmptyState`, §4).

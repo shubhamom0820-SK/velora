@@ -13,6 +13,7 @@ import { useState, type ReactNode } from "react";
 import { Avatar } from "@/components/ui/Avatar";
 import { Button } from "@/components/ui/Button";
 import { ButtonLink } from "@/components/ui/ButtonLink";
+import { Badge } from "@/components/ui/Badge";
 import { Chip } from "@/components/ui/Chip";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { ErrorState } from "@/components/ui/ErrorState";
@@ -126,6 +127,16 @@ export function UiGallery() {
           <ButtonLink href="/dev/ui" variant="chrome">
             Chrome link
           </ButtonLink>
+        </div>
+      </Section>
+
+      <Section title="Badge">
+        <div className="flex flex-wrap items-center gap-3">
+          <Badge>@ username</Badge>
+          <Badge tone="soft">Exact</Badge>
+          <Badge tone="count" label="7 people">
+            7
+          </Badge>
         </div>
       </Section>
 

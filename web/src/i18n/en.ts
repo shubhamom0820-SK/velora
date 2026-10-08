@@ -75,6 +75,28 @@ export const en = {
     wallet: "Wallet",
     you: "You",
   },
+  // Search (T-6.6, D-540): a name, a city, an intent or an interest nearby,
+  // or @ and a username anywhere. Drafted by Claude, for the founder's review.
+  search: {
+    title: "Search",
+    label: "Search people",
+    placeholder: "Name, city, interest or @username",
+    hint: "Search by name, city, interest or what someone is looking for nearby. Start with @ to find a username anywhere.",
+    tooShort: "Type at least {min} letters.",
+    badUsername: "Usernames use only a–z, 0–9, dots and underscores.",
+    usernameMode: "@ username",
+    exact: "Exact",
+    resultsFor: "Results for {q}",
+    empty: "No one found",
+    emptyBody: "Try a different name, or check the spelling.",
+    failed: "We couldn't search just now",
+    loadingMore: "Loading more",
+    // "Simran, 24", or "Simran" when she hides her age.
+    nameAge: "{name}, {age}",
+    // "@simran.k · Phagwara", or "@simran.k" without a city.
+    usernameCity: "@{username} · {city}",
+    usernameOnly: "@{username}",
+  },
   // The balance pill, the wallet screen and the store sheet (T-5.5). Users see
   // Velas, never "credits" (D-049). Drafted by Claude, for the founder's review.
   wallet: {

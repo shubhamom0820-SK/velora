@@ -1,5 +1,5 @@
-"""`GET /v1/discover` (T-6.2) and `GET /v1/users/{id}` (T-6.3): the feed, its
-cards, and a public profile (04-API.md)."""
+"""`GET /v1/discover` (T-6.2), `GET /v1/users/{id}` (T-6.3) and search
+(T-6.6): the feed, its cards, a public profile and search's rows (04-API.md)."""
 
 from __future__ import annotations
 
@@ -88,3 +88,28 @@ class PublicProfile(Card):
     album_photo_count: int
     match_id: UUID | None
     thread: ThreadWithMe | None
+
+
+class SearchResult(BaseModel):
+    """One person in search's results (T-6.6, D-540): a row, not a card. The
+    `Card`'s rules for each field it shares; never a distance, a date of
+    birth, a position or raw `is_verified`."""
+
+    id: UUID
+    first_name: str
+    # Null when they hide it.
+    age: int | None
+    username: str
+    city: str | None
+    # As the `Card`'s: the approved public photo at the lowest place, or null.
+    main_photo_url: str | None
+    # D-393's badge, as the `Card`'s.
+    shows_badge: bool
+    is_online: bool
+    # `@` search only: the username is exactly what was asked.
+    exact: bool
+
+
+class SearchResultPage(Page[SearchResult]):
+    """`Page<SearchResult>`: `@` search's exact match first, then usernames in
+    order; text search's best name match first, then by id (D-540)."""

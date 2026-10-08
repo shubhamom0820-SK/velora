@@ -272,6 +272,16 @@ never closes a gap (P-75, D-494). Its URL is null when there is no approved publ
 the web shows a grey silhouette with the name. The "verified" filter (`verified=true`, and T-6.9's
 chip) filters on this badge.
 
+**Search (T-6.6, D-540)**, `discovery.repository.username_search_query` and `text_search_query`,
+reads the same `visible_to`. `@` and a username's start: `visible_to` without seeking (a link
+reaches past it, D-493), no radius, never a hidden profile, swiped or not; `ILIKE` on the prefix
+with `\`, `%` and `_` escaped; the exact username first, then the rest by username in byte order
+(`COLLATE "C"`), the cursor `(exact, username)`. Text: `visible_to`, mutual, within
+`discovery_radius_km` (`ST_DWithin`), swiped or not, matching a name or username by trigram (`%`,
+`SET LOCAL pg_trgm.similarity_threshold = 0.3`) or prefix, a city by prefix, or an intent or
+interest whose label holds the text; best name similarity first, then by id, the cursor `(score,
+user_id)`. A row is a `SearchResult`, read through `cards()` as the feed's are.
+
 Indexes that make this fast are listed in `03-SCHEMA.md`. Target: p95 < 80 ms at 50k users, for
 the spread shape, what beta looks like; the launch shape (50k inside one city's 25 km) is accepted
 above it, about 200 ms, until P-391's cell-first ranking (D-495).
@@ -442,8 +452,13 @@ secret is left empty. Real secret values are never committed.
   allows the camera to the site itself, `camera=(self)`, for the selfie, on every page rather
   than only `/onboarding/selfie`: a page reached by Next's client-side navigation keeps the
   policy of the document first loaded. Its captured frame shows as a `blob:` image, which T-4.6's
-  `img-src` already allows on every build with photo storage. Each task that needs more widens
-  it there, deliberately: App Check (P-68), the microphone
+  `img-src` already allows on every build with photo storage. **The sign-in and app routes
+  (T-6.6, D-541)**, `NONCE_ROUTES` (`/login`, `/onboarding`, `/discover`, `/chats`, `/wallet`,
+  `/you` and all beneath each), are served the same policy but for `script-src`: `'self'
+  'nonce-<a fresh 128-bit nonce per response>' 'strict-dynamic'`, never `'unsafe-inline'`, set by
+  `web/src/proxy.ts`, and their pages render per request (`force-dynamic` in the `(auth)` and
+  `(app)` layouts). Every other page, the marketing pages among them, keeps the static policy above
+  and stays static. Each task that needs more widens it there, deliberately: App Check (P-68), the microphone
   (T-7.11), WebSockets (T-7.12), Razorpay (T-8.7), Sentry (T-9.12) and analytics (T-10.2). This
   line changes with each.
 - API headers (`app/core/headers.py`, P-42): `X-Content-Type-Options: nosniff` on every
@@ -461,6 +476,7 @@ secret is left empty. Real secret values are never committed.
 | Send message | 30 / min / user |
 | Reports | 10 / day / user |
 | Username check | 30 / min / user |
+| `GET /search` | 60 / min / user (T-6.6): `@` search walks usernames by their start; a person typing fits, a script listing them doesn't (D-540) |
 | `POST /payments/orders` | 20 / hour / user (T-8.1): each asks the gateway for an order; every retry a real checkout needs fits |
 | `POST /payments/webhook` | None (T-8.2): its auth is the signature, checked before the body is read, so an unsigned request costs one HMAC; a limit would slow Razorpay's own retries of real payments, which arrive from its few addresses. Flooding is the edge's to stop |
 | `PUT /me/location` | 10 / hour / user (T-4.10). Onboarding's tries and a refresh each time the app opens fit easily; it slows someone moving themselves about to measure distances, and can't stop them; the grid (D-490) is what makes their readings tell nothing finer than a 1 km cell |

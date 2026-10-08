@@ -3,10 +3,21 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { nextConfig } from "../../next.config";
 
 import { apiBaseUrl } from "./api";
+import { getPathMatch } from "next/dist/shared/lib/router/utils/path-match";
+
+import { config as proxyConfig } from "../proxy";
+
 import {
   apiOrigin,
   contentSecurityPolicy,
+  headerRules,
+  NONCE_ROUTES,
+  NONCE_SLOT,
+  newNonce,
+  policyWithNonce,
+  policyWithNonceSlot,
   securityHeaders,
+  staticPolicySource,
 } from "./security-headers";
 
 const STAGING = {
@@ -245,9 +256,119 @@ describe("next.config", () => {
     expect(nextConfig.poweredByHeader).toBe(false);
   });
 
-  it("sends the headers on every response", async () => {
+  it("sends every header on every response, and the static CSP everywhere but the nonce routes", async () => {
     const rules = await nextConfig.headers?.();
 
-    expect(rules).toEqual([{ source: "/(.*)", headers: securityHeaders() }]);
+    expect(rules).toEqual(headerRules());
+    const all = securityHeaders();
+    expect(rules?.[0]).toEqual({
+      source: "/(.*)",
+      headers: all.filter((h) => h.key !== "Content-Security-Policy"),
+    });
+    expect(rules?.[1]).toEqual({
+      source: staticPolicySource(),
+      headers: [
+        { key: "Content-Security-Policy", value: contentSecurityPolicy() },
+      ],
+    });
+  });
+});
+
+/** Whether next.config's `source` covers `path`, read the way Next reads it. */
+function covers(source: string, path: string): boolean {
+  return getPathMatch(source, { strict: true })(path) !== false;
+}
+
+describe("the nonce routes' CSP (T-6.6, D-541)", () => {
+  const NONCED = [
+    "/login",
+    "/onboarding/birthday",
+    "/discover",
+    "/discover/search",
+    "/chats",
+    "/wallet",
+    "/you",
+  ];
+  const STATIC = [
+    "/",
+    "/terms",
+    "/privacy",
+    "/dev/ui",
+    "/admin",
+    "/discoverx",
+    "/youth",
+    "/logins",
+    "/robots.txt",
+  ];
+
+  it.each(NONCED)("leaves %s to the proxy", (path) => {
+    expect(covers(staticPolicySource(), path)).toBe(false);
+    expect(proxyConfig.matcher.some((m) => covers(m, path))).toBe(true);
+  });
+
+  it.each(STATIC)(
+    "gives %s the static policy, and the proxy never sees it",
+    (path) => {
+      expect(covers(staticPolicySource(), path)).toBe(true);
+      expect(proxyConfig.matcher.some((m) => covers(m, path))).toBe(false);
+    },
+  );
+
+  it("has the proxy match exactly NONCE_ROUTES and all beneath each", () => {
+    expect(proxyConfig.matcher).toEqual(
+      NONCE_ROUTES.map((route) => `/${route}/:path*`),
+    );
+  });
+
+  it.each([
+    ["local, dev", { NODE_ENV: "development", APP_ENV: "local" }],
+    ["ci", { ...STAGING, APP_ENV: "ci" }],
+    ["staging", { ...STAGING, APP_ENV: "staging" }],
+    ["production", { ...STAGING, APP_ENV: "production" }],
+  ])(
+    "differs from the static one in script-src alone: a nonce and 'strict-dynamic', never 'unsafe-inline' (%s)",
+    (_, env) => {
+      const nonced = policyWithNonce(policyWithNonceSlot(env), "Tm9uY2U=");
+      const before = contentSecurityPolicy(env).split("; ");
+      const after = nonced.split("; ");
+
+      expect(after).toHaveLength(before.length);
+      after.forEach((directive, i) => {
+        if (directive.startsWith("script-src")) {
+          expect(directive).toContain("'nonce-Tm9uY2U=' 'strict-dynamic'");
+          expect(directive).not.toContain("'unsafe-inline'");
+          expect(
+            directive.replace(
+              "'nonce-Tm9uY2U=' 'strict-dynamic'",
+              "'unsafe-inline'",
+            ),
+          ).toBe(before[i]);
+        } else {
+          expect(directive).toBe(before[i]);
+        }
+      });
+    },
+  );
+
+  it("never serves a nonce route under no policy", () => {
+    expect(() => policyWithNonce("", "abc")).toThrow(/CSP_WITH_NONCE/);
+    expect(() =>
+      policyWithNonce(contentSecurityPolicy(STAGING), "abc"),
+    ).toThrow();
+  });
+
+  it("puts the nonce in every slot", () => {
+    expect(policyWithNonce(policyWithNonceSlot(STAGING), "abc")).not.toContain(
+      NONCE_SLOT,
+    );
+  });
+
+  it("makes a fresh 128-bit nonce each time", () => {
+    const nonces = new Set(Array.from({ length: 50 }, () => newNonce()));
+
+    expect(nonces.size).toBe(50);
+    for (const nonce of nonces) {
+      expect(nonce).toMatch(/^[A-Za-z0-9+/]{22}==$/);
+    }
   });
 });

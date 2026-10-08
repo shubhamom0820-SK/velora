@@ -1,6 +1,6 @@
-"""SQL for discovery (T-6.2): who a viewer may see, the ranked feed, and what
-each card needs. No rules here: `rules.py` says what each condition is, the
-service decides which apply.
+"""SQL for discovery (T-6.2): who a viewer may see, the ranked feed, what each
+card needs, the public profile (T-6.3) and search (T-6.6). No rules here:
+`rules.py` says what each condition is, the service decides which apply.
 
 02-ARCHITECTURE §8 is the query this builds. The feed reads only grid points
 (D-490), so the radius, the distance and the ranking all are measured between
@@ -22,6 +22,7 @@ from sqlalchemy import (
     ColumnElement,
     Float,
     Row,
+    Text,
     and_,
     case,
     cast,
@@ -32,6 +33,7 @@ from sqlalchemy import (
     select,
     text,
 )
+from sqlalchemy.dialects.postgresql import UUID as PG_UUID
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import aliased
@@ -52,7 +54,13 @@ from app.modules.discovery.models import ProfileView
 from app.modules.kudos.models import Kudos as KudosGiven
 from app.modules.matches.models import Match
 from app.modules.photos.models import Photo
-from app.modules.profiles.models import Profile, ProfileIntent, ProfileInterest
+from app.modules.profiles.models import (
+    Intent,
+    Interest,
+    Profile,
+    ProfileIntent,
+    ProfileInterest,
+)
 from app.modules.safety.models import Block, FraudScore
 from app.modules.swipes.models import Swipe
 from app.modules.threads.models import Thread
@@ -341,12 +349,22 @@ async def cards(
 # --- The public profile (T-6.3) ------------------------------------------------------
 
 
+def _as_uuid(value: Any) -> Any:
+    """An id bound as `uuid`. `least()` and `greatest()` give a bare value no
+    type, and asyncpg's own UUID, which an id read back from a query is, binds
+    as nothing at all, so Postgres takes it for text (found by T-6.6's lookup
+    by username). A column keeps its own type."""
+    if isinstance(value, UUID):
+        return literal(value, PG_UUID(as_uuid=True))
+    return value
+
+
 def _pair_low(a: Any, b: Any) -> Any:
-    return func.least(a, b)
+    return func.least(_as_uuid(a), _as_uuid(b))
 
 
 def _pair_high(a: Any, b: Any) -> Any:
-    return func.greatest(a, b)
+    return func.greatest(_as_uuid(a), _as_uuid(b))
 
 
 def shares_a_match_or_thread(viewer_id: UUID, other: Any) -> ColumnElement[bool]:
@@ -471,3 +489,155 @@ async def record_view(
             },
         )
     )
+
+
+# --- Search (T-6.6) ---------------------------------------------------------------
+
+
+async def user_id_by_username(session: AsyncSession, username: str) -> UUID | None:
+    """Whose username this is, in any case (`citext`), or None. Who may see
+    them is the caller's question."""
+    found: UUID | None = await session.scalar(
+        select(Profile.user_id).where(Profile.username == username)
+    )
+    return found
+
+
+async def catalogue_matching(
+    session: AsyncSession, term: str
+) -> tuple[list[int], list[int]]:
+    """The intents and the interests whose label holds `term`, in any case:
+    two catalogues of a few dozen rows (D-041, T-3.8)."""
+    pattern = rules.like_contains(term)
+    intents = await session.scalars(
+        select(Intent.id).where(Intent.label.ilike(pattern, escape="\\"))
+    )
+    interests = await session.scalars(
+        select(Interest.id).where(Interest.label.ilike(pattern, escape="\\"))
+    )
+    return list(intents), list(interests)
+
+
+def _username_text() -> Any:
+    """The username as text in byte order, so the order, the cursor's
+    comparison and Python's agree whatever the database's collation."""
+    return cast(Profile.username, Text).collate("C")
+
+
+def username_search_query(
+    viewer: Viewer, term: str, *, after: tuple[bool, str] | None, limit: int
+) -> Select[tuple[UUID, bool]]:
+    """`@` search (D-540): usernames starting with `term`, the exact one first,
+    then in order. Anyone `visible_to` allows without seeking or the radius,
+    as a link (D-493), and never a hidden profile, whatever is shared with it:
+    hidden stays out of search."""
+    username = _username_text()
+    ranked = (
+        select(
+            User.id.label("user_id"),
+            (Profile.username == term).label("exact"),
+            username.label("username"),
+        )
+        .select_from(User)
+        .join(Profile, Profile.user_id == User.id)
+        .where(
+            *visible_to(viewer, mutual=False),
+            Profile.username.ilike(rules.like_prefix(term), escape="\\"),
+        )
+        .subquery("ranked")
+    )
+    query = select(ranked.c.user_id, ranked.c.exact)
+    if after is not None:
+        was_exact, last = after
+        later = and_(ranked.c.exact.is_(was_exact), ranked.c.username > last)
+        query = query.where(
+            or_(ranked.c.exact.is_(False), later) if was_exact else later
+        )
+    return query.order_by(ranked.c.exact.desc(), ranked.c.username).limit(limit)
+
+
+def text_search_query(
+    viewer: Viewer,
+    term: str,
+    *,
+    radius_m: float,
+    intent_ids: Collection[int],
+    interest_ids: Collection[int],
+    after: tuple[float, UUID] | None,
+    limit: int,
+) -> Select[tuple[UUID, float]]:
+    """Text search (D-540): within the radius, whom the feed could show,
+    swiped or not; matched by name or username (a trigram match or a prefix),
+    a city starting with `term`, or an intent or interest whose label holds
+    it. Best name match first, then by id."""
+    if viewer.position is None:
+        raise ValueError("text search needs the viewer's position; the service checks")
+    here = _point_written_in(viewer.position)
+    username = cast(Profile.username, Text)
+    prefix = rules.like_prefix(term)
+    matches: list[ColumnElement[bool]] = [
+        Profile.first_name.op("%")(term),
+        username.op("%")(term),
+        Profile.first_name.ilike(prefix, escape="\\"),
+        Profile.username.ilike(prefix, escape="\\"),
+        Profile.city.ilike(prefix, escape="\\"),
+    ]
+    if intent_ids:
+        matches.append(
+            exists().where(
+                ProfileIntent.user_id == User.id,
+                ProfileIntent.intent_id.in_(list(intent_ids)),
+            )
+        )
+    if interest_ids:
+        matches.append(
+            exists().where(
+                ProfileInterest.user_id == User.id,
+                ProfileInterest.interest_id.in_(list(interest_ids)),
+            )
+        )
+    score = cast(
+        func.greatest(
+            func.similarity(Profile.first_name, term), func.similarity(username, term)
+        ),
+        Float,
+    )
+    ranked = (
+        select(User.id.label("user_id"), score.label("score"))
+        .select_from(User)
+        .join(Profile, Profile.user_id == User.id)
+        .where(
+            *visible_to(viewer, mutual=True),
+            func.ST_DWithin(Profile.location, here, radius_m),
+            or_(*matches),
+        )
+        .subquery("ranked")
+    )
+    query = select(ranked.c.user_id, ranked.c.score)
+    if after is not None:
+        last_score, last_id = after
+        query = query.where(
+            or_(
+                ranked.c.score < last_score,
+                and_(ranked.c.score == last_score, ranked.c.user_id > last_id),
+            )
+        )
+    return query.order_by(ranked.c.score.desc(), ranked.c.user_id).limit(limit)
+
+
+# pg_trgm's `%` threshold for the search's own transaction, never left to the
+# database's setting (D-540).
+SIMILARITY = text(f"SET LOCAL pg_trgm.similarity_threshold = {rules.SIMILARITY}")
+
+
+async def username_search(
+    session: AsyncSession, viewer: Viewer, term: str, **page: Any
+) -> Sequence[Row[tuple[UUID, bool]]]:
+    return (await session.execute(username_search_query(viewer, term, **page))).all()
+
+
+async def text_search(
+    session: AsyncSession, viewer: Viewer, term: str, **page: Any
+) -> Sequence[Row[tuple[UUID, float]]]:
+    await session.execute(SIMILARITY)
+    return (await session.execute(text_search_query(viewer, term, **page))).all()

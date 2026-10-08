@@ -21,6 +21,12 @@ export const metadata: Metadata = {
   robots: { index: false, follow: false },
 };
 
+/**
+ * Per request, every page beneath: the proxy's nonce (D-541) reaches only a
+ * page rendered after the request arrives, never one built ahead of it.
+ */
+export const dynamic = "force-dynamic";
+
 export default function AppGroupLayout({ children }: { children: ReactNode }) {
   return (
     <>

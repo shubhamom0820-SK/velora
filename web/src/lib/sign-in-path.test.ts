@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import { configFor } from "../../next.config";
 
 import { firebaseConfigFor } from "./firebase-config";
+import { policyWithNonceSlot } from "./security-headers";
 
 import { signInOpen, signInPath, signInPathFor } from "./sign-in-path";
 
@@ -47,7 +48,10 @@ describe("whether anyone can sign in: one flag for /login and the waitlist box",
 // velora-ic's, as firebase-config.ts holds it (D-065, D-085).
 const VELORA_IC = JSON.stringify(firebaseConfigFor({ APP_ENV: "production" }));
 
-describe("next.config builds exactly these three values into the browser's code", () => {
+// Three for the browser's code, and the nonce routes' CSP for src/proxy.ts
+// (D-541): public, the policy every such response sends, and inlined only
+// where code reads it, which is the proxy alone.
+describe("next.config builds exactly these values into the code", () => {
   it.each([
     [
       "production",
@@ -84,6 +88,9 @@ describe("next.config builds exactly these three values into the browser's code"
   ])("APP_ENV=%s", (appEnv, env) => {
     expect(
       configFor("phase-production-build", { APP_ENV: appEnv }).env,
-    ).toEqual(env);
+    ).toEqual({
+      ...env,
+      CSP_WITH_NONCE: policyWithNonceSlot({ APP_ENV: appEnv }),
+    });
   });
 });

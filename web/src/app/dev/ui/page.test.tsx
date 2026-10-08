@@ -27,6 +27,7 @@ describe("/dev/ui", () => {
     for (const section of [
       "Button",
       "ButtonLink",
+      "Badge",
       "Chip",
       "Field",
       "TextArea",

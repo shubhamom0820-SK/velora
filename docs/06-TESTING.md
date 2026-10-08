@@ -213,6 +213,10 @@ the API's one process.
   number. `test-results/` is gitignored for the same reason.
 - **T-3.10's session machinery** runs here too (`web/e2e/session.spec.ts`): reload, rotation, two
   tabs, sign-out.
+- **The nonce routes' CSP** (`web/e2e/csp.spec.ts`, D-541), by its effect: a fresh nonce per
+  response and no `'unsafe-inline'` on `/login`, and an injected inline handler that runs on `/`
+  and is refused on `/login`. It uses plain `@playwright/test`, since it causes a violation on
+  purpose.
 - **Firefox** is Playwright's own build, run by hand (`E2E_FIREFOX=1 make e2e`), never in CI.
 - **Against staging, nightly,** is P-67, whose Needs line carries P-66, a Firebase project for
   staging alone. Staging signs in by Firebase, where Path B and the fake don't exist, so a run

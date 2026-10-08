@@ -2736,17 +2736,31 @@ prices don't depend on the web photos step, and the hold is lifted.
 - [ ] Match celebration sheet → "Open thread · 5 Velas" / "Keep swiping".
 - [ ] Empty states: no one nearby / filters too narrow (clear button).
 - [ ] 60 fps on the test phone (check Chrome performance panel).
-- [ ] **Re-examine the CSP's `'unsafe-inline'` here (D-059's trigger, amended 3 October 2026):** the first screen planned to render another user's text, their names and about. If any screen gets there sooner, the re-examination moves to it. T-3.11 kept the allowance for the user's own text; here the threat is someone else's input on your page. Nonces scoped to the signed-in routes by Next's proxy leave the marketing pages static (the amendment).
+- [x] **Re-examine the CSP's `'unsafe-inline'` here (D-059's trigger, amended 3 October 2026):** the first screen planned to render another user's text, their names and about. If any screen gets there sooner, the re-examination moves to it. T-3.11 kept the allowance for the user's own text; here the threat is someone else's input on your page. Nonces scoped to the signed-in routes by Next's proxy leave the marketing pages static (the amendment).
+  **Moved to T-6.6 and done there (D-541, 8 October 2026):** its search rows got there first. The
+  deck's routes are already nonce routes (`/discover` and beneath); a new place this task adds
+  outside them joins `NONCE_ROUTES` in `web/src/lib/security-headers.ts`.
+- [ ] **The feed row's Search button links to `/discover/search`** (T-6.6) and a Liked you entry
+  to `/discover/likes` (T-6.7): P-443.
 - [ ] **Commit:** `feat(web): discover deck [T-6.5]`
 
 ### T-6.6 · Search and @username
-- [ ] **Needs:** T-6.3
-- [ ] `GET /search?q=`: `@` prefix → exact-then-prefix username match (ignores distance/filters, still respects blocks/hidden); otherwise trigram on first_name/username + city, intent and interest matches within radius. `GET /users/by-username/{u}`.
-- [ ] **Search and `/users/by-username/{u}` find `active` accounts only** (T-9.6, D-500): a
+- [x] **Needs:** T-6.3
+- [x] `GET /search?q=`: `@` prefix → exact-then-prefix username match (ignores distance/filters, still respects blocks/hidden); otherwise trigram on first_name/username + city, intent and interest matches within radius. `GET /users/by-username/{u}`.
+- [x] **Search and `/users/by-username/{u}` find `active` accounts only** (T-9.6, D-500): a
   deleted or paused one is `NOT_FOUND`. An erased account's username is free for anyone to take
   (D-505).
-- [ ] Web search bar with debounce; @-mode list results.
-- [ ] **Commit:** `feat(search): search and username lookup [T-6.6]`
+- [x] Web search bar with debounce; @-mode list results.
+  **Built as D-540:** `@` and a username's start across India and past seeking, the exact one
+  first, never a hidden profile; text within the radius, mutual, by name, username, city, intent
+  or interest; swiped people included; a `SearchResult` per row; 60 a minute. The screen is
+  `/discover/search`, its field on a chrome bar under the header; T-6.5's feed row links to it
+  (P-443). Breaking runs `t66-01` to `t66-11` (API) and `t66-search-*` (web) each red.
+- [x] **The CSP's re-examination came here (D-059's trigger; D-541):** the search rows are the
+  first screen with another person's text. The sign-in and app routes carry a nonce per response
+  and `'strict-dynamic'`, never `'unsafe-inline'`, and render per request; the marketing pages
+  stay static. `web/e2e/csp.spec.ts` proves it by effect; breaking runs `t66-csp-*` each red.
+- [x] **Commit:** `feat(search): search and username lookup [T-6.6]`
 
 ### T-6.7 · Liked you
 - [ ] **Needs:** T-6.4, T-5.1 (P-370, the `liked_you_reveal` row at 1, not 20, came off this line
@@ -5668,3 +5682,10 @@ The number comes from the session's own block, given in its brief, from P-100 up
   no list of his own claims, so this task adds `GET /refund-requests` (his own, D-270) if it
   shows one. Found building T-8.3; filed by Claude, 8 October 2026; its session's block, P-480
   to P-489.
+- [ ] P-443 · Link search and Liked you from the deck. **In T-6.5.** Worst case: both screens
+  exist from T-6.6 and T-6.7 at `/discover/search` and `/discover/likes`, and nothing in the app
+  leads to either, so nobody finds them but by typing the address. T-6.5's feed row holds a Search
+  icon button (08-DESIGN §8) and is the deck's own file, `web/src/app/(app)/discover/page.tsx`,
+  which neither task touches while T-6.5 is unbuilt. Liked you's entry, with its count (`GET
+  /likes/count`, T-6.7), is T-6.5's to place. Filed by Claude building T-6.6, 8 October 2026; its
+  session's block, P-440 to P-449.

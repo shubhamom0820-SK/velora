@@ -926,6 +926,9 @@ the marketing pages static with their Lighthouse margin; the signed-in pages car
 target and are never cached for anyone else. That is the option to weigh at the trigger.
 Recommended by Claude in the joint plan for T-3.10 to T-3.13; answered by the advisor directing
 that plan (Claude, in a separate chat), relayed by the founder, 3 October 2026.
+**Superseded in part, 8 October 2026, by D-541:** the trigger came at T-6.6's search, not T-6.5;
+the sign-in and app routes now carry a nonce per response instead of `'unsafe-inline'`, and the
+marketing pages keep this policy and stay static.
 
 ### D-060 · Security primitives come from vetted libraries — Locked
 **The libraries (rule 4):** PyJWT for access tokens, argon2-cffi for PINs, cryptography for phone
@@ -4324,6 +4327,80 @@ T-8.7's (P-481).
 **Rejected:** `python -m app.tools.refund_claims` over `fly ssh`, as D-264's selfie review is
 run: Fly's login is a stronger gate than a role check, but `audit_log` needs an actor, and the
 tool would serve no panel later.
+
+### D-540 · Search: `@` and a username's start anywhere, or text nearby; a `SearchResult` per row — Locked
+**The decision (T-6.6):** `GET /v1/search?q=` has two modes, chosen by `q`.
+- **`@` and 1 to 20 of `[A-Za-z0-9._]`**: usernames starting with it, in any case, the exact one
+  first and marked `exact`, then the rest in byte order. Who: discovery's `visible_to` **without
+  seeking and without the radius**, as a link reaches (D-493), so a username finds its person
+  across India; never a hidden profile, even one the searcher shares a match or Thread with
+  (D-493: hidden stays out of the feed and search); swiped or not. `_` and `%` are characters,
+  never LIKE's wildcards.
+- **Text, 2 to 50 characters**: within `discovery_radius_km`, `visible_to` mutual, as the feed,
+  swiped or not. A person matches on a name or username by trigram similarity (0.3, set for the
+  transaction, never left to the database's default) or by prefix, a city by prefix, or an intent
+  or interest whose catalogue label holds the text. Best name match first, then by id.
+- Either way only `active` accounts (T-9.6, D-500), nobody blocked either way, not yourself, and
+  the `freeze` and `shadow` bands as the feed has them. Anything else, an empty `q`, one
+  character, `@` and a character outside the alphabet, more than 50, is `VALIDATION_ERROR` on
+  `q`. 60 a minute per user.
+- **A row is a `SearchResult`**: `id`, `first_name`, `age` (null if hidden), `username`, `city`,
+  `main_photo_url` (D-494's), `shows_badge` (D-393's, never `is_verified`), `is_online`, `exact`.
+  No distance: a row across India would carry one nobody asked for. Each field is the `Card`'s,
+  computed by the same code.
+  **Named `SearchResult`, not 04-API's first name for it, `CardLite`:** T-7.2 landed a `CardLite`
+  of its own the same day (the chats list's other person, a different shape), and two schemas of
+  one name collide in the OpenAPI the web is typed from. The shape and the rules are as above.
+- **`GET /users/by-username/{u}`** is `GET /users/{id}` by another key: the same rule (D-493),
+  the same `PublicProfile`, a view recorded the same way, every refusal and a name nobody holds
+  (an erased one's, D-505) the same `NOT_FOUND`.
+- **The web's field** sits on a chrome bar at the top of the search screen, under the shell's
+  header, whose shape stays `AppShell.tsx`'s alone; 08-DESIGN §8 drew it inline in the header.
+
+**Why:** the plan's line ("`@` prefix … ignores distance/filters, still respects blocks/hidden;
+otherwise trigram … within radius"), with the shape 04-API named but never gave. People already
+swiped stay findable: search is a lookup, not a deck. Ranked by name, not by D-491's score: a
+person searching for "Simran" wants Simran first.
+
+**Rejected:** a distance on the row (a `@` row across India); hidden profiles in `@` search for
+matches (D-493 keeps them out); ranking text results by the feed's score.
+
+Approved by the founder on the advisor's recommendation (Claude, in a separate chat), relayed, 8
+October 2026, as Claude's plan for T-6.6 proposed it; written up by Claude.
+
+### D-541 · The sign-in and app routes carry a nonce, not `'unsafe-inline'` — Locked
+**The decision (T-6.6, D-059's trigger):** T-6.6's search rows are the first screen to render
+another person's text (their names, usernames and cities), so the re-examination D-059's
+amendment of 3 October 2026 set moved here from T-6.5. The routes `NONCE_ROUTES` names in
+`web/src/lib/security-headers.ts`, `/login`, `/onboarding`, `/discover`, `/chats`, `/wallet` and
+`/you`, each and all beneath it, are served by `web/src/proxy.ts` with `script-src 'self'
+'nonce-<nonce>' 'strict-dynamic'`, a fresh 128-bit nonce per response, and never
+`'unsafe-inline'`. Every other directive is the static policy's, from the same build
+(`CSP_WITH_NONCE`, built in `next.config.ts` from the build's environment, with a slot the proxy
+fills; a build without it serves those routes nothing rather than no policy). Next puts the nonce
+on its own scripts; `'strict-dynamic'` lets what they load run (Next's chunks, Firebase's
+reCAPTCHA on a Firebase build) and nothing injected. The `(auth)` and `(app)` layouts render per
+request (`force-dynamic`): a page built ahead carries no nonce. Every other page keeps the static
+policy with `'unsafe-inline'` and stays static: none renders anyone's text but ours. `/admin`
+waits for T-9.5, the first admin screen with anyone's text; today it is a `next dev` placeholder.
+
+**Proved by effect, in the E2E** (`web/e2e/csp.spec.ts`): an injected `<img onerror>` runs on `/`
+and is refused on `/login` with a `script-src` violation; every journey runs through `/login`,
+onboarding and `/discover` with no violation. `next build` lists those routes as dynamic and the
+marketing pages as static.
+
+**Why:** React's escaping is the defence for someone else's text, and the CSP the second line; a
+`script-src` with `'unsafe-inline'` is no second line. Scoped to the signed-in routes, the cost
+D-059 rejected nonces for (every page dynamic) falls only on pages with no performance target,
+never cached for anyone else.
+
+**Rejected:** nonces on every page (the marketing pages lose their static rendering and margin);
+Next's experimental hash-based SRI (experimental); keeping `'unsafe-inline'` (the trigger is met).
+**Unverified until staging:** Firebase's reCAPTCHA under `'strict-dynamic'`. The local E2E signs in
+by the fake SMS, so it never loads reCAPTCHA; T-3.14's staging check is where it is seen.
+
+The founder's answer to Q1 of Claude's plan for T-6.6, 8 October 2026, on the advisor's
+recommendation (Claude, in a separate chat), relayed; written up by Claude.
 
 ---
 
