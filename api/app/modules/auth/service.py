@@ -18,7 +18,7 @@ import structlog
 from redis.asyncio import Redis
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core import clock, ratelimit
+from app.core import clock, events, ratelimit
 from app.core.config import Settings
 from app.core.enums import OnboardingStep
 from app.core.errors import AppError, invalid_field
@@ -390,6 +390,7 @@ async def refresh(
             await repository.revoke_family(
                 session, user_id=current.user_id, family_id=current.family_id, at=now
             )
+            events.close_sockets(session, current.user_id)
     # After the transaction commits, so a family revoked above stays revoked.
     raise _session_revoked()
 
@@ -443,6 +444,7 @@ async def logout(
             family_id=current.family_id,
             at=clock.now(),
         )
+        events.close_sockets(session, current.user_id)
 
 
 async def _authenticated_session(
@@ -468,6 +470,7 @@ async def sign_out_everywhere(session: AsyncSession, user_id: uuid.UUID) -> None
     deleted account (T-9.6). Access tokens keep their last minutes (D-067),
     which `current_user` answers with `SESSION_REVOKED`."""
     await repository.revoke_every_session(session, user_id=user_id, at=clock.now())
+    events.close_sockets(session, user_id)
 
 
 def _auth_required() -> AppError:
@@ -526,6 +529,7 @@ async def _check_the_users_pin(
             await repository.revoke_every_session(
                 session, user_id=user_id, at=clock.now()
             )
+            events.close_sockets(session, user_id)
     if tries is None:
         raise _session_revoked()
 
@@ -548,6 +552,7 @@ async def _check_the_users_pin(
             await repository.revoke_every_session(
                 session, user_id=user_id, at=clock.now()
             )
+            events.close_sockets(session, user_id)
         raise _session_revoked()
     raise AppError(
         "PIN_INVALID",

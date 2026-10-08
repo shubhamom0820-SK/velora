@@ -161,7 +161,11 @@ says whether a location is set, so the web sends anyone past Name without one to
 
 ## 6. Real-time protocol
 
-Connect: `POST /v1/ws/ticket` → `{ticket}` (single use, 30 s) → `wss://api.veloraapp.co.in/ws?ticket=…`.
+Connect: `POST /v1/ws/ticket` → `{ticket}` (single use, 30 s) → `wss://api.veloraapp.co.in/ws?ticket=…`,
+from one of the web's exact origins (D-557, T-7.4). Closed by the server: 4401 no live ticket,
+4403 another origin (before it opens), 4408 silent 60 s, 4000 the user's sessions were revoked,
+1013 too slow to keep up. Each API instance holds one Redis subscription for the users connected
+to it (`modules/realtime/hub.py`).
 
 Envelope, both directions: `{ "type": "…", "id": "<uuid>", "data": { … } }`
 
@@ -181,7 +185,7 @@ Envelope, both directions: `{ "type": "…", "id": "<uuid>", "data": { … } }`
 | Client → server | Effect |
 |---|---|
 | `typing` | relayed to the other participant |
-| `ping` | server replies `pong`; client reconnects if no pong in 10 s |
+| `ping` | server replies `pong`; client reconnects if no pong in 10 s. Ping well inside 60 s: a socket silent that long is closed (4408) |
 
 Sending messages is **REST** (`POST /v1/threads/{id}/messages`) so it goes through validation,
 masking and persistence; the socket only pushes. Client dedupes by `client_msg_id`.
@@ -189,6 +193,8 @@ Fan-out: API publishes to Redis channel `user:{id}`; every API instance subscrib
 connected users. A service queues an event in the transaction that makes it true; `get_session`
 publishes the request's committed events when the request ends, after its session has closed, and
 a failed or hung publish (1 s) is logged without failing the request (`core/events.py`, T-5.1).
+`socket.close` is the server's own: queued where a user's sessions are revoked, it closes every
+socket of theirs and is never sent to a client (T-7.4).
 
 ## 7. Background jobs (ARQ)
 

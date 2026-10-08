@@ -16,6 +16,7 @@ from httpx import AsyncClient, Response
 from sqlalchemy import select, text
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession
 
+from app.core import events
 from app.core.enums import UserStatus
 from app.core.errors import AppError
 from app.core.providers import FakeProviders
@@ -224,6 +225,7 @@ async def test_reuse_more_than_ten_seconds_later_revokes_the_family(
     client: AsyncClient,
     fake_providers: FakeProviders,
     clock: ModuleType,
+    published: list[events.Event],
 ) -> None:
     clock.freeze(START)
     device = await _sign_in(client, fake_providers)
@@ -244,6 +246,8 @@ async def test_reuse_more_than_ten_seconds_later_revokes_the_family(
         START,
         START + timedelta(seconds=10),
     ]
+    # And the user's sockets close with it (T-7.4).
+    assert _closed_sockets(published) == [sessions[0].user_id]
     # The rightful device is signed out too: the family is gone.
     after = await _refresh(client, device)
     assert _error(after) == REVOKED
@@ -542,6 +546,7 @@ async def test_logout_revokes_the_whole_family_but_not_another_devices(
     client: AsyncClient,
     fake_providers: FakeProviders,
     clock: ModuleType,
+    published: list[events.Event],
 ) -> None:
     clock.freeze(START)
     phone_device = await _sign_in(client, fake_providers)
@@ -549,9 +554,13 @@ async def test_logout_revokes_the_whole_family_but_not_another_devices(
     laptop = await _sign_in(client, fake_providers)
     phone_device.take(await _refresh(client, phone_device))
 
+    published.clear()
     response = await client.post("/v1/auth/logout", headers=phone_device.headers())
 
     assert response.status_code == 204
+    # Its sockets close (T-7.4); the laptop's reconnect, its tokens still good.
+    user_ids = {s.user_id for s in await _sessions(db)}
+    assert _closed_sockets(published) == list(user_ids)
     assert _error(await _refresh(client, phone_device)) == REVOKED
     assert (await _refresh(client, laptop)).status_code == 200
 
@@ -619,3 +628,8 @@ async def test_the_refresh_routes_are_served_on_firebase_too(
     assert (refresh.status_code, _error(refresh)) == (401, AUTH_REQUIRED)
     assert (logout.status_code, _error(logout)) == (401, AUTH_REQUIRED)
     assert (send.status_code, _error(send)["code"]) == (404, "NOT_FOUND")
+
+
+def _closed_sockets(published: list[events.Event]) -> list[uuid.UUID]:
+    """Whose sockets a request closed (T-7.4)."""
+    return [e.user_id for e in published if e.type == events.CLOSE_SOCKETS]

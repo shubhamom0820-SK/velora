@@ -18,7 +18,7 @@ from httpx import AsyncClient, Response
 from sqlalchemy import select, text, update
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession
 
-from app.core import security
+from app.core import events, security
 from app.core.enums import Gender, OnboardingStep, Role
 from app.core.errors import AppError
 from app.core.providers import FakeProviders
@@ -399,6 +399,7 @@ async def test_five_wrong_pins_revoke_every_session_of_the_user(
     client: AsyncClient,
     fake_providers: FakeProviders,
     clock: ModuleType,
+    published: list[events.Event],
 ) -> None:
     """Every session, both devices' families, not only this one's (D-069)."""
     clock.freeze(START)
@@ -427,10 +428,15 @@ async def test_five_wrong_pins_revoke_every_session_of_the_user(
     )
     assert live == 0
     assert (await _row(db, user_id)).pin_failed == 5
+    # Every socket of theirs closes too (T-7.4), once, at the fifth.
+    assert _closed_sockets(published) == [user_id]
 
 
 async def test_once_locked_even_the_right_pin_is_refused_and_not_counted(
-    db: AsyncSession, client: AsyncClient, make_user: MakeUser
+    db: AsyncSession,
+    client: AsyncClient,
+    make_user: MakeUser,
+    published: list[events.Event],
 ) -> None:
     """No sixth guess: past five, nothing is checked until a fresh sign-in."""
     user, _ = await make_user()
@@ -444,6 +450,7 @@ async def test_once_locked_even_the_right_pin_is_refused_and_not_counted(
     assert _error(right)["code"] == "SESSION_REVOKED"
     assert _error(change)["code"] == "SESSION_REVOKED"
     assert (await _row(db, user.id)).pin_failed == 5
+    assert user.id in _closed_sockets(published)
     assert await _pin_is(db, user.id, PIN)
 
 
@@ -750,3 +757,8 @@ async def test_no_pin_hash_or_key_reaches_a_log_or_a_body(
     ]
     assert [s for s in secrets if s in seen] == []
     captured_logs.assert_listening()
+
+
+def _closed_sockets(published: list[events.Event]) -> list[uuid.UUID]:
+    """Whose sockets a request closed (T-7.4)."""
+    return [e.user_id for e in published if e.type == events.CLOSE_SOCKETS]

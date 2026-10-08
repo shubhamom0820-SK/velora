@@ -37,6 +37,8 @@ from app.modules.payments.router import router as payments_router
 from app.modules.photos.router import router as photos_router
 from app.modules.pricing.router import router as pricing_router
 from app.modules.profiles.router import router as profiles_router
+from app.modules.realtime.router import gateway as realtime_gateway
+from app.modules.realtime.router import router as realtime_router
 from app.modules.swipes.router import router as swipes_router
 from app.modules.threads.router import router as threads_router
 from app.modules.users.router import router as users_router
@@ -74,6 +76,9 @@ async def close_resources(app: FastAPI) -> None:
     The lifespan calls it on shutdown; tests call it directly, because an
     in-process test client does not run the lifespan.
     """
+    hub = getattr(app.state, "hub", None)
+    if hub is not None:
+        await hub.aclose()
     await app.state.redis.aclose()
     await app.state.engine.dispose()
     await app.state.providers.storage.aclose()
@@ -162,6 +167,9 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.include_router(swipes_router, prefix="/v1")
     app.include_router(threads_router, prefix="/v1")
     app.include_router(messages_router, prefix="/v1")
+    app.include_router(realtime_router, prefix="/v1")
+    # The socket, at the root (02-ARCHITECTURE §6): `wss://api…/ws`.
+    app.include_router(realtime_gateway)
     for sign_in_router, served_for in SIGN_IN_PATHS:
         if settings.AUTH_PHONE_PROVIDER in served_for:
             app.include_router(sign_in_router, prefix="/v1")

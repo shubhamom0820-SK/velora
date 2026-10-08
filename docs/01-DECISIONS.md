@@ -4463,6 +4463,42 @@ deleted account (D-051). Signing in again restores the account (D-500), and with
 
 **Rejected:** `NOT_ALLOWED` (422), which the web couldn't tell from a voice note or a gift.
 
+### D-556 · `websockets`, a dev dependency, for the load test's client — Locked
+**The decision (T-7.4, the plan's Q11, approved by the founder 8 October 2026):** `websockets`
+(17.1, already in `uv.lock` through `uvicorn[standard]`, which serves the API's sockets with it) is
+declared in the dev group, for `bench/realtime/sockets.py`'s thousand clients. Nothing in `app/`
+imports it; the API's own sockets are Starlette's. The tests use no client library at all:
+`tests/ws.py` calls the app as ASGI, in process.
+
+**Rejected:** a hand-written handshake in the bench (a client of our own, tested by nothing).
+
+### D-557 · The socket: a ticket, the web's origin, one subscription an instance, closed by the server — Locked
+**The decision (T-7.4, building 02-ARCHITECTURE §6; the plan approved 8 October 2026):**
+- **A ticket** (`POST /v1/ws/ticket`, onboarded, 30 a minute): 32 random bytes, kept in Redis
+  30 seconds by its SHA-256 alone, naming the user, taken with `GETDEL` as a socket presents it.
+  The access token never goes in a URL, which proxies and logs keep.
+- **`/ws?ticket=`, at the root:** refused before it opens (4403) unless its `Origin` is one of
+  the API's exact CORS origins; closed (4401) without a live ticket. The gateway reads no
+  database, so a socket holds no connection (P-52).
+- **One `PubSub` per instance**, never per socket: a user's first socket subscribes
+  `user:{id}`, their last unsubscribes. Each socket has an outbox of 100; one that fills is
+  closed (1013) and reconnects, never waited for.
+- **Heartbeat:** the client's `ping` gets `pong`; 60 seconds of silence closes the socket (4408).
+- **Closing:** `socket.close` (`core/events.py`'s `close_sockets`) is queued in the transaction
+  that revokes a user's sessions (sign-out, a replayed refresh, five wrong PINs, a deleted
+  account), and closes every socket of theirs (4000), on every instance. It is the server's own
+  and never reaches a client. A freeze or a ban does the same when a task writes one (T-9.2,
+  T-9.5; noted on both).
+- **Measured** (`bench/realtime/sockets.py`, the founder's Mac, 8 October 2026, eleven runs):
+  1,000 sockets open and 1,000 events delivered in every run; the API process held 104 to
+  120 MB idle, 137 to 210 MB with every socket open, and 170 to 198 MB after the events. Under
+  256 MB in every run, the worst by about 46 MB. A local measure, never Fly's.
+
+**Corrected in planning:** Claude's plan (Q10) said Fly caps a machine at about 25 connections
+unless `[http_service.concurrency]` says otherwise. Fly's own reference (read 8 October 2026)
+says the default is `type = "connections"`, a `soft_limit` of 20, a load-balancing preference,
+and no `hard_limit` at all. So nothing in `infra/` changed.
+
 ## Adding a decision
 
 Append `D-0NN · Title — Locked|Open`, with Decision, Why, Rejected. Never edit a Locked entry —

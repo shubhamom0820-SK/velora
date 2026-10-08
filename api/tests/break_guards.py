@@ -6818,6 +6818,232 @@ P64: list[Case] = [
     ),
 ]
 
+# --- T-7.4: the socket side -------------------------------------------------------
+
+T74_SELECTION = [
+    "tests/modules/realtime",
+    "tests/modules/auth/test_refresh.py",
+    "tests/modules/auth/test_pin.py",
+    "tests/bench/realtime",
+]
+REALTIME = "app/modules/realtime/service.py"
+HUB = "app/modules/realtime/hub.py"
+AUTH = "app/modules/auth/service.py"
+
+T74: list[Case] = [
+    Case(
+        id="t74-01-ticket-twice",
+        what="a ticket that opens a second socket",
+        edits=[
+            (
+                REALTIME,
+                "    raw = await redis.getdel(_key(ticket))\n",
+                "    raw = await redis.get(_key(ticket))\n",
+            )
+        ],
+        expect=["test_a_ticket_opens_once", "test_a_ticket_opens_one_socket_once"],
+    ),
+    Case(
+        id="t74-02-ticket-kept-whole",
+        what="a ticket kept in Redis as itself, not its hash",
+        edits=[
+            (
+                REALTIME,
+                "    return TICKET_PREFIX + hashlib.sha256(ticket.encode()).hexdigest()\n",
+                "    return TICKET_PREFIX + ticket\n",
+            )
+        ],
+        expect=["test_a_ticket_names_its_user_for_thirty_seconds_by_its_hash"],
+    ),
+    Case(
+        id="t74-03-ticket-forever",
+        what="a ticket that never expires",
+        edits=[
+            (
+                REALTIME,
+                "    await redis.set(_key(ticket), str(user_id), ex=TICKET_TTL_S)\n",
+                "    await redis.set(_key(ticket), str(user_id))\n",
+            )
+        ],
+        expect=["test_a_ticket_names_its_user_for_thirty_seconds_by_its_hash"],
+    ),
+    Case(
+        id="t74-04-any-origin",
+        what="a socket opened from any origin",
+        edits=[
+            (
+                REALTIME,
+                '    if websocket.headers.get("origin") not in app.state.settings.CORS_ORIGINS:\n',
+                "    if False:\n",
+            )
+        ],
+        expect=["test_only_the_webs_own_origin_opens_one"],
+    ),
+    Case(
+        id="t74-05-no-ticket-asked",
+        what="a socket opened without a ticket",
+        edits=[(REALTIME, "    if user_id is None:\n", "    if False:\n")],
+        expect=["test_no_ticket_no_socket", "test_a_ticket_opens_one_socket_once"],
+    ),
+    Case(
+        id="t74-06-no-pong",
+        what="a ping never answered",
+        edits=[
+            (
+                REALTIME,
+                '        if _type_of(message.get("text")) == PING:\n',
+                "        if False:\n",
+            )
+        ],
+        expect=["test_ping_is_answered_pong"],
+    ),
+    Case(
+        id="t74-07-never-idle",
+        what="a silent socket kept open",
+        edits=[
+            (
+                REALTIME,
+                "            socket.close(CLOSE_IDLE)\n            return\n",
+                "            continue\n",
+            )
+        ],
+        expect=["test_a_silent_socket_is_closed"],
+    ),
+    Case(
+        id="t74-08-close-forwarded",
+        what="the server's own close sent on as an event",
+        edits=[
+            (
+                HUB,
+                "        if _type_of(text) == events.CLOSE_SOCKETS:\n",
+                "        if False:\n",
+            )
+        ],
+        expect=[
+            "test_socket_close_closes_every_socket_of_that_user_alone",
+            "test_deleting_the_account_closes_its_sockets",
+            "test_the_hub_never_forwards_its_own_close",
+        ],
+    ),
+    Case(
+        id="t74-09-never-unsubscribed",
+        what="Redis held for a user with no socket left",
+        edits=[
+            (
+                HUB,
+                "                    await self._pubsub.unsubscribe(_channel(user_id))\n",
+                "                    pass\n",
+            )
+        ],
+        expect=["test_the_last_socket_gone_the_hub_lets_redis_go"],
+    ),
+    Case(
+        id="t74-10-one-socket-told",
+        what="an event reaching one of a user's sockets",
+        edits=[
+            (
+                HUB,
+                "        for socket in held:\n            socket.offer(text)\n",
+                "        for socket in held[:1]:\n            socket.offer(text)\n",
+            )
+        ],
+        expect=["test_an_event_reaches_every_socket_of_its_user_and_nobody_else"],
+    ),
+    Case(
+        id="t74-11-outbox-unbounded",
+        what="a slow socket's outbox without a bound",
+        edits=[
+            (
+                HUB,
+                "        self.outbox: asyncio.Queue[str] = asyncio.Queue(maxsize=QUEUE_MAX)\n",
+                "        self.outbox: asyncio.Queue[str] = asyncio.Queue()\n",
+            )
+        ],
+        expect=["test_a_slow_socket_is_closed_never_waited_for"],
+    ),
+    Case(
+        id="t74-12-shutdown-leaves-sockets",
+        what="the hub not closed with the app",
+        edits=[("app/main.py", "        await hub.aclose()\n", "        pass\n")],
+        expect=["test_shutting_down_closes_every_socket"],
+    ),
+    Case(
+        id="t74-13-reuse-keeps-sockets",
+        what="a replayed refresh leaving the sockets open",
+        edits=[
+            (
+                AUTH,
+                "            )\n            events.close_sockets(session, current.user_id)\n",
+                "            )\n",
+            )
+        ],
+        expect=["test_reuse_more_than_ten_seconds_later_revokes_the_family"],
+    ),
+    Case(
+        id="t74-14-logout-keeps-sockets",
+        what="a sign-out leaving the sockets open",
+        edits=[
+            (
+                AUTH,
+                "        )\n        events.close_sockets(session, current.user_id)\n",
+                "        )\n",
+            )
+        ],
+        expect=["test_logout_revokes_the_whole_family_but_not_another_devices"],
+    ),
+    Case(
+        id="t74-15-deletion-keeps-sockets",
+        what="a deleted account's sockets left open",
+        edits=[
+            (
+                AUTH,
+                (
+                    "    await repository.revoke_every_session(session, user_id=user_id, at=clock.now())\n"
+                    "    events.close_sockets(session, user_id)\n"
+                ),
+                "    await repository.revoke_every_session(session, user_id=user_id, at=clock.now())\n",
+            )
+        ],
+        expect=["test_deleting_the_account_closes_its_sockets"],
+    ),
+    Case(
+        id="t74-16-locked-pin-keeps-sockets",
+        what="a PIN already locked leaving the sockets open",
+        edits=[
+            (
+                AUTH,
+                "            events.close_sockets(session, user_id)\n    if tries is None:\n",
+                "    if tries is None:\n",
+            )
+        ],
+        expect=["test_once_locked_even_the_right_pin_is_refused_and_not_counted"],
+    ),
+    Case(
+        id="t74-17-fifth-pin-keeps-sockets",
+        what="the fifth wrong PIN leaving the sockets open",
+        edits=[
+            (
+                AUTH,
+                "            events.close_sockets(session, user_id)\n        raise _session_revoked()\n",
+                "        raise _session_revoked()\n",
+            )
+        ],
+        expect=["test_five_wrong_pins_revoke_every_session_of_the_user"],
+    ),
+    Case(
+        id="t74-18-bench-judges-open-only",
+        what="the load test blind to memory after the events",
+        edits=[
+            (
+                "bench/realtime/sockets.py",
+                "    if peak_mb >= LIMIT_MB:\n",
+                "    if peak_mb > 10**9:\n",
+            )
+        ],
+        expect=["test_each_shortfall_is_named"],
+    ),
+]
+
 CASES: list[tuple[Case, list[str]]] = (
     [(c, T51_SELECTION) for c in T51]
     + [(c, T54_SELECTION) for c in T54]
@@ -6848,6 +7074,7 @@ CASES: list[tuple[Case, list[str]]] = (
     + [(c, T83_SELECTION) for c in T83]
     + T66
     + [(c, P64_SELECTION) for c in P64]
+    + [(c, T74_SELECTION) for c in T74]
 )
 
 # The fifty-connection fixture's own message when Postgres refuses a connection.

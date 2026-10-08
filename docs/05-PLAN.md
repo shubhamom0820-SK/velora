@@ -2860,10 +2860,22 @@ prices don't depend on the web photos step, and the hold is lifted.
 - [x] **Commit:** `feat(messages): list and send with safety filters [T-7.3]`
 
 ### T-7.4 · Real-time server
-- [ ] **Needs:** T-7.3, and **P-64**: in tests `session_for_the_app` replaces `get_session`, which is what publishes, so no endpoint test sees an event; and services queue events through `core/events.py` (T-5.1), never a publish of their own
-- [ ] `POST /ws/ticket` (Redis, 30 s, single use). `/ws` endpoint: validate ticket, register connection, subscribe `user:{id}`, heartbeat, close on logout/freeze. ~~Publishing helper `realtime.publish(user_id, type, data)` used by services.~~ **Services queue events through `core/events.py`, published after commit (T-5.1); this task builds the socket side only** (P-64's note, struck 8 October 2026 as P-64 landed).
-- [ ] Load test: 1,000 concurrent sockets on one instance stay under 256 MB.
-- [ ] **Commit:** `feat(realtime): websocket gateway [T-7.4]`
+- [x] **Needs:** T-7.3, and **P-64**: in tests `session_for_the_app` replaces `get_session`, which is what publishes, so no endpoint test sees an event; and services queue events through `core/events.py` (T-5.1), never a publish of their own
+- [x] `POST /ws/ticket` (Redis, 30 s, single use). `/ws` endpoint: validate ticket, register connection, subscribe `user:{id}`, heartbeat, close on logout/freeze. ~~Publishing helper `realtime.publish(user_id, type, data)` used by services.~~ **Services queue events through `core/events.py`, published after commit (T-5.1); this task builds the socket side only** (P-64's note, struck 8 October 2026 as P-64 landed).
+- [x] Load test: 1,000 concurrent sockets on one instance stay under 256 MB.
+  **Built as D-557, 8 October 2026:** the ticket kept by its hash and taken once; the socket
+  only from the web's exact origins; one Redis subscription an instance; `ping`/`pong` and 60 s
+  of silence; `socket.close` queued wherever sessions are revoked (sign-out, a replayed refresh,
+  five wrong PINs, a deleted account), proved through each of those flows. The tests drive the
+  app as ASGI in process (`tests/ws.py`), so a request's events reach a socket as in the app
+  (P-64). **The load test** (`uv run python -m bench.realtime.sockets`, by hand, D-556): eleven
+  runs on the founder's Mac, every socket open and every event delivered each time, the API at
+  137 to 210 MB with 1,000 sockets open and 170 to 198 MB after the events: under 256 MB in all
+  eleven, the worst by about 46. A local measure, never Fly's. **Fly needed nothing** (the plan's
+  Q10 was wrong: Fly has no default hard limit, D-557). **Broken once each** (`uv run python -m
+  tests.break_guards t74-`): eighteen cases, each red in 1 of 1, every file restored and none
+  differing by SHA-256 after.
+- [x] **Commit:** `feat(realtime): websocket gateway [T-7.4]`
 
 ### T-7.5 · Read receipts and typing
 - [ ] **Needs:** T-7.4
@@ -3191,6 +3203,8 @@ number** per account gets its 5 each, one Thread's worth, and is **accepted**, k
 
 ### T-9.2 · Fraud scoring v1
 - [ ] **Needs:** T-9.1
+- **A freeze closes the sockets** (T-7.4, D-557): wherever this task sets `frozen` and revokes
+  the sessions, `events.close_sockets(session, user_id)` in the same transaction, as sign-out does.
 - [ ] Signals written as `fraud_events` by services: report received, contact-info masked, message rejected (abuse / solicitation), > 30 new threads in 24 h, identical first message to > 10 people, > 3 devices in 7 days, location jumps > 500 km in 1 h.
 - [ ] Sessions store no IP address or user agent (D-067), and "> 3 devices in 7 days" needs one of them. Add what this task needs here, with a line on `/privacy`, which lists neither today.
 - [ ] **A possible-minor photo's event is a signal, not proof** (D-093): it weighs in the score, and
@@ -3209,6 +3223,9 @@ number** per account gets its 5 each, one Thread's worth, and is **accepted**, k
 
 ### T-9.4 · Notifications
 - [ ] **Needs:** T-7.4
+- **"Only if not connected" needs presence across instances** (T-7.4, 8 October 2026): each
+  instance's hub knows only its own sockets (`Hub.count`), so this task records who is connected,
+  for example a Redis key per user refreshed while a socket lives, and reads that.
 - [ ] VAPID keys; `POST/DELETE /push/subscriptions`; `send_push` worker (drop subscriptions on 404/410); notification prefs; in-app `notifications` list. Kinds: match, message (only if not connected), like, knot requested/accepted, thread expiring, album decided, low balance.
 - [ ] **A paused account is sent nothing** (T-9.6): no push and no in-app notification while
   `paused`. A deleted one has no push subscriptions left (`DELETE /me` drops them).
@@ -3218,6 +3235,8 @@ number** per account gets its 5 each, one Thread's worth, and is **accepted**, k
 
 ### T-9.5 · Admin panel
 - [ ] **Needs:** T-9.2
+- **A ban or a freeze closes the sockets** (T-7.4, D-557): `events.close_sockets(session,
+  user_id)` in the transaction that sets it, as sign-out does.
 - [ ] API: all `/admin/*` routes in `04-API.md`, `require_role(moderator)`; Vela grants and bans `admin` only; every call writes `audit_log`; viewing messages of a thread logs who looked and why (reason required).
 - [ ] **Vela grants (`/admin/users/{id}/credits`):** a grant can't reach a woman, because the database refuses it (D-076). A negative `delta`, an admin correction, has no ledger reason today, since `admin_grant` is a credit (D-077). Add a debit reason for it here, an enum addition. **Make `admin_grant`'s ref required here:** it is optional (T-5.1) only while its callers are the seed and `make_user`; an admin's grant names the `audit_log` row its call writes, or it is a grant nobody can trace. That is a migration on `ck_ledger_entries_ref_required` and a change to `wallet/rules.py`, which the seed and `make_user` must then follow (at the direction of the advisor directing Sprint 5, 3 October 2026).
 - [ ] Web `/admin`: metrics tiles, report queue with SLA timer (24 h), user search + detail (photos, reports, fraud signals, ledger, threads), moderation queue (approve/reject), actions with confirmation dialogs, audit log.

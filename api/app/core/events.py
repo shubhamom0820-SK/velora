@@ -14,7 +14,7 @@ would fail where nobody is looking. A failure is logged and never fails the
 request, whose transaction has already committed; that includes a Redis that
 accepts the connection and never answers, cut off after `PUBLISH_TIMEOUT_S`.
 Code outside a request (the seed, a test's session) publishes nothing.
-T-7.4 builds the socket side.
+T-7.4 builds the socket side (`modules/realtime`).
 """
 
 from __future__ import annotations
@@ -35,6 +35,11 @@ from sqlalchemy.orm import Session, SessionTransaction
 log = structlog.get_logger(__name__)
 
 PUBLISH_TIMEOUT_S = 1.0
+
+# A user's sockets close (T-7.4): queued in the transaction that revokes their
+# sessions, so a signed-out device stops hearing. The gateway acts on it and
+# never sends it to a client.
+CLOSE_SOCKETS = "socket.close"
 
 # On `Session.info`: (the transaction it was queued in, the event).
 _PENDING = "events.pending"
@@ -69,6 +74,11 @@ def queue(
         )
     pending: list[tuple[SessionTransaction, Event]] = sync.info.setdefault(_PENDING, [])
     pending.append((transaction, Event(user_id, type_, data)))
+
+
+def close_sockets(session: AsyncSession, user_id: uuid.UUID) -> None:
+    """Close every socket `user_id` has open, once this transaction commits."""
+    queue(session, user_id, CLOSE_SOCKETS, {})
 
 
 def take_committed(session: AsyncSession) -> list[Event]:

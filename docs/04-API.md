@@ -171,6 +171,12 @@ to be; never the original, D-030), `masked`, `duration_s`, `mine`, `from_deleted
 (D-051), `locked` (a voice note a man hasn't unlocked; the file is never here, T-7.9),
 `read_at`, `created_at`, and `client_msg_id` on your own messages only.
 
+## Real time
+| Method | Path | Auth | Body → Response | Task |
+|---|---|---|---|---|
+| POST | /ws/ticket | ✅ | → `{ticket}`: opens one socket, once, within 30 s (D-557). 30 a minute | T-7.4 |
+| WS | /ws?ticket= (at the root, never in OpenAPI) | ticket | §6's envelope; only from the web's exact origins | T-7.4 |
+
 ## Album, kudos, safety
 | Method | Path | Auth | Body → Response | Task |
 |---|---|---|---|---|
