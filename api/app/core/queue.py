@@ -40,6 +40,13 @@ LOG_TURNOVER = "log_turnover"  # a cron, never queued by the API (T-8.1)
 # T-4.12, D-393: an approved public photo with a face compared with the kept
 # selfie, for the badge. Nobody waits on it, so it has no wake.
 MATCH_PHOTO = "match_photo"
+# T-9.6 (D-502): a copy of a user's own data, written to the private bucket;
+# and its file deleted when its link expires, 24 hours after it was ready.
+EXPORT_DATA = "export_data"
+EXPIRE_EXPORT = "expire_export"
+# T-9.6 (D-500): the daily job, at 03:30 IST, that erases deleted accounts and
+# deletes any export file its own job left behind. Run by the worker's cron.
+ERASE_ACCOUNTS = "erase_accounts"
 WAKE_TIMEOUT_S = 1.0
 
 

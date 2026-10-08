@@ -102,9 +102,10 @@ make infra-up    # docker: postgres+postgis, redis, s3 (SeaweedFS, D-086); stamp
                  # sets the private bucket's CORS rule for the local web (T-4.6)   (make infra-down to stop)
 make infra-reset # stop the stack and DROP all data volumes (clean database)
 make dev         # infra + api + worker + web on 127.0.0.1
-make worker      # ARQ worker only: moderate_photo, delete_files, verify_selfie, match_photo (polls
-                 # every 10 s, D-091; a selfie's wake runs it at once, D-261); and log_turnover,
-                 # a daily cron at 09:00 IST, the year's turnover at warning from ₹15 lakh (D-483)
+make worker      # ARQ worker only: moderate_photo, delete_files, verify_selfie, match_photo,
+                 # export_data, expire_export (polls every 10 s, D-091; a selfie's wake runs it at
+                 # once, D-261); two daily crons: log_turnover at 09:00 IST, the year's turnover at
+                 # warning from ₹15 lakh (D-483), and erase_accounts at 03:30 IST (D-500)
 make models      # fetch the face models into api/models, checked by SHA-256 (D-088; needed
                  # where FACEMATCH_PROVIDER=sface, and by the face-match tests)
 make seed        # dev data: 20 profiles, test users (local only; a re-run changes nothing, infra-reset starts over)

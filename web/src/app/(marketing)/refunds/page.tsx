@@ -15,8 +15,8 @@ export const generateMetadata = publicPageMetadata(
 
 /**
  * /refunds (T-2.2, D-050; D-230 by P-130): purchases are final, Velas spent
- * are spent, and a broken payment is ours to fix. Nothing comes back on its
- * own. Payment gateways ask for this page before approving a merchant (P-0.8).
+ * are spent, Velas left in a deleted account are lost (D-504, T-9.6), and a
+ * broken payment is ours to fix. Nothing comes back on its own. Payment gateways ask for this page before approving a merchant (P-0.8).
  */
 export default function RefundsPage() {
   return (
@@ -29,6 +29,9 @@ export default function RefundsPage() {
       </LegalSection>
       <LegalSection title={t("legal.refunds.spent.title")}>
         <p>{t("legal.refunds.spent.body", { app: APP_NAME })}</p>
+      </LegalSection>
+      <LegalSection title={t("legal.refunds.deleted.title")}>
+        <p>{t("legal.refunds.deleted.body")}</p>
       </LegalSection>
       <LegalSection title={t("legal.refunds.broken.title")}>
         <p>{t("legal.refunds.broken.body")}</p>

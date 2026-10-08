@@ -35,6 +35,7 @@ async def test_the_wallets_logs_and_refusals_carry_nothing_secret(
     man, token = await make_user(credits=10)
     man.pin_hash = PIN_HASH
     await db.flush()
+    assert man.phone_enc is not None
     phone = decrypt_phone(man.phone_enc, make_test_settings())
     grant_event, reopen_event = f"client-{uuid.uuid4()}", f"client-{uuid.uuid4()}"
     thread = Ref(RefType.THREAD, uuid.uuid4())

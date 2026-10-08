@@ -195,6 +195,9 @@ a failed or hung publish (1 s) is logged without failing the request (`core/even
 | `moderate_photo` | photo upload completed | re-encode (D-092: decoded and encoded afresh, so no EXIF survives), score with Sightengine (D-094), decide: approve → the scored bytes to the public bucket; a possible minor → rejected, a `fraud_events` score, every copy deleted (D-093) |
 | `delete_files` | under-18 refusal, before its commit | delete the refused user's files once they're gone, each read back (D-090) |
 | `verify_selfie` | selfie submitted, then a wake (D-261) | the selfie re-encoded, then face match vs the approved photos' public copies, on the worker itself: YuNet and SFace (D-088), no third party (D-087), at SFace's published 0.363 (D-260); approved → `is_verified`. A wake on `wake:verify_selfie`, published after the submit commits, runs it at once; the queued job is the path sure to run. Liveness is T-4.11's, and nothing claims it until then (D-262) |
+| `export_data` | `POST /me/export`, after its commit | a user's own data as JSON to the private bucket, key recorded first; `ready` for 24 hours (D-502). 3 tries, the last marking it `failed` |
+| `expire_export` | `export_data`, 24 h on | delete the export's file, read back as gone; `expired` (D-502) |
+| `erase_accounts` | cron, daily 03:30 IST (the worker's only cron) | erase every account deleted ≥ 29 days ago, files first, by D-503's lists, then anonymise its row (D-500); expire any export file its own job left |
 | `watermark_album` | album access granted | render per-viewer watermarked copies |
 | `send_push` | any notification | Web Push, drop dead subscriptions on 404/410 |
 | `expire_threads` | cron, every minute | active threads past `expires_at` → `expired`, emit event |

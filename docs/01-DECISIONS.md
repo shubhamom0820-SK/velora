@@ -3858,6 +3858,139 @@ profile from its own matches and Threads.
 The founder's approval, 8 October 2026, of Claude's Q4 in T-6.2's plan, on the advisor's
 recommendation (Claude, in a separate chat), relayed by the founder.
 
+### D-500 · Deleting an account: deleted at once, restored by signing in, erased on day 29 or 30 — Locked
+**The decision (T-9.6):**
+- **`DELETE /me`** sets `deleted` and `deleted_requested_at` and revokes every session and push
+  subscription, in one transaction under the row's lock. It answers `202 {erase_by}`, 30 days on.
+  Who may delete is who may sign in, checked again under the lock, so a ban or a freeze that
+  lands while the request is in flight still stops it (D-051: never a route around a ban).
+- **What a `deleted` account gets** (D-067 left it to this task): a request on an access token's
+  last minutes is `401 SESSION_REVOKED`, so the web goes to sign-in. **Signing in again before
+  the erasure restores the account**: `active`, the request cleared, everything as it was, the
+  balance included. Proving the number proves the account (D-069). This replaces D-067's
+  "`FORBIDDEN` until T-9.6 decides"; anything else not on `MAY_SIGN_IN` stays `FORBIDDEN`.
+- **The erasure** is a daily job, `erase_accounts`, at 03:30 IST (the worker's cron, its only
+  one). It erases every account deleted at least **29** days ago, so each is erased on day 29 or
+  30, and `/privacy` keeps "within 30 days". `/privacy` gives "within 29 days" as the window to
+  sign back in. One transaction per account, under the row's lock. Its files are deleted and
+  read back as gone first (D-090), then D-503's rows, then the row is anonymised. A file that
+  won't go rolls that account back for the next day's run.
+- **The `users` row stays**, since kept rows name it: `anonymised_at` set, `phone_enc`, dob
+  (D-501), the PIN, `last_active_at` emptied, and the referral code replaced. **`phone_hash`
+  stays on it** (D-051): `ix_users_phone_hash` finds every row a number ever had, for T-9.5.
+  It is unique among live accounts only (`uq_users_phone_hash_live`), so **after the erasure the
+  number starts a new account**, unless `banned_identities` holds it. The database holds the row
+  to this: `anonymised_at` never changes once set, only a `deleted` row carries it, and an
+  anonymised row has no number, dob or PIN (migration `a3c12afe34d5`).
+- **The race.** A sign-in and the erasure both lock the row. If the erasure commits first, the
+  sign-in's lookup no longer matches the erased row and it starts a new account; if the sign-in
+  commits first, the account is restored and the erasure finds nothing due. A test forces each
+  order and asserts that the second waited.
+- **Cost against D-091:** ARQ checks its cron at each poll without asking Redis. The job costs
+  one enqueue and its own few commands, once a day. D-091's sum, 260,640 a month idle, is
+  unchanged; a test holds the cron to no Redis command until it is due.
+
+**Rejected:** `FORBIDDEN` at sign-in with an explicit restore endpoint (a second step for the
+same proof); a deferred job per deletion (lost if Redis is wiped, where the daily job reads the
+database); erasing at 30 days or more (a daily job would land past "within 30 days"); clearing
+`phone_hash` (D-051 keeps it).
+
+Recommended by Claude in T-9.6's plan; approved by the founder on the advisor's recommendation
+(Claude, in a separate chat), relayed, 8 October 2026.
+
+### D-501 · The erasure clears the date of birth; gender stays — Locked
+**The decision (T-9.6):** dob is personal data, and nothing needs it once an account is erased,
+so the erasure clears it. T-1.9's trigger makes dob immutable once set. It now has one exception:
+dob may become null **in the update that sets `anonymised_at`**, and in no other. Afterwards
+`ck_users_anonymised_is_empty` keeps it null. Otherwise the trigger's first-set rule would let a
+date be written back to the anonymised row. **Gender stays:** D-076's triggers read it, and on
+its own it identifies no one.
+
+**Rejected:** keeping dob (pseudonymous beside the hash, but nothing needs it); clearing gender
+(the ledger's and wallets' triggers read it, and the ledger is kept).
+
+Approved by the founder on the advisor's recommendation, relayed, 8 October 2026.
+
+### D-502 · A copy of your data: JSON of your own, a link for 24 hours, then deleted — Locked
+**The decision (T-9.6):** `POST /me/export` makes an export row and queues `export_data`. The
+worker writes the JSON to the private bucket and marks it `ready`. `GET /me/export` signs a link
+to it only until `expires_at`, 24 hours after it was ready, and never past it (the link's TTL is
+what remains). `expire_export`, queued 24 hours on, deletes the file, reads it back as gone and
+marks the row `expired`; the daily job sweeps any file left behind. Asking again returns the
+export being made, or a ready one, rather than a second; a pending one stuck for an hour is
+replaced; 5 asks a day. The key is recorded before the file is written, so no file ever exists
+that no row points to.
+
+**What's in it:**
+- **Account:** your phone number (decrypted on the worker, D-061), date of birth and gender.
+- **Profile:** your own location, interests and intents.
+- **Photos and voice notes:** each with a 24-hour link.
+- **Messages you sent**, with threads numbered within the export.
+- **Your activity:** your swipes, blocks, kudos, gifts and album requests, with what and when
+  only; reports **you filed**.
+- **Money:** your ledger (reason, delta, balance, time; never `ref_id`, which can name another
+  person) and payments (never `raw_webhook`).
+- **The rest:** notifications (kind and time; never the payload), notification settings and
+  sessions (times).
+
+**What's never in it:** anyone else's id, name, username, number, location or words. Reports
+about you aren't in it (T-9.1: never told who reported, or that anyone did), and neither are
+fraud signals or moderation's notes. A test fills the other person's name, username, phone,
+location, about and message text with markers and finds none of them in the file. Logs name an
+export by its id only (rule 15).
+
+**Rejected:** emailing it (sign-in is by phone; there is no address); messages received (the
+other person's words); a link stored on the row (one is signed at each read instead).
+
+Approved by the founder ("your sent messages only"), on the advisor's recommendation, relayed,
+8 October 2026.
+
+### D-503 · What the erasure takes and keeps, column by column — Locked
+**The decision (T-9.6):** `api/app/modules/account/erasure.py` lists every column holding a key
+to `users` as erased or kept. A test holds the lists to the database, so a table or column added
+later fails CI, naming D-503, until someone decides.
+- **Erased:** profiles, intents, interests, photos and verifications (files deleted), data
+  exports (files deleted), swipes, reveals, profile views and matches (both sides), the person's
+  own blocks, thread clears and voice unlocks, kudos *to* them, notifications, notification
+  settings, push subscriptions and sessions.
+- **Kept:** ledger, payments, refund requests and the wallet (money); messages and threads (rule
+  12, D-051); reports and the audit log (rule 12); fraud events and scores (moderation records);
+  other people's blocks of them; kudos *from* them (the other person's); gift sends, album
+  requests and referrals (records the ledger names).
+- **Kept by name before it exists:** `welcome_grants`, T-8.11's hash of every number that
+  received welcome Velas (D-470, P-371). Its name is provisional: T-8.11 renames the entry if it
+  chooses another. The check asks for it to move into the kept list once the table exists.
+  `banned_identities` has no key to `users` and is never touched.
+
+This is not D-072's list. An under-18 refusal happens before anything rule 12 keeps can exist,
+and deletes everything; the erasure happens to an account that may have lived for years.
+
+Approved by the founder on the advisor's recommendation, relayed, 8 October 2026; the welcome
+entry at the founder's direction.
+
+### D-504 · A deleted account's unspent Velas are lost at the erasure — Locked
+**The decision (T-9.6):** a man's unspent Velas are lost when his account is erased, with no
+refund (D-230). His ledger and balance stay as records, and T-9.9's reconciliation still holds.
+Restored within the window, his balance is untouched, so the Velas come back with the account.
+The delete confirmation shows his balance in plain words before he confirms, as the number from
+the API (`Me.balance`), never written into the copy; that screen is T-9.8's. `/privacy` and
+`/refunds` say it.
+
+The founder's own decision, 8 October 2026.
+
+### D-505 · Usernames stay locked after onboarding for the beta; an erased one is freed — Locked
+**The decision (T-9.6, the second of D-068's questions):** a username still can't change after
+onboarding, `IMMUTABLE_FIELD` as before. It is a link people share (D-001's `/@username`), and
+changing it breaks links and invites impersonation. A design for changing it (an old name
+redirecting for a while, then retired) waits until after the beta, if anyone asks. **At the
+erasure the username is freed** along with the profile: D-051 erases what others could see, and
+keeping a name reserved forever would keep identifying data the person asked us to erase.
+
+**Rejected:** changes now (redirects and a retired-name list for a case nobody has raised);
+retiring erased names forever (keeps identifying data).
+
+Approved by the founder on the advisor's recommendation, relayed, 8 October 2026.
+
 ---
 
 ## Adding a decision

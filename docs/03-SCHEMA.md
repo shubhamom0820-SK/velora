@@ -58,10 +58,10 @@ Intent is not an enum: it is the `intents` catalogue, picked 1 to 3 per user (D-
 | column | type | notes |
 |---|---|---|
 | id | uuid pk | |
-| phone_hash | text not null unique | HMAC-SHA256 of E.164, keyed by `PHONE_PEPPER` (D-061) |
-| phone_enc | bytea not null | E.164, Fernet-encrypted in the API, never by the database (D-061) |
-| gender | gender_t null | immutable after set (trigger) |
-| dob | date null | immutable after set (trigger) |
+| phone_hash | text not null | HMAC-SHA256 of E.164, keyed by `PHONE_PEPPER` (D-061). Unique among accounts not erased (`uq_users_phone_hash_live`); an erased row keeps it (D-051, D-500), and `ix_users_phone_hash` finds every row a number ever had |
+| phone_enc | bytea null | E.164, Fernet-encrypted in the API, never by the database (D-061). Null exactly when erased (`ck_users_phone_enc_until_anonymised`) |
+| gender | gender_t null | immutable after set (trigger); kept by the erasure (D-501) |
+| dob | date null | immutable after set (trigger), but for the erasure's own update, which clears it (D-501) |
 | role | role_t not null default 'user' | |
 | status | user_status_t not null default 'active' | |
 | onboarding_step | onboarding_t not null default 'dob' | moves to `done` only for a man or `is_verified` (trigger `users_done_needs_a_match`, D-310) |
@@ -70,9 +70,15 @@ Intent is not an enum: it is the `intents` catalogue, picked 1 to 3 per user (D-
 | pin_failed | smallint not null default 0 | |
 | referral_code | citext unique not null | generated at creation |
 | last_active_at | timestamptz null | updated at most once per minute |
-| deleted_requested_at | timestamptz null | 30-day deletion window |
+| deleted_requested_at | timestamptz null | when `DELETE /me` was asked; signing in again clears it (D-500) |
+| anonymised_at | timestamptz null | when the account was erased, on day 29 or 30 (T-9.6, D-500); never changes once set (trigger `users_anonymised_for_good`) |
 
-Indexes: `(status, last_active_at desc)`.
+Indexes: `(status, last_active_at desc)`, `(phone_hash)`, and unique `(phone_hash) where
+anonymised_at is null`. Checks (T-9.6): `ck_users_anonymised_is_deleted` (only a `deleted` row is
+anonymised, so an erased account never comes back), `ck_users_phone_enc_until_anonymised`, and
+`ck_users_anonymised_is_empty` (no dob or PIN on an anonymised row: the immutability trigger's
+first-set rule would otherwise let a date back in, D-501). What else an erasure takes and keeps is
+D-503's, column by column, in `api/app/modules/account/erasure.py`.
 
 ### sessions
 | column | type | notes |
@@ -98,6 +104,18 @@ Index: `(user_id) where revoked_at is null`.
 | value | text | hash |
 | reason | text | e.g. `underage`, `ban` |
 Unique `(kind, value)`.
+
+### data_exports  (T-9.6, D-502)
+| column | type | notes |
+|---|---|---|
+| id | uuid pk | |
+| user_id | uuid fk users | |
+| status | text not null default 'pending' | check: `pending`, `ready`, `failed`, `expired` |
+| file_key | text null | the private bucket's key while a file may exist; recorded before the file is written |
+| ready_at | timestamptz null | |
+| expires_at | timestamptz null | 24 hours after `ready_at`: the link is signed until then, never past it, and the file is deleted then |
+Check: `ready` has a file, `ready_at` and `expires_at`. Index `(user_id, created_at desc)`. An
+under-18 refusal (D-078) and the erasure (D-503) delete its rows, files first.
 
 ---
 

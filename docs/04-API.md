@@ -37,15 +37,23 @@ named `<T>Page` (`LedgerEntryPage`). `limit` is 1 to 50, 20 when absent; outside
 | POST | /me/pin/skip | 🔐 | → `Me`, moving `pin` → `selfie` (D-069) | T-3.9 |
 | POST | /me/onboarding/complete | 🔐 | → `Me`, moving `selfie` → `done` (D-310). Every requirement met, or `PROFILE_INCOMPLETE` naming each one missing; a matched selfie for anyone but a man, or `VERIFICATION_REQUIRED`. Before `selfie`, `ONBOARDING_INCOMPLETE`; once `done`, `Me` unchanged. Sets `completeness` | T-4.8 |
 | PUT | /me/location | 🔐 | `{lat, lng}`, inside India's box, or `{area_id}`, stored at its centroid → `Me` (D-220). Either is stored as its point of the 0.01° grid, never exactly (D-490). A position takes the nearest area within 2 km of the exact position, or none. From the `username` step on, never moving it; before, `ONBOARDING_INCOMPLETE`. Outside the box, or an area that isn't one: `VALIDATION_ERROR`. 10 an hour per user | T-4.10 |
-| PATCH | /me/settings | ✅ | `{is_hidden?, hide_age?, hide_distance?, show_kudos?}` → `Me` | T-9.6 |
-| POST | /me/pause | ✅ | → 204 | T-9.6 |
-| POST | /me/export | ✅ | → 202 (emailed/downloadable later) | T-9.6 |
-| DELETE | /me | ✅ | → 202, 30-day window | T-9.6 |
+| PATCH | /me/settings | ✅ | `{is_hidden?, hide_age?, hide_distance?, show_kudos?, show_gifts?}`, each `true` or `false` only → `Me`. A field it doesn't know, or nothing to set, is `VALIDATION_ERROR`: a typo in a privacy switch never looks like it worked | T-9.6 |
+| POST | /me/pause | ✅ | → 204: `paused`, hidden from everyone and sent no notifications (T-9.4) until resumed. Twice is once | T-9.6 |
+| DELETE | /me/pause | ✅ | → 204: back to `active`. Twice is once | T-9.6 |
+| POST | /me/export | ✅ | → 202 `DataExport` (below): a new one queued for the worker, or the one being made, or a ready one, rather than a second (D-502). 5 a day per user | T-9.6 |
+| GET | /me/export | ✅ | → `DataExport`, the newest, its `url` signed until `expires_at` while `ready`; none asked for: `NOT_FOUND` | T-9.6 |
+| DELETE | /me | ✅ | → 202 `{erase_by}`: `deleted` at once, every session revoked. Signing in again before the erasure restores it; erased on day 29 or 30, within `erase_by` (D-500). A ban or freeze landing meanwhile still refuses it (`ACCOUNT_BANNED` / `ACCOUNT_FROZEN`) | T-9.6 |
 | GET | /interests | 🔓 | → `Interest[]` | T-3.8 |
 | GET | /intents | 🔐 | → `Intent[]` | T-3.6 |
 | GET | /areas?city= | 🔓 | → `Area[]`: `{id, city, name}`, never a centroid, by city then name; every city's, or `city`'s in any case (D-220) | T-4.10 |
 
 Onboarding endpoints work at their step and after it, never before (D-068).
+
+`DataExport` (T-9.6, D-502): `id`, `status` (`pending`, `ready`, `failed`, `expired`),
+`requested_at`, `expires_at` (24 hours after it was ready), and `url`, a link to the JSON signed
+until `expires_at` and never past it, while `ready`; otherwise `null`. A ready one past its
+expiry reads `expired`, whether or not its file's deletion has run yet. The JSON holds the
+user's own data and nobody else's (D-502 lists it).
 
 `Me` (T-3.5): `id`, `role`, `status`, `onboarding_step`, `gender`, `age`, `is_verified`,
 `has_pin`, `referral_code`, `balance`, and `profile`: `first_name`, `username`, `about`,
@@ -249,9 +257,9 @@ fake order is paid by calling it, for T-8.2's tests and T-8.7's local checkout.
 | `VALIDATION_ERROR` | 400 | body failed schema |
 | `UNSUPPORTED_IMAGE` | 422 | not a JPEG, PNG or WebP, by its bytes; `details.accepted`. The message says what to do (D-089) |
 | `IMAGE_TOO_LARGE` | 422 | over 8 MB; `details.max_bytes` |
-| `AUTH_REQUIRED` / `TOKEN_EXPIRED` / `SESSION_REVOKED` | 401 | |
+| `AUTH_REQUIRED` / `TOKEN_EXPIRED` / `SESSION_REVOKED` | 401 | `SESSION_REVOKED` also for a `deleted` account's access token or refresh (D-500): signing in again restores it |
 | `INSUFFICIENT_CREDITS` | 402 | `details.required`, `details.balance` |
-| `FORBIDDEN` | 403 | wrong role; a `deleted` account until T-9.6 (D-067) |
+| `FORBIDDEN` | 403 | wrong role; a status no one has allowed to sign in (D-067's allowlist) |
 | `ACCOUNT_FROZEN` / `ACCOUNT_BANNED` | 403 | |
 | `BLOCKED` | 403 | either side blocked |
 | `ONBOARDING_INCOMPLETE` | 403 | `details.step`, the user's current step (D-068) |

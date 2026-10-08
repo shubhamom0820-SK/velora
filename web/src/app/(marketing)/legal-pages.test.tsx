@@ -136,6 +136,23 @@ describe("/privacy", () => {
     ).toHaveTextContent("a hashed copy of your phone number");
   });
 
+  it("says signing in again restores an account, Velas and all, before the erasure (D-500, D-504)", () => {
+    render(<PrivacyPage />);
+
+    expect(
+      screen.getByText(t("legal.privacy.deletion.erased")),
+    ).toHaveTextContent("Within 30 days we erase");
+    expect(
+      screen.getByText(t("legal.privacy.deletion.restore")),
+    ).toHaveTextContent("Sign in again within 29 days");
+    expect(
+      screen.getByText(t("legal.privacy.deletion.velas")),
+    ).toHaveTextContent("lost when your account is erased");
+    expect(screen.getByText(t("legal.privacy.choices.body"))).toHaveTextContent(
+      "download for 24 hours; then we delete it",
+    );
+  });
+
   it("says an under-18 sign-up is deleted at once, all but the number's hash (D-072)", () => {
     render(<PrivacyPage />);
 
@@ -159,14 +176,24 @@ describe("/refunds", () => {
     vi.stubEnv("APP_ENV", "staging");
   });
 
-  it("says the three things D-050 and D-230 decide, in order", () => {
+  it("says the four things D-050, D-230 and D-504 decide, in order", () => {
     render(<RefundsPage />);
 
     expect(sectionTitles()).toEqual([
       t("legal.refunds.final.title"),
       t("legal.refunds.spent.title"),
+      t("legal.refunds.deleted.title"),
       t("legal.refunds.broken.title"),
     ]);
+  });
+
+  it("says Velas left in a deleted account are lost once it's erased (D-504)", () => {
+    render(<RefundsPage />);
+    const deleted = section(t("legal.refunds.deleted.title"));
+
+    expect(deleted).toHaveTextContent("lost once it's erased, within 30 days");
+    expect(deleted).toHaveTextContent("We don't refund them.");
+    expect(deleted).toHaveTextContent("Sign in again within 29 days");
   });
 
   it("promises no Velas back, on a ban or on a declined request (D-230, P-130)", () => {

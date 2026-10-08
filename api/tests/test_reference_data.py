@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import importlib.util
 import json
+import uuid
 from collections.abc import Callable
 from itertools import pairwise
 from types import ModuleType
@@ -555,15 +556,16 @@ async def _alembic(db: AsyncSession, run: Callable[..., object], revision: str) 
     await connection.run_sync(_run)
 
 
-async def _place(db: AsyncSession, make_user: MakeUser, city: str, name: str) -> None:
-    user, _ = await make_user()
+async def _place(db: AsyncSession, user_id: uuid.UUID, city: str, name: str) -> None:
+    """Put the user in an area, by SQL alone: the schema may be one a
+    downgrade left, older than the models (T-9.6 added a `users` column)."""
     await db.execute(
         text(
             "update profiles set area_id = "
             "(select id from areas where city = :city and name = :name) "
             "where user_id = :user"
         ),
-        {"city": city, "name": name, "user": user.id},
+        {"city": city, "name": name, "user": user_id},
     )
 
 
@@ -631,15 +633,17 @@ async def test_the_migration_refuses_to_remove_an_area_in_use(
     fix: str,
 ) -> None:
     """A profile in an area it would remove: it stops with a message naming the
-    fix, not a bare foreign-key error, and changes nothing. Rolled back."""
+    fix, not a bare foreign-key error, and changes nothing. Rolled back. The
+    user is made at head, through the models, before any downgrade."""
+    user, _ = await make_user()
     with pytest.raises(RuntimeError) as refused:
         async with db.begin_nested():
             if direction == "upgrade":
                 await _alembic(db, command.downgrade, AREAS_REVISION.down_revision)
-                await _place(db, make_user, city, name)
+                await _place(db, user.id, city, name)
                 await _alembic(db, command.upgrade, AREAS_REVISION.revision)
             else:
-                await _place(db, make_user, city, name)
+                await _place(db, user.id, city, name)
                 await _alembic(db, command.downgrade, AREAS_REVISION.down_revision)
 
     assert type(refused.value).__name__ == "AreasInUse"
@@ -653,6 +657,7 @@ async def test_the_migration_counts_only_the_areas_it_removes(
 ) -> None:
     """Someone in another city's area doesn't stop it: the count has the
     delete's own condition, not "anyone with an area"."""
+    user, _ = await make_user()
     async with db.begin_nested():
         await _alembic(db, command.downgrade, AREAS_REVISION.down_revision)
         await db.execute(
@@ -661,7 +666,7 @@ async def test_the_migration_counts_only_the_areas_it_removes(
                 "('Elsewhere', 'Somewhere', ST_GeogFromText('SRID=4326;POINT(75 31)'))"
             )
         )
-        await _place(db, make_user, "Elsewhere", "Somewhere")
+        await _place(db, user.id, "Elsewhere", "Somewhere")
         await _alembic(db, command.upgrade, AREAS_REVISION.revision)
 
     assert await _cities(db) == {"Phagwara": 17, "Elsewhere": 1}

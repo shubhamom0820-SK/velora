@@ -11,6 +11,7 @@ from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.enums import BanKind
+from app.modules.account.models import DataExport
 from app.modules.album.models import AlbumRequest
 from app.modules.auth.models import BannedIdentity, Session
 from app.modules.discovery.models import ProfileView
@@ -36,8 +37,19 @@ from app.modules.wallet.models import Wallet
 
 
 async def user_by_phone_hash(session: AsyncSession, phone_hash: str) -> User | None:
+    """The live account on a number, locked until the transaction ends.
+
+    Never an erased one (T-9.6, D-500): its hash stays on its row (D-051), and
+    the number is free. The lock is the sign-in's side of the race with the
+    erasure: an erasure that commits first leaves this row no longer matching,
+    so the sign-in finds nothing and starts a new account; a sign-in that
+    commits first has restored the account, and the erasure skips it.
+    """
     user: User | None = await session.scalar(
-        select(User).where(User.phone_hash == phone_hash)
+        select(User)
+        .where(User.phone_hash == phone_hash, User.anonymised_at.is_(None))
+        .with_for_update()
+        .execution_options(populate_existing=True)
     )
     return user
 
@@ -92,6 +104,7 @@ UNDERAGE_DELETES = (
     Attached(PushSubscription, ("user_id",)),
     Attached(FraudEvent, ("user_id",)),
     Attached(FraudScore, ("user_id",)),
+    Attached(DataExport, ("user_id",)),
     # A selfie is a photo (kind `selfie`), so its file is a photo's: listed in
     # UNDERAGE_FILES below, read before these rows go (D-078, T-4.2).
     Attached(Verification, ("user_id",)),
@@ -132,6 +145,7 @@ class FileColumn:
 UNDERAGE_FILES = (
     FileColumn(Photo, "raw_key", "private"),
     FileColumn(Photo, "public_key", "public"),
+    FileColumn(DataExport, "file_key", "private"),
 )
 
 

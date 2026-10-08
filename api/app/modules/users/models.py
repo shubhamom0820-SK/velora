@@ -1,7 +1,9 @@
 """`users` — 03-SCHEMA.md §1.
 
 gender and dob are immutable once set; a database trigger enforces it
-(migration T-1.9), and T-3.6 maps its `check_violation` to IMMUTABLE_FIELD.
+(migration T-1.9), and T-3.6 maps its `check_violation` to IMMUTABLE_FIELD. The
+one exception is the erasure's (T-9.6, D-501): dob becomes null in the update
+that sets `anonymised_at`, which never changes after.
 """
 
 from __future__ import annotations
@@ -11,6 +13,7 @@ from datetime import date, datetime
 
 from sqlalchemy import (
     Boolean,
+    CheckConstraint,
     Date,
     DateTime,
     Index,
@@ -31,8 +34,11 @@ class User(Timestamps, Base):
     __tablename__ = "users"
 
     id: Mapped[uuid.UUID] = uuid_pk()
-    phone_hash: Mapped[str] = mapped_column(Text, nullable=False, unique=True)
-    phone_enc: Mapped[bytes] = mapped_column(LargeBinary, nullable=False)
+    # Unique among accounts not yet erased (`uq_users_phone_hash_live`): an
+    # erased row keeps its hash (D-051), and the number may sign up again.
+    phone_hash: Mapped[str] = mapped_column(Text, nullable=False)
+    # Empty exactly when the account is erased (T-9.6, D-500).
+    phone_enc: Mapped[bytes | None] = mapped_column(LargeBinary)
     gender: Mapped[Gender | None] = mapped_column(pg_enum(Gender))
     dob: Mapped[date | None] = mapped_column(Date)
     role: Mapped[Role] = mapped_column(
@@ -59,7 +65,28 @@ class User(Timestamps, Base):
     deleted_requested_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True)
     )
+    # When the account was erased, 29 days or so after its deletion was asked
+    # (T-9.6, D-500); never changes once set (`users_anonymised_for_good`).
+    anonymised_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
 
     __table_args__ = (
         Index("ix_users_status_last_active_at", "status", last_active_at.desc()),
+        Index(
+            "uq_users_phone_hash_live",
+            "phone_hash",
+            unique=True,
+            postgresql_where=text("anonymised_at IS NULL"),
+        ),
+        Index("ix_users_phone_hash", "phone_hash"),
+        CheckConstraint(
+            "(phone_enc IS NULL) = (anonymised_at IS NOT NULL)",
+            name="phone_enc_until_anonymised",
+        ),
+        CheckConstraint(
+            "anonymised_at IS NULL OR status = 'deleted'", name="anonymised_is_deleted"
+        ),
+        CheckConstraint(
+            "anonymised_at IS NULL OR (dob IS NULL AND pin_hash IS NULL)",
+            name="anonymised_is_empty",
+        ),
     )

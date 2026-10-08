@@ -112,6 +112,7 @@ async def test_me_never_sends_the_number_or_the_date_of_birth(
 ) -> None:
     """Data nothing displays isn't sent (D-067's discipline), in any format."""
     user, token = await make_user()
+    assert user.phone_enc is not None
     phone = decrypt_phone(user.phone_enc, SETTINGS)
     national = phone.removeprefix("+91")
     assert user.dob is not None
@@ -208,7 +209,6 @@ async def test_a_token_for_a_user_who_no_longer_exists_is_auth_required(
             "ACCOUNT_FROZEN",
             "This account is frozen while we look into it.",
         ),
-        (UserStatus.DELETED, "FORBIDDEN", "This account can't sign in."),
     ],
 )
 async def test_a_ban_or_freeze_takes_effect_at_the_next_request(
@@ -228,6 +228,25 @@ async def test_a_ban_or_freeze_takes_effect_at_the_next_request(
 
     assert response.status_code == 403
     assert _error(response) == {"code": code, "message": message}
+
+
+async def test_a_deleted_accounts_token_is_signed_out_at_the_next_request(
+    db: AsyncSession, client: AsyncClient, make_user: MakeUser
+) -> None:
+    """A deleted account's sessions are revoked with it; its access token's
+    last minutes (D-067) are answered as signed out, so the web goes to sign-in,
+    where signing in again restores the account (T-9.6, D-500)."""
+    user, token = await make_user()
+    user.status = UserStatus.DELETED
+    await db.flush()
+
+    response = await _me(client, token)
+
+    assert response.status_code == 401
+    assert _error(response) == {
+        "code": "SESSION_REVOKED",
+        "message": "You've been signed out. Sign in again.",
+    }
 
 
 async def test_a_revoked_sessions_token_works_until_it_expires(

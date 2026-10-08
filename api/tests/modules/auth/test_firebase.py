@@ -549,6 +549,7 @@ async def test_an_account_banned_or_frozen_by_status_cant_sign_in(
     user, _ = await make_user()
     user.status = status
     await db.flush()
+    assert user.phone_enc is not None
     phone = decrypt_phone(user.phone_enc, SETTINGS)
 
     response = await _exchange(client, google.sign(_claims(phone)))

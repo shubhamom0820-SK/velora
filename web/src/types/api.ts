@@ -146,7 +146,8 @@ export interface paths {
         get: operations["get_me_v1_me_get"];
         put?: never;
         post?: never;
-        delete?: never;
+        /** Delete Account */
+        delete: operations["delete_account_v1_me_delete"];
         options?: never;
         head?: never;
         patch?: never;
@@ -692,6 +693,59 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/me/settings": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /** Update Settings */
+        patch: operations["update_settings_v1_me_settings_patch"];
+        trace?: never;
+    };
+    "/v1/me/pause": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Pause */
+        post: operations["pause_v1_me_pause_post"];
+        /** Resume */
+        delete: operations["resume_v1_me_pause_delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/me/export": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Latest Export */
+        get: operations["latest_export_v1_me_export_get"];
+        put?: never;
+        /** Request Export */
+        post: operations["request_export_v1_me_export_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/auth/otp/send": {
         parameters: {
             query?: never;
@@ -829,6 +883,44 @@ export interface components {
             items: components["schemas"]["Card"][];
             /** Next Cursor */
             next_cursor: string | null;
+        };
+        /**
+         * DataExport
+         * @description A copy of the user's own data (D-502). `url` is a link to the file,
+         *     signed until `expires_at`, only while it is `ready`; otherwise null.
+         */
+        DataExport: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "pending" | "ready" | "failed" | "expired";
+            /**
+             * Requested At
+             * Format: date-time
+             */
+            requested_at: string;
+            /** Expires At */
+            expires_at: string | null;
+            /** Url */
+            url: string | null;
+        };
+        /**
+         * DeletionScheduled
+         * @description `DELETE /me`'s answer: when the account will be erased at the latest.
+         *     Signing in again before then cancels the deletion (D-500).
+         */
+        DeletionScheduled: {
+            /**
+             * Erase By
+             * Format: date-time
+             */
+            erase_by: string;
         };
         /** DobSet */
         DobSet: {
@@ -1266,6 +1358,24 @@ export interface components {
             intent_ids: number[];
         };
         /**
+         * SettingsPatch
+         * @description Any of the five privacy switches, each only if sent. A field nobody
+         *     knows is refused rather than ignored, and so is a body that changes
+         *     nothing: a typo in a privacy switch must never look like it worked.
+         */
+        SettingsPatch: {
+            /** Is Hidden */
+            is_hidden?: boolean | null;
+            /** Hide Age */
+            hide_age?: boolean | null;
+            /** Hide Distance */
+            hide_distance?: boolean | null;
+            /** Show Kudos */
+            show_kudos?: boolean | null;
+            /** Show Gifts */
+            show_gifts?: boolean | null;
+        };
+        /**
          * SignedIn
          * @description A sign-in's body. The refresh token and CSRF value go in cookies, never
          *     here: the refresh token is HttpOnly, out of the page's reach (D-024).
@@ -1630,6 +1740,26 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["Me"];
+                };
+            };
+        };
+    };
+    delete_account_v1_me_delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DeletionScheduled"];
                 };
             };
         };
@@ -2531,6 +2661,115 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    update_settings_v1_me_settings_patch: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SettingsPatch"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Me"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    pause_v1_me_pause_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    resume_v1_me_pause_delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    latest_export_v1_me_export_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DataExport"];
+                };
+            };
+        };
+    };
+    request_export_v1_me_export_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DataExport"];
                 };
             };
         };

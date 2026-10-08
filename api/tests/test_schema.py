@@ -331,6 +331,8 @@ async def test_updated_at_triggers_are_on_exactly_the_mutable_tables(
         # notifications and push_subscriptions carry their own timestamps)
         "notification_prefs",
         "app_config",
+        # T-9.6
+        "data_exports",
     }
 
 

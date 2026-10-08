@@ -10,9 +10,10 @@ themselves).
   Free plan that is 260,640 commands a month idle; ARQ's default 0.5 seconds
   would be over five million. The health key is written once an hour, the sum
   D-091 counted; abort is off.
-- **One cron, `log_turnover`, once a day** (D-483): ARQ checks its schedule in
-  the heartbeat each poll already makes, so it adds a job's few commands a day,
-  nothing per poll. Schedules are in UTC, whatever the machine's clock says.
+- **Two crons, each once a day:** `log_turnover` (D-483) and `erase_accounts`
+  (T-9.6, D-500). ARQ checks their schedules in the heartbeat each poll already
+  makes, so each adds a job's few commands a day, nothing per poll. Schedules
+  are in UTC, whatever the machine's clock says.
 - **A wake runs `verify_selfie` at once** (D-261): a listener on a Redis
   channel of its own (`app/workers/wake.py`), started with the worker, so a
   woman's selfie is decided in seconds, not at the next look at the queue. The
@@ -51,6 +52,9 @@ from app.core.logging import configure_logging
 from app.core.providers import Providers, build_providers
 from app.core.queue import (
     DELETE_FILES,
+    ERASE_ACCOUNTS,
+    EXPIRE_EXPORT,
+    EXPORT_DATA,
     LOG_TURNOVER,
     MATCH_PHOTO,
     MODERATE_PHOTO,
@@ -60,6 +64,9 @@ from app.core.queue import (
 from app.workers.tasks import log_turnover as log_turnover_job
 from app.workers.tasks import verify_selfie as verify_selfie_job
 from app.workers.tasks.delete_files import delete_files
+from app.workers.tasks.erase_accounts import erase_accounts
+from app.workers.tasks.expire_export import EXPIRE_TRIES, expire_export
+from app.workers.tasks.export_data import EXPORT_TRIES, export_data
 from app.workers.tasks.match_photo import MATCH_TRIES, match_photo
 from app.workers.tasks.moderate_photo import MODERATE_TRIES, moderate_photo
 from app.workers.wake import WakeListener, connect_to
@@ -76,14 +83,30 @@ JOBS: Final[Sequence[Function]] = (
     ),
     # T-4.12, D-393: a shown photo's face against the kept selfie, for the badge.
     func(match_photo, name=MATCH_PHOTO, max_tries=MATCH_TRIES),
+    # T-9.6, D-502: a user's own data, and its file deleted 24 hours on.
+    func(export_data, name=EXPORT_DATA, max_tries=EXPORT_TRIES),
+    func(expire_export, name=EXPIRE_EXPORT, max_tries=EXPIRE_TRIES),
 )
-# Once a day, in UTC (`WorkerSettings.timezone`).
+# T-9.6, D-500: erasing deleted accounts, at 22:00 UTC, which is 03:30 IST.
+# One run at a time across workers (`unique`), and a timeout of its own: it goes
+# through every account due, one by one.
+ERASE_AT_UTC: Final = (22, 0)
+ERASE_TIMEOUT_S: Final = 1800
+# Once a day each, in UTC (`WorkerSettings.timezone`).
 CRON_JOBS: Final[Sequence[CronJob]] = (
     cron(
         log_turnover_job.log_turnover,
         name=LOG_TURNOVER,
         hour=log_turnover_job.RUN_AT_UTC[0],
         minute=log_turnover_job.RUN_AT_UTC[1],
+    ),
+    cron(
+        erase_accounts,
+        name=ERASE_ACCOUNTS,
+        hour=ERASE_AT_UTC[0],
+        minute=ERASE_AT_UTC[1],
+        timeout=ERASE_TIMEOUT_S,
+        max_tries=1,
     ),
 )
 # Jobs at once. Decoding is synchronous on the event loop, so only one image is
@@ -157,6 +180,7 @@ async def startup(ctx: MutableMapping[str, Any]) -> None:
     log.info(
         "worker.started",
         jobs=[job.name for job in JOBS],
+        cron=[job.name for job in CRON_JOBS],
         poll_delay_s=settings.WORKER_POLL_DELAY_S,
         env=settings.ENV,
     )

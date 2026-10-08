@@ -326,6 +326,8 @@ async def sign_in(session: AsyncSession, settings: Settings, phone: E164) -> New
         user, _created = await users_service.find_or_create_account(
             session, phone, settings
         )
+        if users_service.restore_if_deleted(user):
+            log.info("account.restored", user_id=str(user.id))
         users_service.refuse_who_may_not_sign_in(user)
         # A fresh sign-in is D-069's way back from a locked PIN: proof of the
         # number, which is the account.
@@ -459,6 +461,13 @@ async def _authenticated_session(
     if current is None:
         raise _auth_required()
     return current
+
+
+async def sign_out_everywhere(session: AsyncSession, user_id: uuid.UUID) -> None:
+    """Revoke every session of the user, in the caller's transaction: a
+    deleted account (T-9.6). Access tokens keep their last minutes (D-067),
+    which `current_user` answers with `SESSION_REVOKED`."""
+    await repository.revoke_every_session(session, user_id=user_id, at=clock.now())
 
 
 def _auth_required() -> AppError:

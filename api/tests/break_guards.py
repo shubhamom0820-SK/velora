@@ -4352,6 +4352,374 @@ T63: list[tuple[Case, list[str]]] = [
     ),
 ]
 
+# --- T-9.6: settings, deletion, the erasure, the export ----------------------------
+
+ERASURE96 = "app/modules/account/erasure.py"
+ACCOUNT96 = "app/modules/account/service.py"
+ACCOUNT_REPO96 = "app/modules/account/repository.py"
+ACCOUNT_SCHEMAS96 = "app/modules/account/schemas.py"
+ACCOUNT_ROUTER96 = "app/modules/account/router.py"
+USERS_SERVICE96 = "app/modules/users/service.py"
+USERS_REPO96 = "app/modules/users/repository.py"
+ANONYMISED96 = "alembic/versions/20261008_a3c12afe34d5_users_can_be_anonymised.py"
+EXPORTS96 = "alembic/versions/20261008_b4bfd6974ee4_data_exports.py"
+WORKER96 = "app/workers/main.py"
+T96_SELECTION = [
+    "tests/modules/account",
+    "tests/modules/users",
+    "tests/modules/auth",
+    "tests/workers/test_worker.py",
+    "tests/test_schema.py",
+]
+ERASED_29 = (
+    "test_an_account_deleted_29_days_ago_is_erased_and_kept_exactly_as_d051_says"
+)
+CLASSIFIED = "test_every_column_keyed_to_users_is_erased_or_kept"
+ALL_MINE = "test_the_export_is_all_mine_and_nothing_of_theirs"
+RACE = "test_a_sign_in_and_the_erasure_at_once_never_leave_both_or_neither"
+
+T96: list[Case] = [
+    Case(
+        id="t96-01-an-erased-table-dropped",
+        what="D-503: swipes left off the erased list",
+        edits=[(ERASURE96, '    Erased(Swipe, ("swiper_id", "target_id")),\n', "")],
+        expect=[CLASSIFIED, ERASED_29],
+    ),
+    Case(
+        id="t96-02-a-kept-column-erased",
+        what="D-503: kudos the erased person gave, erased too",
+        edits=[
+            (
+                ERASURE96,
+                '    Erased(Kudos, ("to_id",)),\n',
+                '    Erased(Kudos, ("to_id", "from_id")),\n',
+            )
+        ],
+        expect=[CLASSIFIED],
+    ),
+    Case(
+        id="t96-03-the-welcome-hash-unnamed",
+        what="D-503, P-371: T-8.11's table dropped from the kept-when-built list",
+        edits=[
+            (
+                ERASURE96,
+                '    "welcome_grants": "one welcome per number, ever (T-8.11, D-470)",\n',
+                "",
+            )
+        ],
+        expect=["test_the_welcome_hash_is_kept_by_name_before_it_exists"],
+    ),
+    Case(
+        id="t96-04-an-export-file-left-behind",
+        what="D-503: the erasure forgets export files",
+        edits=[(ERASURE96, '    (DataExport, "file_key", "private"),\n', "")],
+        expect=[
+            "test_every_storage_key_on_an_erased_table_is_in_the_file_list",
+            ERASED_29,
+        ],
+    ),
+    Case(
+        id="t96-05-erased-at-28-days",
+        what="D-500: the erasure a day early",
+        edits=[
+            (
+                ACCOUNT96,
+                "ERASE_AFTER = timedelta(days=29)\n",
+                "ERASE_AFTER = timedelta(days=28)\n",
+            )
+        ],
+        expect=["test_not_yet_29_days_is_left_alone"],
+    ),
+    Case(
+        id="t96-06-erased-at-30-days",
+        what="D-500: the erasure past 'within 30 days' once a daily job runs",
+        edits=[
+            (
+                ACCOUNT96,
+                "ERASE_AFTER = timedelta(days=29)\n",
+                "ERASE_AFTER = timedelta(days=30)\n",
+            )
+        ],
+        expect=[ERASED_29],
+    ),
+    Case(
+        id="t96-07-the-erasure-takes-no-lock",
+        what="D-500: the erasure reads the row without locking it",
+        edits=[
+            (
+                ACCOUNT_REPO96,
+                "        .where(User.id == user_id, *_due(cutoff))\n        .with_for_update()\n",
+                "        .where(User.id == user_id, *_due(cutoff))\n",
+            )
+        ],
+        expect=[f"{RACE}[sign_in]"],
+    ),
+    Case(
+        id="t96-08-the-sign-in-takes-no-lock",
+        what="D-500: the sign-in's lookup without the row's lock",
+        edits=[
+            (
+                USERS_REPO96,
+                "        .where(User.phone_hash == phone_hash, User.anonymised_at.is_(None))\n        .with_for_update()\n",
+                "        .where(User.phone_hash == phone_hash, User.anonymised_at.is_(None))\n",
+            )
+        ],
+        expect=[f"{RACE}[erasure]"],
+    ),
+    Case(
+        id="t96-09-sign-in-finds-the-erased-row",
+        what="D-500: the sign-in's lookup reads erased rows too",
+        edits=[
+            (
+                USERS_REPO96,
+                "        .where(User.phone_hash == phone_hash, User.anonymised_at.is_(None))\n",
+                "        .where(User.phone_hash == phone_hash)\n",
+            )
+        ],
+        expect=["test_after_the_erasure_the_number_starts_a_new_account"],
+    ),
+    Case(
+        id="t96-10-no-restore",
+        what="D-500: signing in again doesn't restore a deleted account",
+        edits=[
+            (
+                USERS_SERVICE96,
+                "    if user.status is not UserStatus.DELETED:\n        return False\n",
+                "    if True:\n        return False\n",
+            )
+        ],
+        expect=["test_signing_in_within_the_window_restores_the_account_and_its_velas"],
+    ),
+    Case(
+        id="t96-11-delete-around-a-ban",
+        what="D-051: a deletion let in before a ban isn't checked again under the lock",
+        edits=[
+            (
+                ACCOUNT96,
+                "        users_service.refuse_who_may_not_sign_in(locked)\n",
+                "",
+            )
+        ],
+        expect=["test_a_ban_or_freeze_stops_a_deletion_even_one_already_let_in"],
+    ),
+    Case(
+        id="t96-12-delete-keeps-sessions",
+        what="D-500: deleting leaves the sessions live",
+        edits=[
+            (
+                ACCOUNT96,
+                "        await auth_service.sign_out_everywhere(session, locked.id)\n",
+                "",
+            )
+        ],
+        expect=["test_deleting_hides_the_account_at_once_and_signs_it_out_everywhere"],
+    ),
+    Case(
+        id="t96-13-deleted-forbidden-again",
+        what="D-500: a deleted account's token answered FORBIDDEN, as before T-9.6",
+        edits=[
+            (
+                USERS_SERVICE96,
+                '    if user.status is UserStatus.DELETED:\n        raise AppError(\n            "SESSION_REVOKED",',
+                '    if False:\n        raise AppError(\n            "SESSION_REVOKED",',
+            )
+        ],
+        expect=[
+            "test_a_deleted_accounts_token_is_signed_out_at_the_next_request",
+            "test_an_account_that_cant_sign_in_cant_refresh_either[deleted-401-SESSION_REVOKED]",
+        ],
+    ),
+    Case(
+        id="t96-14-dob-cleared-any-time",
+        what="D-501: the trigger lets dob go null without the anonymising update",
+        edits=[
+            (
+                ANONYMISED96,
+                "       and not (new.dob is null\n                and old.anonymised_at is null\n                and new.anonymised_at is not null) then\n",
+                "       and not (new.dob is null) then\n",
+            )
+        ],
+        expect=["test_dob_can_be_cleared_only_by_the_anonymising_update"],
+    ),
+    Case(
+        id="t96-15-an-anonymised-row-takes-a-dob",
+        what="D-501: no check keeps an anonymised row's dob and PIN empty",
+        edits=[
+            (
+                ANONYMISED96,
+                '        "anonymised_at IS NULL OR (dob IS NULL AND pin_hash IS NULL)",\n',
+                '        "anonymised_at IS NULL OR true",\n',
+            )
+        ],
+        expect=["test_an_anonymised_row_can_never_take_a_dob_or_come_back"],
+    ),
+    Case(
+        id="t96-16-anonymised-at-cleared",
+        what="D-500: the trigger keeping anonymised_at for good disarmed",
+        edits=[
+            (
+                ANONYMISED96,
+                "    if old.anonymised_at is not null\n",
+                "    if false\n",
+            )
+        ],
+        expect=["test_an_anonymised_row_can_never_take_a_dob_or_come_back"],
+    ),
+    Case(
+        id="t96-17-two-live-accounts-on-a-number",
+        what="D-500: the live accounts' hash index not unique",
+        edits=[(ANONYMISED96, "        unique=True,\n", "        unique=False,\n")],
+        expect=["test_a_number_holds_one_live_account_and_any_number_of_erased_ones"],
+    ),
+    Case(
+        id="t96-18-users-downgrade-over-erased-rows",
+        what="D-500: the downgrade goes on over erased accounts",
+        edits=[(ANONYMISED96, "    if erased:\n", "    if False:\n")],
+        expect=["test_the_downgrade_refuses_while_an_account_is_erased"],
+    ),
+    Case(
+        id="t96-19-exports-downgrade-over-files",
+        what="D-502: the downgrade drops rows whose files may be stored",
+        edits=[(EXPORTS96, "    if stored:\n", "    if False:\n")],
+        expect=["test_the_downgrade_refuses_while_an_export_may_have_its_file"],
+    ),
+    Case(
+        id="t96-20-the-other-persons-words-exported",
+        what="D-502: every message on the user's threads exported, theirs too",
+        edits=[
+            (
+                ACCOUNT_REPO96,
+                "            .where(Message.sender_id == user_id)\n",
+                "            .where(\n                Message.thread_id.in_(\n                    select(Thread.id).where(\n                        or_(Thread.user_low == user_id, Thread.user_high == user_id)\n                    )\n                )\n            )\n",
+            )
+        ],
+        expect=[ALL_MINE],
+    ),
+    Case(
+        id="t96-21-reports-about-them-exported",
+        what="T-9.1, D-502: reports about the user exported",
+        edits=[
+            (
+                ACCOUNT_REPO96,
+                "            .where(Report.reporter_id == user_id)\n",
+                "            .where(\n                or_(Report.reporter_id == user_id, Report.reported_id == user_id)\n            )\n",
+            )
+        ],
+        expect=[ALL_MINE],
+    ),
+    Case(
+        id="t96-22-the-ledgers-ref-exported",
+        what="D-502: the ledger's ref_id, which can name the other person, exported",
+        edits=[
+            (
+                ACCOUNT_REPO96,
+                "                LedgerEntry.reason,\n",
+                "                LedgerEntry.reason,\n                LedgerEntry.ref_id,\n",
+            )
+        ],
+        expect=[ALL_MINE],
+    ),
+    Case(
+        id="t96-23-the-phone-logged",
+        what="rule 15: the export's phone number in its log line",
+        edits=[
+            (
+                ACCOUNT96,
+                '    log.info("export.ready", export_id=str(export_id), size=len(body))\n',
+                '    log.info("export.ready", export_id=str(export_id), phone=document["account"]["phone"])\n',
+            )
+        ],
+        expect=[ALL_MINE],
+    ),
+    Case(
+        id="t96-24-the-link-outlives-the-file",
+        what="D-502: every link signed for 24 hours, whenever it is read",
+        edits=[
+            (
+                ACCOUNT96,
+                "        ttl = max(1, int((export.expires_at - now).total_seconds()))\n",
+                "        ttl = int(EXPORT_LINK.total_seconds())\n",
+            )
+        ],
+        expect=["test_ready_for_24_hours_then_expired_and_its_file_deleted"],
+    ),
+    Case(
+        id="t96-25-a-delete-taken-on-its-word",
+        what="D-090: a file's deletion believed without reading it back",
+        edits=[(ACCOUNT96, "    if remaining:\n", "    if False:\n")],
+        expect=[
+            "test_a_file_that_wont_go_is_never_called_gone",
+            "test_a_file_that_wont_go_stops_that_account_and_the_next_run_finishes",
+        ],
+    ),
+    Case(
+        id="t96-26-a-typo-ignored",
+        what="T-9.6: an unknown privacy switch silently ignored",
+        edits=[
+            (
+                ACCOUNT_SCHEMAS96,
+                '    model_config = ConfigDict(extra="forbid")\n',
+                '    model_config = ConfigDict(extra="ignore")\n',
+            )
+        ],
+        expect=["test_a_body_that_sets_nothing_known_is_refused"],
+    ),
+    Case(
+        id="t96-27-yes-is-true",
+        what="T-9.6: a privacy switch read leniently, 'yes' as true",
+        edits=[
+            (
+                ACCOUNT_SCHEMAS96,
+                "    is_hidden: StrictBool | None = None\n",
+                "    is_hidden: bool | None = None\n",
+            )
+        ],
+        expect=["test_a_body_that_sets_nothing_known_is_refused"],
+    ),
+    Case(
+        id="t96-28-two-exports-at-once",
+        what="D-502: asking again makes a second export",
+        edits=[
+            (
+                ACCOUNT96,
+                "        if latest is not None and _still_useful(latest, now):\n",
+                "        if False:\n",
+            )
+        ],
+        expect=["test_asking_queues_one_export_and_asking_again_returns_it"],
+    ),
+    Case(
+        id="t96-29-exports-unlimited",
+        what="D-502: no daily limit on asking",
+        edits=[(ACCOUNT_ROUTER96, "EXPORTS_PER_DAY = 5\n", "EXPORTS_PER_DAY = 500\n")],
+        expect=["test_five_asks_a_day_then_rate_limited"],
+    ),
+    Case(
+        id="t96-30-the-number-kept",
+        what="D-500: the erasure leaves the encrypted number",
+        edits=[(ACCOUNT96, "    user.phone_enc = None\n", "")],
+        expect=[ERASED_29],
+    ),
+    Case(
+        id="t96-31-the-crons-hour",
+        what="D-500: the daily job an hour late",
+        edits=[
+            (
+                WORKER96,
+                "ERASE_AT_UTC: Final = (22, 0)\n",
+                "ERASE_AT_UTC: Final = (23, 0)\n",
+            )
+        ],
+        expect=["test_the_erasure_runs_daily_at_0330_ist"],
+    ),
+    Case(
+        id="t96-32-the-machines-clock",
+        what="D-500: the cron's hours read in the machine's timezone",
+        edits=[(WORKER96, "    timezone = UTC\n", "")],
+        expect=["test_the_erasure_runs_daily_at_0330_ist"],
+    ),
+]
+
 CASES: list[tuple[Case, list[str]]] = (
     [(c, T51_SELECTION) for c in T51]
     + [(c, T54_SELECTION) for c in T54]
@@ -4371,6 +4739,7 @@ CASES: list[tuple[Case, list[str]]] = (
     + P210
     + T62
     + T63
+    + [(c, T96_SELECTION) for c in T96]
 )
 
 # The fifty-connection fixture's own message when Postgres refuses a connection.

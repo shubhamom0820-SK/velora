@@ -210,6 +210,7 @@ async def test_an_existing_number_signs_in_without_a_second_account(
 async def _phone_of(db: AsyncSession, user: User) -> str:
     from app.core.security import decrypt_phone
 
+    assert user.phone_enc is not None
     return decrypt_phone(user.phone_enc, SETTINGS)
 
 
@@ -557,10 +558,9 @@ async def _with_status(
             "ACCOUNT_FROZEN",
             "This account is frozen while we look into it.",
         ),
-        (UserStatus.DELETED, "FORBIDDEN", "This account can't sign in."),
     ],
 )
-async def test_banned_frozen_and_deleted_accounts_cant_sign_in(
+async def test_banned_and_frozen_accounts_cant_sign_in(
     db: AsyncSession,
     client: AsyncClient,
     make_user: MakeUser,

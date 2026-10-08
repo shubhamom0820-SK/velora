@@ -38,7 +38,14 @@ const WHERE = [
   "phone",
 ] as const;
 
-const DELETION = ["erased", "messages", "kept", "google"] as const;
+const DELETION = [
+  "erased",
+  "restore",
+  "messages",
+  "kept",
+  "velas",
+  "google",
+] as const;
 
 /**
  * /privacy (T-2.2): what we collect, where it is, who else handles it, and what

@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import asyncio
 import contextlib
+import copy
 import io
 import logging
 import re
@@ -14,6 +15,7 @@ import shutil
 import tomllib
 import uuid
 from collections.abc import AsyncIterator, MutableMapping
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Any
 
@@ -32,12 +34,16 @@ from sqlalchemy import select, text, update
 from sqlalchemy.exc import DBAPIError
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession
 
+from app.core import clock as core_clock
 from app.core.config import Settings
 from app.core.db import build_engine
 from app.core.enums import OnboardingStep, PhotoKind, ReviewStatus
 from app.core.providers import FakeProviders
 from app.core.queue import (
     DELETE_FILES,
+    ERASE_ACCOUNTS,
+    EXPIRE_EXPORT,
+    EXPORT_DATA,
     MATCH_PHOTO,
     MODERATE_PHOTO,
     VERIFY_SELFIE,
@@ -92,10 +98,59 @@ def _settings(**values: Any) -> Settings:
 def test_it_runs_exactly_the_jobs_the_api_queues() -> None:
     jobs = {job.name: job for job in worker.JOBS}
 
-    assert set(jobs) == {MODERATE_PHOTO, DELETE_FILES, VERIFY_SELFIE, MATCH_PHOTO}
+    assert set(jobs) == {
+        MODERATE_PHOTO,
+        DELETE_FILES,
+        VERIFY_SELFIE,
+        MATCH_PHOTO,
+        EXPORT_DATA,
+        EXPIRE_EXPORT,
+    }
     assert jobs[MODERATE_PHOTO].max_tries == 3
     assert jobs[VERIFY_SELFIE].max_tries == 5
     assert jobs[MATCH_PHOTO].max_tries == 3
+    assert jobs[EXPORT_DATA].max_tries == 3
+    assert jobs[EXPIRE_EXPORT].max_tries == 4
+
+
+def test_the_erasure_runs_daily_at_0330_ist() -> None:
+    """D-500: 22:00 UTC, which is 03:30 IST, in UTC whatever the machine's
+    clock (`WorkerSettings.timezone`, D-483), so each deleted account is erased
+    between day 29 and day 30."""
+    built = create_worker(
+        worker.WorkerSettings,  # type: ignore[arg-type]
+        **worker.worker_options(make_test_settings()),
+    )
+
+    [erase] = [job for job in built.cron_jobs if job.name == ERASE_ACCOUNTS]
+    # A copy: the module's own CronJob carries its next run between tests.
+    job = copy.copy(erase)
+    assert (job.hour, job.minute, job.second) == (22, 0, 0)
+    assert job.unique and job.max_tries == 1 and job.run_at_startup is False
+    assert built.timezone is UTC
+    job.calculate_next(datetime(2026, 10, 8, 12, 0, tzinfo=UTC))
+    assert job.next_run is not None
+    assert job.next_run.replace(microsecond=0).astimezone(core_clock.IST) == datetime(
+        2026, 10, 9, 3, 30, tzinfo=core_clock.IST
+    )
+
+
+async def test_the_erasure_costs_no_redis_command_until_it_is_due() -> None:
+    """D-091's sum holds: ARQ checks its crons at every poll without Redis.
+    With no pool at all, checks before 22:00 UTC pass; the one at 22:00
+    reaches for the pool, the single enqueue a day the job costs."""
+    built = create_worker(
+        worker.WorkerSettings,  # type: ignore[arg-type]
+        **worker.worker_options(make_test_settings()),
+    )
+    built.cron_jobs = [copy.copy(job) for job in built.cron_jobs]
+    built._pool = None  # any Redis command now raises
+    before = datetime(2026, 10, 8, 21, 30, tzinfo=UTC)
+    await built.run_cron(before, delay=10)  # works out the next runs only
+    await built.run_cron(before + timedelta(minutes=20), delay=10)
+
+    with pytest.raises(AttributeError):
+        await built.run_cron(before + timedelta(minutes=30), delay=10)
 
 
 def test_it_polls_every_10_seconds_which_is_d091s_sum() -> None:

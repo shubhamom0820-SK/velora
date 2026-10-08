@@ -83,8 +83,12 @@ async def next_fresh_number(session: AsyncSession, settings: Settings) -> E164:
     """
     taken = [
         int(phone.removeprefix(FRESH_PREFIX))
-        for token in await session.scalars(select(User.phone_enc))
-        if (phone := decrypt_phone(token, settings)).startswith(FRESH_PREFIX)
+        # An erased account has no number left (D-500); its row is skipped.
+        for token in await session.scalars(
+            select(User.phone_enc).where(User.phone_enc.is_not(None))
+        )
+        if token is not None
+        and (phone := decrypt_phone(token, settings)).startswith(FRESH_PREFIX)
     ]
     serial = max(taken, default=-1) + 1
     if serial >= FRESH_NUMBERS:

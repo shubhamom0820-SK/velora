@@ -10,6 +10,7 @@ import pytest
 
 from app.core.storage_keys import (
     album_key,
+    export_key,
     public_photo_key,
     public_url,
     raw_key,
@@ -26,6 +27,7 @@ def test_each_kind_of_file_has_its_shape() -> None:
     assert public_photo_key(B) == f"p/{B}.jpg"
     assert voice_key(A, B) == f"voice/{A}/{B}.webm"
     assert album_key(A, B) == f"album/{A}/{B}.jpg"
+    assert export_key(A, B) == f"exports/{A}/{B}.json"
 
 
 @pytest.mark.parametrize("smuggled", ["../other-user", f"{A}/../..", str(A), 7])
@@ -38,6 +40,8 @@ def test_anything_but_a_uuid_is_refused(smuggled: Any) -> None:
         lambda: public_photo_key(smuggled),
         lambda: voice_key(smuggled, B),
         lambda: album_key(A, smuggled),
+        lambda: export_key(smuggled, B),
+        lambda: export_key(A, smuggled),
     )
     for build in builders:
         with pytest.raises(TypeError, match="built from UUIDs"):

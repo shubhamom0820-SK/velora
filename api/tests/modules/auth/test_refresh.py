@@ -460,11 +460,13 @@ async def test_a_session_past_thirty_days_is_auth_required(
 
 
 @pytest.mark.parametrize(
-    ("status", "code"),
+    ("status", "http_status", "code"),
     [
-        (UserStatus.BANNED, "ACCOUNT_BANNED"),
-        (UserStatus.FROZEN, "ACCOUNT_FROZEN"),
-        (UserStatus.DELETED, "FORBIDDEN"),
+        (UserStatus.BANNED, 403, "ACCOUNT_BANNED"),
+        (UserStatus.FROZEN, 403, "ACCOUNT_FROZEN"),
+        # Deleting revokes every session (T-9.6); one that somehow survived is
+        # signed out all the same (D-500).
+        (UserStatus.DELETED, 401, "SESSION_REVOKED"),
     ],
 )
 async def test_an_account_that_cant_sign_in_cant_refresh_either(
@@ -472,6 +474,7 @@ async def test_an_account_that_cant_sign_in_cant_refresh_either(
     client: AsyncClient,
     fake_providers: FakeProviders,
     status: UserStatus,
+    http_status: int,
     code: str,
 ) -> None:
     device = await _sign_in(client, fake_providers)
@@ -482,7 +485,7 @@ async def test_an_account_that_cant_sign_in_cant_refresh_either(
 
     response = await _refresh(client, device)
 
-    assert response.status_code == 403
+    assert response.status_code == http_status
     assert _error(response)["code"] == code
     assert len(await _sessions(db)) == 1
 

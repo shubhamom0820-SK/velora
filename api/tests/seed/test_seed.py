@@ -508,6 +508,7 @@ async def test_the_test_man_is_found_as_login_will_find_him(
 ) -> None:
     """Typed the way people type it, through normalize_phone and hash_phone."""
     user = await _user(db, "+91 90000 00001")
+    assert user.phone_enc is not None
     assert decrypt_phone(user.phone_enc, make_test_settings()) == "+919000000001"
     profile = await db.get(Profile, user.id)
     assert profile is not None and profile.username == "test_man"

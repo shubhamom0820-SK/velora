@@ -291,6 +291,7 @@ async def test_a_made_user_is_found_the_way_login_will_look(
     user, _ = await make_user()
     settings = app.state.settings
 
+    assert user.phone_enc is not None
     phone = decrypt_phone(user.phone_enc, settings)
     found = await db.execute(
         select(User.id).where(

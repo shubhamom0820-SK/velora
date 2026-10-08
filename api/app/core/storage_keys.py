@@ -33,6 +33,11 @@ def album_key(photo_id: UUID, viewer_id: UUID) -> str:
     return f"album/{_id(photo_id)}/{_id(viewer_id)}.jpg"
 
 
+def export_key(user_id: UUID, export_id: UUID) -> str:
+    """A copy of a user's own data, in the private bucket, for 24 hours (T-9.6)."""
+    return f"exports/{_id(user_id)}/{_id(export_id)}.json"
+
+
 def public_url(settings: Settings, key: str) -> str:
     """Where a public-bucket object is served. `Settings` holds the base to
     `https://` with no trailing slash outside local."""

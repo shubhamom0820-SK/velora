@@ -22,6 +22,7 @@ from app.core.logging import RequestIDMiddleware, configure_logging
 from app.core.providers import build_providers
 from app.core.queue import ArqQueue
 from app.core.redis import build_redis
+from app.modules.account.router import router as account_router
 from app.modules.admin.router import router as admin_router
 from app.modules.auth.router import firebase_router, otp_router
 from app.modules.auth.router import router as auth_router
@@ -152,6 +153,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.include_router(payments_router, prefix="/v1")
     app.include_router(admin_router, prefix="/v1")
     app.include_router(discovery_router, prefix="/v1")
+    app.include_router(account_router, prefix="/v1")
     for sign_in_router, served_for in SIGN_IN_PATHS:
         if settings.AUTH_PHONE_PROVIDER in served_for:
             app.include_router(sign_in_router, prefix="/v1")

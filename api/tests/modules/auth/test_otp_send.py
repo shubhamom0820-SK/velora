@@ -443,6 +443,7 @@ async def test_a_known_and_an_unknown_number_are_answered_alike(
     fake_providers: FakeProviders,
 ) -> None:
     user, _ = await make_user()
+    assert user.phone_enc is not None
     known_phone = decrypt_phone(user.phone_enc, SETTINGS)
     known = await _send(client, known_phone)
     unknown = await _send(client, _phone(3))

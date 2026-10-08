@@ -2738,6 +2738,9 @@ prices don't depend on the web photos step, and the hold is lifted.
 ### T-6.6 · Search and @username
 - [ ] **Needs:** T-6.3
 - [ ] `GET /search?q=`: `@` prefix → exact-then-prefix username match (ignores distance/filters, still respects blocks/hidden); otherwise trigram on first_name/username + city, intent and interest matches within radius. `GET /users/by-username/{u}`.
+- [ ] **Search and `/users/by-username/{u}` find `active` accounts only** (T-9.6, D-500): a
+  deleted or paused one is `NOT_FOUND`. An erased account's username is free for anyone to take
+  (D-505).
 - [ ] Web search bar with debounce; @-mode list results.
 - [ ] **Commit:** `feat(search): search and username lookup [T-6.6]`
 
@@ -2781,11 +2784,16 @@ prices don't depend on the web photos step, and the hold is lifted.
 ### T-7.2 · Thread list
 - [ ] **Needs:** T-7.1
 - [ ] `GET /threads?tier=threads|knots&filter=&q=`: excludes cleared (unless newer message), blocked; each row has other person's card-lite, last message preview (voice → "Voice note"), unread count, status, `expires_at`, whether I've tapped tie.
+- [ ] **The other person deleted their account** (T-9.6, D-051, D-500): their row's card-lite is
+  "Deleted account", no name or photo, from the moment they delete; once erased they have no
+  profile row at all. The thread stays, as the messages do.
 - [ ] **Commit:** `feat(threads): list [T-7.2]`
 
 ### T-7.3 · Messages
 - [ ] **Needs:** T-7.2
 - [ ] `GET /threads/{id}/messages?cursor=&limit=` (newest first, respects my `cleared_at`; voice notes locked for men without unlock → no media URL).
+- [ ] **Messages from a deleted or erased account** show as from "Deleted account" (D-051), and
+  stay; sending to one is refused, with the code this task chooses (T-9.6, D-500).
 - [ ] `POST /threads/{id}/messages`: participant only; thread `expired` → `THREAD_EXPIRED` for his send, while hers is delivered (D-097: an expired Thread refuses his sends and accepts hers); text 1–2000; abuse/solicitation rules → `MESSAGE_REJECTED` (+ fraud event); masking if `message_count < mask_first_n` (store `body_raw`, set `masked`); dedupe on `client_msg_id` (return existing); update `last_message_at`, `message_count`; publish `message.new`; notify recipient if not connected.
 - [ ] **When she wrote first, he pays to answer: the 2-Vela re-open, `thread_reopen`** (D-250,
   the founder, 4 October 2026; T-5.2's item 10(b)). Charged through `pricing.service.charge`
@@ -3030,6 +3038,11 @@ number** per account gets its 5 each, one Thread's worth, and is **accepted**, k
   the account, sign up again on the number after T-9.6's 30 days: no second grant (P-371).
   T-9.6 comes after this task, so until it lands the test stands in for its anonymisation by
   freeing the number from the old account, and T-9.6 runs it through its own (its pointer).
+- [ ] **T-9.6's erasure already keeps the hash table by name** (D-503): `welcome_grants`, in
+  `KEPT_WHEN_BUILT` in `api/app/modules/account/erasure.py`. Name the table that, or rename the
+  entry; once the table exists, the check asks for it to move to `KEPT`. T-9.6 came first, so
+  this task's test (grant, delete, sign up again after 30 days, no second grant) runs through the
+  real erasure, `account.service.erase_due_accounts`, with no stand-in.
 - [ ] **Types and copy:** `make types`, since `LedgerReason` gains `welcome` (rule 10), and a
   history label for it in `en.ts`, whose `satisfies Record<LedgerReason, string>` fails `tsc`
   without one.
@@ -3046,7 +3059,8 @@ number** per account gets its 5 each, one Thread's worth, and is **accepted**, k
 # Sprint 9 — Safety, admin, notifications, hardening (weeks 14–15)
 
 ### T-9.1 · Reports and blocks
-- [ ] **Needs:** T-7.2
+- [ ] **Needs:** T-7.2, and **P-400**: a blocked person deletes and signs up again on the same
+  number to reach the one who blocked them
 - [ ] `POST /reports` (≤ 10/day, details ≤ 500, optional `also_block`), `POST /blocks`, `DELETE /blocks/{id}`, `GET /blocks`.
 - [ ] Block effects, each with a test: removed from both discovery feeds, search, likes; profile → 404 both ways; threads hidden for both and sending → `BLOCKED`; realtime events stop; existing album grants revoked.
 - [ ] Reported person is never told who reported.
@@ -3073,6 +3087,8 @@ number** per account gets its 5 each, one Thread's worth, and is **accepted**, k
 ### T-9.4 · Notifications
 - [ ] **Needs:** T-7.4
 - [ ] VAPID keys; `POST/DELETE /push/subscriptions`; `send_push` worker (drop subscriptions on 404/410); notification prefs; in-app `notifications` list. Kinds: match, message (only if not connected), like, knot requested/accepted, thread expiring, album decided, low balance.
+- [ ] **A paused account is sent nothing** (T-9.6): no push and no in-app notification while
+  `paused`. A deleted one has no push subscriptions left (`DELETE /me` drops them).
 - [ ] Web: Serwist service worker (push + notificationclick → open the right route), permission asked **after the first match**, not on load; generic-text option; iOS note when not installed.
 - [ ] Update `/privacy` (T-2.2) to say what push notifications carry and who delivers them.
 - [ ] **Commit:** `feat(notifications): web push and in-app list [T-9.4]`
@@ -3097,17 +3113,27 @@ number** per account gets its 5 each, one Thread's worth, and is **accepted**, k
   Sightengine's `face-age` scores real photos. This is where real scores are first seen (the
   photo's `moderation` column keeps every photo's minor score, below the threshold too).
   Report what they show; the founder decides whether 0.35 moves, recorded on D-101.
+- [ ] **An erased account is still found by its number** (T-9.6, D-500): search hashes the number
+  typed and matches `users.phone_hash`, which an erased row keeps (`ix_users_phone_hash`), so
+  support sees it as erased, with its reports. Its row can't leave `deleted`
+  (`ck_users_anonymised_is_deleted`): ban its number through `banned_identities` only. And
+  **P-401**: what a ban landing during a deletion's 29 days does to the erasure.
 - [ ] **Commit:** `feat(admin): moderation panel [T-9.5]`
 
 ### T-9.6 · Settings and data rights
-- [ ] **Needs:** T-3.5
-- [ ] Hide profile, hide age, hide distance, show kudos; pause (hidden + no notifications); export (JSON of own data, generated by worker, signed link valid 24 h); delete (status `deleted`, profile hidden immediately, anonymised after 30 days by cron; payments and ledger kept, detached from identity). What's erased and kept follows D-051, which `/privacy` states: messages stay in the other person's chat as from "Deleted account" and as moderation records, and a hashed phone number is kept so deletion can't escape a ban. Change the page with the code.
-- [ ] Two things T-3.3 and T-3.7 left here: what a `deleted` account gets at sign-in (`FORBIDDEN` until now, D-067), and whether and how a username can change after onboarding (locked until now, D-068; D-001's `/@username` links depend on it).
-- [ ] **The welcome hash survives the anonymisation** (T-8.11, D-470, P-371): a number that
+- [x] **Needs:** T-3.5
+- [x] Hide profile, hide age, hide distance, show kudos; pause (hidden + no notifications); export (JSON of own data, generated by worker, signed link valid 24 h); delete (status `deleted`, profile hidden immediately, anonymised after 30 days by cron; payments and ledger kept, detached from identity). What's erased and kept follows D-051, which `/privacy` states: messages stay in the other person's chat as from "Deleted account" and as moderation records, and a hashed phone number is kept so deletion can't escape a ban. Change the page with the code.
+- [x] Two things T-3.3 and T-3.7 left here: what a `deleted` account gets at sign-in (`FORBIDDEN` until now, D-067), and whether and how a username can change after onboarding (locked until now, D-068; D-001's `/@username` links depend on it).
+- [x] **The welcome hash survives the anonymisation** (T-8.11, D-470, P-371): a number that
   received welcome Velas never gets them again, on any later account. T-8.11's test (grant,
   delete, sign up again after 30 days, no second grant) stands in for this task's anonymisation
   until it exists; run it through the real one here.
-- [ ] **Commit:** `feat(settings): privacy and data rights [T-9.6]`
+  **Built here as far as it can be before T-8.11 (8 October 2026):** T-8.11's table doesn't exist
+  yet, so the erasure keeps it by name, `welcome_grants` in `KEPT_WHEN_BUILT` (D-503), and
+  `test_the_welcome_hash_is_kept_by_name_before_it_exists` holds that. The erasure touches only
+  the tables `ERASED` lists, and `banned_identities` and the erased row's own `phone_hash` stay
+  too. The grant-delete-sign-up test is T-8.11's to run through the real erasure (its pointer).
+- [x] **Commit:** `feat(settings): privacy and data rights [T-9.6]`
 
 ### T-9.7 · PWA
 - [ ] **Needs:** T-9.4
@@ -3117,6 +3143,12 @@ number** per account gets its 5 each, one Thread's worth, and is **accepted**, k
 ### T-9.8 · You tab complete
 - [ ] **Needs:** T-9.6, T-8.8
 - [ ] Profile summary + edit, verification status, kudos, knots list with untie, blocked list with unblock, reports filed, cleared chats with restore, settings rows, lock now, log out.
+- [ ] **The settings screen** (T-9.6's routes): the five switches through `PATCH /me/settings`,
+  pause and resume, a copy of your data (`POST`/`GET /me/export`, with the link while it is
+  ready, 24 hours), and delete. **The delete confirmation shows his balance in plain words before
+  he confirms** (D-504): the number from the API, `Me.balance`, never written into the copy, and
+  that Velas left are lost at the erasure unless he signs in again within 29 days. After the
+  delete, the web is signed out (`SESSION_REVOKED`).
 - [ ] **Commit:** `feat(web): you tab [T-9.8]`
 
 ### T-9.9 · Ledger audit
@@ -5379,3 +5411,22 @@ The number comes from the session's own block, given in its brief, from P-100 up
   trigger needs a count: how many eligible profiles a city has, from a query T-9.5's metrics or
   a check by hand can run. Filed by Claude at the founder's direction (8 October 2026, on the
   advisor's recommendation, relayed), building T-6.2; its session's block, P-390 to P-399.
+- [ ] P-400 · Stop a blocked person getting around the block by deleting and signing up again.
+  **Before T-9.1** (on its Needs line). Worst case: a harasser someone blocked deletes their
+  account, waits out T-9.6's 29 days, signs up again on the same number, and reaches the person
+  who blocked them as a stranger, in their discovery feed and search. A block names the old
+  `user_id`, and the erasure keeps the other person's block of it (D-503), but the new account is a
+  new id that no block names. The number's hash survives on the erased row (D-500), so T-9.1 can
+  carry a block to a later account on the same number. What T-9.1 decides: whether a block holds
+  against the number as well as the account, and how that is told to nobody (a block is silent).
+  Filed by Claude building T-9.6; the founder put it on T-9.1's Needs line, 8 October 2026. Its
+  session's block, P-400 to P-409.
+- [ ] P-401 · Decide what a ban landing during a deletion's 29 days does to the erasure. **In
+  T-9.5, where bans are written.** Worst case: someone deletes their account, a moderator bans it
+  the next day, and the erasure never runs, because it erases only `deleted` accounts. Their
+  photos, profile and number's encrypted copy are then kept indefinitely, against what `/privacy`
+  told them. Or, the other way, the erasure runs on a banned
+  account and takes the photos a moderator was about to look at. T-9.6 erases only `deleted`
+  accounts, so a ban today keeps everything (`deleted_requested_at` stays set as the record of
+  the request). Filed by Claude building T-9.6, 8 October 2026; its session's block, P-400 to
+  P-409.

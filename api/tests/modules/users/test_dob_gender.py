@@ -726,6 +726,7 @@ async def _a_row_naming_them_everywhere(
         ),
         "insert into fraud_events (user_id, signal, weight) values (:m, 'probe', 1)",
         "insert into fraud_scores (user_id) values (:m)",
+        "insert into data_exports (user_id) values (:m)",
         "insert into profile_intents (user_id, intent_id) values (:m, 1)",
         "insert into profile_interests (user_id, interest_id) values (:m, 1)",
         (
@@ -1078,5 +1079,11 @@ def test_every_storage_key_on_a_deleted_table_is_in_the_file_list() -> None:
     }
 
     assert (
-        listed == on_deleted_tables == {("photos", "raw_key"), ("photos", "public_key")}
+        listed
+        == on_deleted_tables
+        == {
+            ("photos", "raw_key"),
+            ("photos", "public_key"),
+            ("data_exports", "file_key"),
+        }
     )

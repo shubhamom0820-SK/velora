@@ -808,17 +808,24 @@ export const en = {
       },
       choices: {
         title: "Your choices",
-        // D-010, T-9.6.
-        body: "In your settings you can hide your profile, your age or your distance, pause your account, download a copy of your data, or delete your account.",
+        // D-010, T-9.6; the copy's 24 hours: D-502.
+        body: "In your settings you can hide your profile, your age or your distance, pause your account, download a copy of your data, or delete your account. A copy of your data is a file you can download for 24 hours; then we delete it.",
       },
       deletion: {
         title: "Deleting your account",
-        // D-051; the timing: T-9.6.
+        // D-051; the timing: D-500, whose daily job erases on day 29 or 30.
         erased:
-          "When you delete your account, your profile disappears straight away. Within 30 days we erase your profile, your photos, your private album and everything else other people can see of you, except your messages.",
+          "When you delete your account, your profile disappears straight away and you're signed out everywhere. Within 30 days we erase your profile, your photos, your private album and everything else other people can see of you, except your messages.",
+        // D-500: signing in again before the erasure restores the account. 29,
+        // not 30: the job may erase on day 29.
+        restore:
+          "Changed your mind? Sign in again within 29 days and your account comes back as it was.",
         messages:
           "Your messages stay in the other person's chat, shown as from “Deleted account”, and we keep them as moderation records. Otherwise, deleting an account could be used to destroy evidence someone has reported.",
         kept: "We also keep your history of Velas and payments, any reports and moderation records about you, and a hashed copy of your phone number, so that deleting an account can't be used to escape a ban or a report.",
+        // D-504 (the founder, 8 October 2026); /refunds says it too.
+        velas:
+          "Velas left in your balance are lost when your account is erased: they have no cash value, and we don't refund them. Sign in again before then and they come back with your account.",
         google:
           "Google's copy of your phone number stays with Google, as described above.",
       },
@@ -851,6 +858,11 @@ export const en = {
         // D-230. The ledger reasons that once served these two returns stay
         // unused (the labels at the top of this file).
         body: "Once you spend Velas, they're spent. They don't come back if the person you spent them on is later banned from {app}, and they don't come back if someone declines your request to see their private album. The price is always shown before you spend.",
+      },
+      // D-504 (the founder, 8 October 2026); /privacy says it too.
+      deleted: {
+        title: "Deleting your account",
+        body: "If you delete your account, the Velas left in your balance are lost once it's erased, within 30 days. We don't refund them. Sign in again within 29 days and your account comes back, Velas included.",
       },
       broken: {
         title: "A broken payment is ours to fix",

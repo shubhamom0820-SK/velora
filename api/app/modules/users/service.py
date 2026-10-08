@@ -90,7 +90,8 @@ async def find_or_create_account(
 
     Runs in the caller's transaction, so the four rows are written together or
     not at all. A number signing up twice at once finds the account the other
-    created rather than failing.
+    created rather than failing. The account found is locked, and is never an
+    erased one: a number whose account was erased starts a new one (D-500).
     """
     phone_hash = hash_phone(phone, settings)
     user = await repository.user_by_phone_hash(session, phone_hash)
@@ -105,6 +106,16 @@ async def find_or_create_account(
             raise
         return user, False
     return account.user, True
+
+
+async def fresh_referral_code(session: AsyncSession) -> str:
+    """A referral code nobody has, drawn until one is free: a new account's,
+    and an erased account's replacement for the one it shared (D-503)."""
+    for _ in range(_REFERRAL_TRIES):
+        code = new_referral_code()
+        if not await repository.referral_code_taken(session, code):
+            return code
+    raise RuntimeError("no free referral code in ten draws")
 
 
 async def create_account(
@@ -122,12 +133,7 @@ async def create_account(
     """
     code = referral_code
     if code is None:
-        for _ in range(_REFERRAL_TRIES):
-            code = new_referral_code()
-            if not await repository.referral_code_taken(session, code):
-                break
-        else:
-            raise RuntimeError("no free referral code in ten draws")
+        code = await fresh_referral_code(session)
     user, profile = await repository.insert_account(
         session,
         phone_hash=hash_phone(phone, settings),
@@ -145,9 +151,11 @@ MAY_SIGN_IN = frozenset({UserStatus.ACTIVE, UserStatus.PAUSED})
 
 
 def refuse_who_may_not_sign_in(user: User) -> None:
-    """Banned and frozen accounts get their own codes; `deleted` can't happen
-    before T-9.6, which decides, so until then it's FORBIDDEN, like anything
-    else not on the list."""
+    """Banned and frozen accounts get their own codes. A deleted one is
+    signed out (T-9.6, D-500): its sessions were revoked when it was deleted,
+    so only an access token's last minutes can still ask (D-067), and signing
+    in again restores it (`restore_if_deleted`, before this check). Anything
+    else not on the list is FORBIDDEN."""
     if user.status in MAY_SIGN_IN:
         return
     if user.status is UserStatus.BANNED:
@@ -158,7 +166,24 @@ def refuse_who_may_not_sign_in(user: User) -> None:
             "This account is frozen while we look into it.",
             status=403,
         )
+    if user.status is UserStatus.DELETED:
+        raise AppError(
+            "SESSION_REVOKED", "You've been signed out. Sign in again.", status=401
+        )
     raise AppError("FORBIDDEN", "This account can't sign in.", status=403)
+
+
+def restore_if_deleted(user: User) -> bool:
+    """Signing in again before the erasure cancels a deletion (T-9.6, D-500):
+    proving the number proves the account (D-069). The account comes back as
+    it was, its balance untouched, active even if it was paused. `user` is the
+    locked row `find_or_create_account` found, which is never an erased one.
+    True if it was restored."""
+    if user.status is not UserStatus.DELETED:
+        return False
+    user.status = UserStatus.ACTIVE
+    user.deleted_requested_at = None
+    return True
 
 
 def account_banned() -> AppError:
