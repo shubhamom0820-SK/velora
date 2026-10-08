@@ -135,13 +135,39 @@ def _in_band(user_id: Any, band: FraudBand) -> ColumnElement[bool]:
     return exists().where(FraudScore.user_id == user_id, FraudScore.band == band)
 
 
+def _number_of(user_id: Any) -> Any:
+    """The phone hash of `user_id`'s account: one per live account, and kept
+    on an erased one (D-500)."""
+    owner = aliased(User)
+    # Correlated to whatever `user_id` names, however deep the enclosing query
+    # holds it (the feed's `users`, a Thread's pair).
+    return (
+        select(owner.phone_hash)
+        .where(owner.id == user_id)
+        .correlate_except(owner)
+        .scalar_subquery()
+    )
+
+
 def blocked_either_way(a: Any, b: Any) -> ColumnElement[bool]:
-    """A block between `a` and `b`, whoever made it (06-TESTING's critical 9)."""
-    return exists().where(
-        or_(
-            and_(Block.blocker_id == a, Block.blocked_id == b),
-            and_(Block.blocker_id == b, Block.blocked_id == a),
+    """A standing block between `a` and `b`, whoever made it (06-TESTING's
+    critical 9). A lifted one (`unblocked_at`) is history, never a block
+    (D-860). **By number** (D-861): a block names an account, and holds
+    against every account that account's number has, before or after, so a
+    blocked person who deletes and signs up again on the same number is still
+    blocked, and nobody is told."""
+    blocked = aliased(User)
+
+    def by(blocker: Any, other: Any) -> ColumnElement[bool]:
+        return and_(
+            Block.blocker_id == blocker, blocked.phone_hash == _number_of(other)
         )
+
+    return (
+        select(Block.id)
+        .join(blocked, blocked.id == Block.blocked_id)
+        .where(Block.unblocked_at.is_(None), or_(by(a, b), by(b, a)))
+        .exists()
     )
 
 

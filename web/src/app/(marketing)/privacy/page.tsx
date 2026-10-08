@@ -23,6 +23,7 @@ const COLLECTED = [
   "facePhoto",
   "selfie",
   "messages",
+  "blocks",
   "payments",
   "waitlist",
 ] as const;

@@ -81,8 +81,10 @@ function Profile({ person, own }: { person: PublicProfile; own: boolean }) {
         <ProfileGallery urls={person.photo_urls} />
         <div className="absolute top-3 right-3">
           <ProfileMenu
+            userId={person.id}
             username={person.username}
             firstName={person.first_name}
+            own={own}
           />
         </div>
       </div>

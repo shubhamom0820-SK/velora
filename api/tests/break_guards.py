@@ -3906,8 +3906,8 @@ T62: list[tuple[Case, list[str]]] = [
             edits=[
                 (
                     "app/modules/discovery/repository.py",
-                    "            and_(Block.blocker_id == b, Block.blocked_id == a),\n",
-                    "",
+                    "        .where(Block.unblocked_at.is_(None), or_(by(a, b), by(b, a)))\n",
+                    "        .where(Block.unblocked_at.is_(None), by(a, b))\n",
                 )
             ],
             expect=["test_a_block_either_way_hides_each_from_the_other[her]"],
@@ -11411,6 +11411,315 @@ T94: list[Case] = [
 ]
 
 
+# --- T-9.1: reports and blocks -------------------------------------------------------
+
+DISCOVERY_REPO91 = "app/modules/discovery/repository.py"
+SAFETY_SERVICE = "app/modules/safety/service.py"
+SAFETY_REPO = "app/modules/safety/repository.py"
+SAFETY_ROUTER = "app/modules/safety/router.py"
+THREADS_REPO91 = "app/modules/threads/repository.py"
+THREADS_SERVICE91 = "app/modules/threads/service.py"
+BLOCKS_HISTORY = "alembic/versions/20261009_4889c586aa2c_blocks_keep_history.py"
+ACCOUNT_REPO91 = "app/modules/account/repository.py"
+T91_SELECTION = [
+    "tests/modules/safety",
+    "tests/workers/test_thread_clock.py",
+    "tests/modules/account/test_export.py",
+    "tests/modules/album",
+]
+
+T91: list[Case] = [
+    Case(
+        id="t91-01-a-lifted-block-still-blocks",
+        what="D-860: a lifted block read as standing, so unblocking lifts nothing",
+        edits=[
+            (
+                DISCOVERY_REPO91,
+                "        .where(Block.unblocked_at.is_(None), or_(by(a, b), by(b, a)))\n",
+                "        .where(or_(by(a, b), by(b, a)))\n",
+            )
+        ],
+        expect=[
+            "test_unblocking_lifts_every_one_of_them",
+            "test_a_lifted_block_warns_and_tells_as_before",
+            "test_nobody_is_told_and_lifting_her_one_block_lets_him_through",
+        ],
+    ),
+    Case(
+        id="t91-02-by-account-not-number",
+        what="P-400's hole: a block matched by account alone, so a new one on the number walks in",
+        edits=[
+            (
+                DISCOVERY_REPO91,
+                "            Block.blocker_id == blocker, blocked.phone_hash == _number_of(other)\n",
+                "            Block.blocker_id == blocker, Block.blocked_id == other\n",
+            )
+        ],
+        expect=[
+            "test_a_new_account_on_a_blocked_number_is_blocked_both_ways_everywhere"
+        ],
+    ),
+    Case(
+        id="t91-03-a-block-revokes-nothing",
+        what="a block leaving her album granted to him",
+        edits=[
+            (
+                SAFETY_SERVICE,
+                "    return await album_service.revoke_between(session, user.id, other_id)\n",
+                "    return []\n",
+            )
+        ],
+        expect=[
+            "test_a_block_revokes_the_grant_and_its_copies_go",
+            "test_grants_both_ways_are_revoked_by_one_block",
+            "test_a_report_with_also_block_revokes_too",
+        ],
+    ),
+    Case(
+        id="t91-04-only-grants-locked",
+        what="the block locking granted requests only, so a grant being decided is missed",
+        edits=[
+            (
+                ALBUM_REPO,
+                "        .order_by(AlbumRequest.id)\n        .with_for_update()\n",
+                (
+                    "        .where(AlbumRequest.status == AlbumRequestStatus.GRANTED)\n"
+                    "        .order_by(AlbumRequest.id)\n        .with_for_update()\n"
+                ),
+            )
+        ],
+        expect=["test_a_block_waiting_on_a_grant_revokes_it"],
+    ),
+    Case(
+        id="t91-05-a-grant-across-a-block",
+        what="decide never asking for a block, so she grants across one",
+        edits=[
+            (
+                ALBUM_SERVICE,
+                (
+                    "        if await repository.blocked_between(session, row.owner_id, row.requester_id):\n"
+                    "            raise rules.not_found()\n"
+                ),
+                "",
+            )
+        ],
+        expect=[
+            "test_she_cant_grant_across_a_block_and_a_pending_one_waits_it_out",
+            "test_a_grant_waiting_on_a_block_sees_it",
+        ],
+    ),
+    Case(
+        id="t91-06-warned-across-a-block",
+        what="the clock warning him of a Thread across a block",
+        edits=[
+            (
+                THREADS_REPO91,
+                "        ~blocked_either_way(Thread.user_low, Thread.user_high),\n",
+                "",
+            )
+        ],
+        expect=["test_across_a_block_nobody_is_warned"],
+    ),
+    Case(
+        id="t91-07-expiry-told-across-a-block",
+        what="the clock telling him a Thread across a block expired",
+        edits=[
+            (
+                THREADS_SERVICE91,
+                "        told = [row for row in rows if not row.blocked]\n",
+                "        told = list(rows)\n",
+            )
+        ],
+        expect=["test_across_a_block_it_expires_and_nobody_is_told"],
+    ),
+    Case(
+        id="t91-08-evidence-through-the-clearing",
+        what="D-006's hole: the report's evidence read through the reporter's clearing",
+        edits=[
+            (
+                SAFETY_REPO,
+                "        .where(Message.thread_id == thread_id)\n",
+                (
+                    "        .where(\n"
+                    "            Message.thread_id == thread_id,\n"
+                    "            ~exists().where(\n"
+                    "                ThreadClear.thread_id == thread_id,\n"
+                    "                ThreadClear.cleared_at >= Message.created_at,\n"
+                    "            ),\n"
+                    "        )\n"
+                ),
+            ),
+            (
+                SAFETY_REPO,
+                "from sqlalchemy import Row, select, tuple_, update\n",
+                "from sqlalchemy import Row, exists, select, tuple_, update\n",
+            ),
+            (
+                SAFETY_REPO,
+                "from app.modules.threads.models import Thread\n",
+                "from app.modules.threads.models import Thread, ThreadClear\n",
+            ),
+        ],
+        expect=["test_the_evidence_is_every_message_whatever_the_reporter_cleared"],
+    ),
+    Case(
+        id="t91-09-also-block-ignored",
+        what="a report's also_block dropped",
+        edits=[
+            (SAFETY_SERVICE, "        if body.also_block:\n", "        if False:\n")
+        ],
+        expect=[
+            "test_also_block_blocks_in_the_same_request",
+            "test_a_report_with_also_block_revokes_too",
+        ],
+    ),
+    Case(
+        id="t91-10-any-thread-attached",
+        what="a report naming a Thread that isn't the pair's",
+        edits=[
+            (
+                SAFETY_SERVICE,
+                "            if pair != body.thread_id:\n                raise _not_found()\n",
+                "",
+            )
+        ],
+        expect=["test_a_thread_that_isnt_theirs_is_not_found_and_blocks_nothing"],
+    ),
+    Case(
+        id="t91-11-reports-unlimited",
+        what="reports with no daily limit",
+        edits=[
+            (
+                SAFETY_ROUTER,
+                '        Depends(user_rate_limit("reports", limit=REPORTS_PER_DAY, window_s=86_400))\n',
+                "",
+            )
+        ],
+        expect=["test_ten_a_day_then_rate_limited"],
+    ),
+    Case(
+        id="t91-12-blocks-unlimited",
+        what="blocks and unblocks with no limit",
+        edits=[
+            (
+                SAFETY_ROUTER,
+                '@router.post("/blocks", status_code=201, dependencies=[Depends(_blocks_limit)])\n',
+                '@router.post("/blocks", status_code=201)\n',
+            )
+        ],
+        expect=["test_blocks_and_unblocks_share_a_limit_a_minute"],
+    ),
+    Case(
+        id="t91-13-unblock-deletes",
+        what="P-16's loss: unblocking deleting the block's history",
+        edits=[
+            (SAFETY_REPO, "        update(Block)\n", "        delete(Block)\n"),
+            (SAFETY_REPO, "        .values(unblocked_at=now)\n", ""),
+            (
+                SAFETY_REPO,
+                "from sqlalchemy import Row, select, tuple_, update\n",
+                "from sqlalchemy import Row, delete, select, tuple_, update\n",
+            ),
+        ],
+        expect=["test_unblocking_keeps_the_row_and_blocking_again_is_a_new_one"],
+    ),
+    Case(
+        id="t91-14-twice-is-an-error",
+        what="a second block of the same person breaking the index",
+        edits=[
+            (
+                SAFETY_REPO,
+                (
+                    "        .on_conflict_do_nothing(\n"
+                    "            index_elements=[Block.blocker_id, Block.blocked_id],\n"
+                    "            index_where=Block.unblocked_at.is_(None),\n"
+                    "        )\n"
+                ),
+                "",
+            )
+        ],
+        expect=["test_twice_is_once"],
+    ),
+    Case(
+        id="t91-15-downgrade-deletes-history",
+        what="the downgrade going back over lifted blocks",
+        edits=[
+            (
+                BLOCKS_HISTORY,
+                "    if lifted:\n",
+                "    if False:\n",
+            )
+        ],
+        expect=["test_the_downgrade_refuses_while_a_lifted_block_is_recorded"],
+    ),
+    Case(
+        id="t91-16-the-reported-told",
+        what="a report telling its subject",
+        edits=[
+            (
+                SAFETY_SERVICE,
+                "        result = schemas.ReportFiled(id=filed.id, created_at=filed.created_at)\n",
+                (
+                    '        events.queue(session, body.reported_id, "report.filed", {})\n'
+                    "        result = schemas.ReportFiled(id=filed.id, created_at=filed.created_at)\n"
+                ),
+            ),
+            (
+                SAFETY_SERVICE,
+                "from app.core import clock\n",
+                "from app.core import clock, events\n",
+            ),
+        ],
+        expect=["test_the_reported_person_is_never_told"],
+    ),
+    Case(
+        id="t91-17-the-blocked-told",
+        what="D-862's hole: a block telling the blocked person",
+        edits=[
+            (
+                SAFETY_SERVICE,
+                "        revoked = await _block_in(session, user, other_id)\n",
+                (
+                    "        revoked = await _block_in(session, user, other_id)\n"
+                    '        events.queue(session, other_id, "block.made", {})\n'
+                ),
+            ),
+            (
+                SAFETY_SERVICE,
+                "from app.core import clock\n",
+                "from app.core import clock, events\n",
+            ),
+        ],
+        expect=["test_nothing_is_queued_or_published_for_the_blocked_person"],
+    ),
+    Case(
+        id="t91-18-yourself-allowed",
+        what="blocking or reporting yourself reaching the database",
+        edits=[
+            (
+                SAFETY_SERVICE,
+                "    if other_id == user.id:\n        raise _not_yourself(what)\n",
+                "",
+            )
+        ],
+        expect=[
+            "test_nobody_is_not_found_and_yourself_is_not_allowed",
+        ],
+    ),
+    Case(
+        id="t91-19-export-forgets-the-unblock",
+        what="D-502's export of your blocks without when you lifted them",
+        edits=[
+            (
+                ACCOUNT_REPO91,
+                "            select(Block.created_at, Block.unblocked_at)\n",
+                "            select(Block.created_at)\n",
+            )
+        ],
+        expect=["test_the_export_is_all_mine_and_nothing_of_theirs"],
+    ),
+]
+
 CASES: list[tuple[Case, list[str]]] = (
     [(c, T51_SELECTION) for c in T51]
     + [(c, T54_SELECTION) for c in T54]
@@ -11463,6 +11772,7 @@ CASES: list[tuple[Case, list[str]]] = (
     + [(c, T810_SELECTION) for c in T810]
     + [(c, T711_SELECTION) for c in T711]
     + [(c, T94_SELECTION) for c in T94]
+    + [(c, T91_SELECTION) for c in T91]
 )
 
 # The fifty-connection fixture's own message when Postgres refuses a connection.

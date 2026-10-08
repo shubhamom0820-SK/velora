@@ -80,7 +80,7 @@ session and never commit.
 ```
 
 HTTP status mapping: 400 validation · 401 `AUTH_REQUIRED`/`TOKEN_EXPIRED` · 402 `INSUFFICIENT_CREDITS`
-· 403 `FORBIDDEN`/`BLOCKED`/`ACCOUNT_FROZEN` · 404 `NOT_FOUND` · 409 conflict codes · 410 `THREAD_EXPIRED`
+· 403 `FORBIDDEN`/`ACCOUNT_FROZEN` (`BLOCKED` is never sent: across a block, `NOT_FOUND`, D-862) · 404 `NOT_FOUND` · 409 conflict codes · 410 `THREAD_EXPIRED`
 · 422 business-rule codes · 429 `RATE_LIMITED`. Full code list in `04-API.md`.
 
 ## 4. Auth flow
@@ -246,7 +246,7 @@ SELECT user_id, score, distance_m FROM (
     AND NOT EXISTS (fraud_scores band 'freeze')          -- D-031
     AND NOT EXISTS (fraud_scores band 'shadow')          -- unless the viewer is shadowed
     AND NOT EXISTS (SELECT 1 FROM swipes s WHERE s.swiper_id = :me_id AND s.target_id = u.id)
-    AND NOT EXISTS (a block either way)
+    AND NOT EXISTS (a standing block either way, matched by number: D-860, D-861)
     -- optional: intents (any overlap: EXISTS on profile_intents, D-041), the badge, online
 ) ranked
 WHERE (score, user_id) after the cursor's               -- score < :s OR (score = :s AND id > :id)
@@ -511,7 +511,8 @@ secret is left empty. Real secret values are never committed.
 | `POST /threads/{id}/read` | `current_user`'s 300 / min (T-7.5): a read that marks nothing tells nobody, and what one can tell is bounded by the other person's messages |
 | `typing` on the socket | 1 a Thread every 3 s and 40 / min / user, dropped quietly past either (T-7.5, D-670): both before the database is read |
 | `POST /kudos` | 10 / min / user (T-8.5): one per person ever, so someone giving them never needs more; a script trying ids does |
-| Reports | 10 / day / user |
+| Reports | 10 / day / user (T-9.1) |
+| `POST /blocks`, `DELETE /blocks/{id}` | 60 / min / user, together (T-9.1): a person tidying their list never needs more, and each writes a row that is kept (D-860) |
 | Username check | 30 / min / user |
 | `GET /search` | 60 / min / user (T-6.6): `@` search walks usernames by their start; a person typing fits, a script listing them doesn't (D-540) |
 | `GET /public-profiles/{u}` | 60 / min / IP (T-6.8, D-544): public; a script walking usernames is held to it. The page's server render asks it, so today it counts the web's server, not each visitor (P-446) |

@@ -370,8 +370,13 @@ Indexes: `(recipient_id, created_at desc)`, `(sender_id, created_at desc)`,
 Check `sender_id <> recipient_id`. No check pins prices to particular values — prices are data (D-016).
 
 ### blocks
-`blocker_id uuid fk users, blocked_id uuid fk users, created_at, pk(blocker_id, blocked_id)`. Index `(blocked_id)`.
-Check `blocker_id <> blocked_id`.
+`id uuid pk, blocker_id uuid fk users, blocked_id uuid fk users, created_at, unblocked_at
+timestamptz null`. Unique `(blocker_id, blocked_id) where unblocked_at is null`
+(`uq_blocks_active`): one standing block per pair. Index `(blocked_id)`. Check `blocker_id <>
+blocked_id`. **Unblocking sets `unblocked_at` and keeps the row; blocking again is a new one**
+(T-9.1, D-860, migration `4889c586aa2c`, whose downgrade refuses while a lifted block exists). A
+standing block holds against the blocked account's number, matched through `users.phone_hash`, so
+a later account on it is blocked too (D-861).
 
 ### reports
 | column | type | notes |

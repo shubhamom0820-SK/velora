@@ -136,6 +136,11 @@ If any of these fails, nothing ships.
     database refuses any write moving such a user to `done`, inserts too, and an upgrade over one
     already there. Proved by breaking the service's check, the trigger, and each into a blacklist.
 9. **Blocks are total** (T-9.1): after a block, neither side appears to the other anywhere.
+   As built (`tests/modules/safety/test_block_effects.py`): the feed, search, Liked you, the
+   profile by id and by username, the album, the gifts, the chats list, the Thread, its messages
+   and sending, each asked of both people, whichever blocked, all `NOT_FOUND` or absent (D-862);
+   unblocking lifts every one. A new account on the blocked person's number is blocked the same
+   (`test_block_number.py`, D-861), and the clock tells nobody across a block.
 10. **Clearing is one-sided** (T-7.8): A clears → B still sees every message.
 11. **Contact masking** (T-7.3): numbers, spaced digits, emails, UPI IDs, social handles masked in
     the first 20 messages; `body_raw` never returned by any user-facing endpoint.
@@ -178,7 +183,7 @@ A test in this list is marked `@pytest.mark.critical`; CI runs them first and fa
 | J7 | Thread expires → read-only → re-open (−2) | T-7.13 |
 | J8 | Buy Velas (fake gateway) → balance updates. As built (`e2e/store.spec.ts`): a man signs up through the screens (5 welcome Velas), opens the store from the wallet, taps 30 Velas; the fake gateway's webhook captures it, asked from Node as Razorpay would; the stand-in's "Payment went through" starts the poll; "36 Velas added to your balance", and the card and the pill say 41 | T-8.7 |
 | J9 | Payment fails → retry sheet → success. As built: the webhook fails it, the stand-in closes, "Payment didn't go through"; "Try again" reopens the same order (one `POST /payments/orders` in all, D-761), the webhook captures it, and the balance is 41 | T-8.7 |
-| J10 | Report with also-block → confirmation shown → person gone everywhere | T-9.1 |
+| J10 | Report with also-block → confirmation shown → person gone everywhere. Written and passing locally on both projects (9 October 2026), held by P-680 with T-8.10's journey: its two sign-ups take the run past the API's 20 OTP sends an hour per IP (D-066). It is `web/e2e/safety.spec.ts` in commit 46e23c0 on branch `t-9.1-j10` | T-9.1 |
 | J11 | Moderator resolves a report and freezes the account | T-9.5 |
 | J12 | Clear chat → undo → restore from You tab | T-7.10 |
 

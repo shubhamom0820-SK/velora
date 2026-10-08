@@ -5445,6 +5445,116 @@ a voice note's link asked for only on tap (a browser may refuse to play after th
 asked as the note is drawn, signed for 10 minutes); an expired panel without the knot (an expired
 Thread takes a tap, T-7.7).
 
+### D-860 · Unblocking keeps the block's history — Locked
+**The decision (P-16, T-9.1):** unblocking is soft. `DELETE /blocks/{user_id}` sets the standing
+block's `unblocked_at` and keeps the row; blocking again is a new row. One block stands per pair
+(`uq_blocks_active`, `(blocker_id, blocked_id) where unblocked_at is null`), and as many lifted
+ones as there have been; `blocks` has an `id` key in place of the pair (migration
+`4889c586aa2c`). A lifted block is history and blocks nothing: every read asks only for a standing
+one (`blocked_either_way`). The erasure still deletes the erased person's own blocks, lifted ones
+included, and keeps other people's blocks of them (D-503). The downgrade refuses while a lifted
+block is recorded. Blocks and unblocks share 60 a minute per person, so the history a person can
+write is bounded. `/privacy` says a block is kept on record after it is undone. A person's export
+lists each block's times, made and lifted, never whom (D-502).
+
+**Why:** "blocked by many people" is a fraud and moderation signal (T-9.2, T-9.5), and rule 12's
+principle is that nothing moderation may need is hard-deleted. A `DELETE` would erase the fact
+that A blocked B the moment A changed their mind.
+
+**Rejected:** accepting the loss (P-16's other option); a separate history table beside `blocks`
+(two places to keep in step for one fact).
+
+The founder's decision, in his words in the advisor chat (9 October 2026, 03:49): "9.1 ka
+question ka ans sahi hai jo tumne diya tha" (the answer you gave to 9.1's question is right),
+agreeing with the advisor's recommendation (Claude, in a separate chat), relayed by the founder.
+
+### D-861 · A block holds against the blocked person's number — Locked
+**The decision (P-400, T-9.1):** a block names an account and holds against every account that
+account's number has had or will have. `blocked_either_way(a, b)` matches a standing block by the
+blocked account's `users.phone_hash`, compared with the other person's: so when someone blocked is
+erased and signs up again on the same number, the new account is blocked too, both ways,
+everywhere a block applies. Nothing new is stored: the hash stays on the erased row (D-500), and
+the erasure keeps other people's blocks of an erased person (D-503). **Nobody is told:** nothing
+is written at sign-up, the blocker's list shows the one block they made, of the account they
+blocked (shown as a deleted account once it is erased), and lifting it lets the new account
+through. A blocker's own blocks still go with their erasure (D-503): a new account on the
+blocker's number starts with none. `/privacy` says the kept hash also stops deleting an account
+from escaping someone's block.
+
+**Why:** P-400's worst case, a harasser deleting their account, waiting out the 29 days and
+reaching the person who blocked them as a stranger. The number is what survives the account.
+
+**Cost, noted to the founder and accepted:** Indian carriers reassign numbers left unused. A
+stranger given a blocked person's old number would never see the blocker, and the blocker never
+them, without either knowing. A ban by number (`banned_identities`) already works the same way.
+
+**Rejected:** copying blocks onto a new account at sign-up (a write that would show in the
+blocker's list as a new person, telling them the blocked one came back); a second column holding
+the hash on `blocks` (a copy of what the users row already keeps).
+
+The founder's decision, in the same words as D-860, 9 October 2026; the mechanism is Claude's, in
+T-9.1's plan, approved by the founder on the advisor's recommendation, relayed.
+
+### D-862 · Across a block, everything is `NOT_FOUND`, never `BLOCKED` — Locked
+**The decision (T-9.1):** a block is silent. Sending a message, opening a Thread or a profile,
+asking for an album, deciding one, gifting, giving kudos, anything between two people with a
+block standing either way answers `NOT_FOUND`, the same as an id nobody holds, whichever of them
+made the block. `BLOCKED` is never sent; it stays in the error tables, marked so. A block queues
+no event and writes no notification for anyone, and the Thread's clock neither warns nor tells of
+an expiry across one (the status still catches up, D-560). This settles T-7.3's open line ("T-9.1
+decides whether sending says `BLOCKED` instead") and replaces the plan's "sending → `BLOCKED`".
+
+**Why:** `BLOCKED` would tell the blocked person exactly what a block must never tell them, as
+D-653 found for gifts. A warning about a Thread its reader can no longer open would tell him the
+same.
+
+**Rejected:** `BLOCKED` to the blocker only (they know already, and one answer is simpler to keep
+honest); `BLOCKED` everywhere, as planned.
+
+Recommended by Claude in T-9.1's plan; approved by the founder on the advisor's recommendation
+(Claude, in a separate chat), relayed, 9 October 2026.
+
+### D-863 · Reports and blocks: who, what is answered, and what a block takes — Locked
+**The decision (T-9.1):**
+- **Who:** anyone with an account may be blocked or reported, in any status, visible to you or
+  not, a block standing either way or not, so the answer never says whether one does. Yourself is
+  `NOT_ALLOWED` (`why: yourself`); an id nobody holds, `NOT_FOUND`.
+- **`POST /blocks {user_id}` → 201 `BlockedUser`** `{user: CardLite, blocked_at}`; twice is once.
+  **`DELETE /blocks/{user_id}` → 204**, twice or never blocked the same. **`GET /blocks` →
+  `Page<BlockedUser>`** (`BlockedUserPage`), whom you block now, newest first by `(created_at,
+  blocked_id)`, never who blocks you: paged as D-270 has every list, in place of 04-API's
+  `BlockedUser[]`.
+- **What a block takes:** every album grant between the two, either way, revoked in the block's
+  transaction, its copies deleted by `watermark_album` (D-730) and its cooldown started (D-731);
+  nobody is told. The block locks every request between them whatever its status, and `decide`
+  asks for a block under the request's lock, so a grant and a block at once never leave a grant
+  standing. A pending request is left as it was, hidden, and comes back with an unblock. Nothing
+  else is touched: Threads, Knots, matches, swipes and clearings stay, hidden while the block
+  stands, so unblocking brings a Thread back as it was, a clearing still in place.
+- **`POST /reports` → 201 `{id, created_at}`**, ten a day per person (02-ARCHITECTURE §12).
+  `also_block` is said every time, `true` or `false`, and blocks in the same transaction.
+  `details` is 1 to 500 characters when given. `thread_id`, when given, is the pair's own Thread,
+  whatever block stands, or `NOT_FOUND`. Every refusal comes before anything is written.
+  **Reporting the same person again is a new report**, never `ALREADY_EXISTS`: someone harassed
+  again reports again, and the day's ten bound it. Nothing is queued or written for the reported
+  person.
+- **A report's evidence** is the whole Thread, read from `messages` by `thread_id`
+  (`safety.repository.thread_messages`), never through a clearing (D-006, D-610): what T-9.5
+  reads.
+- **The web** (P-442): Report and Block in a profile's ⋯ menu, never on your own. The prototype's
+  report and block sheets, less two lines that wait for their tasks: a moderator's "within 24
+  hours" (T-9.5, P-761) and "undo this from the You tab" (T-9.8, P-762).
+
+**Why:** a block or report must work on someone you can no longer see (a frozen account, one
+that blocked you), and its answer must not reveal a block. A list that pages from the start never
+changes shape later.
+
+**Rejected:** `ALREADY_EXISTS` for a second open report (a person harassed again couldn't report
+again); reporting only people you can see (it would reveal who blocked you).
+
+Recommended by Claude in T-9.1's plan; approved by the founder on the advisor's recommendation
+(Claude, in a separate chat), relayed, 9 October 2026.
+
 ## Adding a decision
 
 Append `D-0NN · Title — Locked|Open`, with Decision, Why, Rejected. Never edit a Locked entry —

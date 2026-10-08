@@ -278,6 +278,8 @@ async def test_the_export_is_all_mine_and_nothing_of_theirs(
         "created_at",
     }
     assert len(document["swipes"]) == len(document["blocks"]) == 1
+    # When, made and lifted (D-860), never whom.
+    assert set(document["blocks"][0]) == {"created_at", "unblocked_at"}
     assert [k["kind"] for k in document["kudos_received"]] == ["genuinely_funny"]
     # Logs: by id only (rule 15).
     for secret in (my_phone, "exports/", "fake-storage://", MY_WORDS):

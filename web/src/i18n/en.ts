@@ -256,6 +256,44 @@ export const en = {
     notFound: "This profile isn't available",
     notFoundBody: "It may be hidden, or no longer here.",
     failed: "We couldn't load this profile",
+    // Report and Block (T-9.1, P-442), from the prototype's sheets. Two of its
+    // lines wait for their tasks: the moderator's 24 hours for T-9.5 (P-761),
+    // "undo this from the You tab" for T-9.8 (P-762). A block is silent
+    // (D-862): nothing here may say the other person is told.
+    report: "Report this profile",
+    block: "Block {name}",
+    reportTitle: "Report {name}",
+    reportIntro:
+      "This goes to our moderators, in confidence: they're never told who reported them.",
+    reportReasons: "What happened?",
+    reason: {
+      fake: "Fake profile or stolen photos",
+      scam: "Asking for money or off-platform payment",
+      harass: "Harassment or abusive messages",
+      sexual: "Unwanted sexual content",
+      minor: "Appears to be under 18",
+      other: "Something else",
+    },
+    reportDetails: "Tell us more",
+    reportDetailsHelper: "Optional, but it helps",
+    reportDetailsPlaceholder: "What did they say or do?",
+    alsoBlock: "Also block {name}",
+    reportSend: "Send report",
+    reportPick: "Pick a reason first",
+    reportSentTitle: "Report sent",
+    reportSentBody:
+      "They're never told who reported them, and nothing you wrote appears on their profile.",
+    reportDone: "Done",
+    reportTooMany: "You've sent a lot of reports today. Try again tomorrow.",
+    reportFailed: "We couldn't send your report. Try again.",
+    blockTitle: "Block {name}?",
+    blockTheyWont: "They won't see your profile anywhere in {app}",
+    blockYouWont: "You won't see theirs",
+    blockThreads: "Any Thread or Knot between you disappears",
+    blockSilent: "They're never told they've been blocked",
+    blockCancel: "Cancel",
+    blocked: "{name} blocked",
+    blockFailed: "We couldn't block {name}. Try again.",
   },
   // The requests to see your private album (T-8.8, D-732), at
   // /you/album-requests. Drafted by Claude, for the founder's review.
@@ -1421,6 +1459,10 @@ export const en = {
         // app_config.mask_first_n_messages, seeded 20: change it with the setting.
         messages:
           "Your messages and voice notes. We keep them even when you clear a chat, so that reports can be checked. In a Thread's first 20 messages, phone numbers, email addresses, UPI IDs and social media handles are hidden from the other person; we keep the original so that moderators can see it.",
+        // D-860 (T-9.1): a lifted block is kept, as "blocked by many" is a
+        // moderation signal. Silent: D-862.
+        blocks:
+          "Who you block and report, for our moderators. We keep a block on record after you undo it, and nobody is ever told who blocked or reported them.",
         // D-026, D-021.
         payments:
           "Your payments. Razorpay handles the payment itself. We keep a record of every payment and a permanent history of your Velas.",
@@ -1489,8 +1531,8 @@ export const en = {
           "Changed your mind? Sign in again within 29 days and your account comes back as it was.",
         messages:
           "Your messages stay in the other person's chat, shown as from “Deleted account”, and we keep them as moderation records. Otherwise, deleting an account could be used to destroy evidence someone has reported.",
-        // D-051; the welcome Velas: D-470, T-8.11.
-        kept: "We also keep your history of Velas and payments, any reports and moderation records about you, and a hashed copy of your phone number, so that deleting an account can't be used to escape a ban or a report, or to collect the welcome Velas again.",
+        // D-051; the welcome Velas: D-470, T-8.11; a block: D-861 (T-9.1).
+        kept: "We also keep your history of Velas and payments, any reports and moderation records about you, and a hashed copy of your phone number, so that deleting an account can't be used to escape a ban, a report or someone's block, or to collect the welcome Velas again.",
         // D-504 (the founder, 8 October 2026); /refunds says it too.
         velas:
           "Velas left in your balance are lost when your account is erased: they have no cash value, and we don't refund them. Sign in again before then and they come back with your account.",

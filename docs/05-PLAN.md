@@ -3517,19 +3517,36 @@ number** per account gets its 5 each, one Thread's worth, and is **accepted**, k
 # Sprint 9 — Safety, admin, notifications, hardening (weeks 14–15)
 
 ### T-9.1 · Reports and blocks
-- [ ] **Needs:** T-7.2, and **P-400**: a blocked person deletes and signs up again on the same
+- [x] **Needs:** T-7.2, and **P-400**: a blocked person deletes and signs up again on the same
   number to reach the one who blocked them; and **P-16**: whether unblocking keeps history (a
   migration, if it does)
-- [ ] `POST /reports` (≤ 10/day, details ≤ 500, optional `also_block`), `POST /blocks`, `DELETE /blocks/{id}`, `GET /blocks`.
-- [ ] Block effects, each with a test: removed from both discovery feeds, search, likes; profile → 404 both ways; threads hidden for both and sending → `BLOCKED`; realtime events stop; existing album grants revoked.
-- [ ] Reported person is never told who reported.
-- [ ] **A report's evidence is the whole Thread, whatever the reporter cleared** (T-7.8, D-006,
+  **Answered 9 October 2026, the founder:** P-16 soft-unblock (D-860), P-400 by number (D-861).
+- [x] `POST /reports` (≤ 10/day, details ≤ 500, optional `also_block`), `POST /blocks`, `DELETE /blocks/{id}`, `GET /blocks`.
+  **Built as D-863:** `also_block` is said every time; repeats are new reports; `GET /blocks` is
+  a page (`BlockedUserPage`); anyone with an account may be blocked or reported.
+- [x] Block effects, each with a test: removed from both discovery feeds, search, likes; profile → 404 both ways; threads hidden for both and sending → `BLOCKED`; realtime events stop; existing album grants revoked.
+  **Built as D-862: sending is `NOT_FOUND`, never `BLOCKED`**, which would tell him. Each surface
+  is asked of both people, whichever blocked (`test_block_effects.py`); the Thread's clock neither
+  warns nor tells of an expiry across a block; grants are revoked either way, and `decide` is
+  `NOT_FOUND` across one, a grant and a block at once forced in both orders
+  (`test_block_album_race.py`). A new account on a blocked number is blocked too (D-861).
+  Notifications from before a block are left out by T-9.4 (P-760, D-858).
+- [x] Reported person is never told who reported.
+  Nothing is queued or written for them, with `also_block` or without (`test_reports.py`).
+- [x] **A report's evidence is the whole Thread, whatever the reporter cleared** (T-7.8, D-006,
   D-610): read the Thread's messages from `messages` by `thread_id`, never through
   `messages.service.list_messages` or anything that applies `thread_clears.cleared_at`, which
   shows a person their own view. Clearing never touches `messages`, so nothing is lost; a test
   clears, then reports, and finds every message. A block hides a Thread separately from a
   clearing: unblocking brings it back with the clearing still in place.
-- [ ] **Commit:** `feat(safety): reports and blocks [T-9.1]`
+  **Built:** `safety.service.report_evidence`, through `safety.repository.thread_messages`, for
+  T-9.5's admin read. **Broken once each** (`uv run python -m tests.break_guards t91-`):
+  nineteen cases, each red in 1 of 1, every file restored and none differing by SHA-256 after;
+  T-6.2's `t62-03` re-anchored on the new helper, red in 1 of 1.
+- [x] **Commit:** `feat(safety): reports and blocks [T-9.1]`
+  **J10 held by P-680** (06-TESTING): written and passing locally, it took CI's E2E past the
+  20-sends-an-hour cap; it waits on branch `t-9.1-j10`. Report and Block in the conversation's ⋯
+  menu: P-764.
 
 ### T-9.2 · Fraud scoring v1
 - [ ] **Needs:** T-9.1
@@ -3879,13 +3896,15 @@ The number comes from the session's own block, given in its brief, from P-100 up
   migration now that T-1.10 is merged (rule 11). Found in review of T-1.10.
   **T-7.9 (8 October 2026):** `duration_s` is bounded 1 to 60 by the API and tested, and the length
   stored is the server's measure (D-620); `body_raw` and both CHECKs stay open (the founder).
-- [ ] P-16 · Decide whether unblocking keeps history — `blocks` is one row per pair with no
+- [x] P-16 · Decide whether unblocking keeps history — `blocks` is one row per pair with no
   history, so unless T-9.1 designs otherwise, unblock is a `DELETE` and the fact that A blocked B is
   gone. Rule 12's explicit list doesn't name blocks, but its principle does ("nothing is hard-deleted
   that moderation may need"), and "blocked by many people" is a fraud and moderation signal. Options:
   soft-unblock (`unblocked_at`, primary key replaced by a partial unique index) or accept the loss.
   Needs a new migration (T-1.11 is merged). **Before T-9.1.** Found in review of T-1.11.
   **Placed 8 October 2026 (the audit, P-490):** on T-9.1's Needs line.
+  **Done 9 October 2026 (T-9.1, D-860):** soft-unblock, the founder's answer: `unblocked_at`, the
+  pair's key replaced by `uq_blocks_active`, migration `4889c586aa2c`.
 - [ ] P-17 · Refuse DELETE and TRUNCATE on `messages` and `reports` — rule 12 names messages,
   reports, ledger and payments as never hard-deleted. T-1.12 enforces it in the database for the
   ledger and payments (`refuse_change()`, `restrict_violation` 23001); `messages` and `reports`
@@ -6093,7 +6112,7 @@ The number comes from the session's own block, given in its brief, from P-100 up
   trigger needs a count: how many eligible profiles a city has, from a query T-9.5's metrics or
   a check by hand can run. Filed by Claude at the founder's direction (8 October 2026, on the
   advisor's recommendation, relayed), building T-6.2; its session's block, P-390 to P-399.
-- [ ] P-400 · Stop a blocked person getting around the block by deleting and signing up again.
+- [x] P-400 · Stop a blocked person getting around the block by deleting and signing up again.
   **Before T-9.1** (on its Needs line). Worst case: a harasser someone blocked deletes their
   account, waits out T-9.6's 29 days, signs up again on the same number, and reaches the person
   who blocked them as a stranger, in their discovery feed and search. A block names the old
@@ -6103,6 +6122,9 @@ The number comes from the session's own block, given in its brief, from P-100 up
   against the number as well as the account, and how that is told to nobody (a block is silent).
   Filed by Claude building T-9.6; the founder put it on T-9.1's Needs line, 8 October 2026. Its
   session's block, P-400 to P-409.
+  **Done 9 October 2026 (T-9.1, D-861):** a block holds against the number, matched through
+  `users.phone_hash`, the founder's answer; nobody is told. `test_block_number.py` erases a
+  blocked man, signs his number up again, and finds the new account blocked both ways everywhere.
 - [ ] P-401 · Decide what a ban landing during a deletion's 29 days does to the erasure. **In
   T-9.5, where bans are written.** Worst case: someone deletes their account, a moderator bans it
   the next day, and the erasure never runs, because it erases only `deleted` accounts. Their
@@ -6256,9 +6278,10 @@ The number comes from the session's own block, given in its brief, from P-100 up
 - [ ] P-441 · "Ask to view" on the profile's private album. **In T-8.4.** Worst case: the album row
   says how many private photos there are and offers no way to ask, so the count reads as a tease.
   T-6.8 shows the count alone. Filed by Claude building T-6.8, 8 October 2026; its session's block.
-- [ ] P-442 · Report and Block in the profile's ⋯ menu. **In T-9.1.** Worst case: someone being
+- [x] P-442 · Report and Block in the profile's ⋯ menu. **In T-9.1.** Worst case: someone being
   harassed opens the profile to block or report and finds only Share. T-6.8's menu holds Share
   alone until T-9.1 builds both. Filed by Claude building T-6.8, 8 October 2026; its session's block.
+  **Done 9 October 2026 (T-9.1, D-863):** both, on someone else's profile only.
 - [ ] P-445 · Next's own 404 page breaks the CSP on every build. **Before REL-1.** Worst case: every
   404 a person reaches renders with its styles refused (five `style-src` violations, read in
   Playwright's Chromium on 8 October 2026 at `/no-such-page` under the static policy), and once
@@ -6427,6 +6450,8 @@ The number comes from the session's own block, given in its brief, from P-100 up
   **A third copy waits (T-8.10, 9 October 2026):** the gifts journey held by P-680 repeats J1's
   steps for a man and J2's for a woman, her face photo and selfie included, for the same reason.
   The move takes it too.
+  **In part, T-9.1 (9 October 2026):** `signUpMan` moved from `store.spec.ts` to `e2e/fixtures.ts`,
+  used by J8, J9 and J10; J1's helpers in `signup.spec.ts` are still their own.
 - [ ] P-680 · Give the E2E room for another sign-in, then land T-8.10's gifts journey.
   **Before the next journey that signs anyone in.** Worst case: every new sign-in journey turns
   CI's E2E red at someone else's sign-in, as T-8.10's did (run 37859041045: J3, J8 and J9 on
@@ -6440,6 +6465,10 @@ The number comes from the session's own block, given in its brief, from P-100 up
   `web/e2e/gifts.spec.ts` in commit 1fddbdc on branch `t-8.10-web-gifts`, kept on origin for it,
   and it passed locally on both projects on 9 October 2026. Filed by Claude building T-8.10, 9
   October 2026, at the founder's direction (dropped from T-8.10 to land it).
+  **J10 waits here too (T-9.1, 9 October 2026):** its two sign-ups took CI's run 37863825770 past
+  the cap the same way (J3, J8 and J9 on desktop got no code), so T-9.1 landed without it. It is
+  `web/e2e/safety.spec.ts`, with `unlock` in `e2e/fixtures.ts`, in commit 46e23c0 on branch
+  `t-9.1-j10`, kept on origin for it; it passed locally on both projects on 9 October 2026.
 - [ ] P-681 · Swipes' ledger reads sort by `created_at` alone, so a tie fails a landing at
   random. **Soon: it costs a full `make test` each time it fires.** Worst case: a red `make test`
   that isn't the change's, blocking a landing (or, worse, teaching sessions to rerun until
@@ -6552,3 +6581,49 @@ The number comes from the session's own block, given in its brief, from P-100 up
   `test_push_stays_off_everywhere_until_d857_is_decided` with them. Then P-753's check on real
   devices. Production follows with its own pair. Filed by Claude building T-9.4, 9 October 2026, at
   the founder's direction; its session's block.
+- [x] P-760 · Notifications across a block. **In T-9.4** (its session is building now). Worst
+  case: a woman blocks a man, then opens her notifications and finds "Kabir sent you a rose" from
+  before the block, his name and photo shown, with a tap that leads to a profile that isn't
+  there; or a push queued before the block arrives after it. T-9.1 stops every new event and
+  notification across a block (D-862), but `notifications` rows written before it stay, and the
+  list and pushes are T-9.4's. Fix: the list leaves out, and the push sender drops, any
+  notification naming someone a standing block lies between (`blocked_either_way`, by number,
+  D-861), and an unblock brings the list's back. Filed by Claude building T-9.1, 9 October 2026;
+  its session's block, P-760 to P-769.
+  **Built by T-9.4 (9 October 2026, D-858),** which read it from T-9.1's session before it
+  landed: the list and the sender leave out anything about someone blocked either way, through
+  `blocked_either_way`, so by number too (D-861).
+- [ ] P-761 · The report sheet's "A moderator reviews this within 24 hours". **In T-9.5.** Worst
+  case: if the line ships before moderators have a queue, a woman reporting harassment is promised
+  a review in 24 hours that nothing in the product makes happen. The prototype's sent state says
+  it; T-9.1 leaves it out (D-863). Add it to `profile.reportSentBody` (`en.ts`) when T-9.5's
+  report queue and its 24-hour timer exist, in the same words as the SLA it enforces. Filed by
+  Claude building T-9.1, 9 October 2026.
+- [ ] P-762 · The block sheet's "You can undo this from the You tab". **In T-9.8.** Worst case: a
+  person who blocked someone by mistake has no way back in the product until the You tab's blocked
+  list exists: `DELETE /blocks/{user_id}` and `GET /blocks` are built (T-9.1), the screen isn't.
+  T-9.1 leaves the line out rather than promise a screen that doesn't exist. Add it to the block
+  sheet (`BlockSheet.tsx`, `en.ts`) with T-9.8's list. Filed by Claude building T-9.1, 9 October
+  2026.
+- [ ] P-763 · Time the feed with blocks in it, on a quiet machine. **Before beta.** Worst case:
+  D-861's by-number match makes Discover's feed slower than its 80 ms p95 target at beta's scale
+  and nobody sees it, because T-6.2's benchmark seeds no blocks, so the block check never runs
+  there. T-9.1 measured it with none (`out/t-9.1-bench/`, git-ignored), the old helper and the new
+  run alternately, on a machine other sessions were loading (load average 5 to 7): spread p50
+  32.9–43.6 ms old against 36.4–52.8 ms new, and the 80 ms p95 target met in both old runs but
+  missed in one round of five in each new run (102.9 and 181.6 ms). The plans are the same shape,
+  and the block nodes never executed on an empty table; planning took about 0.5 ms more per
+  statement. Fix: seed the bench's viewer with blocks (some made by them, some of them, some of
+  numbers with an erased account) and run old and new interleaved, ten rounds each, on a quiet
+  machine; if the new one misses, give the viewer's blocked numbers to the query as a constant.
+  Filed by Claude building T-9.1, 9 October 2026; its session's block, P-760 to P-769.
+- [ ] P-764 · Report and Block in the conversation's ⋯ menu. **Before beta.** Worst case: a woman
+  being harassed in a chat opens its ⋯ menu to block him and finds only "View profile", "Clear
+  chat" and "Untie the knot"; she has to open his profile and use its ⋯ menu, one more step at the
+  moment it matters, and none at all once his account is deleted (no profile link). The prototype's
+  conversation ⋯ opens the profile's menu, Report and Block included. T-9.1 built them in the
+  profile's menu (P-442) and the approved plan stopped there; T-7.11's `ConversationMenu.tsx`
+  landed meanwhile, its comment saying they "join with T-9.1". Fix: the same `ReportSheet` and
+  `BlockSheet`, with the Thread's id as the report's `thread_id`, and after a block the chat left
+  for the chats list; update that comment. Filed by Claude building T-9.1, 9 October 2026; its
+  session's block.

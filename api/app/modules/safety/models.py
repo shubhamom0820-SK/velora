@@ -18,16 +18,28 @@ from app.core.enums import FraudBand, ReportReason, ReportStatus
 
 
 class Block(CreatedAt, Base):
-    """Blocks are total (06-TESTING.md critical test 9). Added or removed,
-    never updated."""
+    """Blocks are total (06-TESTING.md critical test 9), and hold against the
+    blocked person's number as well as the account (D-861). Unblocking sets
+    `unblocked_at` and keeps the row (D-860): one standing block per pair, as
+    many lifted ones as there have been. Only the erasure (D-503) and an
+    under-18 refusal (D-072) delete one."""
 
     __tablename__ = "blocks"
 
-    blocker_id: Mapped[uuid.UUID] = uuid_fk("users.id", primary_key=True)
-    blocked_id: Mapped[uuid.UUID] = uuid_fk("users.id", primary_key=True)
+    id: Mapped[uuid.UUID] = uuid_pk()
+    blocker_id: Mapped[uuid.UUID] = uuid_fk("users.id")
+    blocked_id: Mapped[uuid.UUID] = uuid_fk("users.id")
+    unblocked_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
 
     __table_args__ = (
         CheckConstraint("blocker_id <> blocked_id", name="not_self"),
+        Index(
+            "uq_blocks_active",
+            "blocker_id",
+            "blocked_id",
+            unique=True,
+            postgresql_where=text("unblocked_at IS NULL"),
+        ),
         Index("ix_blocks_blocked_id", "blocked_id"),
     )
 

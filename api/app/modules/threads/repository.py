@@ -425,14 +425,21 @@ async def expire_due(
     session: AsyncSession, now: datetime, *, limit: int
 ) -> Sequence[Row[Any]]:
     """Marks up to `limit` active Threads whose `expires_at` has passed
-    `expired`. Each row: `id`, `user_low`, `user_high`. A private message has
-    no `expires_at`, so it is never due."""
+    `expired`. Each row: `id`, `user_low`, `user_high`, and `blocked`, whether
+    a block stands between the two (T-9.1): the status catches up all the same,
+    and nobody is told. A private message has no `expires_at`, so it is never
+    due."""
     due = _due(Thread.expires_at <= now, limit=limit)
     rows = await session.execute(
         update(Thread)
         .where(Thread.id == due.c.id)
         .values(status=ThreadStatus.EXPIRED)
-        .returning(Thread.id, Thread.user_low, Thread.user_high)
+        .returning(
+            Thread.id,
+            Thread.user_low,
+            Thread.user_high,
+            blocked_either_way(Thread.user_low, Thread.user_high).label("blocked"),
+        )
         .execution_options(synchronize_session=False)
     )
     return rows.all()
@@ -442,12 +449,15 @@ async def warn_due(
     session: AsyncSession, now: datetime, until: datetime, *, limit: int
 ) -> Sequence[Row[Any]]:
     """Marks warned up to `limit` active Threads expiring after `now` and by
-    `until` that haven't been warned for this expiry. Each row: `id`,
-    `user_low`, `user_high`, `expires_at`."""
+    `until` that haven't been warned for this expiry, never one a block stands
+    across (T-9.1): a warning about a Thread its reader can't open would tell
+    him he was blocked. Each row: `id`, `user_low`, `user_high`,
+    `expires_at`."""
     due = _due(
         Thread.expires_at > now,
         Thread.expires_at <= until,
         Thread.expiry_warned_at.is_(None),
+        ~blocked_either_way(Thread.user_low, Thread.user_high),
         limit=limit,
     )
     rows = await session.execute(

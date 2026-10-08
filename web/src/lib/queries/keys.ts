@@ -25,6 +25,10 @@ export const queryKeys = {
   packs: () => ["packs"] as const,
   payment: (id: string) => ["payments", id] as const,
   search: (q: string) => ["search", q] as const,
+  // Every search, every feed, every profile: what a block makes stale (T-9.1).
+  searches: () => ["search"] as const,
+  feeds: () => ["discover"] as const,
+  profiles: () => ["profiles"] as const,
   // Each feed and filter set is its own scroll, ranked at its first instant
   // (D-491).
   discover: (

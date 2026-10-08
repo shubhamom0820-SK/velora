@@ -11,6 +11,11 @@ import { envelope, fakeApi, json, type Route } from "@/lib/testing/fakeApi";
 
 import { ProfileScreen } from "./ProfileScreen";
 
+const nav = vi.hoisted(() => ({ back: vi.fn(), replace: vi.fn() }));
+vi.mock("next/navigation", () => ({
+  useRouter: () => ({ back: nav.back, replace: nav.replace, push: vi.fn() }),
+}));
+
 function her(overrides: Partial<PublicProfile> = {}): PublicProfile {
   return {
     id: "u2",
@@ -79,6 +84,7 @@ function renderProfile(meId = "u1", showGifts = true) {
     gender: "male",
     profile: { show_gifts: showGifts },
   });
+  lastClient = client;
   return render(
     <QueryClientProvider client={client}>
       <ToastProvider>
@@ -87,6 +93,8 @@ function renderProfile(meId = "u1", showGifts = true) {
     </QueryClientProvider>,
   );
 }
+
+let lastClient: QueryClient;
 
 const name = () =>
   screen.findByRole("heading", {
@@ -101,6 +109,8 @@ beforeEach(() => {
 afterEach(() => {
   vi.unstubAllGlobals();
   vi.unstubAllEnvs();
+  nav.back.mockReset();
+  nav.replace.mockReset();
 });
 
 describe("the profile (T-6.8)", () => {
@@ -517,5 +527,137 @@ describe("the kudos prompt (T-8.8, D-790)", () => {
       await screen.findByText(t("profile.kudosTooEarly")),
     ).toBeInTheDocument();
     await waitFor(() => expect(ask()).toBeNull());
+  });
+});
+
+describe("report and block, in the ⋯ menu (T-9.1, P-442)", () => {
+  async function openMenu() {
+    await name();
+    await userEvent.click(
+      screen.getByRole("button", { name: t("profile.more") }),
+    );
+    return within(await screen.findByRole("dialog"));
+  }
+
+  it("offers both on someone else's profile", async () => {
+    routes(() => json(200, her()));
+    renderProfile();
+    const menu = await openMenu();
+    expect(
+      menu.getByRole("button", { name: t("profile.report") }),
+    ).toBeVisible();
+    expect(
+      menu.getByRole("button", {
+        name: t("profile.block", { name: "Simran" }),
+      }),
+    ).toBeVisible();
+  });
+
+  it("offers neither on your own", async () => {
+    routes(() => json(200, her()));
+    renderProfile("u2");
+    const menu = await openMenu();
+
+    expect(
+      menu.queryByRole("button", { name: t("profile.report") }),
+    ).toBeNull();
+    expect(
+      menu.queryByRole("button", {
+        name: t("profile.block", { name: "Simran" }),
+      }),
+    ).toBeNull();
+  });
+
+  it("blocks, says so, leaves the profile and marks every list stale", async () => {
+    const api = routes(() => json(200, her()), {
+      "POST /v1/blocks": () =>
+        json(201, {
+          user: {
+            id: "u2",
+            first_name: "Simran",
+            username: "simran.k",
+            main_photo_url: null,
+            shows_badge: false,
+            is_online: false,
+            deleted: false,
+          },
+          blocked_at: "2026-10-09T05:00:00Z",
+        }),
+    });
+    renderProfile();
+    lastClient.setQueryData(queryKeys.threadList("threads", "all", ""), {
+      pages: [],
+      pageParams: [],
+    });
+    const menu = await openMenu();
+
+    await userEvent.click(
+      menu.getByRole("button", {
+        name: t("profile.block", { name: "Simran" }),
+      }),
+    );
+    const sheet = within(
+      await screen.findByRole("dialog", {
+        name: t("profile.blockTitle", { name: "Simran" }),
+      }),
+    );
+    await userEvent.click(
+      sheet.getByRole("button", {
+        name: t("profile.block", { name: "Simran" }),
+      }),
+    );
+
+    expect(
+      await screen.findByText(t("profile.blocked", { name: "Simran" })),
+    ).toBeInTheDocument();
+    expect(nav.back.mock.calls.length + nav.replace.mock.calls.length).toBe(1);
+    // One block, and nothing asked again after it: the lists are only marked.
+    const sent = api.sent();
+    expect(sent.filter((call) => call === "POST /v1/blocks")).toHaveLength(1);
+    expect(sent.slice(sent.indexOf("POST /v1/blocks") + 1)).toEqual([]);
+    for (const key of [
+      queryKeys.profile("u2"),
+      queryKeys.threadList("threads", "all", ""),
+    ]) {
+      expect(lastClient.getQueryState(key)?.isInvalidated).toBe(true);
+    }
+  });
+
+  it("reports with also-block, then leaves once she taps Done", async () => {
+    const api = routes(() => json(200, her()), {
+      "POST /v1/reports": () =>
+        json(201, { id: "r1", created_at: "2026-10-09T05:00:00Z" }),
+    });
+    renderProfile();
+    const menu = await openMenu();
+
+    await userEvent.click(
+      menu.getByRole("button", { name: t("profile.report") }),
+    );
+    const sheet = within(
+      await screen.findByRole("dialog", {
+        name: t("profile.reportTitle", { name: "Simran" }),
+      }),
+    );
+    await userEvent.click(
+      sheet.getByRole("radio", { name: t("profile.reason.scam") }),
+    );
+    await userEvent.click(
+      sheet.getByRole("button", { name: t("profile.reportSend") }),
+    );
+    expect(await sheet.findByText(t("profile.reportSentTitle"))).toBeVisible();
+    expect(nav.back).not.toHaveBeenCalled();
+    expect(nav.replace).not.toHaveBeenCalled();
+
+    await userEvent.click(
+      sheet.getByRole("button", { name: t("profile.reportDone") }),
+    );
+
+    expect(nav.back.mock.calls.length + nav.replace.mock.calls.length).toBe(1);
+    expect(api.calls.at(-1)?.body).toEqual({
+      reported_id: "u2",
+      reason: "scam",
+      also_block: true,
+    });
   });
 });

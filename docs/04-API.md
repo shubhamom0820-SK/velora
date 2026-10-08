@@ -215,10 +215,10 @@ to be; never the original, D-030), `masked`, `duration_s`, `mine`, `from_deleted
 | GET | /users/{id}/gifts | ✅ | → `{counts:[{gift_id,count}]}` in the catalogue's order, never from whom. `NOT_FOUND` unless you can open the profile (D-493); with `show_gifts` off, empty to everyone but her | T-8.9 |
 | POST | /kudos | ✅ | `{to_id, kind}` → 201 `{to_id, kind, created_at}`: once ever to each person, only after both have written in your Thread and it has `kudos_min_messages` messages (D-680). 10 a minute | T-8.5 |
 | GET | /me/kudos | ✅ | → `Kudos[]`: `[{kind, count}]`, the kinds you were given, each with how many gave it, in the kinds' order, none at 0; never who nor when, and shown to you whatever `show_kudos` says (D-680) | T-8.5 |
-| POST | /reports | ✅ | `{reported_id, reason, details?, thread_id?, also_block}` → 201 | T-9.1 |
-| POST | /blocks | ✅ | `{user_id}` → 201 | T-9.1 |
-| DELETE | /blocks/{user_id} | ✅ | → 204 | T-9.1 |
-| GET | /blocks | ✅ | → `BlockedUser[]` | T-9.1 |
+| POST | /reports | ✅ | `{reported_id, reason, details?, thread_id?, also_block}` → 201 `{id, created_at}`. Anyone with an account, a block standing either way or not; yourself `NOT_ALLOWED` (`why: yourself`), an id nobody holds `NOT_FOUND`. `details` 1 to 500; `also_block` `true` or `false`, always said, and blocks in the same transaction; `thread_id` the pair's own Thread, whatever block stands, else `NOT_FOUND`. The same person again is a new report. Every refusal before anything is written; the reported person is never told. 10 a day (D-863) | T-9.1 |
+| POST | /blocks | ✅ | `{user_id}` → 201 `BlockedUser` `{user: CardLite, blocked_at}`. Anyone with an account, in any status; yourself `NOT_ALLOWED`, an id nobody holds `NOT_FOUND`. Twice is once. Every album grant between them, either way, revoked (D-863). From then on everything between them is `NOT_FOUND`, never `BLOCKED` (D-862), and a new account on the blocked person's number is blocked too (D-861). Nobody is told. 60 a minute, with unblocking | T-9.1 |
+| DELETE | /blocks/{user_id} | ✅ | → 204: the block lifted and kept (D-860); twice, or never blocked, 204 | T-9.1 |
+| GET | /blocks | ✅ | `?cursor=&limit=` → `Page<BlockedUser>` (`BlockedUserPage`): whom you block now, newest first by `(created_at, blocked_id)`; a deleted account as `deleted`; never who blocks you (D-863) | T-9.1 |
 
 ## Wallet & payments
 Users see Velas (D-049). The contract keeps the neutral name `credits` in fields, paths and error
@@ -355,7 +355,7 @@ fake order is paid by calling it, for T-8.2's tests and T-8.7's local checkout.
 | `PRICE_CHANGED` | 409 | a paid action whose `shown_price` (0 when absent) isn't its price now; nothing charged or written; `details.price`, the price now (P-56, D-600) |
 | `FORBIDDEN` | 403 | wrong role; a status no one has allowed to sign in (D-067's allowlist) |
 | `ACCOUNT_FROZEN` / `ACCOUNT_BANNED` | 403 | |
-| `BLOCKED` | 403 | either side blocked |
+| `BLOCKED` | 403 | never sent: across a block everything is `NOT_FOUND` (D-862) |
 | `ONBOARDING_INCOMPLETE` | 403 | `details.step`, the user's current step (D-068) |
 | `PROFILE_INCOMPLETE` | 403 | finishing onboarding with something missing; `details.missing`, every one, in onboarding's order: `seeking`, `intents`, `first_name`, `hometown`, `city`, `location`, `username`, `about`, `interests` (D-310; no photo since T-4.12, D-392) |
 | `FACE_PHOTO_REQUIRED` | 403 | leaving the `photos` step with no face photo, pending or approved, by anyone but a man (D-391, T-4.12) |

@@ -170,6 +170,10 @@ async def decide(
         row = await repository.request_for_update(session, request_id, owner_id=user.id)
         if row is None:
             raise rules.not_found()
+        # Under the request's lock (T-9.1): a block landing now either waits
+        # for this answer and revokes it, or is seen here, never neither.
+        if await repository.blocked_between(session, row.owner_id, row.requester_id):
+            raise rules.not_found()
         if row.status is AlbumRequestStatus.PENDING:
             row.status = wanted
             row.decided_at = clock.now()
@@ -216,6 +220,34 @@ async def revoke(
         job_id=rules.revoke_job_id(request_id),
         request_id=str(request_id),
     )
+
+
+async def revoke_between(session: AsyncSession, a: UUID, b: UUID) -> list[UUID]:
+    """A block's part (T-9.1), in the caller's transaction: every grant
+    between `a` and `b`, either way, revoked, its cooldown started (D-731).
+    Nobody is told: no event, no notification. The requests whose copies
+    `watermark_album` must delete, for `delete_revoked_copies` once committed:
+    every revoked one between them that still has a copy, so a block asked
+    again after a failed enqueue queues the deletion again."""
+    now = clock.now()
+    rows = await repository.between_for_update(session, a, b)
+    for row in rows:
+        if row.status is AlbumRequestStatus.GRANTED:
+            row.status = AlbumRequestStatus.REVOKED
+            row.decided_at = now
+    await session.flush()
+    revoked = [row.id for row in rows if row.status is AlbumRequestStatus.REVOKED]
+    return await repository.with_copies(session, revoked)
+
+
+async def delete_revoked_copies(queue: Queue, request_ids: list[UUID]) -> None:
+    """Queue each revoked request's copies for deletion, after the commit."""
+    for request_id in request_ids:
+        await queue.enqueue(
+            WATERMARK_ALBUM,
+            job_id=rules.revoke_job_id(request_id),
+            request_id=str(request_id),
+        )
 
 
 # --- The album ---------------------------------------------------------------------------

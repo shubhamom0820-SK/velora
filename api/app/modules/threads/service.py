@@ -503,10 +503,12 @@ async def _buy_time(
 async def expire_batch(session: AsyncSession, *, limit: int = SWEEP_BATCH) -> int:
     """One transaction of the expiry sweep: active Threads past `expires_at`
     marked `expired`, and `thread.expired` to whoever of the two sees the
-    expiry, never her (D-097). How many it took."""
+    expiry, never her (D-097), and nobody across a block (T-9.1). How many it
+    took."""
     async with session.begin():
         rows = await repository.expire_due(session, clock.now(), limit=limit)
-        await _tell(session, rows, THREAD_EXPIRED, lambda row: {})
+        told = [row for row in rows if not row.blocked]
+        await _tell(session, told, THREAD_EXPIRED, lambda row: {})
     return len(rows)
 
 

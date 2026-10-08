@@ -7,7 +7,7 @@ from datetime import datetime
 from typing import Any
 from uuid import UUID
 
-from sqlalchemy import Row, delete, func, select, text, tuple_
+from sqlalchemy import Row, and_, delete, func, or_, select, text, tuple_
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import aliased
@@ -142,6 +142,46 @@ async def request_for_update(
         query.with_for_update().execution_options(populate_existing=True)
     )
     return found
+
+
+async def blocked_between(session: AsyncSession, a: UUID, b: UUID) -> bool:
+    """Whether a block stands between `a` and `b`, either way (D-861)."""
+    return bool(await session.scalar(select(blocked_either_way(a, b))))
+
+
+async def between_for_update(
+    session: AsyncSession, a: UUID, b: UUID
+) -> list[AlbumRequest]:
+    """Every request between `a` and `b`, in either direction and any status,
+    locked until the transaction ends (T-9.1). Locked whatever their status,
+    so a grant being decided now is waited for and read as granted, never
+    missed as the pending row it was."""
+    rows = await session.scalars(
+        select(AlbumRequest)
+        .where(
+            or_(
+                and_(AlbumRequest.requester_id == a, AlbumRequest.owner_id == b),
+                and_(AlbumRequest.requester_id == b, AlbumRequest.owner_id == a),
+            )
+        )
+        .order_by(AlbumRequest.id)
+        .with_for_update()
+        .execution_options(populate_existing=True)
+    )
+    return list(rows)
+
+
+async def with_copies(session: AsyncSession, request_ids: Sequence[UUID]) -> list[UUID]:
+    """Those of `request_ids` that still have a copy recorded."""
+    if not request_ids:
+        return []
+    rows = await session.scalars(
+        select(AlbumCopy.request_id)
+        .where(AlbumCopy.request_id.in_(request_ids))
+        .distinct()
+        .order_by(AlbumCopy.request_id)
+    )
+    return list(rows)
 
 
 async def requester_columns(

@@ -287,9 +287,10 @@ async def own_reveals(session: AsyncSession, user_id: UUID) -> list[Row[Any]]:
 
 
 async def own_blocks(session: AsyncSession, user_id: UUID) -> list[Row[Any]]:
+    """When each block was made and, once lifted, when (D-860): never whom."""
     return list(
         await session.execute(
-            select(Block.created_at)
+            select(Block.created_at, Block.unblocked_at)
             .where(Block.blocker_id == user_id)
             .order_by(Block.created_at)
         )

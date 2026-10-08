@@ -13,12 +13,14 @@ from datetime import UTC, datetime, timedelta
 from types import ModuleType
 from typing import Any
 
+import pytest
 from sqlalchemy import select, text, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core import events
 from app.core.enums import Gender, ThreadStatus
 from app.modules.notifications.models import Notification
+from app.modules.safety.models import Block
 from app.modules.threads.models import Thread
 from app.workers.tasks import thread_clock
 from tests.conftest import MakeThread, MakeUser
@@ -309,3 +311,71 @@ async def test_an_idle_minute_costs_redis_nothing(db: AsyncSession) -> None:
 
     assert done == {"expired": 0, "warned": 0}
     assert redis.sent == []
+
+
+# --- Across a block (T-9.1) -----------------------------------------------------------
+
+
+@pytest.mark.parametrize("who_blocks", ["her", "him"])
+async def test_across_a_block_nobody_is_warned(
+    db: AsyncSession,
+    make_user: MakeUser,
+    make_thread: MakeThread,
+    clock: ModuleType,
+    who_blocks: str,
+) -> None:
+    """A warning about a Thread he can't open would tell him she blocked him;
+    one about someone he blocked is about someone he chose not to see."""
+    clock.freeze(NOON)
+    man, _ = await make_user()
+    woman, _ = await make_user(Gender.FEMALE)
+    thread = await make_thread(woman, man)
+    await _set(db, thread.id, expires_at=NOON + timedelta(minutes=10))
+    blocker, blocked = (woman, man) if who_blocks == "her" else (man, woman)
+    db.add(Block(blocker_id=blocker.id, blocked_id=blocked.id))
+    redis = Published()
+
+    assert await _warn(db, redis) == 0
+
+    assert redis.sent == []
+    assert await _notes(db, man.id) == []
+    assert (await _thread(db, thread.id)).expiry_warned_at is None
+
+
+@pytest.mark.parametrize("who_blocks", ["her", "him"])
+async def test_across_a_block_it_expires_and_nobody_is_told(
+    db: AsyncSession,
+    make_user: MakeUser,
+    make_thread: MakeThread,
+    clock: ModuleType,
+    who_blocks: str,
+) -> None:
+    """The status catches the clock up all the same (D-560); no event."""
+    clock.freeze(NOON)
+    man, _ = await make_user()
+    woman, _ = await make_user(Gender.FEMALE)
+    thread = await make_thread(woman, man)
+    await _set(db, thread.id, expires_at=NOON - timedelta(minutes=1))
+    blocker, blocked = (woman, man) if who_blocks == "her" else (man, woman)
+    db.add(Block(blocker_id=blocker.id, blocked_id=blocked.id))
+    redis = Published()
+
+    assert await _expire(db, redis) == 1
+
+    assert (await _thread(db, thread.id)).status is ThreadStatus.EXPIRED
+    assert redis.sent == []
+
+
+async def test_a_lifted_block_warns_and_tells_as_before(
+    db: AsyncSession, make_user: MakeUser, make_thread: MakeThread, clock: ModuleType
+) -> None:
+    clock.freeze(NOON)
+    man, _ = await make_user()
+    woman, _ = await make_user(Gender.FEMALE)
+    thread = await make_thread(woman, man)
+    await _set(db, thread.id, expires_at=NOON + timedelta(minutes=10))
+    db.add(Block(blocker_id=woman.id, blocked_id=man.id, unblocked_at=NOON))
+    redis = Published()
+
+    assert await _warn(db, redis) == 1
+    assert [kind for _, kind, _ in redis.sent] == ["thread.expiring"]

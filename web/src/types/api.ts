@@ -1382,6 +1382,58 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/reports": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** File Report */
+        post: operations["file_report_v1_reports_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/blocks": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Blocks */
+        get: operations["list_blocks_v1_blocks_get"];
+        put?: never;
+        /** Block */
+        post: operations["block_v1_blocks_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/blocks/{user_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Unblock */
+        delete: operations["unblock_v1_blocks__user_id__delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/ws/ticket": {
         parameters: {
             query?: never;
@@ -1691,6 +1743,40 @@ export interface components {
             area_id: string;
         };
         /**
+         * BlockRequest
+         * @description `{user_id}`: whom to block.
+         */
+        BlockRequest: {
+            /**
+             * User Id
+             * Format: uuid
+             */
+            user_id: string;
+        };
+        /**
+         * BlockedUser
+         * @description Someone you block, as a card, and since when. A deleted account is
+         *     `deleted`, with no name, username or photo (D-051, D-500).
+         */
+        BlockedUser: {
+            user: components["schemas"]["CardLite"];
+            /**
+             * Blocked At
+             * Format: date-time
+             */
+            blocked_at: string;
+        };
+        /**
+         * BlockedUserPage
+         * @description `Page<BlockedUser>`: newest block first, by `(created_at, id)`.
+         */
+        BlockedUserPage: {
+            /** Items */
+            items: components["schemas"]["BlockedUser"][];
+            /** Next Cursor */
+            next_cursor: string | null;
+        };
+        /**
          * BuyTimeRequest
          * @description Re-open or Extend (T-7.6): the price the screen showed for it (P-56,
          *     D-600), compared, never charged. The body may be left out: 0.
@@ -1889,6 +1975,25 @@ export interface components {
          * @enum {string}
          */
         Feed: "foryou" | "new" | "online";
+        /**
+         * FileReportRequest
+         * @description `{reported_id, reason, details?, thread_id?, also_block}`. `also_block`
+         *     is said every time, `true` or `false`: a block is never assumed.
+         */
+        FileReportRequest: {
+            /**
+             * Reported Id
+             * Format: uuid
+             */
+            reported_id: string;
+            reason: components["schemas"]["ReportReason"];
+            /** Details */
+            details?: string | null;
+            /** Thread Id */
+            thread_id?: string | null;
+            /** Also Block */
+            also_block: boolean;
+        };
         /**
          * FirebaseSignIn
          * @description Path A (D-035): the ID token Firebase gave the browser once the code was
@@ -2774,6 +2879,28 @@ export interface components {
              */
             created_at: string;
         };
+        /**
+         * ReportFiled
+         * @description The report you just filed: its id and when. Nothing about what
+         *     moderation does with it, which the reporter is told later, if at all.
+         */
+        ReportFiled: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+        };
+        /**
+         * ReportReason
+         * @enum {string}
+         */
+        ReportReason: "fake" | "scam" | "harass" | "sexual" | "minor" | "other";
         /**
          * RevealRequest
          * @description `POST /likes/{handle}/reveal`'s body (P-56, D-600).
@@ -5833,6 +5960,133 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["Album"];
                 };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    file_report_v1_reports_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["FileReportRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReportFiled"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_blocks_v1_blocks_get: {
+        parameters: {
+            query?: {
+                cursor?: string | null;
+                limit?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BlockedUserPage"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    block_v1_blocks_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["BlockRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BlockedUser"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    unblock_v1_blocks__user_id__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                user_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
             /** @description Validation Error */
             422: {
