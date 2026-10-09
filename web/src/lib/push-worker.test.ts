@@ -183,6 +183,11 @@ describe("the service worker (T-9.4)", () => {
     expect(shown.options.data).toEqual({ url: `/chats/${THREAD}` });
   });
 
+  it("opens the sender's profile for a gift (T-8.10)", async () => {
+    const shown = await boot().push({ kind: "gift", user_id: ID });
+    expect(shown.options.data).toEqual({ url: `/people/${ID}` });
+  });
+
   it("keeps ids inside their path segment", async () => {
     const shown = await boot().push({
       kind: "match",

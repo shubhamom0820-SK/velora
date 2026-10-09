@@ -386,6 +386,8 @@ async def test_nothing_about_someone_blocked_either_way_is_listed(
     thread = await make_thread(man, blocked)
     await _row(db, man.id, "match", {"user_id": str(blocked.id)}, 0)
     await _row(db, man.id, "thread_expiring", {"thread_id": str(thread.id)}, 1)
+    # A gift's row names its sender (T-8.10): hidden across a block, as any is.
+    await _row(db, man.id, "gift", {"gift_send_id": "g", "user_id": str(blocked.id)}, 1)
     kept_friend = await _row(db, man.id, "match", {"user_id": str(friend.id)}, 2)
     kept_nobody = await _row(db, man.id, "low_balance", {"balance": 3}, 3)
     pair = (man.id, blocked.id) if blocker == "me" else (blocked.id, man.id)

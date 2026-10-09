@@ -50,8 +50,8 @@ const VARIANT_OF_KIND: Readonly<Record<string, Variant>> = {
 
 /**
  * Where each kind leads. A Thread's kinds open its conversation (T-7.11's
- * `/chats/[id]`, P-752); a gift opens You,
- * where her received gifts are (T-8.10), and an album request her album's
+ * `/chats/[id]`, P-752); a gift opens the sender's profile (T-8.10's line on
+ * T-9.4: the payload's `user_id` is the sender's), and an album request her album's
  * requests (T-8.8).
  */
 export const ROUTES: Readonly<Record<string, string>> = {
@@ -59,7 +59,7 @@ export const ROUTES: Readonly<Record<string, string>> = {
   thread: "/chats/{thread_id}",
   message: "/chats/{thread_id}",
   like: "/discover/likes",
-  gift: "/you",
+  gift: "/people/{user_id}",
   album_request: "/you/album-requests",
   album_decided: "/people/{user_id}",
   knot_requested: "/chats/{thread_id}",

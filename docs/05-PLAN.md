@@ -3583,13 +3583,13 @@ number** per account gets its 5 each, one Thread's worth, and is **accepted**, k
 - [x] **P-550: gifts.** T-8.9 writes a `gift` notification (`{gift_send_id, gift_id, user_id}`)
   for every gift received, and no setting names gifts: decide which one governs its push, and add
   `gift` to the kinds above.
-- [ ] **From T-8.10: a `gift` notification opens the sender's profile,** `/people/{user_id}`:
+- [x] **From T-8.10: a `gift` notification opens the sender's profile,** `/people/{user_id}`:
   the payload's `user_id` is the sender's (T-8.9). Moved here from T-8.10's line (the founder, 9
   October 2026), since the in-app list and `notificationclick` are this task's.
-  **Open: not built.** T-9.4 sends a gift to `/you`, where her received gifts are, not to
-  `/people/{user_id}`. This line arrived with T-8.10 while T-9.4 was being built, and was missed
-  at the rebase. The fix is one entry in `web/src/lib/notification-view.ts`'s `ROUTES`, and its
-  test.
+  **Built after T-9.4 landed** (it had sent a gift to `/you`, missing this line, which arrived with
+  T-8.10 during the build): `ROUTES.gift` is `/people/{user_id}`, held by `push-worker.test.ts`
+  and `NotificationsScreen.test.tsx`, and broken once (`t94-web-09`). Across a block the row stays
+  hidden, as every row about that person is (P-760, D-858, its test).
 - [x] **P-631: album requests.** T-8.4 tells her nothing when someone asks to see her album (D-732):
   add an `album.requested` event and an `album_request` notification, and the setting that
   governs its push.

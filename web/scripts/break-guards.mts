@@ -1596,6 +1596,20 @@ export const CASES: BreakCase[] = [
     expect: ["is exactly what a build without photo storage needs"],
   },
   {
+    id: "t94-web-09-a-gift-not-to-its-sender",
+    file: "src/lib/notification-view.ts",
+    old: '  gift: "/people/{user_id}",\n',
+    new: '  gift: "/you",\n',
+    run: [
+      "src/lib/push-worker.test.ts",
+      "src/components/notifications/NotificationsScreen.test.tsx",
+    ],
+    expect: [
+      "opens the sender's profile for a gift",
+      "leads a gift to its sender's profile",
+    ],
+  },
+  {
     id: "t94-web-08-the-list-unnonced",
     file: "src/lib/security-headers.ts",
     old: '  // The in-app notifications list (T-9.4).\n  "notifications",\n',

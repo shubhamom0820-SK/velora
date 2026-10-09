@@ -86,6 +86,20 @@ describe("the in-app list (T-9.4)", () => {
     expect(low).not.toHaveTextContent(t("notifications.unread"));
   });
 
+  it("leads a gift to its sender's profile (T-8.10)", async () => {
+    routes([
+      row({
+        kind: "gift",
+        data: { gift_send_id: "g1", gift_id: "rose", user_id: ID },
+      }),
+    ]);
+    renderList();
+
+    const [link] = within(await screen.findByRole("list")).getAllByRole("link");
+    expect(link).toHaveAttribute("href", `/people/${ID}`);
+    expect(link).toHaveTextContent(t("notifications.kinds.gift.plain"));
+  });
+
   it("marks them read once, when an unread one has been shown", async () => {
     const api = routes([row()]);
     renderList();
