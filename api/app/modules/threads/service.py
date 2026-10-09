@@ -364,6 +364,28 @@ async def get_thread(
 
 # --- Clearing (T-7.8) ---------------------------------------------------------------
 
+# `(cleared_at, id)`: when the clearing reached, then the Thread.
+CLEARED_CURSOR: Cursor[tuple[datetime, UUID]] = Cursor(tuple[AwareDatetime, UUID])
+
+
+async def list_cleared(
+    session: AsyncSession, user: User, *, params: PageParams, settings: Settings
+) -> schemas.ClearedThreadRowPage:
+    """The chats `user` cleared that nothing newer has brought back (T-9.8,
+    P-510): Threads and Knots alike, newest clearing first, never one across a
+    block either way. Each is restored by `restore`."""
+    after = None if params.cursor is None else CLEARED_CURSOR.decode(params.cursor)
+    async with session.begin():
+        rows = await repository.cleared_rows(
+            session, user.id, after=after, limit=params.fetch
+        )
+    keys = {row.Thread.id: row.cleared_at for row in rows}
+    return schemas.ClearedThreadRowPage.of(
+        _rows(rows, user, clock.now(), settings),
+        params,
+        lambda item: CLEARED_CURSOR.encode((keys[item.id], item.id)),
+    )
+
 
 async def clear(session: AsyncSession, user: User, thread_id: UUID) -> None:
     """Clear one of `user`'s Threads from their chats, theirs alone (D-006):

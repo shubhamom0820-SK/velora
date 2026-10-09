@@ -183,27 +183,32 @@ async def kept_selfie(
 
 
 def badge_of(user_id: Any, is_verified: Any) -> ColumnElement[bool]:
-    """D-393's badge for the user whose id and `is_verified` are these columns
-    of the caller's query: `is_verified` (the selfie matched the face photo)
-    and at least one approved public photo whose record says its face matched
-    that selfie. Never `is_verified` alone. One rule for `shows_badge` and
-    discovery's `Card` and filter (T-6.2)."""
-    matched = (
-        select(Photo.id)
+    """The badge for the user whose id and `is_verified` are these columns of
+    the caller's query: `is_verified` (the selfie matched the face photo,
+    D-393) and **the main photo's** face matched that selfie (D-910). The main
+    photo is the card's: the approved public photo at the lowest place
+    (`discovery.repository.main_photo_key`, P-75), so a new main photo, or a
+    reorder that puts another first, carries no badge until it is compared and
+    matches; a match elsewhere on the profile never lends it one. Never
+    `is_verified` alone. One rule for `shows_badge` and discovery's `Card` and
+    filter (T-6.2)."""
+    main_matched = (
+        select(Photo.moderation["selfie_match"]["matched"].as_boolean())
         .where(
             Photo.user_id == user_id,
             Photo.kind == PhotoKind.PUBLIC,
             Photo.status == ReviewStatus.APPROVED,
             Photo.public_key.is_not(None),
-            Photo.moderation["selfie_match"]["matched"].as_boolean().is_(True),
         )
-        .exists()
+        .order_by(Photo.position, Photo.id)
+        .limit(1)
+        .scalar_subquery()
     )
-    return and_(is_verified.is_(True), matched)
+    return and_(is_verified.is_(True), main_matched.is_(True))
 
 
 async def shows_badge(session: AsyncSession, user_id: UUID) -> bool:
-    """D-393's badge for one user, by `badge_of`."""
+    """The badge for one user, by `badge_of` (D-393, D-910)."""
     found = await session.scalar(
         select(User.id).where(User.id == user_id, badge_of(User.id, User.is_verified))
     )

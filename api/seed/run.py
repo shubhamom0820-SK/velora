@@ -682,8 +682,8 @@ async def _face_photo(
 async def _badge(
     session: AsyncSession, person: Person, user_id: UUID, report: SeedReport
 ) -> None:
-    """The badge on a seeded verified profile (D-393, T-4.12): its approved
-    public photo's record says its face matched the selfie, on the seed's word,
+    """The badge on a seeded verified profile (D-393, T-4.12): its main
+    photo's record (D-910) says its face matched the selfie, on the seed's word,
     with no number and no face claimed, as the seed's verification is approved
     and never compared (the founder, 8 October 2026). Set once: a record that
     says anything about the match is left as it is."""

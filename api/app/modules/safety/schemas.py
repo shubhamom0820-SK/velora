@@ -55,3 +55,19 @@ class BlockedUser(BaseModel):
 
 class BlockedUserPage(Page[BlockedUser]):
     """`Page<BlockedUser>`: newest block first, by `(created_at, id)`."""
+
+
+class FiledReport(BaseModel):
+    """A report you filed (T-9.8): its reason, when, and whom, as a card. No
+    status: what moderation did with it is never said here. Across a block,
+    either way, the card has the name and username alone, no photo, badge or
+    presence, whoever blocked, so the list never tells which (D-911)."""
+
+    id: UUID
+    reason: ReportReason
+    created_at: datetime
+    reported: CardLite
+
+
+class FiledReportPage(Page[FiledReport]):
+    """`Page<FiledReport>`: newest first, by `(created_at, id)`."""

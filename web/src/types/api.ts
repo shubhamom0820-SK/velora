@@ -1005,6 +1005,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/threads/cleared": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Cleared */
+        get: operations["list_cleared_v1_threads_cleared_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/threads/{thread_id}": {
         parameters: {
             query?: never;
@@ -1389,7 +1406,8 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        get?: never;
+        /** List Filed Reports */
+        get: operations["list_filed_reports_v1_reports_get"];
         put?: never;
         /** File Report */
         post: operations["file_report_v1_reports_post"];
@@ -1903,6 +1921,17 @@ export interface components {
             cleared: number;
         };
         /**
+         * ClearedThreadRowPage
+         * @description `Page<ThreadRow>` of the chats you cleared (`GET /threads/cleared`,
+         *     T-9.8): newest clearing first, then id.
+         */
+        ClearedThreadRowPage: {
+            /** Items */
+            items: components["schemas"]["ThreadRow"][];
+            /** Next Cursor */
+            next_cursor: string | null;
+        };
+        /**
          * CreateAlbumRequest
          * @description Whose album. The price is never the browser's (rule 6): only what the
          *     screen showed, compared and never charged (P-56, D-600).
@@ -1993,6 +2022,37 @@ export interface components {
             thread_id?: string | null;
             /** Also Block */
             also_block: boolean;
+        };
+        /**
+         * FiledReport
+         * @description A report you filed (T-9.8): its reason, when, and whom, as a card. No
+         *     status: what moderation did with it is never said here. Across a block,
+         *     either way, the card has the name and username alone, no photo, badge or
+         *     presence, whoever blocked, so the list never tells which (D-911).
+         */
+        FiledReport: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            reason: components["schemas"]["ReportReason"];
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            reported: components["schemas"]["CardLite"];
+        };
+        /**
+         * FiledReportPage
+         * @description `Page<FiledReport>`: newest first, by `(created_at, id)`.
+         */
+        FiledReportPage: {
+            /** Items */
+            items: components["schemas"]["FiledReport"][];
+            /** Next Cursor */
+            next_cursor: string | null;
         };
         /**
          * FirebaseSignIn
@@ -5191,6 +5251,38 @@ export interface operations {
             };
         };
     };
+    list_cleared_v1_threads_cleared_get: {
+        parameters: {
+            query?: {
+                cursor?: string | null;
+                limit?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ClearedThreadRowPage"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     get_thread_v1_threads__thread_id__get: {
         parameters: {
             query?: never;
@@ -5968,6 +6060,38 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["Album"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_filed_reports_v1_reports_get: {
+        parameters: {
+            query?: {
+                cursor?: string | null;
+                limit?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FiledReportPage"];
                 };
             };
             /** @description Validation Error */

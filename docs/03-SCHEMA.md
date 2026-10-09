@@ -67,7 +67,7 @@ Intent is not an enum: it is the `intents` catalogue, picked 1 to 3 per user (D-
 | role | role_t not null default 'user' | |
 | status | user_status_t not null default 'active' | |
 | onboarding_step | onboarding_t not null default 'dob' | moves to `done` only for a man or `is_verified` (trigger `users_done_needs_a_match`, D-310) |
-| is_verified | boolean not null default false | the selfie matched the face photo (T-4.5, D-391); never "verified" in copy (D-262). Not the badge: that is D-393's rule, computed from `photos` (02-ARCHITECTURE §8) |
+| is_verified | boolean not null default false | the selfie matched the face photo (T-4.5, D-391); never "verified" in copy (D-262). Not the badge: that is D-393's rule as D-910 amends it (the main photo matched), computed from `photos` (02-ARCHITECTURE §8) |
 | pin_hash | text null | argon2id over a pepper kept off the database (D-062) |
 | pin_failed | smallint not null default 0 | |
 | referral_code | citext unique not null | generated at creation |
@@ -391,7 +391,7 @@ a later account on it is blocked too (D-861).
 | action | text null | check: one of `freeze` / `ban` / `warn` / `none` |
 | resolved_by | uuid null fk users | |
 | resolved_at | timestamptz null | |
-Indexes: `(status, created_at)`, `(reported_id, created_at desc)`.
+Indexes: `(status, created_at)`, `(reported_id, created_at desc)`, `(reporter_id, created_at desc)` (a person's own reports, `GET /reports`, T-9.8).
 Check `reporter_id <> reported_id` — a self-report could probe the auto-freeze rule (D-031).
 
 ### fraud_scores

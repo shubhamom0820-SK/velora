@@ -153,9 +153,14 @@ def sort_key() -> Any:
 
 
 def _cleared_at(viewer_id: UUID) -> Any:
+    """The viewer's clearing of the outer query's Thread. Correlated to it by
+    name: nested inside the unread count, it would otherwise take `threads`
+    into its own FROM and answer every clearing the viewer has, which
+    Postgres refuses as soon as there are two (T-9.8)."""
     return (
         select(ThreadClear.cleared_at)
         .where(ThreadClear.user_id == viewer_id, ThreadClear.thread_id == Thread.id)
+        .correlate(Thread)
         .scalar_subquery()
     )
 
@@ -217,19 +222,11 @@ async def card_of(session: AsyncSession, user_id: UUID) -> Row[Any]:
     return (await session.execute(query)).one()
 
 
-async def rows_for(
-    session: AsyncSession,
-    viewer_id: UUID,
-    which: ListFilter,
-    *,
-    after: tuple[datetime, UUID] | None,
-    limit: int,
-) -> Sequence[Row[Any]]:
-    """Up to `limit` of the viewer's Threads, newest first by `(sort_key, id)`,
-    from just after `after`: never one they cleared with nothing newer, never
-    one with a block either way. Each row: the Thread, the other person's
-    card-lite columns, the unread count and the last message."""
-    other_id = _other(viewer_id)
+def _listed(viewer_id: UUID) -> tuple[Any, Any, Any]:
+    """The viewer's Threads as rows, unfiltered but for a block either way:
+    each Thread, the other person's card-lite columns, the unread count and
+    the last message. The other person and their profile come back too, for
+    the caller's own conditions on them."""
     other = aliased(User)
     profile = aliased(Profile)
     last = (
@@ -244,6 +241,41 @@ async def rows_for(
         .limit(1)
         .lateral()
     )
+    query = (
+        select(
+            Thread,
+            *_card_columns(other, profile),
+            _unread(viewer_id).label("unread"),
+            last.c.last_kind,
+            last.c.last_body,
+            last.c.last_sender_id,
+            last.c.last_at,
+        )
+        .select_from(Thread)
+        .join(other, other.id == _other(viewer_id))
+        .join(profile, profile.user_id == other.id)
+        .outerjoin(last, true())
+        .where(
+            or_(Thread.user_low == viewer_id, Thread.user_high == viewer_id),
+            ~blocked_either_way(viewer_id, other.id),
+        )
+    )
+    return other, profile, query
+
+
+async def rows_for(
+    session: AsyncSession,
+    viewer_id: UUID,
+    which: ListFilter,
+    *,
+    after: tuple[datetime, UUID] | None,
+    limit: int,
+) -> Sequence[Row[Any]]:
+    """Up to `limit` of the viewer's Threads, newest first by `(sort_key, id)`,
+    from just after `after`: never one they cleared with nothing newer, never
+    one with a block either way. Each row: the Thread, the other person's
+    card-lite columns, the unread count and the last message."""
+    other, profile, query = _listed(viewer_id)
     cleared = _cleared_at(viewer_id)
     unread = _unread(viewer_id)
     statuses = (
@@ -253,25 +285,10 @@ async def rows_for(
     )
     key = sort_key()
     query = (
-        select(
-            Thread,
-            *_card_columns(other, profile),
-            unread.label("unread"),
-            last.c.last_kind,
-            last.c.last_body,
-            last.c.last_sender_id,
-            last.c.last_at,
-            key.label("sort_key"),
-        )
-        .select_from(Thread)
-        .join(other, other.id == other_id)
-        .join(profile, profile.user_id == other.id)
-        .outerjoin(last, true())
+        query.add_columns(key.label("sort_key"))
         .where(
-            or_(Thread.user_low == viewer_id, Thread.user_high == viewer_id),
             Thread.status.in_(statuses),
             or_(cleared.is_(None), Thread.last_message_at > cleared),
-            ~blocked_either_way(viewer_id, other.id),
         )
         .order_by(key.desc(), Thread.id.desc())
         .limit(limit)
@@ -291,6 +308,39 @@ async def rows_for(
         )
     if after is not None:
         query = query.where(tuple_(key, Thread.id) < after)
+    return (await session.execute(query)).all()
+
+
+async def cleared_rows(
+    session: AsyncSession,
+    viewer_id: UUID,
+    *,
+    after: tuple[datetime, UUID] | None,
+    limit: int,
+) -> Sequence[Row[Any]]:
+    """Up to `limit` of the Threads the viewer cleared with nothing newer, so
+    hidden from their chats (T-9.8, P-510): Threads and Knots alike, newest
+    clearing first by `(cleared_at, id)`, from just after `after`; never one
+    across a block either way. Rows as `rows_for`'s, with `cleared_at`."""
+    _, _, query = _listed(viewer_id)
+    # An alias: the unread count's own subquery reads `thread_clears`, and
+    # would take this join's row for its own.
+    mine = aliased(ThreadClear)
+    query = (
+        query.add_columns(mine.cleared_at.label("cleared_at"))
+        .join(mine, and_(mine.thread_id == Thread.id, mine.user_id == viewer_id))
+        .where(
+            # The list's rule turned round: nothing newer than the clearing.
+            or_(
+                Thread.last_message_at.is_(None),
+                Thread.last_message_at <= mine.cleared_at,
+            )
+        )
+        .order_by(mine.cleared_at.desc(), Thread.id.desc())
+        .limit(limit)
+    )
+    if after is not None:
+        query = query.where(tuple_(mine.cleared_at, Thread.id) < after)
     return (await session.execute(query)).all()
 
 

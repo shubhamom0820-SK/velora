@@ -262,6 +262,53 @@ async def report(
     return result
 
 
+REPORTS_CURSOR: Cursor[tuple[datetime, UUID]] = Cursor(tuple[AwareDatetime, UUID])
+
+
+async def filed_reports(
+    session: AsyncSession, user: User, *, params: PageParams, settings: Settings
+) -> schemas.FiledReportPage:
+    """`GET /reports`: the reports `user` filed, newest first. Never one about
+    them (T-9.1: never told), and never a status (D-911)."""
+    after = None if params.cursor is None else REPORTS_CURSOR.decode(params.cursor)
+    async with session.begin():
+        rows = await repository.filed_reports(
+            session, user.id, after=after, limit=params.fetch
+        )
+    now = clock.now()
+    return schemas.FiledReportPage.of(
+        [_filed_report(row, now, settings) for row in rows],
+        params,
+        lambda item: REPORTS_CURSOR.encode((item.created_at, item.id)),
+    )
+
+
+def _filed_report(row: Any, now: datetime, settings: Settings) -> schemas.FiledReport:
+    """The reported person as a card: a deleted account is `deleted` and
+    nothing more (D-051, D-500); across a block, either way, their name and
+    username alone, the same whoever blocked (D-911)."""
+    deleted = row.reported_status is UserStatus.DELETED
+    shown = not deleted and not row.blocked
+    return schemas.FiledReport(
+        id=row.id,
+        reason=row.reason,
+        created_at=row.created_at,
+        reported=CardLite(
+            id=row.reported_id,
+            first_name=None if deleted else row.reported_first_name,
+            username=None if deleted else row.reported_username,
+            main_photo_url=public_url(settings, row.reported_photo_key)
+            if shown and row.reported_photo_key is not None
+            else None,
+            shows_badge=shown and bool(row.reported_badge),
+            is_online=shown
+            and row.reported_last_active_at is not None
+            and row.reported_last_active_at >= now - discovery_rules.ONLINE_FOR,
+            deleted=deleted,
+        ),
+    )
+
+
 async def report_evidence(session: AsyncSession, report_id: UUID) -> Sequence[Message]:
     """The report's Thread, every message of it, oldest first, in the caller's
     transaction (T-9.5 reads through this): what either person cleared

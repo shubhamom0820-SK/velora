@@ -274,18 +274,21 @@ ranking. The page's cards (age, main photo, badge, intents) are read for its row
 be seen, without the radius and swipes, is `visible_to`, which the public profile (T-6.3) and
 swipes (T-6.4) share.
 
-**The `Card`'s badge (D-393, T-4.12)** is never raw `is_verified`. It is `is_verified` (the selfie
-matched the face photo, D-391) **and** at least one shown face that matched that selfie, an EXISTS
-on `photos`, `verification.repository.badge_of`, which `shows_badge` reads and T-6.2's `Card`
-(`shows_badge`) and filter carry:
+**The `Card`'s badge (D-393, T-4.12, D-910)** is never raw `is_verified`. It is `is_verified` (the
+selfie matched the face photo, D-391) **and** the main photo's face matched that selfie, from T-9.8
+(D-910; until then, any shown face): `verification.repository.badge_of`, which `shows_badge` reads
+and T-6.2's `Card` (`shows_badge`) and filter carry. The main photo is the card's own, so a new
+main photo, or a reorder, carries no badge until it is compared and matches:
 
 ```sql
-u.is_verified AND EXISTS (
-  SELECT 1 FROM photos ph
+u.is_verified AND (
+  SELECT (ph.moderation -> 'selfie_match' ->> 'matched')::boolean
+  FROM photos ph
   WHERE ph.user_id = u.id AND ph.kind = 'public' AND ph.status = 'approved'
     AND ph.public_key IS NOT NULL
-    AND (ph.moderation -> 'selfie_match' ->> 'matched')::boolean
-) AS badge
+  ORDER BY ph.position, ph.id
+  LIMIT 1
+) IS TRUE AS badge
 ```
 
 The `Card`'s main photo is the approved public photo at the lowest place, 0 or not: the server

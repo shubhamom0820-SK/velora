@@ -3352,6 +3352,8 @@ Lock this entry with one line saying so.
 decided in D-400; this entry changes nowhere else.
 
 ### D-393 · The badge: the selfie matched the face photo, and a shown face matched the selfie; a red tick — Locked
+**Amended 9 October 2026 by D-910:** rule 1's "at least one approved public photo" is now the
+main photo, the card's own; the rest stands.
 **The decision, in the founder's words, 7 October 2026:** "agar ladki photo nahi daal rahi to usko
 verified mat dikhao; jiska ho jaye usko red tick badge de do." In English: if a woman isn't putting
 up a photo, don't show her as verified; whoever's matches, give them the red tick badge. It is
@@ -5735,3 +5737,84 @@ advisor's recommendation, relayed):**
 **Why:** the plan's line, with the pieces it left to the build: events that could carry a
 Thread's state write none of it, so no screen of hers can be handed an expiry; and two closes
 after which another try changes nothing.
+
+### D-910 · The badge follows the main photo; a changed photo never inherits a match — Locked
+**The decision (T-9.8, amending D-393's rule 1), the founder's own, in his words:** "a changed photo
+goes through moderation like any upload, and the 'Selfie matched' badge must not carry over to
+photos it never matched. If the main or face photo changes, shows_badge stays off until the new
+photo matches the selfie (T-4.12's check)." Recorded at his direction ("Record point 3 as D-910,
+amending D-393, as my own decision in my words above"), 9 October 2026.
+- **The badge shows when `is_verified` is true and the main photo's face matched the selfie.**
+  The main photo is the card's: the approved public photo at the lowest place (P-75, D-494). A
+  match on any other photo lends it nothing. `verification.repository.badge_of` is the one rule,
+  so every `shows_badge` and Discover's verified filter follow it.
+- **A new main photo carries no badge** until moderation approves it and T-4.12's comparison
+  (`match_photo`) finds its face matched the selfie. While it is pending the photo behind it, if
+  any, is the main one; a reorder that puts an unmatched photo first turns the badge off, and
+  putting the matched one back turns it on.
+- **The face photo can't change once the selfie matched** (T-4.12's refusal, `NOT_ALLOWED`), so
+  no swap can leave the badge resting on a face photo the selfie never matched. A matched person
+  changing it is P-163's path. `/you/photos` shows that slot locked (T-9.8).
+- **Its cost:** a main photo with no face, from behind or in sunglasses, never carries the badge,
+  even when a photo further down matched; such a profile shows no tick where D-393 showed one.
+
+**Rejected:** D-393's "any shown photo" kept (a tick could sit on a card whose face was never
+compared, which onboarding allowed before T-9.8, not only the photos screen).
+
+### D-911 · The reports you filed: reason, when and whom, never a status — Locked
+**The decision (T-9.8, Q1):** `GET /reports` lists the reports the caller filed, newest first, as
+D-270's page, each `{id, reason, created_at, reported: CardLite}`. **No status**: what moderation
+did with a report is never said here, so the list can't become a way to learn whether someone was
+warned, frozen or banned. Never a report about the caller (T-9.1: never told). An erased person
+is `deleted`. An index on `(reporter_id, created_at desc)` serves it (migration `086fa0402d0d`).
+The web says "Our team reviews every report", never a time: the 24 hours wait on T-9.5 (P-761).
+The founder approved this shape ("filed reports show no status, as you wrote"), on the advisor's
+recommendation (Claude, in a separate chat), relayed, 9 October 2026.
+
+**Added building it, then accepted:** across a block either way, the card has the reported
+person's name and username alone, with no photo, badge or presence, and the same whoever blocked.
+Showing them would let a reporter watch someone who blocked them (D-862), and differing by who
+blocked would tell which. Claude's, building T-9.8; accepted by the founder on the advisor's
+recommendation (Claude, in a separate chat), relayed, 9 October 2026.
+
+### D-912 · The chats you cleared: a list, restored one at a time — Locked
+**The decision (T-9.8, Q1, P-510):** `GET /threads/cleared` lists the Threads and Knots the
+caller cleared that no newer message has brought back, newest clearing first, as D-270's page of
+`ThreadRow`s. Never another person's clearing (D-006) and never one across a block either way: a
+block hides the Thread from both, and the unblock brings it back here, its clearing in place
+(D-863). Each is restored by `DELETE /threads/{id}/clear` (D-611); there is no "Restore all": a
+loop of restores can half-fail, and one at a time answers P-510's worst case. Approved by the
+founder on the advisor's recommendation (Claude, in a separate chat), relayed, 9 October 2026.
+
+**Found building it:** the unread count's clearing subquery wasn't tied to its own Thread. Nested
+inside the count, it took `threads` into its own FROM and answered every clearing the viewer had,
+so anyone with two clearings and an unread message got a 500 from `GET /threads` too. It is
+correlated to the Thread now, and `test_each_thread_counts_its_unread_after_its_own_clearing`
+holds it. Fixed here, outside the approved plan, because the cleared list can't work without it;
+accepted by the founder on the advisor's recommendation (Claude, in a separate chat), relayed, 9
+October 2026.
+
+### D-913 · The You tab and its settings: existing parts, in the prototype's order — Locked
+**The decision (T-9.8, Q2 and Q3):** You, Settings and the photos screen have no design yet
+(08-DESIGN §8), so they are built from existing parts only, as T-8.7's store and D-859's
+notification screens were. The founder's answer: "Q2: existing parts only"; Q3 "yes, build
+/you/photos" on D-910's condition; on the advisor's recommendation (Claude, in a separate chat),
+relayed by the founder, 9 October 2026.
+- **`/you`**, top to bottom, the prototype's order: who you are (main photo, name and age,
+  username, city, intents, about) with the badge in words, the main photo's (D-910), read from
+  your own profile, which records no view; kudos you were given; her gifts (T-8.10, hers alone);
+  your Knots, each opening its chat, Untie behind a confirmation; whom you block, Unblock at once
+  (D-860); the reports you filed (D-911); the chats you cleared, each restored on its own (D-912);
+  then the settings rows (Privacy and account, notifications and their settings, album requests),
+  Lock now for someone with a PIN, and Sign out. Each section loads, fails and is empty on its own.
+  No invite or referral card (D-840).
+- **`/you/settings`:** five switches, `is_hidden`, `hide_age`, `hide_distance`, `show_kudos` and
+  `public_link` (P-447), each sending itself alone; `show_gifts` stays beside her gifts. Pause and
+  resume. A copy of your data in its four states. Delete behind a sheet in `/privacy`'s words,
+  with his balance as `Me.balance` (D-504), for a man only, an allowlist; after the 202 the tab
+  signs out as sign-out does.
+- **`/you/edit`:** first name, hometown, city, about, intents (his seeking as it is) and the five
+  interests, sending only what changed. **`/you/photos`:** the photos step's grid and face slot,
+  moved into `PhotoGrid` and shared as they are, with no way on; the face slot locked once the
+  selfie matched.
+- **The block sheet** says "You can undo this from the You tab" (P-762).

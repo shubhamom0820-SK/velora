@@ -339,7 +339,8 @@ balance pill stay as T-5.5 built them (§5), the lock screen and onboarding as T
 T-4.10 built them. You, Settings, Notifications, the store sheet, Checkout and admin have no
 design yet: the prototype shows they exist, no more, and the task that builds one asks before
 designing it, as T-6.5 was to (P-57). **T-8.7 asked:** the store sheet and Checkout are built
-from existing parts only (§5), at the founder's word.
+from existing parts only (§5), at the founder's word. **T-9.8 asked:** You, Settings, Edit profile and the photos screen
+are built from existing parts only too (D-913), in the prototype's order.
 
 **One concept, the thread.** A thin red line, `--accent`, 2 to 3 px, is the one thread through the
 whole app: on the card, between the photo and the text; on the match sheet, joining the two
@@ -358,7 +359,7 @@ landing, `/terms`, the share image and the match sheet (copy follows the setting
 
 **The card (T-6.5).** `--corner-swipe`. The photo on top, 336 of the card's 560 px, on a
 `--surface-2` placeholder while it loads; the thread; the text below. Name and age in `title-1`.
-Beside the name, the red tick (D-393) where its rule holds: a 20 px `--accent` circle with an
+Beside the name, the red tick (D-393) where its rule holds (the main photo matched, D-910): a 20 px `--accent` circle with an
 `--on-accent` check, aria-label "Selfie matched" (D-393's words, held by `claims.test.ts`; the
 canvas said "Selfie matched her photos" until 8 October 2026, which overclaims where a shown photo
 didn't match, D-393's rule 3). "Phagwara · 3 km" in `small` `--mute`. "Online now" is a `micro`

@@ -3216,11 +3216,11 @@ T412: list[tuple[Case, list[str]]] = [
                 (
                     # `badge_of` since T-6.2, which `shows_badge` reads.
                     REPO45,
-                    "    return and_(is_verified.is_(True), matched)\n",
+                    "    return and_(is_verified.is_(True), main_matched.is_(True))\n",
                     "    return is_verified.is_(True)\n",
                 )
             ],
-            expect=["test_the_query_needs_is_verified_and_a_shown_face_that_matched"],
+            expect=["test_the_query_needs_is_verified_and_a_main_photo_that_matched"],
         ),
         BADGE_TESTS,
     ),
@@ -3231,12 +3231,13 @@ T412: list[tuple[Case, list[str]]] = [
             edits=[
                 (
                     REPO45,
-                    '            Photo.moderation["selfie_match"]["matched"].as_boolean().is_(True),\n',
-                    '            Photo.moderation["selfie_match"].is_not(None),\n',
+                    # D-910 since T-9.8: the main photo's comparison.
+                    "    return and_(is_verified.is_(True), main_matched.is_(True))\n",
+                    "    return and_(is_verified.is_(True), main_matched.is_not(None))\n",
                 )
             ],
             expect=[
-                "test_the_query_needs_is_verified_and_a_shown_face_that_matched",
+                "test_the_query_needs_is_verified_and_a_main_photo_that_matched",
                 "test_a_shown_face_that_doesnt_match_isnt_rejected_and_doesnt_count",
             ],
         ),
@@ -4029,7 +4030,7 @@ T62: list[tuple[Case, list[str]]] = [
             edits=[
                 (
                     "app/modules/verification/repository.py",
-                    "    return and_(is_verified.is_(True), matched)\n",
+                    "    return and_(is_verified.is_(True), main_matched.is_(True))\n",
                     "    return is_verified.is_(True)\n",
                 )
             ],
@@ -5976,11 +5977,12 @@ T72: list[Case] = [
         edits=[
             (
                 THREADS_REPOSITORY,
+                # `_listed` since T-9.8, which the list and the cleared list share.
                 (
                     "            or_(Thread.user_low == viewer_id, Thread.user_high == viewer_id),\n"
-                    "            Thread.status.in_(statuses),\n"
+                    "            ~blocked_either_way(viewer_id, other.id),\n"
                 ),
-                "            Thread.status.in_(statuses),\n",
+                "            ~blocked_either_way(viewer_id, other.id),\n",
             )
         ],
         expect=["test_my_threads_newest_first_with_their_preview_and_unread"],
@@ -11806,6 +11808,201 @@ T712: list[Case] = [
     ),
 ]
 
+# --- T-9.8: the cleared chats, the filed reports, D-910's badge -----------------------
+
+THREADS_REPO98 = "app/modules/threads/repository.py"
+SAFETY_REPO98 = "app/modules/safety/repository.py"
+SAFETY_SERVICE98 = "app/modules/safety/service.py"
+SAFETY_SCHEMAS98 = "app/modules/safety/schemas.py"
+BADGE98 = "app/modules/verification/repository.py"
+PHOTOS_SERVICE98 = "app/modules/photos/service.py"
+T98_SELECTION = [
+    "tests/modules/threads",
+    "tests/modules/safety",
+    "tests/modules/verification",
+    "tests/modules/photos/test_face_photo.py",
+]
+
+T98: list[Case] = [
+    Case(
+        id="t98-01-anyones-clearing-listed",
+        what="the cleared list reading anyone's clearing of my Thread as mine",
+        edits=[
+            (
+                THREADS_REPO98,
+                "        .join(mine, and_(mine.thread_id == Thread.id, mine.user_id == viewer_id))\n",
+                "        .join(mine, mine.thread_id == Thread.id)\n",
+            )
+        ],
+        expect=["test_only_my_own_clearing_is_listed"],
+    ),
+    Case(
+        id="t98-02-cleared-list-keeps-what-came-back",
+        what="a chat a message brought back still listed as cleared",
+        edits=[
+            (
+                THREADS_REPO98,
+                "                Thread.last_message_at <= mine.cleared_at,\n",
+                "                true(),\n",
+            )
+        ],
+        expect=[
+            "test_a_cleared_chat_is_listed_until_a_message_or_a_restore_brings_it_back"
+        ],
+    ),
+    Case(
+        id="t98-03-cleared-across-a-block",
+        what="the lists, the cleared one too, showing a Thread across a block",
+        edits=[
+            (
+                THREADS_REPO98,
+                "            ~blocked_either_way(viewer_id, other.id),\n",
+                "",
+            )
+        ],
+        expect=[
+            "test_one_across_a_block_isnt_listed_and_an_unblock_brings_it_back[me]",
+            "test_one_across_a_block_isnt_listed_and_an_unblock_brings_it_back[them]",
+        ],
+    ),
+    Case(
+        id="t98-04-unread-takes-every-clearing",
+        what="the unread count's clearing uncorrelated, every clearing the viewer has",
+        edits=[(THREADS_REPO98, "        .correlate(Thread)\n", "")],
+        expect=[
+            "test_each_thread_counts_its_unread_after_its_own_clearing",
+            "test_a_cleared_chat_is_listed_until_a_message_or_a_restore_brings_it_back",
+        ],
+    ),
+    Case(
+        id="t98-05-reports-about-me-listed",
+        what="the filed list not asking who filed",
+        edits=[
+            (
+                SAFETY_REPO98,
+                "        .where(Report.reporter_id == reporter_id)\n",
+                "        .where(Report.reporter_id.is_not(None))\n",
+            )
+        ],
+        expect=["test_my_reports_are_listed_newest_first_and_never_one_about_me"],
+    ),
+    Case(
+        id="t98-06-the-status-told",
+        what="D-911: what moderation did, said in the reporter's list",
+        edits=[
+            (
+                SAFETY_REPO98,
+                "            Report.reason,\n            Report.created_at,\n",
+                "            Report.reason,\n            Report.status,\n            Report.created_at,\n",
+            ),
+            (
+                SAFETY_SCHEMAS98,
+                "    reason: ReportReason\n    created_at: datetime\n    reported: CardLite\n",
+                "    reason: ReportReason\n    status: str\n    created_at: datetime\n    reported: CardLite\n",
+            ),
+            (
+                SAFETY_SERVICE98,
+                "        reason=row.reason,\n        created_at=row.created_at,\n        reported=CardLite(\n",
+                "        reason=row.reason,\n        status=row.status,\n        created_at=row.created_at,\n        reported=CardLite(\n",
+            ),
+        ],
+        expect=[
+            "test_what_moderation_did_is_never_said",
+            "test_my_reports_are_listed_newest_first_and_never_one_about_me",
+        ],
+    ),
+    Case(
+        id="t98-07-a-photo-across-a-block",
+        what="D-862: the reported person's photo and presence shown across a block",
+        edits=[
+            (
+                SAFETY_SERVICE98,
+                "    shown = not deleted and not row.blocked\n",
+                "    shown = not deleted\n",
+            )
+        ],
+        expect=[
+            "test_across_a_block_the_card_is_the_name_alone_whoever_blocked[me]",
+            "test_across_a_block_the_card_is_the_name_alone_whoever_blocked[them]",
+        ],
+    ),
+    Case(
+        id="t98-08-reports-oldest-first",
+        what="the filed list oldest first",
+        edits=[
+            (
+                SAFETY_REPO98,
+                "        .order_by(Report.created_at.desc(), Report.id.desc())\n",
+                "        .order_by(Report.created_at, Report.id)\n",
+            )
+        ],
+        expect=["test_my_reports_are_listed_newest_first_and_never_one_about_me"],
+    ),
+    Case(
+        id="t98-09-the-badge-from-any-photo",
+        what="D-910 undone: a match anywhere on the profile lends the main photo the badge",
+        edits=[
+            (
+                BADGE98,
+                "    return and_(is_verified.is_(True), main_matched.is_(True))\n",
+                (
+                    "    return and_(\n"
+                    "        is_verified.is_(True),\n"
+                    "        select(Photo.id)\n"
+                    "        .where(\n"
+                    "            Photo.user_id == user_id,\n"
+                    "            Photo.kind == PhotoKind.PUBLIC,\n"
+                    "            Photo.status == ReviewStatus.APPROVED,\n"
+                    "            Photo.public_key.is_not(None),\n"
+                    '            Photo.moderation["selfie_match"]["matched"].as_boolean().is_(True),\n'
+                    "        )\n"
+                    "        .exists(),\n"
+                    "    )\n"
+                ),
+            )
+        ],
+        expect=[
+            "test_the_query_needs_is_verified_and_a_main_photo_that_matched",
+            "test_a_reorder_that_puts_an_unmatched_photo_first_turns_it_off",
+        ],
+    ),
+    Case(
+        id="t98-10-the-main-photo-is-the-last",
+        what="the badge reading a photo other than the card's main one",
+        edits=[
+            (
+                BADGE98,
+                "        .order_by(Photo.position, Photo.id)\n",
+                "        .order_by(Photo.position.desc(), Photo.id)\n",
+            )
+        ],
+        expect=[
+            "test_the_query_needs_is_verified_and_a_main_photo_that_matched",
+            "test_a_reorder_that_puts_an_unmatched_photo_first_turns_it_off",
+        ],
+    ),
+    Case(
+        id="t98-11-the-face-photo-swapped-once-matched",
+        what="the founder's condition: a matched face photo swapped from under the badge",
+        edits=[
+            (
+                PHOTOS_SERVICE98,
+                (
+                    "    if user.is_verified:\n"
+                    "        raise AppError(\n"
+                    '            "NOT_ALLOWED", "Your face photo can\'t change once your selfie matched."\n'
+                    "        )\n"
+                ),
+                "",
+            )
+        ],
+        expect=[
+            "test_swapping_the_face_photo_once_matched_is_refused_and_the_badge_stands",
+            "test_the_face_photo_cant_change_once_the_selfie_matched",
+        ],
+    ),
+]
+
 CASES: list[tuple[Case, list[str]]] = (
     [(c, T51_SELECTION) for c in T51]
     + [(c, T54_SELECTION) for c in T54]
@@ -11861,6 +12058,7 @@ CASES: list[tuple[Case, list[str]]] = (
     + [(c, T91_SELECTION) for c in T91]
     + [(c, P592_SELECTION) for c in P592]
     + [(c, T712_SELECTION) for c in T712]
+    + [(c, T98_SELECTION) for c in T98]
 )
 
 # The fifty-connection fixture's own message when Postgres refuses a connection.

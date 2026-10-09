@@ -135,6 +135,11 @@ class ThreadRowPage(Page[ThreadRow]):
     the opening, then id."""
 
 
+class ClearedThreadRowPage(Page[ThreadRow]):
+    """`Page<ThreadRow>` of the chats you cleared (`GET /threads/cleared`,
+    T-9.8): newest clearing first, then id."""
+
+
 # --- Clearing (T-7.8) ---------------------------------------------------------------
 
 CLEAR_MAX = 100

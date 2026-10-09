@@ -22,7 +22,8 @@ the selfie stops that, and until one exists, the person isn't optional.
 face photo alone (D-391): that decides the verification. Each shown public
 photo with a face is then compared with the kept selfie (D-393): that decides
 nothing about the person, only whether the badge shows, and a photo that
-doesn't match stays on the profile.
+doesn't match stays on the profile. The badge follows the main photo's
+comparison alone (D-910).
 """
 
 from __future__ import annotations
@@ -112,7 +113,8 @@ def mixed(approved: bool, similarities: list[float | None]) -> bool:
     return approved and any(s is not None and s < MATCH_THRESHOLD for s in similarities)
 
 
-def badge(is_verified: bool, any_shown_face_matched: bool) -> bool:
-    """D-393's rule: the selfie matched the face photo, and at least one shown
-    photo's face matched the selfie. Never `is_verified` alone."""
-    return is_verified and any_shown_face_matched
+def badge(is_verified: bool, main_photo_matched: bool) -> bool:
+    """The badge's rule: the selfie matched the face photo (D-393), and the
+    main photo's face matched the selfie (D-910, amending D-393's "at least one
+    shown photo"). Never `is_verified` alone."""
+    return is_verified and main_photo_matched

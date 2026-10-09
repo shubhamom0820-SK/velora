@@ -1,8 +1,8 @@
-"""The badge (T-4.12, D-393): each shown photo with a face compared with the
-kept selfie by `verification.service.match_photo`, the result in that photo's
-record and never a rejection; and `repository.shows_badge`, the query T-6.2's
-`Card` carries: `is_verified` and at least one shown face that matched, never
-`is_verified` alone."""
+"""The badge (T-4.12, D-393, D-910): each shown photo with a face compared
+with the kept selfie by `verification.service.match_photo`, the result in that
+photo's record and never a rejection; and `repository.shows_badge`, the query
+T-6.2's `Card` carries: `is_verified` and the main photo's face matched, never
+`is_verified` alone, and never a match elsewhere on the profile (D-910)."""
 
 from __future__ import annotations
 
@@ -10,10 +10,13 @@ import uuid
 from datetime import UTC, datetime
 
 import pytest
+from httpx import AsyncClient
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core import clock as core_clock
 from app.core.enums import ReviewStatus
+from app.core.providers import FakeProviders
 from app.core.providers.facematch import FaceMatch, FakeFaceMatch
 from app.core.providers.storage import FakeStorage
 from app.modules.photos.models import Photo
@@ -27,6 +30,8 @@ from tests.modules.verification.support import (
     PUBLIC,
     approved_photo,
     at_selfie,
+    bearer,
+    error,
     face_photo,
     fresh,
     jpeg,
@@ -273,27 +278,28 @@ async def test_no_key_or_url_in_any_log(
         (False, True, False),
         (False, False, False),
     ],
-    ids=["matched both ways", "selfie only", "a shown face only", "neither"],
+    ids=["matched both ways", "selfie only", "the main photo only", "neither"],
 )
 def test_the_badge_needs_both(verified: bool, matched: bool, badge: bool) -> None:
     assert rules.badge(verified, matched) is badge
 
 
 @pytest.mark.critical
-async def test_the_query_needs_is_verified_and_a_shown_face_that_matched(
+async def test_the_query_needs_is_verified_and_a_main_photo_that_matched(
     db: AsyncSession, make_user: MakeUser
 ) -> None:
-    """D-393 rules 1 and 4: a matched selfie with no shown face, a shown face
-    whose comparison said no, a match on a photo since removed, on one still
-    pending, or on a private one: no badge. One approved public photo whose
-    record says `matched`: the badge."""
+    """D-393 rules 1 and 4, as D-910 has them: a matched selfie with no shown
+    face, or a main photo whose comparison said no, is no badge, whatever
+    matched elsewhere: on a photo further down, one since removed, one still
+    pending or a private one. The main photo is the lowest approved public
+    one; once it says `matched`, the badge."""
     storage = FakeStorage()
     user, _ = await at_selfie(db, make_user)
     await _kept(db, storage, user)
     assert not await repository.shows_badge(db, user.id)
 
-    unmatched = await approved_photo(db, storage, user, position=0)
-    unmatched.moderation = {"faces": 1, "selfie_match": {"matched": False}}
+    main = await approved_photo(db, storage, user, position=0)
+    main.moderation = {"faces": 1, "selfie_match": {"matched": False}}
     removed = await approved_photo(db, storage, user, position=1)
     removed.moderation = {"faces": 1, "selfie_match": {"matched": True}}
     removed.status = ReviewStatus.REJECTED
@@ -316,8 +322,15 @@ async def test_the_query_needs_is_verified_and_a_shown_face_that_matched(
     await db.flush()
     assert not await repository.shows_badge(db, user.id)
 
-    matched = await approved_photo(db, storage, user, position=3)
-    matched.moderation = {"faces": 1, "selfie_match": {"matched": True}}
+    # D-910: a match further down the profile never lends the main photo one.
+    further = await approved_photo(db, storage, user, position=3)
+    further.moderation = {"faces": 1, "selfie_match": {"matched": True}}
+    await db.flush()
+    assert not await repository.shows_badge(db, user.id)
+
+    # The unmatched main photo removed: the matched one is now the main one.
+    main.status = ReviewStatus.REJECTED
+    main.reject_reason = "user_deleted"
     await db.flush()
     assert await repository.shows_badge(db, user.id)
 
@@ -325,3 +338,115 @@ async def test_the_query_needs_is_verified_and_a_shown_face_that_matched(
     user.is_verified = False
     await db.flush()
     assert not await repository.shows_badge(db, user.id)
+
+
+@pytest.mark.critical
+async def test_a_new_main_photo_turns_the_badge_off_until_it_matches(
+    db: AsyncSession, make_user: MakeUser
+) -> None:
+    """D-910, the founder's condition on T-9.8's photos screen: a new main
+    photo carries no badge from the one it replaced. Approved, it is the main
+    one with no comparison yet, so the badge is off; compared and matched, it
+    is back; compared and not matched, it stays off, the photo still shown."""
+    storage, facematch = FakeStorage(), FakeFaceMatch()
+    user, _ = await at_selfie(db, make_user)
+    await _kept(db, storage, user)
+    old = await approved_photo(db, storage, user, position=0)
+    old.moderation = {"faces": 1, "selfie_match": {"matched": True}}
+    await db.flush()
+    assert await repository.shows_badge(db, user.id)
+
+    # Replaced: the old one removed, the new one in its place. While the new
+    # one is pending, nothing is shown, so nothing carries the badge.
+    old.status = ReviewStatus.REJECTED
+    old.reject_reason = "user_deleted"
+    await db.flush()
+    replacement = await approved_photo(db, storage, user, position=0)
+    shown_key = replacement.public_key
+    replacement.status, replacement.public_key = ReviewStatus.PENDING, None
+    await db.flush()
+    assert not await repository.shows_badge(db, user.id)
+
+    # Approved by moderation, not yet compared: shown, and no badge.
+    replacement.status, replacement.public_key = ReviewStatus.APPROVED, shown_key
+    await db.flush()
+    assert not await repository.shows_badge(db, user.id)
+
+    facematch.next = _similarity(0.3629)
+    assert await _match(db, replacement, storage, facematch) == "no_match"
+    assert not await repository.shows_badge(db, user.id)
+
+    facematch.next = _similarity(rules.MATCH_THRESHOLD)
+    replacement.moderation = {"faces": 1}
+    await db.flush()
+    assert await _match(db, replacement, storage, facematch) == "matched"
+    assert await repository.shows_badge(db, user.id)
+
+
+async def test_a_reorder_that_puts_an_unmatched_photo_first_turns_it_off(
+    db: AsyncSession, client: AsyncClient, make_user: MakeUser
+) -> None:
+    """D-910: the main photo is whichever is first, so a reorder
+    (`PATCH /me/photos/order`) that moves an unmatched one there turns the
+    badge off, and moving the matched one back turns it on."""
+    storage = FakeStorage()
+    user, token = await at_selfie(db, make_user)
+    await _kept(db, storage, user)
+    matched = await approved_photo(db, storage, user, position=0)
+    matched.moderation = {"faces": 1, "selfie_match": {"matched": True}}
+    other = await approved_photo(db, storage, user, position=1, faces=0)
+    await db.flush()
+    user_id, ids = user.id, [str(matched.id), str(other.id)]
+    assert await repository.shows_badge(db, user_id)
+
+    async def order(photo_ids: list[str]) -> None:
+        response = await client.patch(
+            "/v1/me/photos/order",
+            json={"photo_ids": photo_ids},
+            headers=bearer(token),
+        )
+        assert response.status_code == 200, response.text
+
+    await order(ids[::-1])
+    assert not await repository.shows_badge(db, user_id)
+
+    await order(ids)
+    assert await repository.shows_badge(db, user_id)
+
+
+@pytest.mark.critical
+async def test_swapping_the_face_photo_once_matched_is_refused_and_the_badge_stands(
+    db: AsyncSession,
+    client: AsyncClient,
+    make_user: MakeUser,
+    fake_providers: FakeProviders,
+) -> None:
+    """The founder's condition on T-9.8's photos screen, as the API holds it:
+    once the selfie matched, the face photo can't be swapped or removed
+    (`NOT_ALLOWED`, T-4.12), so no swap can leave the badge resting on a face
+    photo the selfie never matched. The face photo and the badge are as they
+    were."""
+    user, token = await at_selfie(db, make_user)
+    await _kept(db, fake_providers.storage, user)
+    face = await db.scalar(
+        select(Photo).where(Photo.user_id == user.id, Photo.kind == "verification")
+    )
+    assert face is not None
+    face_id, user_id = face.id, user.id
+    main = await approved_photo(db, fake_providers.storage, user, position=0)
+    main.moderation = {"faces": 1, "selfie_match": {"matched": True}}
+    await db.flush()
+    assert await repository.shows_badge(db, user_id)
+
+    swap = await client.post(
+        "/v1/photos/upload-url",
+        json={"kind": "verification", "content_type": "image/jpeg"},
+        headers=bearer(token),
+    )
+    remove = await client.delete(f"/v1/photos/{face_id}", headers=bearer(token))
+
+    for refused in (swap, remove):
+        assert refused.status_code == 422, refused.text
+        assert error(refused)["code"] == "NOT_ALLOWED"
+    assert (await fresh(db, Photo, face_id)).status is ReviewStatus.APPROVED
+    assert await repository.shows_badge(db, user_id)

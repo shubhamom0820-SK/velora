@@ -18,6 +18,7 @@ from app.modules.safety.schemas import (
     BlockedUser,
     BlockedUserPage,
     BlockRequest,
+    FiledReportPage,
     FileReportRequest,
     ReportFiled,
 )
@@ -49,6 +50,16 @@ async def file_report(
     queue: Annotated[Queue, Depends(get_queue)],
 ) -> ReportFiled:
     return await service.report(session, user, body, queue=queue)
+
+
+@router.get("/reports")
+async def list_filed_reports(
+    user: Annotated[User, Depends(onboarded_user)],
+    session: Annotated[AsyncSession, Depends(get_session)],
+    settings: Annotated[Settings, Depends(app_settings)],
+    params: Annotated[PageParams, Depends(page_params)],
+) -> FiledReportPage:
+    return await service.filed_reports(session, user, params=params, settings=settings)
 
 
 @router.post("/blocks", status_code=201, dependencies=[Depends(_blocks_limit)])

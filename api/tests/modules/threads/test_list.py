@@ -290,6 +290,38 @@ async def test_a_cleared_thread_hides_for_me_alone_until_something_newer(
     assert back[0]["unread"] == 1
 
 
+@pytest.mark.critical
+async def test_each_thread_counts_its_unread_after_its_own_clearing(
+    db: AsyncSession, client: AsyncClient, make_user: MakeUser, make_thread: MakeThread
+) -> None:
+    """Found building T-9.8: the unread count's clearing took every clearing
+    the viewer had, not its own Thread's, so two clearings and one unread
+    message made the chats list a 500. Each Thread's count reads its own."""
+    man, token = await make_user()
+    one, _ = await make_user(Gender.FEMALE)
+    two, _ = await make_user(Gender.FEMALE)
+    first = await make_thread(man, one)
+    second = await make_thread(man, two)
+    await _say(db, first, one, "Before", ago=timedelta(hours=3))
+    await _say(db, second, two, "Before", ago=timedelta(hours=3))
+    for thread, hours in ((first, 2), (second, 1)):
+        db.add(
+            ThreadClear(
+                user_id=man.id,
+                thread_id=thread.id,
+                cleared_at=clock.now() - timedelta(hours=hours),
+            )
+        )
+    await db.flush()
+    await _say(db, first, one, "After")
+    await _say(db, first, one, "And again")
+    await _say(db, second, two, "After")
+
+    rows = {row["id"]: row["unread"] for row in await _rows(client, token)}
+
+    assert rows == {str(first.id): 2, str(second.id): 1}
+
+
 @pytest.mark.parametrize("who_blocks", ["me", "them"])
 async def test_a_block_either_way_hides_the_thread(
     db: AsyncSession,

@@ -1,6 +1,6 @@
 """Threads (T-7.1, T-7.2, T-7.6, T-7.7, T-7.8): open one, list them, read one,
-clear one from your own chats, re-open or Extend one, tie or untie the knot,
-once onboarding is done."""
+clear one from your own chats, list those cleared (T-9.8), re-open or Extend
+one, tie or untie the knot, once onboarding is done."""
 
 from __future__ import annotations
 
@@ -28,6 +28,7 @@ from app.modules.threads.schemas import (
     Q_MAX,
     BuyTimeRequest,
     Cleared,
+    ClearedThreadRowPage,
     ClearThreadsRequest,
     OpenThreadRequest,
     Thread,
@@ -95,6 +96,18 @@ async def list_threads(
         params=params,
         settings=settings,
     )
+
+
+# Declared before `/threads/{thread_id}`, which would take "cleared" for an id
+# and refuse it.
+@router.get("/threads/cleared")
+async def list_cleared(
+    user: Annotated[User, Depends(onboarded_user)],
+    session: Annotated[AsyncSession, Depends(get_session)],
+    settings: Annotated[Settings, Depends(app_settings)],
+    params: Annotated[PageParams, Depends(page_params)],
+) -> ClearedThreadRowPage:
+    return await service.list_cleared(session, user, params=params, settings=settings)
 
 
 @router.get("/threads/{thread_id}")

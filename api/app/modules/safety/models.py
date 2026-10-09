@@ -76,6 +76,12 @@ class Report(Timestamps, Base):
             "reported_id",
             text("created_at DESC"),
         ),
+        # A person's own reports, newest first (`GET /reports`, T-9.8).
+        Index(
+            "ix_reports_reporter_id_created_at",
+            "reporter_id",
+            text("created_at DESC"),
+        ),
     )
 
 

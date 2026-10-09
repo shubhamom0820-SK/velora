@@ -13,7 +13,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import aliased
 from sqlalchemy.sql import Select
 
-from app.modules.discovery.repository import main_photo_key
+from app.modules.discovery.repository import blocked_either_way, main_photo_key
 from app.modules.messages.models import Message
 from app.modules.profiles.models import Profile
 from app.modules.safety.models import Block, FraudEvent, Report
@@ -133,6 +133,45 @@ async def add_report(session: AsyncSession, report: Report) -> Report:
     await session.flush()
     await session.refresh(report, ["created_at"])
     return report
+
+
+async def filed_reports(
+    session: AsyncSession,
+    reporter_id: UUID,
+    *,
+    after: tuple[datetime, UUID] | None,
+    limit: int,
+) -> Sequence[Row[Any]]:
+    """Up to `limit` of the reports `reporter_id` filed, newest first by
+    `(created_at, id)`, from just after `after`, each with the reported
+    person's card-lite columns and whether a block stands between the two,
+    either way (T-9.8). Never a report about them, and never what moderation
+    did with one. An erased person has no profile, so it is joined outer."""
+    reported = aliased(User)
+    profile = aliased(Profile)
+    query = (
+        select(
+            Report.id,
+            Report.reason,
+            Report.created_at,
+            reported.id.label("reported_id"),
+            reported.status.label("reported_status"),
+            reported.last_active_at.label("reported_last_active_at"),
+            profile.first_name.label("reported_first_name"),
+            profile.username.label("reported_username"),
+            main_photo_key(reported.id).label("reported_photo_key"),
+            badge_of(reported.id, reported.is_verified).label("reported_badge"),
+            blocked_either_way(reporter_id, reported.id).label("blocked"),
+        )
+        .join(reported, reported.id == Report.reported_id)
+        .outerjoin(profile, profile.user_id == reported.id)
+        .where(Report.reporter_id == reporter_id)
+        .order_by(Report.created_at.desc(), Report.id.desc())
+        .limit(limit)
+    )
+    if after is not None:
+        query = query.where(tuple_(Report.created_at, Report.id) < after)
+    return (await session.execute(query)).all()
 
 
 async def report_thread_id(session: AsyncSession, report_id: UUID) -> UUID | None:

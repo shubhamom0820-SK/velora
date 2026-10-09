@@ -43,8 +43,8 @@ class Card(BaseModel):
     # Their approved public photo at the lowest place; null with none, and the
     # web shows a grey silhouette with the name (D-392).
     main_photo_url: str | None
-    # D-393: the selfie matched the face photo and a shown face matched the
-    # selfie. Never "verified" in copy (D-262).
+    # D-393, D-910: the selfie matched the face photo and the main photo's
+    # face matched the selfie. Never "verified" in copy (D-262).
     shows_badge: bool
     # Active within the last 5 minutes.
     is_online: bool
@@ -116,7 +116,7 @@ class SearchResult(BaseModel):
     city: str | None
     # As the `Card`'s: the approved public photo at the lowest place, or null.
     main_photo_url: str | None
-    # D-393's badge, as the `Card`'s.
+    # The badge (D-393, D-910), as the `Card`'s.
     shows_badge: bool
     is_online: bool
     # `@` search only: the username is exactly what was asked.
