@@ -13,8 +13,10 @@ The publish is awaited, never fire-and-forget: one that outlived its request
 would fail where nobody is looking. A failure is logged and never fails the
 request, whose transaction has already committed; that includes a Redis that
 accepts the connection and never answers, cut off after `PUBLISH_TIMEOUT_S`.
-Code outside a request (the seed, a test's session) publishes nothing.
-T-7.4 builds the socket side (`modules/realtime`).
+The socket's sessions and the worker's jobs publish the same way, through
+`core.db.publishing` (P-592): a reward credited in a job reaches the screen.
+Anything else outside a request (the seed, a test's session) publishes
+nothing. T-7.4 builds the socket side (`modules/realtime`).
 
 **A push wake** (T-9.4, D-850) rides the same path: a notification's push is
 written to `push_outbox` in its transaction, and `wake_push` queues a wake

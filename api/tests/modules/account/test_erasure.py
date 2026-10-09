@@ -345,7 +345,7 @@ async def _deleted_days_ago(db: AsyncSession, user: User, days: float) -> None:
 
 async def _erase(db: AsyncSession, storage: FakeStorage) -> int:
     return await account_service.erase_due_accounts(
-        Sessions(db),  # type: ignore[arg-type]
+        Sessions(db),
         storage=storage,
         settings=SETTINGS,
     )

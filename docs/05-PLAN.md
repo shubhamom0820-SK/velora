@@ -6379,13 +6379,23 @@ The number comes from the session's own block, given in its brief, from P-100 up
   recorded on the referral. Filed by Claude building T-8.6, 8 October 2026.
   **Moot while referrals are paused (D-840, P-740, 9 October 2026), and must be done before they
   are turned back on:** at 0 no reward is paid, so none can outlive a chargeback.
-- [ ] P-592 · Publish what a worker's transactions queue. **Before T-7.12** (the web's socket
+- [x] P-592 · Publish what a worker's transactions queue. **Before T-7.12** (the web's socket
   client). Worst case: a referee's selfie matches in the `verify_selfie` job, the reward credits
   both men (T-8.6), and neither balance moves on screen until a reload, since `wallet.updated`
   is queued on the worker's session and only `get_session` publishes (`core/events.py`: "Code
   outside a request publishes nothing"). The same holds for any credit or event a job writes.
   Fix: the worker's session factory publishes committed events as `get_session` does. Filed by
   Claude building T-8.6, 8 October 2026.
+  **Built 9 October 2026 (with T-7.12, its own commit):** `core.db.publishing` wraps any session
+  factory so each session publishes its committed events once closed; the socket's
+  `session_opener` and the worker's `ctx["sessionmaker"]` both use it. `thread_clock` publishes
+  its own already and is unchanged. `tests/workers/test_worker_events.py`: the worker's context
+  publishes a committed event and never a rolled-back one, and `verify_selfie` crediting a
+  referral's reward sends both men `wallet.updated`. Broken once each (`uv run python -m
+  tests.break_guards p592-`, 2 of 2 red, log in the main checkout's `out/p592-break-guards.log`).
+  T-7.5's `t75-19` and `t75-20` re-anchored on the shared opener, each red in 1 of 1
+  (`out/p592-break-guards-t75.log`). The founder's `selfie_review` tool writes a verdict and
+  queues no event, so it is unchanged.
 - [ ] P-540 · Decide what the hour means between two men, and between two women. **Before beta,**
   the founder to place it on a task's Needs line. Worst case: two men matched with each other pay
   2 Velas every hour, each, to keep talking, since neither's message restarts the hour (D-097's

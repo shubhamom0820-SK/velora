@@ -80,7 +80,7 @@ async def erased(db: AsyncSession, user: User, storage: FakeStorage) -> None:
     user.deleted_requested_at = clock.now() - timedelta(days=29, hours=1)
     await db.flush()
     erased_now = await account_service.erase_due_accounts(
-        Sessions(db),  # type: ignore[arg-type]
+        Sessions(db),
         storage=storage,
         settings=SETTINGS,
     )

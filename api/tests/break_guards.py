@@ -8191,7 +8191,7 @@ T75: list[Case] = [
         edits=[
             (
                 OPENER,
-                "            await events.publish(committed, app.state.redis)\n",
+                "            await events.publish(committed, redis)\n",
                 "            pass\n",
             )
         ],
@@ -8203,8 +8203,8 @@ T75: list[Case] = [
         edits=[
             (
                 OPENER,
-                "            async with sessionmaker() as session:\n",
-                "            session = sessionmaker()\n            if True:\n",
+                "            async with sessions() as session:\n",
+                "            session = await sessions().__aenter__()\n            if True:\n",
             )
         ],
         expect=["test_the_opener_hands_its_connection_back_and_publishes_after"],
@@ -11720,6 +11720,45 @@ T91: list[Case] = [
     ),
 ]
 
+# --- P-592: a worker's queued events published -------------------------------------
+
+WORKER_MAIN = "app/workers/main.py"
+CORE_DB = "app/core/db.py"
+P592_SELECTION = [
+    "tests/workers/test_worker_events.py",
+    "tests/modules/realtime",
+]
+
+P592: list[Case] = [
+    Case(
+        id="p592-01-the-worker-publishes-nothing",
+        what="P-592's hole: the worker's jobs open plain sessions, so a credit never reaches a screen",
+        edits=[
+            (
+                WORKER_MAIN,
+                '        sessionmaker=publishing(build_sessionmaker(engine), ctx["redis"]),\n',
+                "        sessionmaker=build_sessionmaker(engine),\n",
+            )
+        ],
+        expect=["test_a_jobs_committed_event_reaches_the_persons_sockets"],
+    ),
+    Case(
+        id="p592-02-publishing-forgets-to-publish",
+        what="the shared opener takes the committed events and publishes none",
+        edits=[
+            (
+                CORE_DB,
+                "        finally:\n            await events.publish(committed, redis)\n",
+                "        finally:\n            await events.publish([], redis)\n",
+            )
+        ],
+        expect=[
+            "test_a_jobs_committed_event_reaches_the_persons_sockets",
+            "test_a_reward_credited_in_verify_selfie_moves_both_balances",
+        ],
+    ),
+]
+
 CASES: list[tuple[Case, list[str]]] = (
     [(c, T51_SELECTION) for c in T51]
     + [(c, T54_SELECTION) for c in T54]
@@ -11773,6 +11812,7 @@ CASES: list[tuple[Case, list[str]]] = (
     + [(c, T711_SELECTION) for c in T711]
     + [(c, T94_SELECTION) for c in T94]
     + [(c, T91_SELECTION) for c in T91]
+    + [(c, P592_SELECTION) for c in P592]
 )
 
 # The fifty-connection fixture's own message when Postgres refuses a connection.

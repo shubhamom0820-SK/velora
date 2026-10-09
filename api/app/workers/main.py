@@ -32,6 +32,9 @@ themselves).
   needs neither), and both face models, exactly D-088's, where
   `FACEMATCH_PROVIDER` is `sface`. `Settings` has already refused anything
   else.
+- **A job's events are published** (P-592): `sessionmaker` hands out sessions
+  that publish their committed events once closed, as `get_session` does a
+  request's, so a credit or a decision made here reaches the person's sockets.
 - **Logs keep rule 15.** ARQ logs each job's arguments as it starts it, and
   `delete_files`' arguments are storage keys: the worker logs the job's name and
   id instead. Its engine keeps query values out of errors (`hide_parameters`).
@@ -56,7 +59,7 @@ from arq.worker import Function, run_worker
 
 from app.core import facemodels
 from app.core.config import Settings, get_settings
-from app.core.db import build_engine, build_sessionmaker
+from app.core.db import build_engine, build_sessionmaker, publishing
 from app.core.logging import configure_logging
 from app.core.providers import Providers, build_providers
 from app.core.queue import (
@@ -182,7 +185,9 @@ async def open_resources(
     ctx.update(
         settings=settings,
         engine=engine,
-        sessionmaker=build_sessionmaker(engine),
+        # Each job's committed events published as its session closes, as a
+        # request's are (P-592): a reward credited here moves the balance.
+        sessionmaker=publishing(build_sessionmaker(engine), ctx["redis"]),
         # ARQ's own pool, so queuing opens no connections of its own.
         queue=ArqQueue(ctx["redis"]),
         storage=providers.storage,

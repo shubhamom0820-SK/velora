@@ -197,6 +197,8 @@ Fan-out: API publishes to Redis channel `user:{id}`; every API instance subscrib
 connected users. A service queues an event in the transaction that makes it true; `get_session`
 publishes the request's committed events when the request ends, after its session has closed, and
 a failed or hung publish (1 s) is logged without failing the request (`core/events.py`, T-5.1).
+The worker's jobs and the socket's own reads publish the same way, each session as it closes
+(`core.db.publishing`, P-592), so a credit made in a job moves the balance on screen.
 `socket.close` is the server's own: queued where a user's sessions are revoked, it closes every
 socket of theirs and is never sent to a client (T-7.4).
 

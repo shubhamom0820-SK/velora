@@ -24,16 +24,17 @@ from collections.abc import Awaitable, Callable, Mapping
 from typing import Any
 
 from redis.asyncio import Redis
-from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core import events
+from app.core.db import SessionOpener
 from app.modules.threads import service as threads_service
 
 Batch = Callable[[AsyncSession], Awaitable[int]]
 
 
 async def _sweep(
-    sessionmaker: async_sessionmaker[AsyncSession],
+    sessionmaker: SessionOpener,
     redis: Redis,
     batch: Batch,
     limit: int,
@@ -50,7 +51,7 @@ async def _sweep(
 
 
 async def expire_threads(
-    sessionmaker: async_sessionmaker[AsyncSession],
+    sessionmaker: SessionOpener,
     redis: Redis,
     *,
     limit: int = threads_service.SWEEP_BATCH,
@@ -64,7 +65,7 @@ async def expire_threads(
 
 
 async def warn_expiring(
-    sessionmaker: async_sessionmaker[AsyncSession],
+    sessionmaker: SessionOpener,
     redis: Redis,
     *,
     limit: int = threads_service.SWEEP_BATCH,

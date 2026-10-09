@@ -25,10 +25,11 @@ from typing import Any
 from uuid import UUID
 
 import structlog
-from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core import clock
 from app.core.config import APP_NAME, Settings
+from app.core.db import SessionOpener
 from app.core.enums import UserStatus
 from app.core.errors import AppError
 from app.core.providers.storage import ObjectNotFound, StorageProvider
@@ -198,7 +199,7 @@ async def _out(
 
 
 async def write_export(
-    sessionmaker: async_sessionmaker[AsyncSession],
+    sessionmaker: SessionOpener,
     *,
     export_id: UUID,
     storage: StorageProvider,
@@ -242,9 +243,7 @@ async def write_export(
     return "ready"
 
 
-async def fail_export(
-    sessionmaker: async_sessionmaker[AsyncSession], export_id: UUID
-) -> None:
+async def fail_export(sessionmaker: SessionOpener, export_id: UUID) -> None:
     """The export's last try failed: `failed`, so asking again makes a new
     one. A file it may have written is left to `expire_export`."""
     async with sessionmaker() as session, session.begin():
@@ -255,7 +254,7 @@ async def fail_export(
 
 
 async def expire_export(
-    sessionmaker: async_sessionmaker[AsyncSession],
+    sessionmaker: SessionOpener,
     *,
     export_id: UUID,
     storage: StorageProvider,
@@ -472,7 +471,7 @@ def _rows(rows: list[Any]) -> list[dict[str, Any]]:
 
 
 async def erase_due_accounts(
-    sessionmaker: async_sessionmaker[AsyncSession],
+    sessionmaker: SessionOpener,
     *,
     storage: StorageProvider,
     settings: Settings,
@@ -496,7 +495,7 @@ async def erase_due_accounts(
 
 
 async def erase_account(
-    sessionmaker: async_sessionmaker[AsyncSession],
+    sessionmaker: SessionOpener,
     user_id: UUID,
     cutoff: datetime,
     storage: StorageProvider,
@@ -542,7 +541,7 @@ async def anonymise(session: AsyncSession, user: User) -> None:
 
 
 async def expire_due_exports(
-    sessionmaker: async_sessionmaker[AsyncSession],
+    sessionmaker: SessionOpener,
     *,
     storage: StorageProvider,
     settings: Settings,

@@ -52,7 +52,7 @@ async def _write(
     db: AsyncSession, storage: FakeStorage, queue: FakeQueue, export_id: str
 ) -> str:
     return await account_service.write_export(
-        Sessions(db),  # type: ignore[arg-type]
+        Sessions(db),
         export_id=uuid.UUID(export_id),
         storage=storage,
         settings=SETTINGS,
@@ -62,7 +62,7 @@ async def _write(
 
 async def _expire(db: AsyncSession, storage: FakeStorage, export_id: str) -> str:
     return await account_service.expire_export(
-        Sessions(db),  # type: ignore[arg-type]
+        Sessions(db),
         export_id=uuid.UUID(export_id),
         storage=storage,
         settings=SETTINGS,
@@ -353,7 +353,7 @@ async def test_the_daily_job_expires_what_its_own_job_left(
     clock.freeze(NOW + timedelta(hours=25))
 
     expired = await account_service.expire_due_exports(
-        Sessions(db),  # type: ignore[arg-type]
+        Sessions(db),
         storage=storage,
         settings=SETTINGS,
     )

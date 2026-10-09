@@ -25,6 +25,7 @@ from enum import StrEnum
 from typing import Any
 
 from fastapi import FastAPI, Request
+from redis.asyncio import Redis
 from sqlalchemy import DateTime, ForeignKey, MetaData, event, exc, func, text
 from sqlalchemy.dialects.postgresql import ENUM, UUID
 from sqlalchemy.engine import Connection, Engine
@@ -301,6 +302,30 @@ async def get_session(request: Request) -> AsyncIterator[AsyncSession]:
 SessionOpener = Callable[[], AbstractAsyncContextManager[AsyncSession]]
 
 
+def publishing(sessions: SessionOpener, redis: Redis) -> SessionOpener:
+    """`sessions`, each publishing its committed events once it has closed, as
+    `get_session` does a request's: after its connection is handed back, a
+    failed publish logged and never raised (`core/events.py`).
+
+    For what opens its own sessions outside a request: the socket, and the
+    worker's jobs (P-592), whose credits would otherwise never reach a screen
+    until a reload."""
+
+    @asynccontextmanager
+    async def opened() -> AsyncIterator[AsyncSession]:
+        committed: list[events.Event] = []
+        try:
+            async with sessions() as session:
+                try:
+                    yield session
+                finally:
+                    committed = events.take_committed(session)
+        finally:
+            await events.publish(committed, redis)
+
+    return opened
+
+
 def session_opener(connection: HTTPConnection) -> SessionOpener:
     """FastAPI dependency for what reaches the database outside a request's own
     session: the socket, which reads it once a relayed `typing` (T-7.5, D-670).
@@ -309,21 +334,7 @@ def session_opener(connection: HTTPConnection) -> SessionOpener:
     while it lives, handed back when it closes, its committed events published
     after that. A socket holds none between them (D-557)."""
     app: FastAPI = connection.app
-
-    @asynccontextmanager
-    async def opened() -> AsyncIterator[AsyncSession]:
-        sessionmaker: async_sessionmaker[AsyncSession] = app.state.sessionmaker
-        committed: list[events.Event] = []
-        try:
-            async with sessionmaker() as session:
-                try:
-                    yield session
-                finally:
-                    committed = events.take_committed(session)
-        finally:
-            await events.publish(committed, app.state.redis)
-
-    return opened
+    return publishing(app.state.sessionmaker, app.state.redis)
 
 
 async def check_database(engine: AsyncEngine) -> None:

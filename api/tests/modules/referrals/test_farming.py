@@ -60,7 +60,7 @@ async def test_apply_delete_wait_out_the_erasure_sign_up_again_is_already_exists
 
     clock.freeze(NOW)
     erased = await account_service.erase_due_accounts(
-        Sessions(db),  # type: ignore[arg-type]
+        Sessions(db),
         storage=FakeStorage(),
         settings=SETTINGS,
     )
@@ -98,7 +98,7 @@ async def test_a_number_never_referred_may_apply_after_an_erasure(
 
     clock.freeze(NOW)
     await account_service.erase_due_accounts(
-        Sessions(db),  # type: ignore[arg-type]
+        Sessions(db),
         storage=FakeStorage(),
         settings=SETTINGS,
     )

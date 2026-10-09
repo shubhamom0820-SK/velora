@@ -309,7 +309,7 @@ async def test_grant_delete_wait_out_the_erasure_sign_up_again_is_no_second_gran
 
     clock.freeze(NOW)
     erased = await account_service.erase_due_accounts(
-        Sessions(db),  # type: ignore[arg-type]
+        Sessions(db),
         storage=FakeStorage(),
         settings=SETTINGS,
     )

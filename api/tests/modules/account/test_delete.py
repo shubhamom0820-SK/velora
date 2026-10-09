@@ -192,7 +192,7 @@ async def test_after_the_erasure_the_number_starts_a_new_account(
     await client.delete("/v1/me", headers=_auth(token))
     clock.freeze(NOW)
     erased = await account_service.erase_due_accounts(
-        Sessions(db),  # type: ignore[arg-type]
+        Sessions(db),
         storage=FakeStorage(),
         settings=SETTINGS,
     )
@@ -231,7 +231,7 @@ async def test_a_banned_number_stays_banned_after_the_erasure(
     await users_repository.ban_phone_hash(db, phone_hash, "ban")
     clock.freeze(NOW)
     await account_service.erase_due_accounts(
-        Sessions(db),  # type: ignore[arg-type]
+        Sessions(db),
         storage=FakeStorage(),
         settings=SETTINGS,
     )
@@ -327,7 +327,7 @@ async def test_a_sign_in_and_the_erasure_at_once_never_leave_both_or_neither(
         if first == "erasure":
             erasing = asyncio.create_task(
                 account_service.erase_account(
-                    sessionmaker,  # type: ignore[arg-type]
+                    sessionmaker,
                     man,
                     NOW - account_service.ERASE_AFTER,
                     storage,
@@ -375,7 +375,7 @@ async def test_a_sign_in_and_the_erasure_at_once_never_leave_both_or_neither(
                 storage.release.set()
                 erasing = asyncio.create_task(
                     account_service.erase_account(
-                        sessionmaker,  # type: ignore[arg-type]
+                        sessionmaker,
                         man,
                         NOW - account_service.ERASE_AFTER,
                         storage,
