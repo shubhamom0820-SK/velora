@@ -172,6 +172,21 @@ export function useThreads(
   });
 }
 
+/**
+ * The chats I cleared that nothing newer brought back (`GET /threads/cleared`,
+ * T-9.8, D-912), newest clearing first, a page at a time. A restore, or a new
+ * clearing, asks it again with the lists (`threads()`).
+ */
+export function useClearedThreads() {
+  return useInfiniteQuery({
+    queryKey: queryKeys.clearedThreads(),
+    queryFn: ({ pageParam, signal }) =>
+      api.get("/v1/threads/cleared", { query: { cursor: pageParam }, signal }),
+    initialPageParam: null as string | null,
+    getNextPageParam: (page) => page.next_cursor,
+  });
+}
+
 type Snapshot = [QueryKey, InfiniteData<ThreadRowPage> | undefined][];
 
 /** Takes `id` out of every list now, and returns what was there to put back. */

@@ -3705,15 +3705,35 @@ number** per account gets its 5 each, one Thread's worth, and is **accepted**, k
 - [ ] **Commit:** `feat(web): installable pwa [T-9.7]`
 
 ### T-9.8 · You tab complete
-- [ ] **Needs:** T-9.6, T-8.8
-- [ ] Profile summary + edit, verification status, kudos, knots list with untie, blocked list with unblock, reports filed, cleared chats with restore, settings rows, lock now, log out.
-- [ ] **The settings screen** (T-9.6's routes): the five switches through `PATCH /me/settings`,
+- [x] **Needs:** T-9.6, T-8.8
+- [x] Profile summary + edit, verification status, kudos, knots list with untie, blocked list with unblock, reports filed, cleared chats with restore, settings rows, lock now, log out.
+- [x] **The settings screen** (T-9.6's routes): the five switches through `PATCH /me/settings`,
   pause and resume, a copy of your data (`POST`/`GET /me/export`, with the link while it is
   ready, 24 hours), and delete. **The delete confirmation shows his balance in plain words before
   he confirms** (D-504): the number from the API, `Me.balance`, never written into the copy, and
   that Velas left are lost at the erasure unless he signs in again within 29 days. After the
   delete, the web is signed out (`SESSION_REVOKED`).
-- [ ] **Commit:** `feat(web): you tab [T-9.8]`
+- **Built as D-910 to D-913** (the founder's answers to T-9.8's plan, 9 October 2026, on the
+  advisor's recommendation, relayed; D-910 the founder's own):
+  - **Two read endpoints, their own commit:** `GET /threads/cleared` (P-510, D-912), restored one
+    at a time, no "Restore all"; and `GET /reports`, the reports you filed, with no status and,
+    across a block either way, the name alone (D-911), served by a new index on
+    `(reporter_id, created_at desc)` (migration `086fa0402d0d`).
+  - **The badge follows the main photo** (D-910, amending D-393): a new main photo, or a reorder,
+    carries none until it matches the selfie; the face photo can't be swapped once matched
+    (T-4.12's refusal, now tested with the badge). `badge_of` is the one rule.
+  - **Found and fixed:** the unread count's clearing subquery took every clearing the viewer
+    had, so two clearings and an unread message made `GET /threads` a 500 on `main` (D-912).
+  - **The web from existing parts** (D-913): `/you`, `/you/settings` (the five switches, P-447's
+    `public_link` among them; pause; a copy of your data; delete with his balance, D-504),
+    `/you/edit`, and `/you/photos` (the photos step's grid, moved into `PhotoGrid`). The block
+    sheet says "You can undo this from the You tab" (P-762). No invite card (D-840).
+  - **Broken once each** (`uv run python -m tests.break_guards t98- t412-17 t412-18 t62-11
+    t72-01`, `out/t98-break-guards.log`): eleven new cases and four re-anchored to the new code,
+    15 of 15 red, no file differing by SHA-256 after.
+    The web's twelve (`node scripts/break-guards.mts t98-web`, `out/t98-web-breaks.log`): 12 of
+    12 red, the tree byte for byte as it was.
+- [x] **Commit:** `feat(web): you tab [T-9.8]`
 
 ### T-9.9 · Ledger audit
 - [ ] **Needs:** everything above
@@ -6293,14 +6313,14 @@ The number comes from the session's own block, given in its brief, from P-100 up
   `asyncUtilTimeout` once in `vitest.setup.ts`, which costs a passing test nothing, and prove it
   red at today's 1 s under a forced load. Filed by Claude landing P-330, 8 October 2026; its
   session's block, P-530 to P-539.
-- [ ] P-510 · `GET /threads/cleared`: the chats I cleared, for T-9.8's "cleared chats with
+- [x] P-510 · `GET /threads/cleared`: the chats I cleared, for T-9.8's "cleared chats with
   restore" (the prototype's "Cleared chats (n)" with "Restore all", 08-DESIGN's You tab). Worst
   case: T-9.8 reaches its row and no API lists a cleared chat, so a person who cleared one by
   mistake past the 5-second undo can't find it to restore it; it is kept (D-006) and unreachable.
   T-7.8 built clear, bulk clear and restore (D-611) and no list; this adds `Page<ThreadRow>` of
   Threads I cleared with nothing newer (D-270), and "Restore all" as a loop or a bulk `DELETE`,
   whichever T-9.8 wants. Belongs on T-9.8's Needs line. Filed by Claude building T-7.8, 8 October
-  2026, at the founder's direction; its session's block, P-510 to P-519.
+  2026, at the founder's direction; its session's block, P-510 to P-519. **Built in T-9.8** (D-912).
 - [ ] P-511 · The prototype's auto-clear: an expired Thread more than 7 days past its expiry
   cleared from each person's chats by itself. **After beta, no deadline** (the founder, 8 October
   2026). Worst case without it: a Threads tab fills with long-dead Threads until its owner taps
@@ -6338,11 +6358,11 @@ The number comes from the session's own block, given in its brief, from P-100 up
   sees that server's address. Options: send the visitor's address in a header the API trusts only
   from the web (a shared secret), or let the browser ask the API itself. Found building T-6.8;
   filed by Claude, 8 October 2026; its session's block.
-- [ ] P-447 · A switch for `public_link` on a screen. **With the settings screens** (You and
+- [x] P-447 · A switch for `public_link` on a screen. **With the settings screens** (You and
   Settings have no design yet, 08-DESIGN §8). Worst case: the switch exists only in the API, so
   nobody can turn on their `/@username` page, and every shared link reads "isn't public" to people
   not signed in. T-6.8 built the setting (D-544) and no screen, as the founder's addition asked.
-  Filed by Claude building T-6.8, 8 October 2026; its session's block.
+  Filed by Claude building T-6.8, 8 October 2026; its session's block. **Built in T-9.8** (D-913): a switch in Privacy and account.
 - [x] P-580 · Tell T-8.8's kudos prompt whether it can be shown. Worst case: the prompt in chat
   keeps coming back after kudos was given, and each tap on it is an `ALREADY_EXISTS`, so a
   positive note reads as an error; or it shows before D-680 allows it, and each tap is
@@ -6649,12 +6669,12 @@ The number comes from the session's own block, given in its brief, from P-100 up
   it; T-9.1 leaves it out (D-863). Add it to `profile.reportSentBody` (`en.ts`) when T-9.5's
   report queue and its 24-hour timer exist, in the same words as the SLA it enforces. Filed by
   Claude building T-9.1, 9 October 2026.
-- [ ] P-762 · The block sheet's "You can undo this from the You tab". **In T-9.8.** Worst case: a
+- [x] P-762 · The block sheet's "You can undo this from the You tab". **In T-9.8.** Worst case: a
   person who blocked someone by mistake has no way back in the product until the You tab's blocked
   list exists: `DELETE /blocks/{user_id}` and `GET /blocks` are built (T-9.1), the screen isn't.
   T-9.1 leaves the line out rather than promise a screen that doesn't exist. Add it to the block
   sheet (`BlockSheet.tsx`, `en.ts`) with T-9.8's list. Filed by Claude building T-9.1, 9 October
-  2026.
+  2026. **Built in T-9.8** (D-913).
 - [ ] P-763 · Time the feed with blocks in it, on a quiet machine. **Before beta.** Worst case:
   D-861's by-number match makes Discover's feed slower than its 80 ms p95 target at beta's scale
   and nobody sees it, because T-6.2's benchmark seeds no blocks, so the block check never runs
@@ -6691,3 +6711,21 @@ The number comes from the session's own block, given in its brief, from P-100 up
   `uvicorn.access`), or turn it off where structlog already logs requests, with a test that
   reads the log. Filed by Claude building T-7.12, 9 October 2026; its session's block, P-780 to
   P-789.
+- [ ] P-810 · Set a PIN after onboarding. **Before beta.** Worst case: someone who skipped the PIN
+  at sign-up (D-069's `/me/pin/skip`) never gets the lock: the You tab offers "Lock now" only with
+  a PIN (T-9.8), and nothing in the web sets one after onboarding, though `POST /auth/pin/set`
+  takes one (no `current_pin` needed when none is set, within D-069's rules). A row in Privacy and
+  account, the onboarding step's `PinPad` reused. Filed by Claude building T-9.8, 9 October 2026;
+  its session's block, P-810 to P-819.
+- [ ] P-811 · The selfie check from the You tab, for a man who skipped it. **Before beta.** Worst
+  case: a man who tapped "Skip for now" at the selfie step (D-008) can never carry the badge, and
+  the You tab can only tell him "No selfie check yet" (T-9.8): `POST /verification/start` works
+  after onboarding (D-068) but no screen reaches it. The selfie step's camera and states, reused
+  outside the onboarding frame. Filed by Claude building T-9.8, 9 October 2026; its session's
+  block.
+- [ ] P-812 · Add photos to the private album from the web. **Before beta.** Worst case: no
+  screen uploads a `private` photo, so every album is empty: "Ask to view" is refused as
+  `empty_album` (D-732) and an album request, a priced action, has nothing to sell. The API takes
+  them (`POST /photos/upload-url` with kind `private`, up to 6, D-700's scored copy), and T-9.8's
+  `/you/photos` shows public places and the face photo only. Found building T-9.8, outside its
+  plan; filed by Claude, 9 October 2026; its session's block.

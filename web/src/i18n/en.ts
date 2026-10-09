@@ -54,7 +54,6 @@ export const en = {
   placeholder: {
     comingSoon: "Coming soon.",
     login: "Sign in",
-    you: "You",
     admin: "Admin",
   },
   // Restoring and ending a session (T-3.10).
@@ -256,10 +255,10 @@ export const en = {
     notFound: "This profile isn't available",
     notFoundBody: "It may be hidden, or no longer here.",
     failed: "We couldn't load this profile",
-    // Report and Block (T-9.1, P-442), from the prototype's sheets. Two of its
-    // lines wait for their tasks: the moderator's 24 hours for T-9.5 (P-761),
-    // "undo this from the You tab" for T-9.8 (P-762). A block is silent
-    // (D-862): nothing here may say the other person is told.
+    // Report and Block (T-9.1, P-442), from the prototype's sheets. One of its
+    // lines waits for its task: the moderator's 24 hours for T-9.5 (P-761);
+    // "undo this from the You tab" came with T-9.8's blocked list (P-762). A
+    // block is silent (D-862): nothing here may say the other person is told.
     report: "Report this profile",
     block: "Block {name}",
     reportTitle: "Report {name}",
@@ -291,9 +290,137 @@ export const en = {
     blockYouWont: "You won't see theirs",
     blockThreads: "Any Thread or Knot between you disappears",
     blockSilent: "They're never told they've been blocked",
+    blockUndo: "You can undo this from the You tab",
     blockCancel: "Cancel",
     blocked: "{name} blocked",
     blockFailed: "We couldn't block {name}. Try again.",
+  },
+  // The You tab (T-9.8), built from existing parts (D-913): no design of its
+  // own yet (08-DESIGN §8). Drafted by Claude, for the founder's review.
+  you: {
+    title: "You",
+    summaryFailed: "We couldn't load your profile",
+    username: "@{username}",
+    edit: "Edit profile",
+    editSave: "Save",
+    editSaved: "Profile saved",
+    photos: "Photos",
+    // D-910: a new main photo carries no tick until it matches the selfie.
+    photosHint:
+      "The first photo is your main one. Each new photo is checked before anyone sees it, and the tick shows only while your main photo matches your selfie.",
+    // The badge's line (D-262, D-910): what was done, never "verified".
+    selfieMainNotYet:
+      "Your selfie matched. The tick shows once your main photo matches it too.",
+    selfieNone: "No selfie check yet.",
+    kudos: {
+      title: "Kudos you've received",
+      body: "Only positive notes exist. Whether your profile shows them is up to you, in Privacy and account.",
+      empty: "None yet.",
+      failed: "We couldn't load your kudos.",
+      count: "{label} · {count}",
+    },
+    knots: {
+      title: "Your Knots",
+      empty: "No Knots yet.",
+      failed: "We couldn't load your Knots.",
+      untie: "Untie",
+      untieName: "Untie the knot with {name}",
+      untieTitle: "Untie the knot with {name}?",
+      untieBody: "It becomes a Thread again.",
+      untieConfirm: "Untie",
+      untieCancel: "Keep it",
+      untied: "Untied",
+      untieFailed: "We couldn't untie it. Try again.",
+    },
+    blocked: {
+      title: "Blocked",
+      empty: "You haven't blocked anyone.",
+      failed: "We couldn't load who you've blocked.",
+      unblock: "Unblock",
+      unblockName: "Unblock {name}",
+      unblocked: "{name} unblocked",
+      unblockFailed: "We couldn't unblock {name}. Try again.",
+    },
+    // D-911: never a status, never a time (the 24 hours wait on P-761).
+    reports: {
+      title: "Reports you've filed",
+      body: "Our team reviews every report. Nobody is told who reported them.",
+      empty: "You haven't filed any reports.",
+      failed: "We couldn't load your reports.",
+      row: "{reason} · {date}",
+    },
+    cleared: {
+      title: "Cleared chats",
+      body: "Hidden from your list only. The other person still has their copy.",
+      empty: "No cleared chats.",
+      failed: "We couldn't load your cleared chats.",
+      restore: "Restore",
+      restoreName: "Restore your chat with {name}",
+      restored: "Restored",
+      restoreFailed: "We couldn't restore it. Try again.",
+    },
+    settings: "Settings",
+    account: "Privacy and account",
+    lockNow: "Lock now",
+    more: "Show more",
+  },
+  // Privacy and account (T-9.8, T-9.6's routes), at /you/settings. Drafted by
+  // Claude, for the founder's review.
+  settings: {
+    title: "Privacy and account",
+    privacy: "Privacy",
+    hidden: "Hide my profile",
+    hiddenHint:
+      "Out of Discover and search. People you already match or chat with can still open it.",
+    hideAge: "Hide my age",
+    hideDistance: "Hide my distance",
+    showKudos: "Show kudos on my profile",
+    // D-544: off until its owner turns it on.
+    publicLink: "Public link",
+    publicLinkHint:
+      "Lets people who aren't signed in see your name, age, city and main photo at {link}.",
+    saveFailed: "We couldn't save that. Try again.",
+    pause: {
+      title: "Pause",
+      body: "While paused, nobody sees your profile and we send you no notifications.",
+      button: "Pause my account",
+      paused: "Your account is paused. Nobody sees your profile.",
+      resume: "Resume",
+      failed: "We couldn't change that. Try again.",
+    },
+    // D-502: your own data, a link for 24 hours, then deleted.
+    export: {
+      title: "A copy of your data",
+      body: "A file of your own data: your profile, photos, the messages you sent and your activity. The link works for 24 hours.",
+      ask: "Get a copy",
+      askAgain: "Get a new copy",
+      pending: "Making your copy…",
+      ready: "Download your copy",
+      until: "The link works until {time}.",
+      failed: "We couldn't make your copy. Try again.",
+      loadFailed: "We couldn't check on your copy.",
+      tooMany: "That's today's copies. Try again tomorrow.",
+    },
+    // D-500, D-504; /privacy's words (legal.privacy.deletion).
+    delete: {
+      title: "Delete account",
+      button: "Delete my account",
+      sheetTitle: "Delete your account?",
+      gone: "Your profile disappears straight away and you're signed out everywhere.",
+      restore:
+        "Changed your mind? Sign in again within 29 days and your account comes back as it was.",
+      erased:
+        "After that we erase your profile, your photos and your private album. Your messages stay in the other person's chat, shown as from “Deleted account”.",
+      // D-504: the number is `Me.balance`, never written here.
+      velas: {
+        one: "You have {count} Vela. It's lost when your account is erased, unless you sign in again within 29 days.",
+        other:
+          "You have {count} Velas. They're lost when your account is erased, unless you sign in again within 29 days.",
+      },
+      confirm: "Delete my account",
+      cancel: "Keep my account",
+      failed: "We couldn't delete your account. Try again.",
+    },
   },
   // The requests to see your private album (T-8.8, D-732), at
   // /you/album-requests. Drafted by Claude, for the founder's review.
@@ -1602,8 +1729,8 @@ export const en = {
     counter: "{count}/{max}",
     online: "Online",
     // The badge (D-262, D-393): what was done, never "verified". The selfie
-    // matched the face photo, and a shown face matched the selfie; one line
-    // for both genders (the founder, 8 October 2026).
+    // matched the face photo, and the main photo's face matched the selfie
+    // (D-910); one line for both genders (the founder, 8 October 2026).
     selfieMatched: "Selfie matched",
     errorTitle: "Something went wrong",
     retry: "Try again",

@@ -12,6 +12,8 @@ const WHAT_HAPPENS = [
   "profile.blockYouWont",
   "profile.blockThreads",
   "profile.blockSilent",
+  // P-762: the You tab's blocked list (T-9.8).
+  "profile.blockUndo",
 ] as const satisfies readonly MessageKey[];
 
 type BlockSheetProps = {
@@ -25,8 +27,8 @@ type BlockSheetProps = {
 
 /**
  * Block someone (T-9.1, 08-DESIGN §5's block sheet): what a block does, in
- * the prototype's four lines, then the confirm. Undoing it is the You tab's
- * blocked list, which says so when it exists (T-9.8, P-762).
+ * the prototype's five lines, then the confirm. Undoing it is the You tab's
+ * blocked list (T-9.8, P-762).
  */
 export function BlockSheet({
   open,

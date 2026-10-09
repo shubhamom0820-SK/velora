@@ -1,4 +1,4 @@
-import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import { api } from "@/lib/api";
 import type { components } from "@/types/api";
@@ -24,5 +24,17 @@ export function useGiveKudos() {
         queryKey: [...queryKeys.threads(), "one"],
       });
     },
+  });
+}
+
+/**
+ * The kudos you were given (`GET /me/kudos`, D-680): each kind with how many
+ * gave it, in the kinds' order, none at 0, never who nor when; yours to see
+ * whatever `show_kudos` says. The You tab's (T-9.8).
+ */
+export function useMyKudos() {
+  return useQuery({
+    queryKey: queryKeys.myKudos(),
+    queryFn: ({ signal }) => api.get("/v1/me/kudos", { signal }),
   });
 }

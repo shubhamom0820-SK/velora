@@ -64,6 +64,8 @@ describe("the block sheet (T-9.1)", () => {
       t("profile.blockYouWont"),
       t("profile.blockThreads"),
       t("profile.blockSilent"),
+      // P-762, with T-9.8's blocked list.
+      t("profile.blockUndo"),
     ]) {
       expect(screen.getByText(line)).toBeVisible();
     }

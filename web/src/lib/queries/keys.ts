@@ -54,6 +54,9 @@ export const queryKeys = {
   // `threads()` is the prefix of every list's key (T-7.10), so a clearing
   // asks every tab, filter and search again.
   threads: () => ["threads"] as const,
+  // The chats I cleared (T-9.8, D-912): under `threads()`, so a clearing or
+  // a restore asks it again with the lists.
+  clearedThreads: () => ["threads", "cleared"] as const,
   threadList: (tier: string, filter: string, q: string) =>
     ["threads", "list", tier, filter, q] as const,
   // One Thread's screen (T-7.11). Three keys, none the prefix of another, so
@@ -81,6 +84,12 @@ export const queryKeys = {
   giftCatalogue: () => ["gifts", "catalogue"] as const,
   giftCounts: (userId: string) => ["gifts", "counts", userId] as const,
   receivedGifts: () => ["gifts", "received"] as const,
+  // The You tab (T-9.8): whom I block, the reports I filed, my kudos and my
+  // copy of my data.
+  blocks: () => ["blocks"] as const,
+  filedReports: () => ["reports", "filed"] as const,
+  myKudos: () => ["kudos", "mine"] as const,
+  dataExport: () => ["export"] as const,
   profileByUsername: (username: string) =>
     ["profiles", "by-username", username] as const,
 };

@@ -3,11 +3,12 @@ import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import YouPage from "@/app/(app)/you/page";
 import { ToastProvider } from "@/components/ui/ToastProvider";
 import { t } from "@/i18n/t";
 import { queryKeys } from "@/lib/queries/keys";
 import { envelope, fakeApi, json, type Route } from "@/lib/testing/fakeApi";
+
+import { ReceivedGifts } from "./ReceivedGifts";
 
 const CATALOGUE = {
   gifts: [
@@ -56,7 +57,7 @@ function renderYou(gender: "female" | "male" = "female", showGifts = true) {
   render(
     <QueryClientProvider client={client}>
       <ToastProvider>
-        <YouPage />
+        <ReceivedGifts />
       </ToastProvider>
     </QueryClientProvider>,
   );
@@ -94,10 +95,6 @@ describe("her gifts in the You tab (T-8.10)", () => {
     expect(items[0]).toHaveTextContent("Rose from Arjun");
     expect(items[1]).toHaveTextContent("Coffee from Kabir");
     expect(screen.queryByText(/Vela|Free/)).toBeNull();
-    // Her You page keeps T-8.8's link to her album's requests.
-    expect(
-      screen.getByRole("link", { name: t("albumRequests.title") }),
-    ).toHaveAttribute("href", "/you/album-requests");
   });
 
   it("names a deleted sender as such, with no link, and a retired gift as a gift", async () => {
@@ -207,16 +204,5 @@ describe("her gifts in the You tab (T-8.10)", () => {
 
     expect(await screen.findByText(t("gifts.saveFailed"))).toBeInTheDocument();
     expect(toggle).toHaveAttribute("aria-checked", "false");
-  });
-
-  it("isn't shown to a man, who asks for no gifts", async () => {
-    const api = routes(() => json(200, { items: [], next_cursor: null }));
-    renderYou("male");
-
-    expect(
-      screen.getByRole("heading", { level: 1, name: t("placeholder.you") }),
-    ).toBeInTheDocument();
-    expect(screen.queryByText(t("gifts.yours"))).toBeNull();
-    expect(api.calls).toEqual([]);
   });
 });
