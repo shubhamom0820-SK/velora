@@ -183,9 +183,10 @@ A test in this list is marked `@pytest.mark.critical`; CI runs them first and fa
 | J7 | Thread expires → read-only → re-open (−2) | T-7.13 |
 | J8 | Buy Velas (fake gateway) → balance updates. As built (`e2e/store.spec.ts`): a man signs up through the screens (5 welcome Velas), opens the store from the wallet, taps 30 Velas; the fake gateway's webhook captures it, asked from Node as Razorpay would; the stand-in's "Payment went through" starts the poll; "36 Velas added to your balance", and the card and the pill say 41 | T-8.7 |
 | J9 | Payment fails → retry sheet → success. As built: the webhook fails it, the stand-in closes, "Payment didn't go through"; "Try again" reopens the same order (one `POST /payments/orders` in all, D-761), the webhook captures it, and the balance is 41 | T-8.7 |
-| J10 | Report with also-block → confirmation shown → person gone everywhere. Written and passing locally on both projects (9 October 2026), held by P-680 with T-8.10's journey: its two sign-ups take the run past the API's 20 OTP sends an hour per IP (D-066). It is `web/e2e/safety.spec.ts` in commit 46e23c0 on branch `t-9.1-j10` | T-9.1 |
+| J10 | Report with also-block → confirmation shown → person gone everywhere. As built (`e2e/safety.spec.ts`): two men sign up through the screens (`signUpMan`), each in a browser of his own; one finds the other by `@username`, opens his profile, reports him from the ⋯ menu with "Also block" on, and sees "Report sent" and "They're never told who reported them"; then "Kabir blocked", the profile left, each one's search for the other finding no one, and the profile's address "isn't available". Held from T-9.1 until P-680 gave each context its own OTP budget (D-890) | T-9.1, P-680 |
 | J11 | Moderator resolves a report and freezes the account | T-9.5 |
 | J12 | Clear chat → undo → restore from You tab | T-7.10 |
+| J13 | Gift from her profile → she sees it → her switch hides it. As built (`e2e/gifts.spec.ts`): she signs up as J2 does, face photo and selfie matched by the real models (so Chromium only); he signs up as J1 does in a browser of his own, opens her `/@username` link, and sends a free Coffee from her profile; she finds it in the You tab and her counts on her profile, turns `show_gifts` off, and he no longer sees them. Held from T-8.10 until P-680 (D-890) | T-8.10, P-680 |
 
 **How it runs (T-3.13, T-4.9).** `make e2e` (CI's `e2e` job, after `api` and `web` pass, on a
 push that changed a path outside the docs allowlist, P-282 and D-410; locally it needs
@@ -204,6 +205,14 @@ the API's one process.
   is the real one (D-088), so the launcher refuses to start without the models. The S3's two
   buckets are shared with every pytest run and `make dev` (P-55 gives the S3 no slot); each
   object's key carries its user's id, so runs never meet there.
+- **Each browser context is a client of its own (P-680, D-890).** Read from the socket, every
+  journey would be 127.0.0.1 and share D-066's 20 OTP sends an hour, which the suite outgrew at 28
+  a run. The launcher reads the client's address from `X-E2E-Client-IP`, and `e2e/fixtures.ts`
+  gives every context, the test's own and any a journey opens with `browser.newContext`, an
+  address of its own in 198.18.0.0/15 on its requests to the API alone (the local S3's CORS
+  admits `Content-Type` only). The limit stays D-066's, so a journey that signs one person in
+  more than 20 times an hour is still refused. Only ENV local reads such a header: a deployed
+  build refuses to start on any but `Fly-Client-IP`.
 - **The worker polls every 0.5 seconds here, not D-091's 10.** D-091's interval is Upstash's
   per-command price on the deployed Redis; this Redis is Docker's and free, and at 10 seconds a
   run would wait that long on every photo for nothing. The wake (D-261) decides the selfie either

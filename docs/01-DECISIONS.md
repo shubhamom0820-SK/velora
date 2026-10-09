@@ -5557,6 +5557,39 @@ again); reporting only people you can see (it would reveal who blocked you).
 Recommended by Claude in T-9.1's plan; approved by the founder on the advisor's recommendation
 (Claude, in a separate chat), relayed, 9 October 2026.
 
+### D-890 · The E2E's browser contexts each a client of their own; deployed builds read only Fly-Client-IP — Locked
+**The decision (P-680; the founder, 9 October 2026, on the advisor's recommendation, Claude in a
+separate chat, relayed by the founder):** the E2E API server (`api/tests/e2e_server.py`) reads
+the client's address for every per-IP limit from `X-E2E-Client-IP`, its `CLIENT_IP_HEADER`, and
+`web/e2e/fixtures.ts` gives each Playwright browser context an address of its own in
+198.18.0.0/15 (RFC 2544's benchmark range, never a real client's), added only to that context's
+requests to the API, by `context.route`. Every context gets one: the test's own, and any a
+journey opens itself through `browser.newContext`. A request without the header shares one
+bucket, as on Fly (D-056). D-066's limits are unchanged: each person in a journey has 20 OTP sends
+an hour, as each phone does.
+
+**The gate is an allowlist on both sides (rule 16):** only ENV local may read a header other than
+the platform's. Outside local, `CLIENT_IP_HEADER` must be one of `PROXY_CLIENT_IP_HEADERS`, today
+`Fly-Client-IP` alone, compared ignoring case as HTTP does; Settings refuse to start on anything
+else, `X-Forwarded-For` and the E2E's own header among them (`test_config.py`). The E2E server is
+never in a deployed build: `api/tests/` is in `.dockerignore`.
+
+**Why:** every journey reached the API from 127.0.0.1, so all of them shared one address's 20
+sends an hour, and the suite had spent exactly 20 a run before T-8.10 (ten a project). T-8.10's
+gifts journey and T-9.1's J10 each needed four more, and each turned CI's E2E red at other
+journeys' sign-ins (runs 37859041045 and 37863825770), so both landed without their journeys.
+Now the run sends 28 codes, none from an address that sends more than two. Refusing every header
+but Fly's outside local also closes the trap the E2E's header would open: copied into a Fly
+config, it would key every per-IP limit on an address the client writes, and no test would fail
+(D-056's reason).
+
+**Rejected:** raising `OTP_SENDS_PER_IP` for the E2E alone (the limit tested would not be
+production's, and the journeys would share one budget still, to be outgrown again);
+`extraHTTPHeaders` on each context (it reaches the local S3 too, whose CORS admits `Content-Type`
+alone, so every photo's PUT would fail its preflight); an address per context from loopback
+aliases (127.0.0.2 and up don't exist on macOS without configuration); refusing only the E2E
+header's name outside local (a blacklist: `X-Forwarded-For` would still pass).
+
 ## Adding a decision
 
 Append `D-0NN · Title — Locked|Open`, with Decision, Why, Rejected. Never edit a Locked entry —

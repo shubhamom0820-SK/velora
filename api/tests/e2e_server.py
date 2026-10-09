@@ -30,6 +30,16 @@ long on each photo for nothing. The wake (D-261) still decides the selfie.
 
 The fake SMS keeps its outbox in this process, which is why it's one uvicorn
 worker: the test-only `/v1/test/sms/last-code` reads it there (`app/modules/e2e/`).
+
+**Each browser context is a client of its own (P-680, D-890).** Every journey
+reaches this API from one socket address, 127.0.0.1, so read from the socket
+they would share D-066's 20 OTP sends an hour, and the suite outgrew them. The
+per-IP limits here read `E2E_CLIENT_IP_HEADER` instead, which `web/e2e/
+fixtures.ts` sets to an address of each context's own on its requests to this
+API: each person in a journey is a client, as on the phone, and the limit stays
+D-066's. A request without it shares one bucket (D-056), as on Fly. Only ENV
+local may read such a header: a deployed build reads Fly-Client-IP and nothing
+else (`PROXY_CLIENT_IP_HEADERS`), and this file is never in the image.
 """
 
 from __future__ import annotations
@@ -39,7 +49,7 @@ import signal
 import subprocess
 import sys
 from collections.abc import Mapping
-from typing import Final
+from typing import TYPE_CHECKING, Final
 
 import uvicorn
 from alembic.config import Config
@@ -47,9 +57,14 @@ from alembic.config import Config
 from alembic import command
 from tests.infra import API_DIR, LOCAL_S3_URL, RUN_SLOT, S3_DOWN_REASON, S3_UP
 
+if TYPE_CHECKING:
+    from app.core.config import Settings
+
 # Where Playwright's webServer and the web build expect them (web/playwright.config.ts).
 API_PORT = 8100
 WEB_ORIGIN = "http://127.0.0.1:3100"
+# Each browser context's own client address, set by web/e2e/fixtures.ts (D-890).
+E2E_CLIENT_IP_HEADER: Final = "X-E2E-Client-IP"
 
 # The local S3's buckets and development credentials, as `api/.env.example` and
 # `infra/s3/s3.json` have them: public by design, local and CI only (D-086),
@@ -94,6 +109,19 @@ def shared_settings() -> dict[str, str]:
         **STORAGE,
         "WORKER_POLL_DELAY_S": WORKER_POLL_DELAY_S,
     }
+
+
+def e2e_settings(shared: Mapping[str, str]) -> Settings:
+    """The API's settings: the shared ones, the web's origin, and the client's
+    address from each browser context's header (D-890). Never from `.env`."""
+    from app.core.config import Settings
+
+    return Settings(
+        _env_file=None,
+        CORS_ORIGINS=[WEB_ORIGIN],
+        CLIENT_IP_HEADER=E2E_CLIENT_IP_HEADER,
+        **shared,  # type: ignore[arg-type]
+    )
 
 
 def start_worker(shared: Mapping[str, str]) -> subprocess.Popen[bytes]:
@@ -154,15 +182,10 @@ def main() -> None:
         sys.exit(f"e2e: {S3_DOWN_REASON}: the journeys upload photos to it (T-4.9).")
     shared = shared_settings()
     os.environ.update(shared)
-    from app.core.config import Settings
     from app.main import create_app
     from app.workers.main import WorkerMisconfigured, refuse_unless_ready
 
-    settings = Settings(
-        _env_file=None,
-        CORS_ORIGINS=[WEB_ORIGIN],
-        **shared,  # type: ignore[arg-type]
-    )
+    settings = e2e_settings(shared)
     try:
         # The worker's own check, here, so a missing model stops the run now,
         # not as a journey waiting on a selfie that is never compared.

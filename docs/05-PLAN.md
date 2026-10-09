@@ -3408,6 +3408,7 @@ prices don't depend on the web photos step, and the hold is lifted.
   Its E2E journey (she signs up as J2, he sends a free Coffee from her profile, she finds it in
   the You tab, and her switch hides her counts from him) passed locally on both projects, but
   isn't landed: CI's E2E has no OTP sends to spare (P-680, the founder, 9 October 2026).
+  **Landed by P-680** as J13 (06-TESTING), 9 October 2026.
 - [x] **Commit:** `feat(web): gifts on profile [T-8.10]`
 
 ### T-8.6 · Referrals
@@ -3571,7 +3572,7 @@ number** per account gets its 5 each, one Thread's worth, and is **accepted**, k
 - [x] **Commit:** `feat(safety): reports and blocks [T-9.1]`
   **J10 held by P-680** (06-TESTING): written and passing locally, it took CI's E2E past the
   20-sends-an-hour cap; it waits on branch `t-9.1-j10`. Report and Block in the conversation's ⋯
-  menu: P-764.
+  menu: P-764. **Landed by P-680**, 9 October 2026.
 
 ### T-9.2 · Fraud scoring v1
 - [ ] **Needs:** T-9.1
@@ -6522,7 +6523,7 @@ The number comes from the session's own block, given in its brief, from P-100 up
   The move takes it too.
   **In part, T-9.1 (9 October 2026):** `signUpMan` moved from `store.spec.ts` to `e2e/fixtures.ts`,
   used by J8, J9 and J10; J1's helpers in `signup.spec.ts` are still their own.
-- [ ] P-680 · Give the E2E room for another sign-in, then land T-8.10's gifts journey.
+- [x] P-680 · Give the E2E room for another sign-in, then land T-8.10's gifts journey.
   **Before the next journey that signs anyone in.** Worst case: every new sign-in journey turns
   CI's E2E red at someone else's sign-in, as T-8.10's did (run 37859041045: J3, J8 and J9 on
   desktop never got a code). The API allows 20 OTP sends an hour per client IP
@@ -6539,6 +6540,18 @@ The number comes from the session's own block, given in its brief, from P-100 up
   the cap the same way (J3, J8 and J9 on desktop got no code), so T-9.1 landed without it. It is
   `web/e2e/safety.spec.ts`, with `unlock` in `e2e/fixtures.ts`, in commit 46e23c0 on branch
   `t-9.1-j10`, kept on origin for it; it passed locally on both projects on 9 October 2026.
+  **As built (P-680, 9 October 2026, D-890):** `e2e/fixtures.ts` gives every browser context an
+  address of its own in 198.18.0.0/15, the test's own and any `browser.newContext` opens, added
+  by `context.route` to its requests to the API alone; the launcher reads it from
+  `X-E2E-Client-IP`, its `CLIENT_IP_HEADER`. Outside local, Settings now refuse any
+  `CLIENT_IP_HEADER` but `Fly-Client-IP` (`PROXY_CLIENT_IP_HEADERS`), `X-Forwarded-For`
+  included. Both journeys restored, the gifts one as J13 and J10 as it was, and `make e2e`
+  passed 30 of 30 on both projects, 28 codes sent (`out/p680-e2e-green.log`). With the route
+  switched off, the first 20 sends went through and every sign-in after them was refused: 7 of
+  30 red, desktop's last seven sign-ins, each at "Enter the code"
+  (`out/p680-e2e-break-no-address.log`). Tested in
+  `test_e2e_server.py` and `test_config.py`; three guards broken
+  (`uv run python -m tests.break_guards p680-`, 3 of 3 red, `out/p680-break-guards.log`).
 - [ ] P-681 · Swipes' ledger reads sort by `created_at` alone, so a tie fails a landing at
   random. **Soon: it costs a full `make test` each time it fires.** Worst case: a red `make test`
   that isn't the change's, blocking a landing (or, worse, teaching sessions to rerun until

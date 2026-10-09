@@ -10,6 +10,38 @@ export { expect };
 
 const API = "http://127.0.0.1:8100";
 
+/**
+ * Each browser context is a client of its own (P-680, D-890): the E2E API
+ * (api/tests/e2e_server.py) reads the client's address from this header, so
+ * each person in a journey has D-066's 20 OTP sends an hour, as each phone
+ * does, where read from the socket they would all be 127.0.0.1 and share them.
+ * Added to the API's requests only: the local S3's CORS admits Content-Type
+ * alone (infra/s3/private-cors.xml), so on a photo's PUT it would fail the
+ * upload. A deployed API never reads it (`PROXY_CLIENT_IP_HEADERS`).
+ */
+const CLIENT_IP_HEADER = "X-E2E-Client-IP";
+const addressed = new WeakSet<BrowserContext>();
+let addresses = 0;
+
+/** An address in 198.18.0.0/15 (RFC 2544's, never a real client's), once a context. */
+async function ownAddress(
+  context: BrowserContext,
+  workerIndex: number,
+): Promise<void> {
+  if (addressed.has(context)) return;
+  addressed.add(context);
+  addresses += 1;
+  if (addresses > 254 || workerIndex > 255) {
+    throw new Error("e2e: out of client addresses (198.18.<worker>.<1-254>)");
+  }
+  const address = `198.18.${workerIndex}.${addresses}`;
+  await context.route(`${API}/**`, (route) =>
+    route.continue({
+      headers: { ...route.request().headers(), [CLIENT_IP_HEADER]: address },
+    }),
+  );
+}
+
 let issued = 0;
 
 /** A mobile number no other journey in this run uses: "98" and eight digits. */
@@ -61,6 +93,17 @@ async function tapPin(page: Page, pin: string) {
   for (const digit of pin) {
     await page.getByRole("button", { name: digit, exact: true }).click();
   }
+}
+
+/**
+ * Unlocks the app after a full load, which locks it again (T-3.9), with the
+ * PIN `signUpMan` set.
+ */
+export async function unlock(page: Page) {
+  const lock = page.getByRole("heading", { name: "Enter your PIN" });
+  await expect(lock).toBeVisible();
+  await tapPin(page, PIN);
+  await expect(lock).toHaveCount(0);
 }
 
 /**
@@ -141,7 +184,28 @@ type Watch = {
  * zod's eval probe works under `next dev` and is blocked in production), and
  * records the URLs it visited.
  */
-export const test = base.extend<Watch & { cspViolations: string[] }>({
+export const test = base.extend<
+  Watch & { cspViolations: string[]; addressed: void }
+>({
+  context: async ({ context }, provide, testInfo) => {
+    await ownAddress(context, testInfo.workerIndex);
+    await provide(context);
+  },
+  // And every context a journey opens itself (a second person's browser), so
+  // none can be forgotten into the header-less bucket.
+  addressed: [
+    async ({ browser }, provide, testInfo) => {
+      const newContext = browser.newContext;
+      browser.newContext = async (options) => {
+        const context = await newContext.call(browser, options);
+        await ownAddress(context, testInfo.workerIndex);
+        return context;
+      };
+      await provide();
+      browser.newContext = newContext;
+    },
+    { auto: true },
+  ],
   cspViolations: [
     async ({ page }, provide) => {
       const violations: string[] = [];

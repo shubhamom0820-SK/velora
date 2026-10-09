@@ -50,6 +50,12 @@ PLAIN_REDIS_ALLOWED_IN: frozenset[str] = frozenset({"local"})
 # X-Forwarded-For, which the client writes; everywhere else the address comes
 # from the header the platform sets, CLIENT_IP_HEADER.
 SOCKET_CLIENT_IP_ALLOWED_IN: frozenset[str] = frozenset({"local"})
+# The headers a deployed build may read the client's IP from: an allowlist of
+# names the platform's proxy sets, so a header the client writes can't be
+# configured there by mistake (D-890): not X-Forwarded-For, and not the E2E
+# server's per-context address (`api/tests/e2e_server.py`), which only ENV
+# local may read. Compared ignoring case, as HTTP compares header names.
+PROXY_CLIENT_IP_HEADERS: frozenset[str] = frozenset({"fly-client-ip"})
 # The keys this repo publishes for the tests and CI: tests/conftest.py and
 # .github/workflows/ci.yml use exactly these. Anyone who can read the repo can
 # sign access tokens, test phone hashes and decrypt phone numbers with them, and
@@ -396,6 +402,17 @@ class Settings(BaseSettings):
                 "the client, so per-IP rate limits would key on an address anyone can "
                 f"choose (D-056). Only ENV {', '.join(sorted(SOCKET_CLIENT_IP_ALLOWED_IN))} "
                 "may read the socket."
+            )
+        if (
+            self.ENV not in SOCKET_CLIENT_IP_ALLOWED_IN
+            and self.CLIENT_IP_HEADER.lower() not in PROXY_CLIENT_IP_HEADERS
+        ):
+            raise ValueError(
+                f"ENV={self.ENV} reads the client's IP only from Fly-Client-IP, "
+                f"not {self.CLIENT_IP_HEADER}: any other header, X-Forwarded-For "
+                "or the E2E server's own among them, is one the client can write, "
+                "so per-IP rate limits would key on an address anyone can choose "
+                "(D-056, D-890)."
             )
         return self
 

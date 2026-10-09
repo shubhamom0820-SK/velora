@@ -336,6 +336,33 @@ def test_local_may_read_the_socket_or_a_header() -> None:
     )
 
 
+@pytest.mark.parametrize("env", ["staging", "production"])
+@pytest.mark.parametrize("header", ["X-Forwarded-For", "X-E2E-Client-IP"])
+def test_outside_local_only_flys_header_is_read(env: str, header: str) -> None:
+    """A header the client writes can't be configured where it would count
+    (D-890): the E2E server's per-context address and X-Forwarded-For alike."""
+    message = _error(ENV=env, **{**_DEPLOYED, "CLIENT_IP_HEADER": header})
+
+    assert (
+        f"ENV={env} reads the client's IP only from Fly-Client-IP, not {header}"
+        in message
+    )
+    assert "is one the client can write" in message
+    assert "D-890" in message
+
+
+@pytest.mark.parametrize("env", ["staging", "production"])
+def test_outside_local_flys_header_is_read_in_any_case(env: str) -> None:
+    for header in ("Fly-Client-IP", "fly-client-ip"):
+        assert _settings(ENV=env, **{**_DEPLOYED, "CLIENT_IP_HEADER": header})
+
+
+def test_local_may_read_the_e2e_servers_header() -> None:
+    settings = _settings(ENV="local", CLIENT_IP_HEADER="X-E2E-Client-IP")
+
+    assert settings.CLIENT_IP_HEADER == "X-E2E-Client-IP"
+
+
 # --- Keys are checked for shape, everywhere (D-060) -----------------------------
 
 _A64 = "a" * 64

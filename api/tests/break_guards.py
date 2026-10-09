@@ -12003,6 +12003,54 @@ T98: list[Case] = [
     ),
 ]
 
+# --- P-680: each E2E browser context a client of its own (D-890) ----------------
+
+P680_SELECTION = ["tests/test_config.py", "tests/test_e2e_server.py"]
+CONFIG = "app/core/config.py"
+E2E_SERVER = "tests/e2e_server.py"
+FLY_ONLY = "test_outside_local_only_flys_header_is_read"
+
+P680: list[Case] = [
+    Case(
+        id="p680-1-deployed-reads-any-header",
+        what="a deployed build reading the client's IP from any header it is given",
+        edits=[
+            (
+                CONFIG,
+                "            and self.CLIENT_IP_HEADER.lower() not in PROXY_CLIENT_IP_HEADERS\n",
+                "            and False\n",
+            )
+        ],
+        expect=[
+            f"{FLY_ONLY}[X-Forwarded-For-staging]",
+            f"{FLY_ONLY}[X-Forwarded-For-production]",
+            f"{FLY_ONLY}[X-E2E-Client-IP-staging]",
+            f"{FLY_ONLY}[X-E2E-Client-IP-production]",
+        ],
+    ),
+    Case(
+        id="p680-2-header-name-case-sensitive",
+        what="Fly's header refused in another case, which HTTP treats as the same",
+        edits=[
+            (
+                CONFIG,
+                "            and self.CLIENT_IP_HEADER.lower() not in PROXY_CLIENT_IP_HEADERS\n",
+                "            and self.CLIENT_IP_HEADER not in PROXY_CLIENT_IP_HEADERS\n",
+            )
+        ],
+        expect=["test_outside_local_flys_header_is_read_in_any_case"],
+    ),
+    Case(
+        id="p680-3-e2e-reads-the-socket",
+        what="the E2E server keying every context on 127.0.0.1, one budget for all",
+        edits=[(E2E_SERVER, "        CLIENT_IP_HEADER=E2E_CLIENT_IP_HEADER,\n", "")],
+        expect=[
+            "test_the_e2e_server_reads_each_contexts_header_and_is_local",
+            "test_each_context_has_d066s_twenty_sends_of_its_own",
+        ],
+    ),
+]
+
 CASES: list[tuple[Case, list[str]]] = (
     [(c, T51_SELECTION) for c in T51]
     + [(c, T54_SELECTION) for c in T54]
@@ -12059,6 +12107,7 @@ CASES: list[tuple[Case, list[str]]] = (
     + [(c, P592_SELECTION) for c in P592]
     + [(c, T712_SELECTION) for c in T712]
     + [(c, T98_SELECTION) for c in T98]
+    + [(c, P680_SELECTION) for c in P680]
 )
 
 # The fifty-connection fixture's own message when Postgres refuses a connection.
