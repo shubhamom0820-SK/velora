@@ -1015,6 +1015,109 @@ export const en = {
   },
   // What the API's error codes say on screen (T-3.11). A code the screen
   // doesn't expect falls back to `unknown`.
+  // Notifications (T-9.4): what a push and the in-app list say for each kind,
+  // the settings, and asking for permission after the first match. The API
+  // sends a kind and ids, never words (D-033); with "Hide names" on, no name.
+  // Nothing here tells her of an hour or an expiry (P-460): a Thread running
+  // out reaches only him, and its setting is shown only to him. Drafted by
+  // Claude, for the founder's review.
+  notifications: {
+    title: "Notifications",
+    open: "Notifications",
+    empty: "Nothing yet",
+    emptyBody: "Matches, gifts and requests show up here.",
+    failed: "We couldn't load your notifications.",
+    unread: "Unread",
+    kinds: {
+      match: {
+        named: "You and {name} matched.",
+        plain: "You have a new match.",
+      },
+      thread: {
+        named: "{name} started a Thread with you.",
+        plain: "Someone started a Thread with you.",
+      },
+      message: {
+        named: "New message from {name}.",
+        plain: "You have a new message.",
+      },
+      like: { named: "{name} liked you.", plain: "Someone liked you." },
+      superLike: {
+        named: "{name} Super Liked you.",
+        plain: "Someone Super Liked you.",
+      },
+      gift: { named: "{name} sent you a gift.", plain: "You received a gift." },
+      albumRequest: {
+        named: "{name} asked to see your private pictures.",
+        plain: "Someone asked to see your private pictures.",
+      },
+      albumGranted: {
+        named: "{name} said yes: you can see the private pictures.",
+        plain: "Your request to see private pictures was accepted.",
+      },
+      albumDeclined: {
+        named: "{name} said no to your request.",
+        plain: "Your request to see private pictures was declined.",
+      },
+      knotRequested: {
+        named: "{name} wants to tie the knot.",
+        plain: "Someone wants to tie the knot.",
+      },
+      knotAccepted: {
+        named: "You and {name} tied the knot.",
+        plain: "You tied the knot.",
+      },
+      threadExpiring: {
+        named: "A Thread of yours is about to run out.",
+        plain: "A Thread of yours is about to run out.",
+      },
+      lowBalance: {
+        named: "Your Velas are running low.",
+        plain: "Your Velas are running low.",
+      },
+      other: {
+        named: "Something new on {app}.",
+        plain: "Something new on {app}.",
+      },
+    },
+    settings: {
+      title: "Notifications",
+      device: "Notifications on this device",
+      deviceOn: "On: this browser gets them.",
+      deviceOff: "Off: this browser gets none.",
+      blocked:
+        "Notifications are blocked for {app} in this browser. Allow them in the browser's site settings, then come back.",
+      unavailable: "Notifications aren't available in this browser.",
+      iosInstall:
+        "On iPhone, notifications need {app} on your Home Screen: tap Share, then Add to Home Screen, and open it from there.",
+      kindsTitle: "Tell me about",
+      match: "New matches",
+      message: "Threads and messages",
+      like: "Likes",
+      gift: "Gifts",
+      album: "Private pictures",
+      albumHint: "Requests to see them, and answers to yours.",
+      knot: "Knots",
+      expiry: "A Thread about to run out",
+      balance: "Velas running low",
+      genericText: "Hide names",
+      genericTextHint: "Say “New message” instead of who it's from.",
+      listHint: "Turned off, it still shows in your notifications here.",
+      saveFailed: "We couldn't save that. Try again.",
+      failed: "We couldn't load your notification settings.",
+      turnOnFailed: "We couldn't turn notifications on. Try again.",
+    },
+    ask: {
+      title: "Know when they write back",
+      body: "Turn on notifications for messages, matches and requests. You can change this in You.",
+      turnOn: "Turn on",
+      notNow: "Not now",
+    },
+    you: {
+      settings: "Notification settings",
+      list: "Your notifications",
+    },
+  },
   apiErrors: {
     unknown: "Something went wrong. Try again.",
     network: "We couldn't reach {app}. Check your connection and try again.",
@@ -1354,7 +1457,16 @@ export const en = {
         title: "Who else handles your data",
         // D-023, D-026, D-027, D-028, D-035, D-048.
         // P-0.3: Zoho holds every support and grievance email.
-        body: "Google (sign-in codes), Razorpay (payments), Sightengine (photo checks), Cloudflare (storing photos and voice notes), Supabase (our database), Upstash (our cache), Fly.io (our servers), Vercel (our website) and Zoho (our support and grievance email).",
+        // T-9.4: the push services, if you turn notifications on (D-857).
+        body: "Google (sign-in codes), Razorpay (payments), Sightengine (photo checks), Cloudflare (storing photos and voice notes), Supabase (our database), Upstash (our cache), Fly.io (our servers), Vercel (our website), Zoho (our support and grievance email) and, if you turn on notifications, your browser's maker (delivering them).",
+      },
+      // T-9.4 (D-857): what a push carries and who delivers it. The services
+      // are outside India; what they carry is encrypted for your browser alone.
+      push: {
+        title: "Notifications",
+        body: "If you turn on notifications, your browser's maker delivers them: Google for Chrome and Android, Apple for Safari on iPhone, iPad and Mac, Mozilla for Firefox, and Microsoft for Edge, from their servers outside India. Each notification is encrypted so that only your browser can read it. It says what happened, which person or Thread it's about, and that person's first name, unless you turn on Hide names. It never carries a message's text. The browser's maker sees only that a notification was sent to your browser, and when.",
+        choices:
+          "Turn them off, or choose which ones you get, in You, under notification settings, or in your browser's settings. Paused accounts get none.",
       },
       cookies: {
         title: "Cookies",

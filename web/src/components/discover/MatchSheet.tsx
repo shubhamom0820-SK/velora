@@ -2,6 +2,7 @@
 
 import { useRouter } from "next/navigation";
 
+import { PushAsk } from "@/components/notifications/PushAsk";
 import { Button } from "@/components/ui/Button";
 import { Sheet } from "@/components/ui/Sheet";
 import { useToast } from "@/components/ui/useToast";
@@ -35,7 +36,8 @@ function initialOf(name: string): string {
  * The match sheet ✦ (08-DESIGN §8): two initials joined by the thread, its
  * ring at the middle; the one whose like was there first ringed in
  * `--chrome-accent`. "Open thread · 5 Velas" for him, "· Free" for her, the
- * number from `/prices` and sent back as `shown_price` (P-56, D-600).
+ * number from `/prices` and sent back as `shown_price` (P-56, D-600). Below
+ * them, once per browser, the ask for notifications (T-9.4).
  */
 export function MatchSheet({
   match,
@@ -115,6 +117,8 @@ export function MatchSheet({
         <p className="text-micro text-chrome-mute text-center">
           {t("discover.match.footer")}
         </p>
+        {/* After a match, never on load (T-9.4): once per browser. */}
+        {match !== null && <PushAsk />}
       </div>
     </Sheet>
   );

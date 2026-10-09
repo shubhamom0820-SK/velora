@@ -80,6 +80,10 @@ export default function PrivacyPage() {
       <LegalSection title={t("legal.privacy.others.title")}>
         <p>{t("legal.privacy.others.body")}</p>
       </LegalSection>
+      <LegalSection title={t("legal.privacy.push.title")}>
+        <p>{t("legal.privacy.push.body")}</p>
+        <p>{t("legal.privacy.push.choices")}</p>
+      </LegalSection>
       <LegalSection title={t("legal.privacy.cookies.title")}>
         <p>{t("legal.privacy.cookies.body")}</p>
       </LegalSection>

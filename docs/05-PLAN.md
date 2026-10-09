@@ -6522,10 +6522,12 @@ The number comes from the session's own block, given in its brief, from P-100 up
   profile stays without a picture for days. 02-ARCHITECTURE §4 said notifying the user was
   T-9.4's, but T-9.4's kinds never listed it. A `photo_decided` kind, its setting, and its words.
   Filed by Claude building T-9.4, 9 October 2026.
-- [ ] P-752 · A Thread's push opens the conversation. **In T-7.11**, once a conversation has a route.
+- [x] P-752 · A Thread's push opens the conversation. **In T-7.11**, once a conversation has a route.
   Worst case: a message push opens the chats list, one tap short of the message. `web/src/lib/
   notification-view.ts`'s `ROUTES` sends every Thread kind to `/chats`. Change that one table
   (and its test) when `/chats/[id]` exists. Filed by Claude building T-9.4, 9 October 2026.
+  **Done in T-9.4's landing, 9 October 2026:** T-7.11 landed first with `/chats/[id]`, so every
+  Thread kind now opens `/chats/{thread_id}` (`push-worker.test.ts` holds it).
 - [ ] P-753 · See real pushes arrive, on staging, on real devices. **Once the founder has set the
   VAPID secrets.** Worst case: every push service refuses ours (a 403 from a wrong pair, a 400
   from a malformed token), each is tried three times and dropped, and nobody is ever told

@@ -61,6 +61,11 @@ export const queryKeys = {
   typing: (id: string) => ["threads", "typing", id] as const,
   // A voice note's signed link, 10 minutes long (D-027).
   voiceMedia: (messageId: string) => ["messages", messageId, "media"] as const,
+  // Notifications (T-9.4): the list, the settings, and the VAPID key, which a
+  // 404 says this build has no push for.
+  notifications: () => ["notifications"] as const,
+  notificationPrefs: () => ["notifications", "prefs"] as const,
+  pushKey: () => ["notifications", "push-key"] as const,
   profile: (id: string) => ["profiles", id] as const,
   // The private album (T-8.8): someone's, as the viewer may see it, and the
   // requests to see one's own.

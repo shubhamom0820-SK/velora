@@ -210,6 +210,8 @@ export const NONCE_ROUTES = [
   "people",
   // `/@username`'s page (T-6.8), behind next.config's rewrite: their text.
   "share",
+  // The in-app notifications list (T-9.4).
+  "notifications",
 ] as const;
 
 /**
@@ -298,6 +300,9 @@ export function contentSecurityPolicy(
     ...(firebase || razorpay
       ? [`frame-src 'self'${extra(FIREBASE.frame)}${pay(RAZORPAY.frame)}`]
       : []),
+    // The service worker (T-9.4): `/sw.js` from this site only, said outright
+    // rather than left to script-src, whose 'strict-dynamic' ignores 'self'.
+    "worker-src 'self'",
     "object-src 'none'",
     "base-uri 'none'",
     "form-action 'self'",
