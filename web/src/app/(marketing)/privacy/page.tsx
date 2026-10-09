@@ -24,6 +24,7 @@ const COLLECTED = [
   "selfie",
   "messages",
   "blocks",
+  "safety",
   "payments",
   "waitlist",
 ] as const;

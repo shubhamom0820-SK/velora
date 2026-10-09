@@ -419,7 +419,7 @@ async def test_a_possible_minor_is_rejected_recorded_as_a_score_and_every_copy_d
     )
     assert storage.objects == {}
     [signal] = await _signals(db, user)
-    assert (signal.signal, signal.weight) == ("possible_minor_photo_score", 0)
+    assert (signal.signal, signal.weight) == ("possible_minor_photo_score", 10)
     # The minimal record: the user and when (the row), the score and the model.
     assert signal.meta == {
         "what": "A model's score for one photo, not a finding about the person "

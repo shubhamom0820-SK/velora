@@ -479,7 +479,9 @@ async def test_a_rejected_first_message_opens_nothing_and_is_recorded(
             FraudEvent.user_id == man_id
         )
     )
-    assert signals.tuples().all() == [("message_rejected", 0, {"rule": "solicitation"})]
+    assert signals.tuples().all() == [
+        ("message_rejected", 15, {"rule": "solicitation"})
+    ]
 
 
 # --- Whom: every refusal NOT_FOUND --------------------------------------------------

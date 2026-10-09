@@ -195,6 +195,8 @@ async def test_an_existing_number_signs_in_without_a_second_account(
     user, _ = await make_user(gender="female")
     phone = await _phone_of(db, user)
     users_before = await _count(db, User)
+    # Counted apart: the system user (T-9.2) is a row with no profile.
+    profiles_before = await _count(db, Profile)
     code = await _code_for(client, fake_providers, phone)
 
     response = await _verify(client, code, phone)
@@ -205,7 +207,7 @@ async def test_an_existing_number_signs_in_without_a_second_account(
     assert (me["gender"], me["age"], me["onboarding_step"]) == ("female", 25, "done")
     assert me["profile"]["first_name"] == "Test"
     assert await _count(db, User) == users_before
-    assert await _count(db, Profile) == users_before
+    assert await _count(db, Profile) == profiles_before
 
 
 async def _phone_of(db: AsyncSession, user: User) -> str:

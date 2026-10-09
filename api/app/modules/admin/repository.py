@@ -17,8 +17,20 @@ async def config_value(session: AsyncSession, key: str) -> Any | None:
 
 
 async def add_audit(
-    session: AsyncSession, *, actor_id: UUID, action: str, meta: dict[str, Any] | None
+    session: AsyncSession,
+    *,
+    actor_id: UUID,
+    action: str,
+    meta: dict[str, Any] | None,
+    target: tuple[str, UUID] | None = None,
 ) -> None:
+    target_type, target_id = target if target is not None else (None, None)
     await session.execute(
-        insert(AuditLogEntry).values(actor_id=actor_id, action=action, meta=meta)
+        insert(AuditLogEntry).values(
+            actor_id=actor_id,
+            action=action,
+            meta=meta,
+            target_type=target_type,
+            target_id=target_id,
+        )
     )

@@ -52,7 +52,8 @@ velora/
     app/modules/<name>/ router.py service.py repository.py schemas.py models.py
     app/workers/        ARQ worker (main.py, `python -m app.workers`) + tasks/
     app/tools/          checks run by hand inside a deployed machine (storage_probe, T-4.1;
-                        sightengine_shape, T-4.4; selfie_review, the founder's, T-4.5, D-264)
+                        sightengine_shape, T-4.4; selfie_review, the founder's, T-4.5, D-264;
+                        unfreeze, the founder's, lifting any freeze, T-9.2, D-906)
     alembic/            migrations
     seed/               make seed: dev data, local stack only, never in the image (D-064)
     bench/              benchmarks run by hand, never in the image nor `make test`: liveness/,
@@ -128,7 +129,8 @@ make worker      # ARQ worker only: moderate_photo, delete_files, verify_selfie,
                  # once, D-261); two daily crons: log_turnover at 09:00 IST, the year's turnover at
                  # warning from ₹15 lakh (D-483), and erase_accounts at 03:30 IST (D-500); and
                  # once a minute in its own loop, not ARQ's, the Thread's clock: expire_threads and
-                 # warn_expiring (T-7.6, D-640); and pushes, never ARQ jobs: push_outbox sent on a
+                 # warn_expiring (T-7.6, D-640); and every 10 minutes in another, recompute_fraud,
+                 # which scores and may freeze (T-9.2, D-900); and pushes, never ARQ jobs: push_outbox sent on a
                  # wake (wake:send_push) and in that minute (T-9.4, D-850)
 make models      # fetch the face models into api/models, checked by SHA-256 (D-088; needed
                  # where FACEMATCH_PROVIDER=sface, and by the face-match tests)

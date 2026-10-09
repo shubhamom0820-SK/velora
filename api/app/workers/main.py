@@ -23,6 +23,9 @@ themselves).
   channel of its own (`app/workers/wake.py`), started with the worker, so a
   woman's selfie is decided in seconds, not at the next look at the queue. The
   queued job stays the path that is sure to run.
+- **Fraud scoring runs every 10 minutes in a loop of its own** (T-9.2,
+  `recompute_fraud`), the minute's kind of loop, coordinated in Postgres, so it
+  costs Redis nothing but the sockets a freeze closes.
 - **Pushes are sent from `push_outbox`, never as ARQ jobs** (T-9.4, D-850): a
   second listener, on `wake:send_push`, sends them the moment a notification
   commits, and the worker's minute sends any a lost wake left. An ARQ job a
@@ -79,7 +82,7 @@ from app.core.queue import (
 )
 from app.workers.minutely import Minutely
 from app.workers.tasks import log_turnover as log_turnover_job
-from app.workers.tasks import send_push, thread_clock
+from app.workers.tasks import recompute_fraud, send_push, thread_clock
 from app.workers.tasks import verify_selfie as verify_selfie_job
 from app.workers.tasks.blur_photo import BLUR_TRIES, blur_photo
 from app.workers.tasks.delete_files import delete_files
@@ -206,11 +209,13 @@ async def startup(ctx: MutableMapping[str, Any]) -> None:
     ctx["wake"] = asyncio.create_task(listen_for_wakes(ctx, settings).run())
     ctx["push_wake"] = asyncio.create_task(listen_for_pushes(ctx, settings).run())
     ctx["minutely"] = asyncio.create_task(each_minute(ctx).run())
+    ctx["fraud"] = asyncio.create_task(every_ten_minutes(ctx).run())
     log.info(
         "worker.started",
         jobs=[job.name for job in JOBS],
         cron=[job.name for job in CRON_JOBS],
         minutely=[THREAD_CLOCK, SEND_PUSH],
+        every_ten_minutes=[RECOMPUTE_FRAUD],
         poll_delay_s=settings.WORKER_POLL_DELAY_S,
         env=settings.ENV,
     )
@@ -254,9 +259,20 @@ def each_minute(ctx: MutableMapping[str, Any]) -> Minutely:
     return Minutely(work, name=THREAD_CLOCK)
 
 
+# T-9.2: fraud scoring, every 10 minutes (02-ARCHITECTURE §7), in its own loop.
+RECOMPUTE_FRAUD: Final = "recompute_fraud"
+
+
+def every_ten_minutes(ctx: MutableMapping[str, Any]) -> Minutely:
+    async def work() -> dict[str, int]:
+        return await recompute_fraud.run(ctx)
+
+    return Minutely(work, name=RECOMPUTE_FRAUD, every_s=recompute_fraud.EVERY_S)
+
+
 async def shutdown(ctx: MutableMapping[str, Any]) -> None:
     """Release what `startup` opened. Safe if it never ran."""
-    for task in ("minutely", "wake", "push_wake"):
+    for task in ("minutely", "fraud", "wake", "push_wake"):
         if task in ctx:
             ctx[task].cancel()
             with contextlib.suppress(asyncio.CancelledError):

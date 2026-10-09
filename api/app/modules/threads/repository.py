@@ -529,3 +529,18 @@ async def genders_of(
         select(User.id, User.gender).where(User.id.in_(user_ids))
     )
     return {user_id: gender for user_id, gender in rows.tuples()}
+
+
+async def opened_since(session: AsyncSession, user_id: UUID, since: datetime) -> int:
+    """How many Threads `user_id` opened from `since` on (T-9.2): by either
+    side of the pair, so each side's index serves it."""
+    found = await session.scalar(
+        select(func.count())
+        .select_from(Thread)
+        .where(
+            or_(Thread.user_low == user_id, Thread.user_high == user_id),
+            Thread.opened_by == user_id,
+            Thread.created_at >= since,
+        )
+    )
+    return int(found or 0)

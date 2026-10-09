@@ -312,7 +312,7 @@ async def test_velas_partly_spent_take_what_is_left_and_record_the_rest(
 ) -> None:
     """Of 36, 26 spent: the 10 left are taken, the balance stops at 0, and the
     26 are a shortfall, logged; on a dispute a `chargeback_shortfall` signal
-    too, weight 0 until T-9.2."""
+    too, worth 30 since T-9.2 (D-900)."""
     man, payment_id, order_id = await _paid(
         db, client, make_user, fake_providers.payments
     )
@@ -338,7 +338,7 @@ async def test_velas_partly_spent_take_what_is_left_and_record_the_rest(
         assert signals == []
     else:
         [signal] = signals
-        assert (signal.signal, signal.weight) == ("chargeback_shortfall", 0)
+        assert (signal.signal, signal.weight) == ("chargeback_shortfall", 30)
         assert signal.meta is not None
         assert (signal.meta["payment_id"], signal.meta["shortfall"]) == (
             str(payment_id),

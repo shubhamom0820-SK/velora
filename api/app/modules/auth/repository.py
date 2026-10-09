@@ -5,7 +5,7 @@ from __future__ import annotations
 from datetime import datetime
 from uuid import UUID
 
-from sqlalchemy import select, update
+from sqlalchemy import func, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.enums import BanKind
@@ -86,3 +86,18 @@ async def revoke_every_session(
         .where(Session.user_id == user_id, Session.revoked_at.is_(None))
         .values(revoked_at=at)
     )
+
+
+async def sign_ins_since(session: AsyncSession, user_id: UUID, since: datetime) -> int:
+    """How many session families of `user_id`'s, still signed in, began from
+    `since` on: their sign-ins (T-9.2, D-903). Only live ones, so the partial
+    index on live sessions serves it; a family signed out before this one
+    began isn't counted."""
+    found = await session.scalar(
+        select(func.count(Session.family_id.distinct())).where(
+            Session.user_id == user_id,
+            Session.revoked_at.is_(None),
+            Session.auth_time >= since,
+        )
+    )
+    return int(found or 0)

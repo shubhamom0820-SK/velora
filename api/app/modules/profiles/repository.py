@@ -132,6 +132,19 @@ def centroid_of(area_id: UUID) -> Any:
     return on_grid(select(Area.centroid).where(Area.id == area_id).scalar_subquery())
 
 
+async def km_from_current(
+    session: AsyncSession, user_id: UUID, location: Any
+) -> float | None:
+    """How far `location` is from where `user_id`'s profile is now, in
+    kilometres, or None if it has no location yet (T-9.2)."""
+    metres = await session.scalar(
+        select(func.ST_Distance(Profile.location, location)).where(
+            Profile.user_id == user_id, Profile.location.is_not(None)
+        )
+    )
+    return None if metres is None else float(metres) / 1000
+
+
 async def nearest_area_id(
     session: AsyncSession, lat: float, lng: float, within_m: float
 ) -> UUID | None:

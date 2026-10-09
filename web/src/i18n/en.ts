@@ -1592,6 +1592,10 @@ export const en = {
         // moderation signal. Silent: D-862.
         blocks:
           "Who you block and report, for our moderators. We keep a block on record after you undo it, and nobody is ever told who blocked or reported them.",
+        // T-9.2 (D-900, D-903): what fraud scoring reads, and what it can do.
+        // Sign-ins are counted, never an address or a browser's name (D-067).
+        safety:
+          "Signs of misuse, to keep out fake accounts and scams: reports about you, messages our filters refused or masked, many new chats or sign-ins in a short time, the same first message sent to many people, and large jumps in your location. They are scored automatically. A high score can limit who sees your profile, or freeze your account until our team looks into it.",
         // D-026, D-021.
         payments:
           "Your payments. Razorpay handles the payment itself. We keep a record of every payment and a permanent history of your Velas.",

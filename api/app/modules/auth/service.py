@@ -45,6 +45,8 @@ from app.core.security import (
 from app.modules.admin import service as admin_service
 from app.modules.auth import firebase_store, otp_store, pins, repository
 from app.modules.auth.models import Session as SessionRow
+from app.modules.safety import fraud
+from app.modules.safety import signals as safety_signals
 from app.modules.users import service as users_service
 from app.modules.users.schemas import Me
 
@@ -340,6 +342,16 @@ async def sign_in(session: AsyncSession, settings: Settings, phone: E164) -> New
             expires_at=now + SESSION_TTL,
             auth_time=now,
         )
+        # T-9.2 (D-903): more than `fraud.SIGN_INS_MAX` sign-ins in 7 days, the
+        # "devices" of the plan, counted without storing an address or a
+        # browser's name (D-067 stands).
+        sign_ins = await repository.sign_ins_since(
+            session, user.id, now - fraud.SIGN_INS_WINDOW
+        )
+        if sign_ins > fraud.SIGN_INS_MAX:
+            await safety_signals.record_crossing(
+                session, user.id, fraud.MANY_SIGN_INS, {"sign_ins": sign_ins}
+            )
         me = await users_service.me(session, user)
     return NewSession(
         access_token=make_access_token(user.id, user.role, settings, auth_time=now),

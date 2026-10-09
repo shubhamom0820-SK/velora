@@ -38,25 +38,25 @@ from app.core.storage_keys import public_url
 from app.modules.album import service as album_service
 from app.modules.discovery import rules as discovery_rules
 from app.modules.messages.models import Message
-from app.modules.safety import repository, schemas
+from app.modules.safety import fraud, repository, schemas, scoring, signals
 from app.modules.safety.models import FraudEvent, Report
 from app.modules.threads.schemas import CardLite
 from app.modules.users.models import User
 
 # D-093: a model's score that one photo may show a minor. The name and the
 # record say so; nothing downstream may read it as a fact about the person.
-POSSIBLE_MINOR_SCORE: Final = "possible_minor_photo_score"
+POSSIBLE_MINOR_SCORE: Final = fraud.POSSIBLE_MINOR_SCORE
 POSSIBLE_MINOR_NOTE: Final = (
     "A model's score for one photo, not a finding about the person (D-093)."
 )
-# Counts for nothing until T-9.2 says how much a signal like this may count;
-# repeated flags go to a human, never to an automatic action (D-093, P-72).
-POSSIBLE_MINOR_WEIGHT: Final = 0
+# T-9.2 (D-900): it weighs in the score, capped under the monitor band, so it
+# never acts on anyone alone; repeated flags go to a human, never to an
+# automatic action (D-093, P-72).
+POSSIBLE_MINOR_WEIGHT: Final = fraud.WEIGHTS[fraud.POSSIBLE_MINOR_SCORE]
 
 # T-7.3, D-030: a message refused for a rule. The rule's name only, never the
-# text (CLAUDE.md rule 15). Counts for nothing until T-9.2 weighs it.
-MESSAGE_REJECTED: Final = "message_rejected"
-MESSAGE_REJECTED_WEIGHT: Final = 0
+# text (CLAUDE.md rule 15). Worth what its rule is (T-9.2, D-900).
+MESSAGE_REJECTED: Final = fraud.MESSAGE_REJECTED
 
 
 def record_possible_minor(
@@ -79,13 +79,13 @@ def record_possible_minor(
 # D-520: a chargeback whose Velas were spent before they could be taken back.
 # What happened to the money, not a judgement of him: a dispute may be his
 # bank's mistake, and freezing is a moderation decision, never automatic.
-CHARGEBACK_SHORTFALL: Final = "chargeback_shortfall"
+CHARGEBACK_SHORTFALL: Final = fraud.CHARGEBACK_SHORTFALL
 CHARGEBACK_SHORTFALL_NOTE: Final = (
     "A dispute took back money whose Velas were spent: the Velas it couldn't "
     "take back (D-520)."
 )
-# Counts for nothing until T-9.2 says what it may count for (D-520).
-CHARGEBACK_SHORTFALL_WEIGHT: Final = 0
+# T-9.2 (D-900): capped at monitor, so a chargeback never freezes on its own (D-520).
+CHARGEBACK_SHORTFALL_WEIGHT: Final = fraud.WEIGHTS[fraud.CHARGEBACK_SHORTFALL]
 
 
 def record_chargeback_shortfall(
@@ -115,7 +115,7 @@ def record_message_rejected(session: AsyncSession, user_id: UUID, *, rule: str) 
         FraudEvent(
             user_id=user_id,
             signal=MESSAGE_REJECTED,
-            weight=MESSAGE_REJECTED_WEIGHT,
+            weight=fraud.rejected_weight(rule),
             meta={"rule": rule},
         ),
     )
@@ -257,6 +257,12 @@ async def report(
         )
         if body.also_block:
             revoked = await _block_in(session, user, body.reported_id)
+        # T-9.2: a signal, and the score at once, so three reports in 24 hours
+        # freeze in the third one's transaction (D-031, D-901).
+        signals.record_report_received(
+            session, body.reported_id, report_id=filed.id, reason=body.reason
+        )
+        await scoring.recompute(session, body.reported_id)
         result = schemas.ReportFiled(id=filed.id, created_at=filed.created_at)
     await album_service.delete_revoked_copies(queue, revoked)
     return result

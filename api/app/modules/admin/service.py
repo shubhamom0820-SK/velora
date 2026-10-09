@@ -13,6 +13,12 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core import clock
 from app.modules.admin import repository
 
+# The system user (T-9.2, P-20, D-905): who `audit_log.actor_id` names when
+# nobody did it, as an automatic freeze. Its row is the migration 4800f0e8d5a9's,
+# shaped like an erased account so that it never signs in or appears anywhere
+# people are listed.
+SYSTEM_USER_ID: Final = UUID("00000000-0000-4000-8000-000000000001")
+
 # 03-SCHEMA §8: `app_config` is cached 60 s, so a change reaches every reader
 # within a minute (P-47).
 CACHED_FOR: Final = timedelta(seconds=60)
@@ -60,7 +66,12 @@ async def audit(
     actor_id: UUID,
     action: str,
     meta: dict[str, Any] | None = None,
+    *,
+    target: tuple[str, UUID] | None = None,
 ) -> None:
     """Record an admin's call in `audit_log`, inside the caller's transaction,
-    beside whatever it did or read (02-ARCHITECTURE §12, T-9.5's "every call")."""
-    await repository.add_audit(session, actor_id=actor_id, action=action, meta=meta)
+    beside whatever it did or read (02-ARCHITECTURE §12, T-9.5's "every call");
+    `target` is what it acted on, `(type, id)`."""
+    await repository.add_audit(
+        session, actor_id=actor_id, action=action, meta=meta, target=target
+    )

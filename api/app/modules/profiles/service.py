@@ -28,6 +28,8 @@ from app.modules.profiles.schemas import (
     Interest,
     UsernameAvailability,
 )
+from app.modules.safety import fraud
+from app.modules.safety import signals as safety_signals
 from app.modules.users import service as users_service
 from app.modules.users.models import User
 from app.modules.users.schemas import Me
@@ -125,7 +127,7 @@ async def set_position(session: AsyncSession, user: User, lat: float, lng: float
         profile.area_id = await repository.nearest_area_id(
             session, lat, lng, within_m=rules.AREA_WITHIN_M
         )
-        _locate(profile, repository.point(lat, lng))
+        await _locate(session, profile, repository.point(lat, lng))
         return await users_service.me(session, user)
 
 
@@ -139,14 +141,24 @@ async def set_area(session: AsyncSession, user: User, area_id: UUID) -> Me:
             raise invalid_field("area_id", "isn't an area")
         profile = await repository.profile_of(session, user.id)
         profile.area_id = area_id
-        _locate(profile, repository.centroid_of(area_id))
+        await _locate(session, profile, repository.centroid_of(area_id))
         return await users_service.me(session, user)
 
 
-def _locate(profile: Profile, location: object) -> None:
-    """The location and its time, always together: `Me` reads the time alone."""
+async def _locate(session: AsyncSession, profile: Profile, location: object) -> None:
+    """The location and its time, always together: `Me` reads the time alone.
+    A move of more than `fraud.JUMP_KM` within `fraud.JUMP_WITHIN` of the last
+    one is a signal (T-9.2), its distance only, never either place."""
+    now = clock.now()
+    last = profile.location_updated_at
+    if last is not None:
+        km = await repository.km_from_current(session, profile.user_id, location)
+        if km is not None and fraud.jumped(km, now - last):
+            await safety_signals.record_crossing(
+                session, profile.user_id, fraud.LOCATION_JUMP, {"km": round(km)}
+            )
     profile.location = location
-    profile.location_updated_at = clock.now()
+    profile.location_updated_at = now
 
 
 # --- Name, places and about (T-3.7) ------------------------------------------------

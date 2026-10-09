@@ -93,7 +93,7 @@
 ## G. Weekly ops (from beta onward)
 
 - [ ] Report queue: zero items older than 24 h
-- [ ] Fraud: review every `freeze` and a sample of `shadow`
+- [ ] Fraud: review every `freeze` and a sample of `shadow` (`audit_log`'s `fraud.freeze` and `fraud.band` rows, by the system user, D-905); lift a wrong freeze with `python -m app.tools.unfreeze` (D-906)
 - [ ] Ledger reconciliation cron: zero mismatches
 - [ ] Payments: dashboard totals match `payments` table
 - [ ] Metrics review (T-10.3) — write 3 lines in `docs/weekly.md`

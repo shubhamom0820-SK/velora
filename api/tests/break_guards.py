@@ -5451,8 +5451,8 @@ T82: list[Case] = [
         edits=[
             (
                 SAFETY_SERVICE,
-                "CHARGEBACK_SHORTFALL_WEIGHT: Final = 0\n",
-                'CHARGEBACK_SHORTFALL_WEIGHT: Final = 0\n\n\nasync def _take(session, user_id):\n    from app.modules.wallet import service as wallet_service\n\n    await wallet_service.reverse(session, user_id, 5, "purchase_reversal", ref=None, event="x")\n',
+                "CHARGEBACK_SHORTFALL_WEIGHT: Final = fraud.WEIGHTS[fraud.CHARGEBACK_SHORTFALL]\n",
+                'CHARGEBACK_SHORTFALL_WEIGHT: Final = fraud.WEIGHTS[fraud.CHARGEBACK_SHORTFALL]\n\n\nasync def _take(session, user_id):\n    from app.modules.wallet import service as wallet_service\n\n    await wallet_service.reverse(session, user_id, 5, "purchase_reversal", ref=None, event="x")\n',
             )
         ],
         expect=["test_only_the_webhooks_reversal_reaches_reverse"],
@@ -11567,11 +11567,6 @@ T91: list[Case] = [
             ),
             (
                 SAFETY_REPO,
-                "from sqlalchemy import Row, select, tuple_, update\n",
-                "from sqlalchemy import Row, exists, select, tuple_, update\n",
-            ),
-            (
-                SAFETY_REPO,
                 "from app.modules.threads.models import Thread\n",
                 "from app.modules.threads.models import Thread, ThreadClear\n",
             ),
@@ -11633,8 +11628,8 @@ T91: list[Case] = [
             (SAFETY_REPO, "        .values(unblocked_at=now)\n", ""),
             (
                 SAFETY_REPO,
-                "from sqlalchemy import Row, select, tuple_, update\n",
-                "from sqlalchemy import Row, delete, select, tuple_, update\n",
+                "from sqlalchemy import Row, Uuid, and_, cast, exists, func, or_, select, tuple_, update\n",
+                "from sqlalchemy import Row, Uuid, and_, cast, delete, exists, func, or_, select, tuple_, update\n",
             ),
         ],
         expect=["test_unblocking_keeps_the_row_and_blocking_again_is_a_new_one"],
@@ -12051,6 +12046,352 @@ P680: list[Case] = [
     ),
 ]
 
+# --- T-9.2: fraud scoring and auto-freeze -----------------------------------------
+
+FRAUD = "app/modules/safety/fraud.py"
+SCORING = "app/modules/safety/scoring.py"
+SIGNALS = "app/modules/safety/signals.py"
+SAFETY_SERVICE92 = "app/modules/safety/service.py"
+SAFETY_REPO92 = "app/modules/safety/repository.py"
+MESSAGES_SERVICE92 = "app/modules/messages/service.py"
+MESSAGES_REPO92 = "app/modules/messages/repository.py"
+THREADS_REPO92 = "app/modules/threads/repository.py"
+AUTH_REPO92 = "app/modules/auth/repository.py"
+FRAUD_WORKER = "app/workers/tasks/recompute_fraud.py"
+WORKER_MAIN92 = "app/workers/main.py"
+SYSTEM_USER_MIGRATION = "alembic/versions/20261009_4800f0e8d5a9_system_user.py"
+T92_SELECTION = [
+    "tests/modules/safety",
+    "tests/tools/test_unfreeze.py",
+    "tests/workers/test_recompute_fraud.py",
+]
+FROZE = "test_a_score_above_80_freezes_signs_out_closes_sockets_and_audits"
+THIRD_REPORT = "test_three_reporters_sharing_a_thread_freeze_in_the_third_report"
+
+T92: list[Case] = [
+    Case(
+        id="t92-01-a-report-is-no-signal",
+        what="a report filed and no signal written for the person reported",
+        edits=[
+            (
+                SAFETY_SERVICE92,
+                "        signals.record_report_received(\n",
+                "        if False:\n          signals.record_report_received(\n",
+            )
+        ],
+        expect=["test_a_report_is_a_signal_on_the_person_reported_naming_the_report"],
+    ),
+    Case(
+        id="t92-02-a-report-scores-nobody",
+        what="D-031's three reports left to the next sweep, not the third report",
+        edits=[
+            (
+                SAFETY_SERVICE92,
+                "        await scoring.recompute(session, body.reported_id)\n",
+                "",
+            )
+        ],
+        expect=[THIRD_REPORT],
+    ),
+    Case(
+        id="t92-03-scored-without-the-lock",
+        what="two reports at once each counting two, so neither freezes",
+        edits=[
+            (
+                SAFETY_REPO92,
+                "    query = query.with_for_update(key_share=True, skip_locked=skip_locked)\n",
+                "",
+            )
+        ],
+        expect=["test_two_reports_at_once_are_counted_one_after_the_other"],
+    ),
+    Case(
+        id="t92-04-strangers-reports-freeze",
+        what="D-901: reporters who never shared a Thread counted toward the freeze",
+        edits=[(SAFETY_REPO92, "            shares_a_thread,\n", "")],
+        expect=["test_reporters_who_never_shared_a_thread_shadow_and_never_freeze"],
+    ),
+    Case(
+        id="t92-05-by-account-not-number",
+        what="D-901: reporters counted by account, so one number counts twice",
+        edits=[
+            (
+                SAFETY_REPO92,
+                "        select(func.count(reporter.phone_hash.distinct()))\n",
+                "        select(func.count(reporter.id.distinct()))\n",
+            )
+        ],
+        expect=["test_one_numbers_two_accounts_report_as_one"],
+    ),
+    Case(
+        id="t92-06-a-deleted-account-frozen",
+        what="D-902: a deleted account frozen, which stops its erasure",
+        edits=[
+            (
+                FRAUD,
+                "FREEZABLE: Final = frozenset({UserStatus.ACTIVE, UserStatus.PAUSED})\n",
+                "FREEZABLE: Final = frozenset({UserStatus.ACTIVE, UserStatus.PAUSED, UserStatus.DELETED})\n",
+            )
+        ],
+        expect=["test_a_deleted_or_banned_account_is_left_as_it_is[deleted]"],
+    ),
+    Case(
+        id="t92-07-frozen-but-signed-in",
+        what="D-557: a freeze that leaves the sessions and sockets open",
+        edits=[
+            (
+                SCORING,
+                "    await auth_service.sign_out_everywhere(session, user.id)\n",
+                "",
+            )
+        ],
+        expect=[FROZE],
+    ),
+    Case(
+        id="t92-08-a-freeze-nobody-audits",
+        what="P-20: an automatic freeze written nowhere",
+        edits=[
+            (
+                SCORING,
+                "    await admin_service.audit(\n        session,\n        admin_service.SYSTEM_USER_ID,\n        FREEZE,\n",
+                "    if False:\n      await admin_service.audit(\n        session,\n        admin_service.SYSTEM_USER_ID,\n        FREEZE,\n",
+            )
+        ],
+        expect=[FROZE],
+    ),
+    Case(
+        id="t92-09-frozen-at-every-score",
+        what="D-902: a freeze whatever the status, so written again at every recompute",
+        edits=[
+            (
+                SCORING,
+                "    if user.status not in fraud.FREEZABLE:\n        return False\n",
+                "",
+            )
+        ],
+        expect=[
+            "test_a_freeze_is_written_once_however_often_it_is_scored",
+            "test_a_deleted_or_banned_account_is_left_as_it_is[banned]",
+        ],
+    ),
+    Case(
+        id="t92-10-nothing-decays",
+        what="D-900's decay lost: a week-old signal counts in full",
+        edits=[
+            (
+                FRAUD,
+                "    return weight * left if left > 0 else 0.0\n",
+                "    return float(weight)\n",
+            )
+        ],
+        expect=[
+            "test_older_signals_count_less_and_a_week_old_ones_not_at_all",
+            "test_an_event_decays_in_a_straight_line_to_nothing_at_seven_days",
+        ],
+    ),
+    Case(
+        id="t92-11-a-minor-score-uncapped",
+        what="D-093: possible-minor scores able to shadow or freeze on their own",
+        edits=[
+            (
+                FRAUD,
+                "    POSSIBLE_MINOR_SCORE: 20,\n",
+                "    POSSIBLE_MINOR_SCORE: 100,\n",
+            )
+        ],
+        expect=[
+            "test_possible_minor_scores_never_act_on_anyone_alone",
+            "test_a_possible_minor_never_leaves_the_normal_band_on_its_own",
+        ],
+    ),
+    Case(
+        id="t92-12-every-report-counts",
+        what="one reporter's repeated reports each counted",
+        edits=[
+            (
+                FRAUD,
+                "            key = event.reporter if event.reporter is not None else id(event)\n",
+                "            key = id(event)\n",
+            )
+        ],
+        expect=[
+            "test_one_reporter_three_times_is_one",
+            "test_a_report_counts_once_per_reporter_and_has_no_cap",
+        ],
+    ),
+    Case(
+        id="t92-13-masking-is-no-signal",
+        what="a masked contact detail never written as a signal",
+        edits=[
+            (
+                MESSAGES_SERVICE92,
+                "        safety_signals.record_contact_masked(session, sender_id)\n",
+                "        pass\n",
+            )
+        ],
+        expect=["test_a_masked_contact_is_a_signal_and_never_the_message"],
+    ),
+    Case(
+        id="t92-14-a-crossing-every-time",
+        what="a threshold signal written at every crossing, not once a day",
+        edits=[
+            (
+                SIGNALS,
+                "    if await repository.has_signal_since(session, user_id, signal, since):\n",
+                "    if False:\n",
+            )
+        ],
+        expect=["test_a_threshold_signal_is_written_once_a_day"],
+    ),
+    Case(
+        id="t92-15-any-message-is-a-first",
+        what="a message after someone else's first counted as a first message",
+        edits=[
+            (
+                MESSAGES_REPO92,
+                "            ~exists().where(\n                earlier.thread_id == Message.thread_id,\n                earlier.created_at < Message.created_at,\n            ),\n",
+                "",
+            )
+        ],
+        expect=["test_the_same_first_message_to_more_than_10_people_is_a_signal"],
+    ),
+    Case(
+        id="t92-16-a-rotation-is-a-sign-in",
+        what="D-903: each rotated session counted as a sign-in",
+        edits=[
+            (
+                AUTH_REPO92,
+                "        select(func.count(Session.family_id.distinct())).where(\n",
+                "        select(func.count(Session.id)).where(\n",
+            ),
+            (
+                AUTH_REPO92,
+                "            Session.revoked_at.is_(None),\n            Session.auth_time >= since,\n",
+                "            Session.auth_time >= since,\n",
+            ),
+        ],
+        expect=["test_refreshing_a_session_is_no_sign_in"],
+    ),
+    Case(
+        id="t92-26-sign-ins-from-any-time",
+        what="D-903: sign-ins counted however long ago they were",
+        edits=[(AUTH_REPO92, "            Session.auth_time >= since,\n", "")],
+        expect=["test_sign_ins_older_than_seven_days_dont_count"],
+    ),
+    Case(
+        id="t92-27-in-the-band-but-never-frozen",
+        what="an account the freeze band reached while deleted, never frozen once restored",
+        edits=[
+            (
+                SCORING,
+                "    if band is FraudBand.FREEZE:\n",
+                "    if band is FraudBand.FREEZE and before is not FraudBand.FREEZE:\n",
+            )
+        ],
+        expect=["test_an_account_restored_while_in_the_freeze_band_is_frozen_then"],
+    ),
+    Case(
+        id="t92-17-a-jump-at-any-time",
+        what="a long move counted as a jump however long after the last",
+        edits=[
+            (
+                FRAUD,
+                "    return km > JUMP_KM and since_last <= JUMP_WITHIN\n",
+                "    return km > JUMP_KM\n",
+            )
+        ],
+        expect=["test_a_far_move_after_an_hour_or_a_near_one_is_no_signal"],
+    ),
+    Case(
+        id="t92-18-unfreeze-forgets-the-reset",
+        what="D-906: a lifted freeze scored again on what was set aside",
+        edits=[
+            (
+                SCORING,
+                "        counted_from=clock.now(),\n",
+                "        counted_from=None,\n",
+            )
+        ],
+        expect=[
+            "test_what_was_set_aside_never_freezes_her_again_and_new_signals_count"
+        ],
+    ),
+    Case(
+        id="t92-19-anyone-may-unfreeze",
+        what="D-906: a freeze lifted in the name of someone who isn't an admin",
+        edits=[
+            (
+                SCORING,
+                "        or admin.role is not Role.ADMIN\n",
+                "        or False\n",
+            )
+        ],
+        expect=["test_only_an_active_admin_may_lift_one[user]"],
+    ),
+    Case(
+        id="t92-20-an-unfreeze-nobody-audits",
+        what="D-906: a lifted freeze written nowhere",
+        edits=[
+            (
+                SCORING,
+                "    await admin_service.audit(\n        session,\n        by,\n",
+                "    if False:\n      await admin_service.audit(\n        session,\n        by,\n",
+            )
+        ],
+        expect=[
+            "test_it_lifts_an_automatic_freeze_on_a_woman_and_starts_her_score_again"
+        ],
+    ),
+    Case(
+        id="t92-21-the-system-user-scored",
+        what="D-905: the system user scored like a person",
+        edits=[
+            (
+                SCORING,
+                "    if user is None or user.id == admin_service.SYSTEM_USER_ID:\n        return None\n",
+                "    if user is None:\n        return None\n",
+            )
+        ],
+        expect=["test_the_system_user_is_never_scored"],
+    ),
+    Case(
+        id="t92-22-old-scores-never-decay",
+        what="the sweep reading only new signals, so a score never comes down",
+        edits=[
+            (
+                SAFETY_REPO92,
+                "    ids = signalled.union(scored).subquery()\n",
+                "    ids = signalled.subquery()\n",
+            )
+        ],
+        expect=["test_a_score_decays_to_nothing_once_its_signals_are_a_week_old"],
+    ),
+    Case(
+        id="t92-23-the-system-user-dropped-from-under-the-log",
+        what="the system user's downgrade deleting the row the audit log names",
+        edits=[(SYSTEM_USER_MIGRATION, "    if named:\n", "    if False:\n")],
+        expect=["test_the_downgrade_refuses_while_the_audit_log_names_it"],
+    ),
+    Case(
+        id="t92-24-the-loop-never-starts",
+        what="the worker never starting recompute_fraud's loop",
+        edits=[
+            (
+                WORKER_MAIN92,
+                '    ctx["fraud"] = asyncio.create_task(every_ten_minutes(ctx).run())\n',
+                "",
+            )
+        ],
+        expect=["test_the_worker_starts_the_fraud_loop_and_stops_it"],
+    ),
+    Case(
+        id="t92-25-her-threads-are-his",
+        what="Threads opened to him counted as his openings",
+        edits=[(THREADS_REPO92, "            Thread.opened_by == user_id,\n", "")],
+        expect=["test_more_than_30_threads_opened_in_a_day_is_a_signal[29-False]"],
+    ),
+]
+
 CASES: list[tuple[Case, list[str]]] = (
     [(c, T51_SELECTION) for c in T51]
     + [(c, T54_SELECTION) for c in T54]
@@ -12108,6 +12449,7 @@ CASES: list[tuple[Case, list[str]]] = (
     + [(c, T712_SELECTION) for c in T712]
     + [(c, T98_SELECTION) for c in T98]
     + [(c, P680_SELECTION) for c in P680]
+    + [(c, T92_SELECTION) for c in T92]
 )
 
 # The fifty-connection fixture's own message when Postgres refuses a connection.

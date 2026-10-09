@@ -7,9 +7,22 @@ from datetime import datetime
 from typing import Any
 from uuid import UUID
 
-from sqlalchemy import Row, case, exists, insert, or_, select, tuple_, update
+from sqlalchemy import (
+    Row,
+    case,
+    exists,
+    func,
+    insert,
+    literal,
+    or_,
+    select,
+    tuple_,
+    update,
+)
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import aliased
+from sqlalchemy.sql.elements import ColumnElement
 
 from app.core.enums import Gender, LedgerReason, MessageKind, UserStatus
 from app.modules.discovery.repository import blocked_either_way
@@ -46,6 +59,34 @@ async def add_text(
     )
     assert row is not None
     return row
+
+
+def _normalised(text: ColumnElement[str]) -> ColumnElement[str]:
+    """Case and spacing ignored: "Hi  there" is "hi there"."""
+    return func.lower(func.regexp_replace(func.btrim(text), r"\s+", " ", "g"))
+
+
+async def same_first_messages(
+    session: AsyncSession, sender_id: UUID, text: str, since: datetime
+) -> int:
+    """In how many Threads `sender_id`'s first message since `since` was
+    `text`, case and spacing ignored (T-9.2): a Thread's first message, by
+    anyone, that was theirs. Compared as written, before any masking."""
+    earlier = aliased(Message)
+    found = await session.scalar(
+        select(func.count(Message.thread_id.distinct())).where(
+            Message.sender_id == sender_id,
+            Message.kind == MessageKind.TEXT,
+            Message.created_at >= since,
+            _normalised(func.coalesce(Message.body_raw, Message.body))
+            == _normalised(literal(text)),
+            ~exists().where(
+                earlier.thread_id == Message.thread_id,
+                earlier.created_at < Message.created_at,
+            ),
+        )
+    )
+    return int(found or 0)
 
 
 async def add_voice(

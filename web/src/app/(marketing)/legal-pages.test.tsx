@@ -125,6 +125,17 @@ describe("/privacy", () => {
     ).toBeInTheDocument();
   });
 
+  it("says what fraud scoring reads and that it can freeze an account (T-9.2)", () => {
+    render(<PrivacyPage />);
+
+    const line = screen.getByText(t("legal.privacy.collect.safety"));
+    expect(line).toHaveTextContent("sign-ins");
+    expect(line).toHaveTextContent("scored automatically");
+    expect(line).toHaveTextContent(
+      "freeze your account until our team looks into it",
+    );
+  });
+
   it("says what deleting an account keeps (D-051)", () => {
     render(<PrivacyPage />);
 

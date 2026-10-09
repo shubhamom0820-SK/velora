@@ -7,16 +7,17 @@ from datetime import datetime
 from typing import Any
 from uuid import UUID
 
-from sqlalchemy import Row, select, tuple_, update
+from sqlalchemy import Row, Uuid, and_, cast, exists, func, or_, select, tuple_, update
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import aliased
 from sqlalchemy.sql import Select
 
+from app.core.enums import FraudBand
 from app.modules.discovery.repository import blocked_either_way, main_photo_key
 from app.modules.messages.models import Message
 from app.modules.profiles.models import Profile
-from app.modules.safety.models import Block, FraudEvent, Report
+from app.modules.safety.models import Block, FraudEvent, FraudScore, Report
 from app.modules.threads.models import Thread
 from app.modules.users.models import User
 from app.modules.verification.repository import badge_of
@@ -24,6 +25,123 @@ from app.modules.verification.repository import badge_of
 
 def add_fraud_event(session: AsyncSession, event: FraudEvent) -> None:
     session.add(event)
+
+
+# --- Fraud scoring (T-9.2) -----------------------------------------------------------
+
+
+async def has_signal_since(
+    session: AsyncSession, user_id: UUID, signal: str, since: datetime
+) -> bool:
+    found = await session.scalar(
+        select(
+            exists().where(
+                FraudEvent.user_id == user_id,
+                FraudEvent.signal == signal,
+                FraudEvent.created_at >= since,
+            )
+        )
+    )
+    return bool(found)
+
+
+async def events_since(
+    session: AsyncSession, user_id: UUID, since: datetime
+) -> Sequence[Row[Any]]:
+    """`user_id`'s signals from `since` on: `(signal, weight, created_at,
+    reporter_id)`, the last for a report's, read from the report it names."""
+    report_id = cast(FraudEvent.meta["report_id"].astext, Uuid)
+    rows = await session.execute(
+        select(
+            FraudEvent.signal,
+            FraudEvent.weight,
+            FraudEvent.created_at,
+            Report.reporter_id,
+        )
+        .outerjoin(Report, Report.id == report_id)
+        .where(FraudEvent.user_id == user_id, FraudEvent.created_at >= since)
+    )
+    return rows.all()
+
+
+async def reporting_numbers(
+    session: AsyncSession, user_id: UUID, since: datetime
+) -> int:
+    """How many numbers reported `user_id` from `since` on, counting only
+    reporters who share a Thread with them (D-901): by `phone_hash`, so one
+    number's accounts are one."""
+    reporter = aliased(User)
+    shares_a_thread = exists().where(
+        or_(
+            and_(Thread.user_low == Report.reporter_id, Thread.user_high == user_id),
+            and_(Thread.user_low == user_id, Thread.user_high == Report.reporter_id),
+        )
+    )
+    found = await session.scalar(
+        select(func.count(reporter.phone_hash.distinct()))
+        .select_from(Report)
+        .join(reporter, reporter.id == Report.reporter_id)
+        .where(
+            Report.reported_id == user_id,
+            Report.created_at >= since,
+            shares_a_thread,
+        )
+    )
+    return int(found or 0)
+
+
+async def lock_user(
+    session: AsyncSession, user_id: UUID, *, skip_locked: bool = False
+) -> User | None:
+    """The user's row, locked for the transaction: scoring one person is one
+    transaction at a time. With `skip_locked`, None if another holds it.
+    `FOR NO KEY UPDATE`, as a status change needs: rows that only point at
+    them (a report being filed) aren't held up by it."""
+    query = select(User).where(User.id == user_id)
+    query = query.with_for_update(key_share=True, skip_locked=skip_locked)
+    found: User | None = await session.scalar(query)
+    return found
+
+
+async def score_of(session: AsyncSession, user_id: UUID) -> FraudScore | None:
+    found: FraudScore | None = await session.get(FraudScore, user_id)
+    return found
+
+
+async def save_score(
+    session: AsyncSession,
+    user_id: UUID,
+    *,
+    score: int,
+    band: FraudBand,
+    signals: dict[str, int],
+    counted_from: datetime | None,
+) -> None:
+    values = {
+        "score": score,
+        "band": band,
+        "signals": signals,
+        "counted_from": counted_from,
+    }
+    await session.execute(
+        insert(FraudScore)
+        .values(user_id=user_id, **values)
+        .on_conflict_do_update(index_elements=[FraudScore.user_id], set_=values)
+    )
+
+
+async def due_for_scoring(
+    session: AsyncSession, since: datetime, *, after: UUID | None, limit: int
+) -> Sequence[UUID]:
+    """Whose score may have moved: anyone with a signal from `since` on, or a
+    score above 0 to decay. By id, from just after `after`."""
+    signalled = select(FraudEvent.user_id).where(FraudEvent.created_at >= since)
+    scored = select(FraudScore.user_id).where(FraudScore.score > 0)
+    ids = signalled.union(scored).subquery()
+    query = select(ids.c.user_id).order_by(ids.c.user_id).limit(limit)
+    if after is not None:
+        query = query.where(ids.c.user_id > after)
+    return (await session.scalars(query)).all()
 
 
 async def user_exists(session: AsyncSession, user_id: UUID) -> bool:

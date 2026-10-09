@@ -5851,3 +5851,119 @@ relayed by the founder, 9 October 2026.
   moved into `PhotoGrid` and shared as they are, with no way on; the face slot locked once the
   selfie matched.
 - **The block sheet** says "You can undo this from the You tab" (P-762).
+
+### D-900 · Fraud scoring v1: signals, weights, caps, decay and bands — Locked
+**The decision (T-9.2, building D-031; the founder's, 9 October 2026, Q3 of the plan):** services
+write what they see as `fraud_events`; `safety/fraud.py` turns the last 7 days of them into a score.
+- **Signals and weights**, kept on each row as written, so a later change applies to new events
+  only: `report_received` 20 (one per reporter, uncapped); `message_rejected` 10 for `abuse`, 15 for
+  `solicitation` (cap 45); `contact_masked` 2 (cap 10); `many_new_threads`, more than 30 Threads he
+  or she opened in 24 h, 25 (cap 25); `identical_first_message`, the same first message (case and
+  spacing ignored) to more than 10 people in 7 days, 25 (cap 25); `many_sign_ins`, more than 3 in 7
+  days (D-903), 15 (cap 15); `location_jump`, more than 500 km within an hour of the last location,
+  15 (cap 30); `possible_minor_photo_score` 10 (cap 20); `chargeback_shortfall` 30 (cap 30). A
+  signal no rule names adds at most 25. A threshold signal is written at most once in 24 hours.
+- **Decay:** full when written, in a straight line to nothing at 7 days. **Score:** each signal's
+  decayed sum capped, then added, held to 100.
+- **Bands (D-031):** below 30 normal, 30–59 monitor, 60–80 shadow, above 80 freeze; D-031 left 60
+  and 80 to either side, and both are shadow.
+- **What the weights promise** (`test_fraud_rules.py`): no signal but reports reaches shadow alone,
+  so only people take someone out of everyone's deck or freeze them; a possible-minor score never
+  leaves normal alone (D-093); a chargeback never passes monitor alone (D-520).
+- **Runs:** for the person reported, in the report's transaction; for everyone with a signal in 7
+  days or a score to decay, every 10 minutes in the worker's own loop (`recompute_fraud`), never an
+  ARQ cron (D-091's budget). The person's row is locked (`FOR NO KEY UPDATE`) before counting.
+- **Shadow** needs nothing more: every list already shows the shadowed only to the shadowed, and
+  takes them back as the score decays. Band changes into or out of shadow or freeze are written to
+  `audit_log` as the system user (D-905).
+
+**Why:** D-031's rule, with numbers a person can read and check, and the one property that matters
+most stated and tested: a machine's signals alone never take a person out of view.
+
+**Rejected:** an ML model (D-031); weights read from `app_config` (a database write could loosen a
+safety rule quietly; the weights change by a reviewed commit, as D-066's limits do).
+
+The weights, caps and bands are the founder's decision on Claude's plan for T-9.2, approved 9
+October 2026 ("t 9.2 ka plan sahi hai"); relayed with the reading that all of the plan's
+recommendations stand.
+
+### D-901 · Three reports in 24 hours freeze only from numbers that shared a Thread — Locked
+**The decision (T-9.2, D-031's three reports; the founder's, 9 October 2026, Q2 option B):** the
+reports counted toward "three in 24 hours, freeze whatever the score" are from three different
+numbers (the reporter's `phone_hash`, so one number's accounts are one), each reporter sharing a
+Thread with the person reported. Reports from anyone else still score, 20 each, so three strangers'
+reports shadow a fake profile (60) without freezing it. Reports since `counted_from` only (D-906).
+
+**Why:** the worst case of D-031 as written is three men, or one man with three numbers, freezing a
+woman. Harassment comes from a Thread, so those reports still freeze; a stranger can no longer freeze
+someone by reporting them.
+
+**Rejected:** any three accounts (option A, the colluding-strangers case); never freezing a woman on
+reports (option C: a different rule by gender, which the founder didn't choose).
+
+### D-902 · Who an automatic freeze reaches, and that nothing automatic lifts it — Locked
+**The decision (T-9.2; the founder's, 9 October 2026, Q1 and Q7):** both automatic freezes, the
+score above 80 and D-901's reports, act from T-9.2 on, whenever the band is `freeze` and the
+account can sign in: so an account the band reached while deleted, restored by signing in again
+(D-500), is frozen at its next score. A freeze
+sets `frozen`, revokes every session and closes every socket in the same transaction (D-557), and is
+written to `audit_log` as the system user (D-905). It reaches only `active` and `paused` accounts: a
+`deleted` one is left to its erasure, which a freeze would stop, and a `banned` one is banned. A
+frozen man's Velas stay in his wallet, unspendable while frozen, and Thread hours he bought run out
+unreturned (D-230). **Nothing automatic lifts a freeze**, even once the score has decayed: a person
+does, with D-906's tool until T-9.5 gives it a screen, and resets the score with it, or the next
+score would freeze the account again.
+
+**Corrected in the build:** Claude's plan froze "on the way in" only. Breaking that check left every
+test green, since the status allowlist already stops a second freeze, and it hid a hole: the
+restored account above stayed active in the freeze band (`t92-09`, `t92-27`).
+
+**Why:** no real user exists before T-9.5, and T-9.5 must have its unfreeze before the first one
+(noted on T-9.5); meanwhile the founder can lift any freeze himself (D-906).
+
+### D-903 · "More than 3 devices in 7 days" is counted as sign-ins — Locked
+**The decision (T-9.2; approved with the plan, 9 October 2026, Q4):** a device is a sign-in, a
+session family still signed in that began in the last 7 days. No IP address or user agent is
+stored: D-067 stands, and `/privacy` says sign-ins are counted.
+
+**Why:** addresses suit India badly (mobile networks share and rotate them) and reading one safely
+needs P-40 first; a browser's name doesn't tell one phone from another. The cost, accepted: signing
+out and in again on one browser counts as a new device.
+
+**Rejected:** `sessions.user_agent` (the plan's alternative); `sessions.ip`.
+
+### D-904 · An automatic freeze is told by the audit log and a warning — Locked
+**The decision (T-9.2; approved with the plan, 9 October 2026, Q5):** "admin notified" is the
+system user's `audit_log` row and a `fraud.frozen` warning (the user's id, the rule, the score;
+nothing personal). A push to admins and a list of automatic freezes wait for T-9.5's panel, which
+is where a push would lead (P-800).
+
+### D-905 · The system user — Locked
+**The decision (T-9.2, P-20; approved with the plan, 9 October 2026):** `audit_log.actor_id` names
+`00000000-0000-4000-8000-000000000001` (`admin.service.SYSTEM_USER_ID`) when nobody did it. Its
+row, made by migration `4800f0e8d5a9`, is shaped like an erased account, the one shape the checks
+allow with no phone number: `deleted`, `anonymised_at` set, no `phone_enc`, date of birth or PIN,
+`phone_hash` `system`, which no HMAC is, and a referral code outside the alphabet. So it never signs
+in, appears nowhere people are listed, refers nobody, has no wallet, and the erasure skips it; it is
+never scored. Its downgrade refuses while the audit log names it.
+
+**Rejected:** a `system` role (an enum value that every `require_role` would have to rank); a live
+row with a stand-in `phone_enc` (bytes that every decryption would choke on).
+
+### D-906 · The founder can lift any freeze himself, from T-9.2 — Locked
+**The decision (the founder, approving T-9.2's plan, 9 October 2026):** "bas ek chiz rakho ki by me
+hum koi bhi ladki ka account open kar sakte hai kyuki fraud kitna bhi roke ho hi jayega" (keep one
+thing: that we can open any woman's account afterwards, because however much we stop fraud, it will
+happen anyway). Relayed with the reading that he undoes any automatic freeze himself, now, not only
+once T-9.5 exists. Built as `python -m app.tools.unfreeze <user id> --by <his id> --reason '…'`,
+run over `flyctl ssh` like D-264's selfie review:
+- any `frozen` account, a woman's included, becomes `active`; its `fraud_scores` row goes to 0 and
+  normal, and **`fraud_scores.counted_from`** (a new column) is set to now, so only signals and
+  reports from then on count and the next recompute can't freeze it on what he has set aside. The
+  events themselves stay: they are moderation's record;
+- one `audit_log` row, `fraud.unfreeze`, names `--by`, who must be an active admin, with the reason
+  and the score before;
+- it never signs in as the person, makes no session, reads no message, and prints ids and statuses
+  only. The person signs in again themselves.
+
+T-9.5 later gives it a screen.

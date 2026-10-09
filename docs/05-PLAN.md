@@ -3575,17 +3575,52 @@ number** per account gets its 5 each, one Thread's worth, and is **accepted**, k
   menu: P-764. **Landed by P-680**, 9 October 2026.
 
 ### T-9.2 · Fraud scoring v1
-- [ ] **Needs:** T-9.1
+- [x] **Needs:** T-9.1
 - **A freeze closes the sockets** (T-7.4, D-557): wherever this task sets `frozen` and revokes
   the sessions, `events.close_sockets(session, user_id)` in the same transaction, as sign-out does.
-- [ ] Signals written as `fraud_events` by services: report received, contact-info masked, message rejected (abuse / solicitation), > 30 new threads in 24 h, identical first message to > 10 people, > 3 devices in 7 days, location jumps > 500 km in 1 h.
-- [ ] Sessions store no IP address or user agent (D-067), and "> 3 devices in 7 days" needs one of them. Add what this task needs here, with a line on `/privacy`, which lists neither today.
-- [ ] **A possible-minor photo's event is a signal, not proof** (D-093): it weighs in the score, and
+  **Built:** `safety.scoring._freeze` calls `auth.service.sign_out_everywhere`, which does both.
+- **The plan, approved by the founder, 9 October 2026** ("t 9.2 ka plan sahi hai"): every
+  recommendation of Claude's plan, Q2 option B; Q1, Q2, Q3 and Q7 his decisions (D-900 to D-902),
+  Q4 and Q5 approved with it (D-903, D-904). His addition: he lifts any freeze himself, from now
+  (D-906, `app.tools.unfreeze`).
+- [x] Signals written as `fraud_events` by services: report received, contact-info masked, message rejected (abuse / solicitation), > 30 new threads in 24 h, identical first message to > 10 people, > 3 devices in 7 days, location jumps > 500 km in 1 h.
+  **Built (D-900):** `report_received` (`safety.service.report`), `contact_masked` and
+  `identical_first_message` (`messages.service.write_text`, a Thread's first message only, case
+  and spacing ignored, 7 days), `message_rejected` weighed by its rule, `many_new_threads`
+  (`threads.service._open_in`, the ones they opened), `many_sign_ins` (`auth.service.sign_in`),
+  `location_jump` (`profiles.service._locate`, kilometres only). A threshold signal once a day.
+  Through `safety/signals.py`; `test_fraud_signals.py`, each at its threshold and one below.
+- [x] Sessions store no IP address or user agent (D-067), and "> 3 devices in 7 days" needs one of them. Add what this task needs here, with a line on `/privacy`, which lists neither today.
+  **Built as D-903: neither.** A device is a sign-in, a session family still signed in that began
+  in 7 days, so nothing new is stored; `/privacy`'s new `collect.safety` line says sign-ins are
+  counted, and what scoring can do.
+- [x] **A possible-minor photo's event is a signal, not proof** (D-093): it weighs in the score, and
   nothing here acts on it alone. Repeated ones go to a human (P-72), never to an automatic ban.
-- [ ] `recompute_fraud` worker: weighted sum with 7-day decay → `fraud_scores` + band. Actions: `shadow` → shown only to other shadowed users; `freeze` → status `frozen`, sessions revoked, admin notified. 3 reports from different users in 24 h → freeze immediately.
-- [ ] **D-078 (P-54):** an under-18 refusal deletes `fraud_events` and `fraud_scores` rows, once P-54's
+  **Built:** 10 each, capped at 20, under the monitor band, so it never acts alone
+  (`test_possible_minor_scores_never_act_on_anyone_alone`). P-72 stays open.
+- [x] `recompute_fraud` worker: weighted sum with 7-day decay → `fraud_scores` + band. Actions: `shadow` → shown only to other shadowed users; `freeze` → status `frozen`, sessions revoked, admin notified. 3 reports from different users in 24 h → freeze immediately.
+  **Built:** `app/workers/tasks/recompute_fraud.py`, every 10 minutes in the worker's own loop,
+  and the person reported scored in the report's transaction, their row locked first, so two
+  reports at once count one after the other (`test_report_freeze_race.py`, the overlap forced
+  and seen in `pg_blocking_pids`). Three reporting numbers who shared a Thread freeze (D-901);
+  strangers' reports shadow at three. "Admin notified" is the system user's `audit_log` row and a
+  `fraud.frozen` warning (D-904, P-800). Only `active` and `paused` accounts are frozen, whenever
+  the band is freeze (a deleted account restored in the band included), and nothing automatic
+  lifts a freeze (D-902). **P-20 folded here:** the system user, migration
+  `4800f0e8d5a9` (D-905). **The founder's undo:** `python -m app.tools.unfreeze` (D-906), with
+  `fraud_scores.counted_from` (migration `445eefba7f8e`).
+- [x] **D-078 (P-54):** an under-18 refusal deletes `fraud_events` and `fraud_scores` rows, once P-54's
   row half has landed; check it has, since a location jump can come before dob is set.
-- [ ] **Commit:** `feat(safety): fraud scoring and auto-freeze [T-9.2]`
+  **Checked:** P-54's row half has landed; both tables are in `UNDERAGE_DELETES`. A location
+  can't come before dob (D-068: `PUT /me/location` works from the `username` step), but sign-ins
+  can, so `test_an_under_18_refusal_takes_a_signal_written_before_the_dob` holds it.
+- [x] **Commit:** `feat(safety): fraud scoring and auto-freeze [T-9.2]`
+  **Broken once each** (`uv run python -m tests.break_guards t92-`): twenty-seven cases, each
+  red in 1 of 1, every file restored and none differing by SHA-256 after (`out/t-9.2-break-guards-run2.log`,
+  and `-run3.log` for `t92-16`). The first run (`out/t-9.2-break-guards.log`) found two cases
+  green: `t92-09`, whose guard (freeze on the way in) was redundant and hid a hole, so the rule
+  became D-902's "whenever the band is freeze" and `t92-27` holds it; and `t92-16`, whose test
+  never signed in after its refreshes, so it never asked for the count it guarded.
 
 ### T-9.3 · Refund when a partner is banned
 **Dropped, 4 October 2026 (D-230): nothing is returned on a ban.** Kept below as it was planned;
@@ -3683,6 +3718,11 @@ number** per account gets its 5 each, one Thread's worth, and is **accepted**, k
   **P-401**: what a ban landing during a deletion's 29 days does to the erasure.
 - [ ] **The claims screen (P-480):** T-8.3's queue and resolution (`/admin/refund-requests`,
   D-580 to D-582), admin only, each action behind a confirmation.
+- [ ] **Freezes (T-9.2, D-902, D-906):** an unfreeze before the first real user: a screen over
+  `safety.scoring.unfreeze`, the tool's own path, which resets the score and its `counted_from`
+  (an unfreeze that leaves them would be frozen again at the next sweep). The automatic freezes
+  listed, and P-800. **The system user** (D-905, `SYSTEM_USER_ID`) shown as "System" in the audit
+  log and left out of user search.
 - [ ] **Commit:** `feat(admin): moderation panel [T-9.5]`
 
 ### T-9.6 · Settings and data rights
@@ -3986,13 +4026,15 @@ The number comes from the session's own block, given in its brief, from P-100 up
   built by the wallet module (D-077).
   **Settled by T-5.1, 3 October 2026:** `wallet/rules.py`'s `key_for()`; two men with one event both
   apply (`test_two_people_with_one_event_both_apply`), red when the key drops the user.
-- [ ] P-20 · Audit automated actions as a system user — ruled in T-1.13: `audit_log.actor_id` is
+- [x] P-20 · Audit automated actions as a system user — ruled in T-1.13: `audit_log.actor_id` is
   NOT NULL, because null could not tell "the system did it" from "a bug forgot to set it", and the
   system user is created when auto-freeze first needs it, by T-9.2. T-9.2's text says neither that
   auto-freeze writes `audit_log` nor that the user must exist; the ruling lives only in 03-SCHEMA §8
   and the `AuditLogEntry` docstring. T-9.2 adds a data migration creating the user — it must never
   log in or appear anywhere users are listed — and writes each automated freeze to `audit_log` as
   it. **Fold into T-9.2.** Found in review of T-1.13.
+  **Built in T-9.2 (D-905), 9 October 2026:** migration `4800f0e8d5a9`, `admin.service.SYSTEM_USER_ID`;
+  every automatic band change and freeze is written as it. Tick with T-9.2's `/done`.
 - [ ] P-21 · Correct two comments — the `PushSubscription` docstring calls `p256dh` and `auth`
   "secrets": `auth` is a shared secret, but `p256dh` is the browser's public key. The comment above
   `test_updated_at_triggers_are_on_exactly_the_mutable_tables` says "five mutable tables"; it has
@@ -6420,6 +6462,13 @@ The number comes from the session's own block, given in its brief, from P-100 up
   Velas; nothing yet notices the face. T-9.2 could compare a new selfie's embedding with the kept
   selfies' and raise a fraud event on a match above the threshold, never refusing on it alone.
   Filed by Claude building T-8.6, 8 October 2026; its session's block, P-590 to P-599.
+  **T-9.2, 9 October 2026: noted, not built.** No face embedding is kept anywhere: `verify_selfie`
+  compares two photos and keeps the result, so comparing faces across accounts means keeping
+  biometric templates, a decision and a `/privacy` line of its own. While referrals are paused
+  (D-840) the reward route pays nothing; **P-590 is done before they are turned back on**, as
+  P-591 is. When built, scoring takes it as a `face_reused` signal of 30, capped there (monitor at
+  most), so it never refuses or freezes anyone on its own (D-900). The fake-"women" half isn't
+  paused: at beta the founder's review of every selfie (D-264) is what catches it.
 - [ ] P-591 · A referral reward kept after its purchase was charged back. **Before beta, or
   accepted by the founder.** Worst case: a referee buys the smallest pack, the capture rewards
   both men (T-8.6), and he disputes the charge: D-520 takes back the purchase's Velas, never the
@@ -6742,3 +6791,18 @@ The number comes from the session's own block, given in its brief, from P-100 up
   them (`POST /photos/upload-url` with kind `private`, up to 6, D-700's scored copy), and T-9.8's
   `/you/photos` shows public places and the face photo only. Found building T-9.8, outside its
   plan; filed by Claude, 9 October 2026; its session's block.
+- [ ] P-800 · Tell the admins of an automatic freeze, and list them. **In T-9.5.** Worst case: a
+  woman frozen by three colluding reporters (D-901 makes it harder, not impossible) waits
+  frozen until someone happens to read the audit log or a Fly log line that rotates out in
+  about 25 minutes, since "admin notified" is only those two today (D-904). Fix in T-9.5: the
+  automatic freezes in its queue, and a push to every active admin (a notification kind of its
+  own, which no user-facing setting governs, opening `/admin/users/{id}`). Filed by Claude
+  building T-9.2, 9 October 2026; its session's block, P-800 to P-809.
+- [ ] P-801 · Index what fraud scoring reads before beta scale. **Before beta.** Worst case: the
+  10-minute sweep and the per-message checks slow as the tables grow, a sweep running past its
+  10 minutes and a send waiting on its first-message check. `due_for_scoring` reads
+  `fraud_events` by `created_at`, which has no index of its own (only `(user_id, created_at)`);
+  `same_first_messages` reads a sender's messages through `(sender_id, client_msg_id)`, filtering
+  by time after. Both are fine at today's sizes. Measure at 50,000 people as T-6.2 did, then add
+  `fraud_events (created_at)` and `messages (sender_id, created_at)` if the plans say so. Filed by
+  Claude building T-9.2, 9 October 2026.

@@ -90,7 +90,7 @@ D-503's, column by column, in `api/app/modules/account/erasure.py`.
 | family_id | uuid not null | rotation family |
 | token_hash | text not null unique | SHA-256 of refresh token |
 | user_agent | text | stays empty: nothing reads it, and `/privacy` doesn't list it (D-067) |
-| ip | inet | stays empty, likewise (D-067) |
+| ip | inet | stays empty, likewise (D-067). T-9.2 counts sign-ins instead of devices (D-903) |
 | expires_at | timestamptz not null | 30 days from this session's own rotation (D-067) |
 | auth_time | timestamptz not null | when the family signed in, copied unchanged at each rotation: every access token's `auth_time` (D-071) |
 | revoked_at | timestamptz null | |
@@ -395,17 +395,26 @@ Indexes: `(status, created_at)`, `(reported_id, created_at desc)`, `(reporter_id
 Check `reporter_id <> reported_id` — a self-report could probe the auto-freeze rule (D-031).
 
 ### fraud_scores
-`user_id uuid pk fk users, score smallint not null default 0, band fraud_band_t not null default 'normal', signals jsonb, updated_at`.
+`user_id uuid pk fk users, score smallint not null default 0, band fraud_band_t not null default 'normal', signals jsonb, counted_from timestamptz null, updated_at`.
 Check `score between 0 and 100` (D-031). Bands are policy, so no check ties them to the score.
+Written by `safety.scoring.recompute` (T-9.2, D-900): `signals` is each signal's share of the
+score, `{signal: points}`. `counted_from` is set when the founder lifts a freeze
+(`app.tools.unfreeze`, D-906): only signals and reports from then on count; null, everything does.
 
 ### fraud_events
 `id uuid pk, user_id uuid fk users, signal text not null, weight smallint not null, meta jsonb, created_at`.
 Index `(user_id, created_at desc)`.
-A signal, never a verdict. `possible_minor_photo_score` (T-4.4, D-093): a model's score that one
-photo may show a minor, weight 0 until T-9.2 says what it may count for; `meta` is `{what, model,
+A signal, never a verdict. `weight` is what it was worth when written (T-9.2, D-900), so a later
+change of weight applies to new events only. `possible_minor_photo_score` (T-4.4, D-093): a model's
+score that one photo may show a minor, 10, capped under the monitor band; `meta` is `{what, model,
 score}`, and never the image or which photo. `chargeback_shortfall` (T-8.2, D-520): a dispute took
-back money whose Velas were already spent; weight 0 until T-9.2, `meta` `{what, payment_id,
-shortfall}`, our payment's id and the Velas the reversal couldn't take.
+back money whose Velas were already spent; 30, `meta` `{what, payment_id, shortfall}`, our
+payment's id and the Velas the reversal couldn't take. `message_rejected` (T-7.1, D-552): `meta`
+`{rule}`, 10 for `abuse`, 15 for `solicitation`. T-9.2's own, never a message, a place or a number:
+`report_received` (`{report_id, reason}`, the report names its reporter), `contact_masked` (no
+`meta`), and the threshold signals, each written at most once in 24 hours: `many_new_threads`
+(`{threads}`), `identical_first_message` (`{people}`), `many_sign_ins` (`{sign_ins}`, D-903),
+`location_jump` (`{km}`). The weights and caps are D-900's, in `app/modules/safety/fraud.py`.
 
 ---
 
@@ -615,7 +624,10 @@ the erasure and an under-18 refusal delete a user's rows.
 target_id uuid null, meta jsonb null, created_at`.
 `target_id` is polymorphic, so no fk. Check `(target_type IS NULL) = (target_id IS NULL)`, as on
 `ledger_entries.ref_*`. `actor_id` is never null — null could not tell "the system did it" from
-"a bug forgot to set it"; automated actions use a dedicated system user, created by T-9.2.
+"a bug forgot to set it"; automated actions use a dedicated system user, created by T-9.2's
+migration `4800f0e8d5a9` (D-905): `00000000-0000-4000-8000-000000000001`, a row shaped like an
+erased account, so it never signs in or appears where people are listed. Its actions are
+`fraud.band` and `fraud.freeze`; the founder's unfreeze writes `fraud.unfreeze` as himself (D-906).
 Triggers `audit_log_no_update_delete` and `audit_log_no_truncate` (statement-level) reuse T-1.12's
 `refuse_change()` and raise `restrict_violation` (23001): the person with a reason to erase the
 trace is exactly the person with admin access (T-1.13).

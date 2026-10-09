@@ -101,6 +101,9 @@ class FraudScore(Timestamps, Base):
         server_default=FraudBand.NORMAL.value,
     )
     signals: Mapped[dict[str, Any] | None] = mapped_column(JSONB)
+    # Set when the founder lifts a freeze (D-906): only signals and reports from
+    # then on count. Null: everything counts.
+    counted_from: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
 
     __table_args__ = (CheckConstraint("score BETWEEN 0 AND 100", name="score_range"),)
 

@@ -55,6 +55,8 @@ from app.modules.messages import service as messages_service
 from app.modules.notifications import service as notifications_service
 from app.modules.notifications.rules import Kind
 from app.modules.pricing import service as pricing_service
+from app.modules.safety import fraud
+from app.modules.safety import signals as safety_signals
 from app.modules.threads import repository, rules, schemas
 from app.modules.threads.models import Thread
 from app.modules.users.models import User
@@ -213,6 +215,14 @@ async def _open_in(
     )
     if match is not None:
         await repository.link_match(session, match.id, thread.id)
+    # T-9.2 (D-900): more than `fraud.NEW_THREADS_MAX` opened in a day.
+    opened_today = await repository.opened_since(
+        session, user.id, clock.now() - fraud.NEW_THREADS_WINDOW
+    )
+    if opened_today > fraud.NEW_THREADS_MAX:
+        await safety_signals.record_crossing(
+            session, user.id, fraud.MANY_NEW_THREADS, {"threads": opened_today}
+        )
     payload = {"thread_id": str(thread.id), "user_id": str(user.id)}
     events.queue(session, other_id, THREAD_OPENED, payload)
     await notifications_service.notify(session, other_id, Kind.THREAD, payload)

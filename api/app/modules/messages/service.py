@@ -52,7 +52,9 @@ from app.modules.messages.schemas import (
 from app.modules.notifications import service as notifications_service
 from app.modules.notifications.rules import Kind
 from app.modules.pricing import service as pricing_service
+from app.modules.safety import fraud
 from app.modules.safety import service as safety_service
+from app.modules.safety import signals as safety_signals
 from app.modules.threads import rules as threads_rules
 from app.modules.threads.models import Thread
 from app.modules.users.models import User
@@ -100,7 +102,8 @@ async def write_text(
     mask_first_n: int,
 ) -> MessageRow:
     """`text` in `thread`, masked while the Thread is young, in the caller's
-    transaction, which holds the Thread. The Thread counts it."""
+    transaction, which holds the Thread. The Thread counts it, and the fraud
+    signals it may raise are written with it."""
     masked = (
         filters.mask(text)
         if thread.message_count < mask_first_n
@@ -115,6 +118,18 @@ async def write_text(
         masked=masked.masked,
         client_msg_id=client_msg_id,
     )
+    # T-9.2's signals (D-900): a contact detail masked, and the same first
+    # message sent to more than `fraud.IDENTICAL_MAX` people.
+    if masked.masked:
+        safety_signals.record_contact_masked(session, sender_id)
+    if thread.message_count == 0:
+        same = await repository.same_first_messages(
+            session, sender_id, text, clock.now() - fraud.IDENTICAL_WINDOW
+        )
+        if same > fraud.IDENTICAL_MAX:
+            await safety_signals.record_crossing(
+                session, sender_id, fraud.IDENTICAL_FIRST_MESSAGE, {"people": same}
+            )
     thread.message_count += 1
     thread.last_message_at = row.created_at
     return row
