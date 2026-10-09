@@ -2854,6 +2854,44 @@ export interface components {
          */
         ThreadStatus: "active" | "expired" | "knotted";
         /**
+         * ThreadView
+         * @description One Thread, as its conversation screen opens it (`GET /threads/{id}`,
+         *     T-7.11, D-870): the Thread, the other person as the chats list shows them
+         *     (no profile view counted, D-493), and `send_price`, what my next text
+         *     message costs now in Velas (0 for her, D-098), worked out by the send's own
+         *     rules, so the screen shows the price it will send back (P-56, D-600).
+         */
+        ThreadView: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            origin: components["schemas"]["ThreadOrigin"];
+            status: components["schemas"]["ThreadStatus"];
+            /**
+             * Other User Id
+             * Format: uuid
+             */
+            other_user_id: string;
+            /** Expires At */
+            expires_at: string | null;
+            /** Knotted At */
+            knotted_at: string | null;
+            /** I Tied */
+            i_tied: boolean;
+            /** Last Message At */
+            last_message_at: string | null;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            other: components["schemas"]["CardLite"];
+            /** Send Price */
+            send_price: number;
+        };
+        /**
          * ThreadWithMe
          * @description The Thread between the viewer and this person, if there is one: its
          *     state, and when it expires while it is active (never once knotted); and
@@ -4826,7 +4864,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["Thread"];
+                    "application/json": components["schemas"]["ThreadView"];
                 };
             };
             /** @description Validation Error */

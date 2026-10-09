@@ -6,12 +6,16 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { fakeApi, json } from "@/lib/testing/fakeApi";
 
 import { makeQueryClient } from "./QueryProvider";
+import { queryKeys } from "./keys";
 import {
   useClearThreads,
   useExtendThread,
   useReopenThread,
   useRestoreThread,
+  useThread,
   useThreads,
+  useTieKnot,
+  useUntieKnot,
 } from "./threads";
 import { useWallet } from "./wallet";
 
@@ -66,6 +70,24 @@ describe.each([
     expect(call?.body).toEqual({ shown_price: price });
     expect(call?.headers.get("Idempotency-Key")).toBe("tap-0001");
     expect(got).toEqual(THREAD);
+  });
+
+  it("asks the Thread's screen and the lists again: its hour and its price moved", async () => {
+    fakeApi({ [`POST ${path}`]: () => json(200, THREAD) });
+    const invalidate = vi.spyOn(client, "invalidateQueries");
+    const { result } = renderHook(() => useHook(), { wrapper });
+
+    await act(() =>
+      result.current.mutateAsync({
+        thread_id: THREAD.id,
+        shown_price: price,
+        key: "tap-0001",
+      }),
+    );
+
+    const keys = invalidate.mock.calls.map(([filters]) => filters?.queryKey);
+    expect(keys).toContainEqual(queryKeys.thread(THREAD.id));
+    expect(keys).toContainEqual(["threads", "list"]);
   });
 
   it("asks for the balance again when it settles: it spends Velas (T-5.5)", async () => {
@@ -170,4 +192,57 @@ describe("the chats list's hooks (T-7.10)", () => {
     expect(api.calls[1]!.body).toEqual({ expired: true });
     expect(answer).toEqual({ cleared: 1 });
   });
+});
+
+describe("one Thread's hooks (T-7.11)", () => {
+  it("reads one Thread with the other person and its send price (D-870), never retrying a NOT_FOUND", async () => {
+    const view = {
+      ...THREAD,
+      other: {
+        id: THREAD.other_user_id,
+        first_name: "Priya",
+        username: "priya",
+        main_photo_url: null,
+        shows_badge: false,
+        is_online: true,
+        deleted: false,
+      },
+      send_price: 2,
+    };
+    const api = fakeApi({
+      [`GET /v1/threads/${THREAD.id}`]: () => json(200, view),
+      "GET /v1/threads/gone": () =>
+        json(404, { error: { code: "NOT_FOUND", message: "Not found." } }),
+    });
+    const one = renderHook(() => useThread(THREAD.id), { wrapper });
+    const gone = renderHook(() => useThread("gone"), { wrapper });
+
+    await waitFor(() => expect(one.result.current.data).toEqual(view));
+    await waitFor(() => expect(gone.result.current.isError).toBe(true));
+    expect(api.sent().filter((sent) => sent.endsWith("/gone"))).toHaveLength(1);
+  });
+
+  it.each([
+    ["useTieKnot", useTieKnot, "POST"],
+    ["useUntieKnot", useUntieKnot, "DELETE"],
+  ] as const)(
+    "%s %ss the knot, free, and asks the Thread and the lists again (P-670)",
+    async (_, useHook, method) => {
+      const knotted = { ...THREAD, status: "knotted", expires_at: null };
+      const api = fakeApi({
+        [`${method} /v1/threads/${THREAD.id}/knot`]: () => json(200, knotted),
+      });
+      const invalidate = vi.spyOn(client, "invalidateQueries");
+      const { result } = renderHook(() => useHook(), { wrapper });
+
+      const got = await act(() => result.current.mutateAsync(THREAD.id));
+
+      expect(api.sent()).toEqual([`${method} /v1/threads/${THREAD.id}/knot`]);
+      expect(api.calls[0]?.body).toBeUndefined();
+      expect(got).toEqual(knotted);
+      const keys = invalidate.mock.calls.map(([filters]) => filters?.queryKey);
+      expect(keys).toContainEqual(queryKeys.thread(THREAD.id));
+      expect(keys).toContainEqual(["threads", "list"]);
+    },
+  );
 });

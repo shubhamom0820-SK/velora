@@ -34,15 +34,19 @@ function header(env: Record<string, string | undefined>, key: string) {
 const R2 = "https://82f9b26266ddb6b491a623971f87d3c7.r2.cloudflarestorage.com";
 const LOCAL_S3 = {
   img: "img-src 'self' blob: http://127.0.0.1:9000/velora-private/ http://127.0.0.1:9000/velora-public/",
+  // Voice notes (T-7.11): her recording's preview, and their signed links.
+  media: "media-src 'self' blob: http://127.0.0.1:9000/velora-private/",
   upload: "http://127.0.0.1:9000/velora-private/",
 };
 const R2_FOR = {
   staging: {
     img: `img-src 'self' blob: ${R2}/velora-staging-private/ https://cdn.staging.veloraapp.co.in`,
+    media: `media-src 'self' blob: ${R2}/velora-staging-private/`,
     upload: `${R2}/velora-staging-private/`,
   },
   production: {
     img: `img-src 'self' blob: ${R2}/velora-prod-private/ https://cdn.veloraapp.co.in`,
+    media: `media-src 'self' blob: ${R2}/velora-prod-private/`,
     upload: `${R2}/velora-prod-private/`,
   },
 } as const;
@@ -72,6 +76,7 @@ describe("the CSP in a production build (D-059)", () => {
           "default-src 'self'",
           "script-src 'self' 'unsafe-inline'",
           LOCAL_S3.img,
+          LOCAL_S3.media,
           `connect-src 'self' https://api.staging.veloraapp.co.in ${LOCAL_S3.upload}`,
           "object-src 'none'",
           "base-uri 'none'",
@@ -92,6 +97,7 @@ describe("the CSP in a production build (D-059)", () => {
           "default-src 'self'",
           "script-src 'self' 'unsafe-inline' https://www.google.com/recaptcha/ https://www.gstatic.com/recaptcha/",
           R2_FOR[appEnv].img,
+          R2_FOR[appEnv].media,
           `connect-src 'self' https://api.staging.veloraapp.co.in ${R2_FOR[appEnv].upload} https://www.google.com/recaptcha/ https://identitytoolkit.googleapis.com https://securetoken.googleapis.com`,
           "frame-src 'self' https://www.google.com/recaptcha/ https://recaptcha.google.com/recaptcha/",
           "object-src 'none'",
@@ -111,8 +117,10 @@ describe("the CSP in a production build (D-059)", () => {
       expect(csp).not.toContain("*");
       expect(csp).not.toMatch(/r2\.cloudflarestorage\.com[ ;]/);
       expect(csp).not.toMatch(/127\.0\.0\.1:9000[ ;]/);
-      // Uploads only ever go to the private bucket.
+      // Uploads only ever go to the private bucket, and voice notes only
+      // ever play from it.
       expect(csp).not.toMatch(/connect-src[^;]*-public/);
+      expect(csp).not.toMatch(/media-src[^;]*-public/);
     },
   );
 
@@ -169,6 +177,9 @@ describe("under next dev only", () => {
       "img-src 'self' data: blob: http://127.0.0.1:9000/velora-private/ http://127.0.0.1:9000/velora-public/;",
     );
     expect(csp).toContain(
+      "media-src 'self' blob: http://127.0.0.1:9000/velora-private/;",
+    );
+    expect(csp).toContain(
       "connect-src 'self' http://127.0.0.1:8000 http://127.0.0.1:9000/velora-private/;",
     );
   });
@@ -197,7 +208,7 @@ describe("the other headers", () => {
     );
   });
 
-  it("allow the camera (T-4.7) and location (T-4.10) to this site alone, and deny the microphone until the task that needs it allows it", () => {
+  it("allow the camera (T-4.7), location (T-4.10) and the microphone (T-7.11) to this site alone, never a frame of another", () => {
     for (const env of [
       STAGING,
       { ...STAGING, APP_ENV: "staging" },
@@ -205,7 +216,7 @@ describe("the other headers", () => {
       { NODE_ENV: "development" },
     ])
       expect(header(env, "Permissions-Policy")).toBe(
-        "camera=(self), microphone=(), geolocation=(self), browsing-topics=()",
+        "camera=(self), microphone=(self), geolocation=(self), browsing-topics=()",
       );
   });
 
@@ -415,6 +426,7 @@ describe("Razorpay's checkout (T-8.7, D-761): on a Razorpay build's nonce routes
           "script-src 'self' 'nonce-Tm9uY2U=' 'strict-dynamic' https://www.google.com/recaptcha/ https://www.gstatic.com/recaptcha/ https://checkout.razorpay.com/v1/ https://cdn.razorpay.com/static/",
           "style-src 'self' 'unsafe-inline'",
           R2_FOR[appEnv].img,
+          R2_FOR[appEnv].media,
           `connect-src 'self' https://api.staging.veloraapp.co.in ${R2_FOR[appEnv].upload} https://www.google.com/recaptcha/ https://identitytoolkit.googleapis.com https://securetoken.googleapis.com https://lumberjack.razorpay.com`,
           "frame-src 'self' https://www.google.com/recaptcha/ https://recaptcha.google.com/recaptcha/ https://api.razorpay.com",
           "object-src 'none'",

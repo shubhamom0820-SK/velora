@@ -3162,30 +3162,57 @@ prices don't depend on the web photos step, and the hold is lifted.
 - [x] **Commit:** `feat(web): chats list [T-7.10]`
 
 ### T-7.11 · Web conversation
-- [ ] **Needs:** T-7.3, T-7.7, T-7.9, and **P-56**: its paid buttons send the price they showed
+- [x] **Needs:** T-7.3, T-7.7, T-7.9, and **P-56**: its paid buttons send the price they showed
   (before the web's paid buttons, the founder, 8 October 2026); and **P-520**: a real recording
   from each browser read by T-7.9's measuring, or every iPhone user's voice note may be refused
-- [ ] Bubbles, day separators, "Sent/Read" on my last message, typing dots, voice player (locked card with price for men), icebreakers when empty, knot bar (tie / waiting), expired panel (re-open · 2 / tie), header with countdown or "Knotted · permanent", ⋯ → profile menu.
-- [ ] **P-670: the "Knot tied ✦" sheet** (08-DESIGN §8, headed T-7.7 there) when the second tap
+- [x] Bubbles, day separators, "Sent/Read" on my last message, typing dots, voice player (locked card with price for men), icebreakers when empty, knot bar (tie / waiting), expired panel (re-open · 2 / tie), header with countdown or "Knotted · permanent", ⋯ → profile menu.
+- [x] **P-670: the "Knot tied ✦" sheet** (08-DESIGN §8, headed T-7.7 there) when the second tap
   makes the Knot, and the `useTieKnot` / `useUntieKnot` hooks in `src/lib/queries/threads.ts`
   for `POST` and `DELETE /threads/{id}/knot` (T-7.7, D-770).
-- [ ] Composer: text (Enter sends, Shift+Enter newline), mic for women (MediaRecorder, hold or tap-to-record, 60 s cap, preview before send). Optimistic send with `client_msg_id`; failed → retry.
-- [ ] Rejected message → inline explanation, text kept in composer.
-- [ ] **His composer's gift button (08-DESIGN §8, "gifts go to a woman"):** T-8.10's `GiftSheet`
-  (`src/components/gifts/`), with her id and first name, shown only where her profile's
-  `can_gift` is true (`GET /users/{id}`, D-780), never decided from a gender in the browser.
-- [ ] **Her side of an expired Thread (D-097):** readable, and otherwise silent: no prompt, and no sign that money stands between her message and his reply. An expired Thread accepts her sends, so her composer keeps working; the re-open price is his alone.
-- [ ] **The kudos prompt here too (T-8.8, D-790):** T-8.8 built it on the profile, from
-  `PublicProfile.thread.kudos`, shown only for `can_give`. The conversation shows the same
-  `KudosPrompt` by that state: read the other person's profile, or add `kudos` to `Thread` from
-  `kudos.service.state`, never a second rule.
-- [ ] **Allow the microphone here (D-059):** T-2.5's Permissions-Policy has `microphone=()`, so recording is refused until this task makes it `microphone=(self)`; add `media-src` for voice notes' storage origin and `blob:` for the preview.
-- [ ] **Commit:** `feat(web): conversation screen [T-7.11]`
+- [x] Composer: text (Enter sends, Shift+Enter newline), mic for women (MediaRecorder, hold or tap-to-record, 60 s cap, preview before send). Optimistic send with `client_msg_id`; failed → retry.
+- [x] Rejected message → inline explanation, text kept in composer.
+- [x] **Her side of an expired Thread (D-097):** readable, and otherwise silent: no prompt, and no sign that money stands between her message and his reply. An expired Thread accepts her sends, so her composer keeps working; the re-open price is his alone.
+- [x] **Allow the microphone here (D-059):** T-2.5's Permissions-Policy has `microphone=()`, so recording is refused until this task makes it `microphone=(self)`; add `media-src` for voice notes' storage origin and `blob:` for the preview.
+  **Built 9 October 2026, with the founder's answers to its plan (D-870, D-871),** on the
+  advisor's recommendation, relayed. **An API change first (D-870):** the web couldn't know what
+  his next message costs, so `GET /threads/{id}` answers `ThreadView`, with `send_price` from the
+  send's own `_answer` and `other`, a `CardLite` (no profile view counted). Its tests prove the
+  price shown is the price charged, by the ledger, in each of D-551's cases. **The screen**
+  (`src/components/conversation/`, at `/chats/[id]`): her side draws no countdown, bar, Extend,
+  expired panel or price whatever it is sent (an allowlist, `gender === "male"`); his expired
+  Thread keeps its history and offers re-open, re-open and keep, and the knot; every paid button
+  sends the price it showed (re-open, Extend and an unlock from `/prices`, his message from
+  `send_price`); a message shows at once, a refused one returns to the composer with its reason,
+  a failed one keeps Retry under the same `client_msg_id`. Typing dots read a cache only T-7.12
+  will write. The recorder is `src/lib/voice-recorder.ts`, and `/dev/voice` (`next dev` only) is
+  where P-520's recordings are made with it. **Broken once each, 9 October 2026:** the API's six
+  cases (`uv run python -m tests.break_guards t711-`) and the web's sixteen (`node
+  scripts/break-guards.mts t711-`), each red in 1 of 1, every file restored byte for byte; logs in
+  the main checkout's `out/t-7.11-break-guards-api.log` and `out/t-7.11-break-guards-web.log`.
+  Two stayed green on their first run, each a weak test: the view's tests checked a send was
+  accepted at the shown price, not charged it (now read from the ledger), and the input-method
+  test looked for a request not yet made (now it holds the draft). T-4.7's two Permissions-Policy
+  cases were re-anchored on the new policy. **P-520's recordings:** iPhone Safari's 5 s and 59 s, measured
+  within the second (0.77 s and 0.96 s short), the Mac's browsers left to P-773 and Safari's MP4 to
+  P-774 (the founder, 9 October 2026). Found building it: P-770 to P-774. Two items T-8.10
+  and T-8.8 added here while it was being built (his gift button, the kudos prompt) moved to
+  T-7.12 (the founder, 9 October 2026).
+- [x] **Commit:** `feat(web): conversation screen [T-7.11]`
 
 ### T-7.12 · Web real-time client
 - [ ] **Needs:** T-7.4, T-7.11, and **P-460**: the client reads nothing from her null `expires_at`
 - [ ] `src/lib/ws.ts`: ticket → connect; exponential backoff 1→30 s with jitter; pause when tab hidden > 5 min; on reconnect refetch open thread + list. Events update TanStack Query caches (append message, bump row, update wallet, knot state).
 - [ ] **Widen the CSP here (D-059):** `connect-src` for `wss://` on the API host. The socket fails with a CSP error until then.
+- [ ] **His composer's gift button (08-DESIGN §8, "gifts go to a woman"):** T-8.10's `GiftSheet`
+  (`src/components/gifts/`), with her id and first name, shown only where her profile's
+  `can_gift` is true (`GET /users/{id}`, D-780), never decided from a gender in the browser.
+- [ ] **The kudos prompt here too (T-8.8, D-790):** T-8.8 built it on the profile, from
+  `PublicProfile.thread.kudos`, shown only for `can_give`. The conversation shows the same
+  `KudosPrompt` by that state: read the other person's profile, or add `kudos` to `Thread` from
+  `kudos.service.state`, never a second rule.
+  **Moved here from T-7.11** (the founder, 9 October 2026): T-8.10 and T-8.8 added these two
+  to T-7.11 while it was being built, and it landed without them; T-7.12 is the next work on
+  the conversation screen (`src/components/conversation/`).
 - [ ] **Commit:** `feat(web): realtime client [T-7.12]`
 
 ### T-7.13 · E2E chat
@@ -6195,7 +6222,7 @@ The number comes from the session's own block, given in its brief, from P-100 up
   own (D-006), never a Knot, and a restore (D-611) undoes it. Filed by Claude building T-7.8, 8
   October 2026; its session's block, P-510 to P-519.
 - [ ] P-440 · "Open thread" on the profile. **In T-7.10 or T-7.11** (the chats' screens; the
-  founder to place it). Worst case: a man reads a profile, wants to write, and finds no button,
+  founder to place it). **Not in T-7.11** (the founder, 9 October 2026): still to be placed. Worst case: a man reads a profile, wants to write, and finds no button,
   only Like; he has to find the person again in a match or the deck. T-7.1 built `POST /threads`
   (from a match, or a private message with its first message); 08-DESIGN §8's sticky bar carries
   "Open thread · 5 Velas", which T-6.8 left out until a screen can take a first message and its
@@ -6237,7 +6264,7 @@ The number comes from the session's own block, given in its brief, from P-100 up
   Filed by Claude building T-8.5, 8 October 2026; its session's block, P-580 to P-589.
   **Done in T-8.8 (D-790):** `PublicProfile.thread.kudos` (`too_early`, `can_give`, `given`),
   from the one rule `POST /kudos` reads; the prompt shows only for `can_give`.
-- [ ] P-520 · A real voice recording from each browser, read by T-7.9's measuring. **Before
+- [x] P-520 · A real voice recording from each browser, read by T-7.9's measuring. **Before
   T-7.11** (on its Needs line). Worst case: Safari's MediaRecorder writes a fragmented MP4 that
   `core/audio.py` can't read, and every iPhone user's voice note is refused as
   `UNSUPPORTED_AUDIO`; or Chrome's WebM or Firefox's Ogg measures wrong and a minute's note is
@@ -6246,6 +6273,18 @@ The number comes from the session's own block, given in its brief, from P-100 up
   Chrome, Firefox and Safari (macOS and iPhone) with T-7.11's recorder, commit them as fixtures,
   and assert each file's measured length within a second of the recorder's. Filed by Claude
   building T-7.9, 8 October 2026, at the founder's direction; its session's block, P-520 to P-529.
+  **Done for iPhone Safari only** (the founder, 9 October 2026: "that was the real risk"). The
+  founder recorded 5 s and 59 s on his iPhone in Safari at `/dev/voice` (T-7.11's recorder, over a
+  temporary HTTPS tunnel, stopped once they were in) and AirDropped them; both came out as WebM
+  Opus written by WebKit, since this Safari records WebM and the recorder asks for it first. Saved
+  under the page's default name, `chrome-mac-…`, and committed under their true names, the bytes
+  unchanged: `api/tests/fixtures/voice/safari-iphone-5s-5693ms.webm` and `-59s-59919ms.webm`,
+  pinned by SHA-256 in `tests/core/test_audio_recordings.py`, which shows each was AirDropped
+  (`sharingd`) and WebKit-written. **Measured:** 4.926 s against the recorder's 5.693 s (0.77 s
+  short), and 58.963 s against 59.919 s (0.96 s short): inside the second, the second barely.
+  Safari measures shorter than its recorder's clock, so the gap can't make a note too long.
+  Before them, a Playwright Chromium fake-microphone recording measured within 0.05 s (not a real
+  browser recording, not committed). The Mac's three browsers are P-773; Safari's MP4 is P-774.
 - [ ] P-521 · Voice uploads never sent stay in the private bucket for ever. **Before beta.** Worst
   case: the bucket fills with recordings nobody sent, each a person's voice kept with no message
   to delete it by, against D-500's promise that what a person leaves is erased; and storage grows
@@ -6394,8 +6433,51 @@ The number comes from the session's own block, given in its brief, from P-100 up
   in `notification_prefs` that governs its push (as P-550 asks for gifts), and nothing to a paused
   woman. Filed by Claude building T-8.4, 9 October 2026, at the founder's direction; its session's
   block, P-630 to P-639.
-- [ ] P-670 · The "Knot tied ✦" sheet and the web's tie and untie hooks go to T-7.11 — 08-DESIGN
+- [x] P-670 · The "Knot tied ✦" sheet and the web's tie and untie hooks go to T-7.11 — 08-DESIGN
   §8 heads the sheet T-7.7, but T-7.7's items are the API alone, and the knot bar that leads to
   the sheet is T-7.11's. Placed on T-7.11 as an item, the founder's answer (D-770); open until
   T-7.11 builds the sheet and ticks it. Filed by Claude building T-7.7, 9 October 2026; its
-  session's block, P-670 to P-679.
+  session's block, P-670 to P-679. **Built by T-7.11, 9 October 2026:** `KnotTiedSheet.tsx`, shown
+  when a tap's answer is `knotted`, hers without the hour, Velas or footer (D-871); `useTieKnot` and
+  `useUntieKnot` in `src/lib/queries/threads.ts`.
+- [ ] P-770 · The match sheet's "Open thread" should open the Thread it made. **Whenever the
+  discover screen is next touched.** Worst case: a man pays 5 Velas to open a Thread from the
+  match sheet and lands on the chats list, where he has to find the row he just paid for, the
+  moment he is most likely to write. `MatchSheet.tsx` pushes `/chats`, because `/chats/[id]`
+  didn't exist when T-6.5 built it; `POST /threads` answers the Thread, so it can push
+  `/chats/{id}`. Filed by Claude building T-7.11, 9 October 2026; its session's block, P-770 to
+  P-779.
+- [ ] P-771 · The conversation's words assume a man and a woman. **With P-540's answer.** Worst
+  case: two men matched with each other read "her reply restarts the hour", "She wrote back. The
+  hour had run out." and "Free, if she ties it too", and two women "He has to tie it too": wrong
+  about the other person, and, in two men's Thread, a promise the rules don't keep (P-540). T-7.11
+  draws 08-DESIGN §8's copy, chosen by the viewer's gender; `CardLite` carries no gender, so the
+  screen can't pick neutral words for a same-gender pair. Wanted, once P-540 decides the rule:
+  words for each pairing, and the other person's gender (or a neutral flag) where the screen
+  needs it. Filed by Claude building T-7.11, 9 October 2026; its session's block.
+- [ ] P-772 · A long chat's voice notes can outrun their link's rate limit. **Before beta.**
+  Worst case: someone scrolls back through a chat with more than 60 voice notes they can hear, and
+  the ones past the 60th show a play button that does nothing until a tap a minute later asks
+  again. T-7.11 asks each unlocked note's link as it is drawn (`GET /messages/{id}/media`, 60 a
+  minute), so a tap plays at once, without a wait a browser may refuse to play after. Fix: ask as
+  a note scrolls into view, or a batch endpoint for a page's links. Filed by Claude building
+  T-7.11, 9 October 2026; its session's block.
+- [ ] P-773 · Real recordings from the Mac's browsers: Chrome, Firefox and Safari. **Before beta**
+  (the founder, 9 October 2026). Worst case: Chrome's or Firefox's own recording measures longer
+  than the recorder's minute and a 59-second note is refused as `AUDIO_TOO_LONG`, or a desktop
+  browser's file is one `core/audio.py` can't read and every voice note from it is refused as
+  `UNSUPPORTED_AUDIO`. P-520 was closed with iPhone Safari's two recordings alone. Record 5 s and
+  59 s in each at `http://127.0.0.1:3000/dev/voice` under `make dev`, set the page's browser and
+  device first (its defaults name every file `chrome-mac`), check each file's writer in its header
+  (`WebKit`, Chrome's, Firefox's), and add them to `tests/core/test_audio_recordings.py`'s list.
+  A Playwright Chromium recording with a fake microphone measured within 0.05 s on 9 October 2026,
+  which is not a real browser's. Filed by Claude building T-7.11, 9 October 2026, at the founder's
+  direction; its session's block, P-770 to P-779.
+- [ ] P-774 · Safari's MP4 has never been recorded for real. **Before beta.** Worst case: an
+  iPhone on a Safari that records MP4 but not WebM sends a fragmented MP4 that `core/audio.py`,
+  tested only on MP4s built by hand (`tests/audio_samples.py`), can't read, and every voice note
+  from it is refused as `UNSUPPORTED_AUDIO`. P-520's worst case named it, but the founder's
+  iPhone recorded WebM: its Safari records WebM Opus, which `voice-recorder.ts` asks for first, so
+  the MP4 path never ran. Record on a Safari that offers only MP4, or with the recorder made to
+  ask for `audio/mp4` on `/dev/voice` alone, and add the files to the recordings test. Filed by
+  Claude building T-7.11, 9 October 2026; its session's block.

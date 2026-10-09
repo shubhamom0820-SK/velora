@@ -1,6 +1,7 @@
 import {
   useInfiniteQuery,
   useMutation,
+  useQuery,
   useQueryClient,
   type InfiniteData,
   type QueryClient,
@@ -13,6 +14,36 @@ import type { components } from "@/types/api";
 import { queryKeys } from "./keys";
 
 export type Thread = components["schemas"]["Thread"];
+/**
+ * One Thread as its screen opens it (`GET /threads/{id}`, T-7.11, D-870): the
+ * other person, and `send_price`, what my next text message costs now.
+ */
+export type ThreadView = components["schemas"]["ThreadView"];
+
+/**
+ * One of my Threads (`GET /threads/{id}`): `NOT_FOUND` for anyone else's and
+ * across a block, which the screen shows as gone, never retried.
+ */
+export function useThread(id: string) {
+  return useQuery({
+    queryKey: queryKeys.thread(id),
+    queryFn: ({ signal }) =>
+      api.get("/v1/threads/{thread_id}", {
+        params: { thread_id: id },
+        signal,
+      }),
+    retry: false,
+  });
+}
+
+/**
+ * Asks again what a Thread's change moved: its screen (its status, its hour,
+ * and what the next message costs) and every list it is in.
+ */
+function settleThread(client: QueryClient, id: string) {
+  void client.invalidateQueries({ queryKey: queryKeys.thread(id) });
+  void client.invalidateQueries({ queryKey: [...queryKeys.threads(), "list"] });
+}
 
 /**
  * What a re-open or an Extend sends (T-7.6). `shown_price` is the price the
@@ -42,9 +73,12 @@ function buyTime(what: "reopen" | "extend") {
  * Velas, so the balance is asked again when it settles (T-5.5).
  */
 export function useReopenThread() {
+  const client = useQueryClient();
   return useMutation({
     mutationFn: buyTime("reopen"),
     meta: { touchesWallet: true },
+    onSettled: (_data, _error, { thread_id }) =>
+      settleThread(client, thread_id),
   });
 }
 
@@ -54,9 +88,40 @@ export function useReopenThread() {
  * priced `thread_extend`.
  */
 export function useExtendThread() {
+  const client = useQueryClient();
   return useMutation({
     mutationFn: buyTime("extend"),
     meta: { touchesWallet: true },
+    onSettled: (_data, _error, { thread_id }) =>
+      settleThread(client, thread_id),
+  });
+}
+
+/**
+ * Taps "Tie the knot" (`POST /threads/{id}/knot`, T-7.7, D-770): free (D-003),
+ * on a live or an expired Thread. Answers the Thread: `knotted` when this tap
+ * was the second, which the screen celebrates (P-670); otherwise `i_tied`, and
+ * the other person is asked. A tap already there returns it as it is.
+ */
+export function useTieKnot() {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) =>
+      api.post("/v1/threads/{thread_id}/knot", { params: { thread_id: id } }),
+    onSettled: (_data, _error, id) => settleThread(client, id),
+  });
+}
+
+/**
+ * Unties a Knot (`DELETE /threads/{id}/knot`, D-770): either of the two may.
+ * A Thread from a match gets a fresh hour; a private message never expires.
+ */
+export function useUntieKnot() {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) =>
+      api.delete("/v1/threads/{thread_id}/knot", { params: { thread_id: id } }),
+    onSettled: (_data, _error, id) => settleThread(client, id),
   });
 }
 

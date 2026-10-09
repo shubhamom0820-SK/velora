@@ -220,6 +220,37 @@ def _other_of(thread: Thread, user_id: UUID) -> UUID:
     return thread.user_high if thread.user_low == user_id else thread.user_low
 
 
+async def _answer(
+    session: AsyncSession, thread: Thread, user_id: UUID, other_id: UUID
+) -> LedgerReason | None:
+    """What `user_id`'s next message answers for (D-551, D-641), or None: read
+    by the send and by `send_price`, so the price shown is the price charged."""
+    return rules.answer_price(
+        thread,
+        user_id,
+        wrote=await repository.has_written(session, thread.id, user_id),
+        they_wrote=await repository.has_written(session, thread.id, other_id),
+        bought_time=await repository.has_paid(
+            session, thread.id, user_id, rules.TIME_BOUGHT
+        ),
+    )
+
+
+async def send_price(session: AsyncSession, user: User, thread: Thread) -> int:
+    """What `user`'s next text message in `thread` costs now, in Velas (T-7.11,
+    D-870): the answer's price, or a private message's, as the send charges
+    them; 0 for a woman, whom `pricing` charges nothing (D-098). The web shows
+    it and sends it back as `shown_price` (P-56). An expired Thread refuses his
+    send whatever this says (D-097)."""
+    price = 0
+    answer = await _answer(session, thread, user.id, _other_of(thread, user.id))
+    if answer is not None:
+        price += await pricing_service.price_for(session, user, answer)
+    if rules.private_message_priced(thread):
+        price += await pricing_service.price_for(session, user, LedgerReason.DM_MESSAGE)
+    return price
+
+
 async def list_messages(
     session: AsyncSession, user: User, thread_id: UUID, params: PageParams
 ) -> MessagePage:
@@ -428,15 +459,7 @@ async def _send_in(
     expired = threads_rules.has_expired(thread, now)
     if expired and not threads_rules.passes_an_expired_thread(user.gender):
         raise threads_rules.thread_expired()
-    answer = rules.answer_price(
-        thread,
-        user.id,
-        wrote=await repository.has_written(session, thread.id, user.id),
-        they_wrote=await repository.has_written(session, thread.id, other_id),
-        bought_time=await repository.has_paid(
-            session, thread.id, user.id, rules.TIME_BOUGHT
-        ),
-    )
+    answer = await _answer(session, thread, user.id, other_id)
     if answer is not None:
         await pricing_service.charge(
             session,

@@ -93,6 +93,11 @@ const IMG = "img: ` blob: ${storage.privateBucket} ${storage.cdn}`,";
 const EXACT_LOCAL = "adds exactly the local S3's photo sources";
 const EXACT_R2 = "this environment's photo storage (T-4.6) on a Firebase build";
 
+const SCREEN = "src/components/conversation/ConversationScreen.tsx";
+const SCREEN_TEST = "src/components/conversation/ConversationScreen.test.tsx";
+const COMPOSER_TEST = SCREEN_TEST;
+const MIC_TEST = "src/components/conversation/MicButton.test.tsx";
+
 export const CASES: BreakCase[] = [
   // --- The CSP (D-059): each source removed, then widened ---
   {
@@ -350,18 +355,18 @@ export const CASES: BreakCase[] = [
   {
     id: "t47-camera-01-still-denied",
     file: HEADERS,
-    old: '"camera=(self), microphone=(), geolocation=(self), browsing-topics=()",',
-    new: '"camera=(), microphone=(), geolocation=(self), browsing-topics=()",',
+    old: '"camera=(self), microphone=(self), geolocation=(self), browsing-topics=()",',
+    new: '"camera=(), microphone=(self), geolocation=(self), browsing-topics=()",',
     run: [CSP_TEST],
-    expect: ["allow the camera (T-4.7) and location (T-4.10)"],
+    expect: ["allow the camera (T-4.7), location (T-4.10)"],
   },
   {
     id: "t47-camera-02-any-site",
     file: HEADERS,
-    old: '"camera=(self), microphone=(), geolocation=(self), browsing-topics=()",',
-    new: '"camera=*, microphone=(), geolocation=(self), browsing-topics=()",',
+    old: '"camera=(self), microphone=(self), geolocation=(self), browsing-topics=()",',
+    new: '"camera=*, microphone=(self), geolocation=(self), browsing-topics=()",',
     run: [CSP_TEST],
-    expect: ["allow the camera (T-4.7) and location (T-4.10)"],
+    expect: ["allow the camera (T-4.7), location (T-4.10)"],
   },
   {
     id: "t47-camera-03-no-blob-for-the-frame",
@@ -1387,6 +1392,151 @@ export const CASES: BreakCase[] = [
     new: "onDismiss();",
     run: ["src/lib/razorpay.test.ts"],
     expect: ["closing the window afterwards isn't a dismissal"],
+  },
+  // --- T-7.11: the conversation ---
+  {
+    id: "t711-01-her-countdown",
+    file: SCREEN,
+    old: '    man && view && view.status !== "knotted" && view.expires_at\n',
+    new: '    view && view.status !== "knotted" && view.expires_at\n',
+    run: [SCREEN_TEST],
+    expect: [
+      "draws no countdown, no bar, no Extend and no price",
+      "shows her no expired state on an expired Thread",
+    ],
+  },
+  {
+    id: "t711-02-his-send-at-no-price",
+    file: SCREEN,
+    old: "shown_price: man ? (view?.send_price ?? 0) : 0,",
+    new: "shown_price: 0,",
+    run: [SCREEN_TEST],
+    expect: [
+      "shows his message's price before he sends it, and sends exactly it",
+    ],
+  },
+  {
+    id: "t711-03-an-unlock-at-no-price",
+    file: "src/components/conversation/VoiceNote.tsx",
+    old: "        shown_price: unlockPrice,\n",
+    new: "        shown_price: 0,\n",
+    run: [SCREEN_TEST],
+    expect: ["unlocks it at exactly that price"],
+  },
+  {
+    id: "t711-04-time-at-no-price",
+    file: SCREEN,
+    old: "        shown_price: price,\n        key,\n",
+    new: "        shown_price: 0,\n        key,\n",
+    run: [SCREEN_TEST],
+    expect: [
+      "Extend at /prices' price, sending exactly it",
+      "re-opens at the price shown",
+    ],
+  },
+  {
+    id: "t711-05-his-mic",
+    file: SCREEN,
+    old: "canRecord={woman}",
+    new: "canRecord",
+    run: [SCREEN_TEST],
+    expect: ["shows the hour left, the bar, and Extend"],
+  },
+  {
+    id: "t711-06-enter-while-composing",
+    file: "src/components/conversation/Composer.tsx",
+    old: "    if (event.nativeEvent.isComposing) return;\n",
+    new: "",
+    run: [COMPOSER_TEST],
+    expect: ["never on Shift+Enter or while an input method composes"],
+  },
+  {
+    id: "t711-07-a-refusal-loses-the-text",
+    file: SCREEN,
+    old: "        drop(client_msg_id);\n        restore(body);\n",
+    new: "        drop(client_msg_id);\n",
+    run: [SCREEN_TEST],
+    expect: [
+      "explains a message refused for abuse",
+      "says what RATE_LIMITED means and keeps the text",
+    ],
+  },
+  {
+    id: "t711-08-a-retry-with-a-new-id",
+    file: SCREEN,
+    old: "void sendText(item.body, item.client_msg_id);",
+    new: "void sendText(item.body);",
+    run: [SCREEN_TEST],
+    expect: [
+      "keeps a failed message with Retry, which sends the same client id",
+    ],
+  },
+  {
+    id: "t711-09-her-knot-sheet-names-the-hour",
+    file: "src/components/conversation/KnotTiedSheet.tsx",
+    old: 't(man ? "conversation.tied.bodyHis" : "conversation.tied.bodyHers")',
+    new: 't("conversation.tied.bodyHis")',
+    run: [SCREEN_TEST],
+    expect: ["celebrates the second tap for a female"],
+  },
+  {
+    id: "t711-10-the-microphone-to-anyone",
+    file: HEADERS,
+    old: '"camera=(self), microphone=(self), geolocation=(self), browsing-topics=()",',
+    new: '"camera=(self), microphone=*, geolocation=(self), browsing-topics=()",',
+    run: [CSP_TEST],
+    expect: ["and the microphone (T-7.11) to this site alone"],
+  },
+  {
+    id: "t711-11-no-voice-links",
+    file: HEADERS,
+    old: "    media: ` blob: ${storage.privateBucket}`,\n",
+    new: "    media: ` blob:`,\n",
+    run: [CSP_TEST],
+    expect: [
+      "adds exactly the local S3's photo sources",
+      "adds what React's dev tooling needs",
+    ],
+  },
+  {
+    id: "t711-12-no-cap",
+    file: "src/lib/voice-recorder.ts",
+    old: "  }, VOICE_MAX_MS);\n",
+    new: "  }, VOICE_MAX_MS * 2);\n",
+    run: ["src/lib/voice-recorder.test.ts"],
+    expect: ["stops itself at a minute"],
+  },
+  {
+    id: "t711-13-untie-at-once",
+    file: "src/components/conversation/ConversationMenu.tsx",
+    old: "              onClick={() => setConfirming(true)}\n",
+    new: "              onClick={() => void onUntie()}\n",
+    run: [SCREEN_TEST],
+    expect: ["unties a Knot only once asked twice"],
+  },
+  {
+    id: "t711-14-under-a-second-kept",
+    file: "src/components/conversation/MicButton.tsx",
+    old: "if (made.durationMs < VOICE_MIN_MS) {",
+    new: "if (made.durationMs < 0) {",
+    run: [MIC_TEST],
+    expect: ["throws away anything under a second"],
+  },
+  {
+    id: "t711-15-the-recorder-page-everywhere",
+    file: "src/app/dev/voice/page.tsx",
+    old: '  if (process.env.NODE_ENV !== "development") notFound();\n',
+    new: "",
+    run: ["src/app/dev/voice/page.test.tsx"],
+    expect: ["is not found when NODE_ENV is"],
+  },
+  {
+    id: "t711-16-sent-before-heard",
+    file: "src/components/conversation/MicButton.tsx",
+    old: '      setRecording(made);\n      setPhase("preview");\n',
+    new: '      onSend(made);\n      setPhase("idle");\n',
+    run: [MIC_TEST],
+    expect: ["plays it back before anything is sent"],
   },
 ];
 

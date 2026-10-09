@@ -154,7 +154,7 @@ counted, never for your own profile or a refusal.
 |---|---|---|---|---|
 | GET | /threads | ✅ | `?tier=threads|knots&filter=all|unread|recent&q=&cursor=&limit=` → `Page<ThreadRow>`: `threads` is active and expired, `knots` knotted; `unread`, something of theirs unread; `recent`, a message in the last 3 days; `q` (1–50), their first name or username, anywhere in it. Newest first by the last message, or the opening before any. Never one I cleared with nothing newer (D-006), never one with a block either way | T-7.2 |
 | POST | /threads | ✅ | `{match_id}` or `{user_id, first_message}` (1–500), each with `shown_price?` → `Thread` (5 Velas from a match; 8 for a private message, D-231; `PRICE_CHANGED` unless `shown_price` is the price, D-600). One per pair: an existing one is returned, nothing charged; an expired one is `THREAD_EXPIRED` for him and returned to her (D-097). Every refusal of whom is `NOT_FOUND` (D-550). A woman past her daily limits: `RATE_LIMITED` (D-553). 20 a minute | T-7.1 |
-| GET | /threads/{id} | ✅ | → `Thread`; `NOT_FOUND` unless it is yours, and across a block | T-7.2 |
+| GET | /threads/{id} | ✅ | → `ThreadView`: the `Thread`, the other person as the list shows them (`other`, a `CardLite`; no profile view counted, D-493), and `send_price`, what my next text message costs now (D-870); `NOT_FOUND` unless it is yours, and across a block | T-7.2, T-7.11 |
 | GET | /threads/{id}/messages | ✅ | `?cursor=&limit=` → `Page<Message>`: newest first, after my clearing only (D-006); `NOT_FOUND` unless it is yours, and across a block | T-7.3 |
 | POST | /threads/{id}/messages | ✅ | `{client_msg_id, kind, body?, media_key?, duration_s?, shown_price?}` → `Message`. Text 1–2000, not blank. A voice note: hers alone (`NOT_ALLOWED` for anyone else), `media_key` from its upload URL and no body; judged by its bytes and its length measured, never `duration_s` (1–60, unstored): `VALIDATION_ERROR` on `media_key` for a key that URL didn't give this Thread or nothing uploaded, `AUDIO_TOO_LARGE`, `UNSUPPORTED_AUDIO`, `AUDIO_TOO_LONG`; one upload is one message, `ALREADY_EXISTS` again (D-620). The same `client_msg_id` again returns its message, nothing charged; used in another Thread, `ALREADY_EXISTS`. His send on an expired Thread, by the clock, is `THREAD_EXPIRED`, hers delivered (D-097, D-560). What he pays: D-551; a paid send is `PRICE_CHANGED` unless `shown_price` is its price (D-600). `MESSAGE_REJECTED` (D-552), `ACCOUNT_DELETED` (D-555), `RATE_LIMITED` for her daily limits (D-553). 30 a minute | T-7.3 |
 | POST | /threads/{id}/read | ✅ | `{up_to_message_id}` → 204: their messages not yet read, up to and including that one and after my clearing, read now; a `read_at` once set never moves. `message.read` to them alone, only when something was marked (D-670). `NOT_FOUND` unless the Thread is yours, across a block, and for a message from another Thread or before my clearing | T-7.5 |
@@ -172,6 +172,13 @@ counted, never for your own profile or a refusal.
 `Thread` (T-7.1): `id`, `origin` (`match`, `dm`), `status`, `other_user_id`, `expires_at` (a
 man's alone, D-554: null for a woman, once knotted, and for a private message, which never
 expires, D-550), `knotted_at`, `i_tied`, `last_message_at`, `created_at`.
+
+`ThreadView` (T-7.11, D-870): a `Thread`, with `other` (a `CardLite`, as `ThreadRow`'s) and
+`send_price`, the Velas my next text message would cost now, by the send's own rules (D-551,
+D-641): 2 or 5 for his answer in a Thread she opened, until he has written or paid a re-open or an
+Extend there; 2 for each of his private messages until it is knotted; 0 otherwise, and always 0 for
+her (D-098). The conversation screen shows it and sends it back as `shown_price` (P-56, D-600). An
+expired Thread refuses his send whatever it says (D-097).
 
 `ThreadRow` (T-7.2): `id`, `origin`, `status`, `expires_at` (a man's alone, D-554), `knotted_at`,
 `i_tied`, `unread` (their messages I haven't read, after my clearing), `last_message`

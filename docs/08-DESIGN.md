@@ -480,6 +480,22 @@ both chose it." "Keep talking", filled `--accent`. The footer as the match sheet
 knot glyph; "Knotted 3 days ago · Online now". The bar is full `--chrome-accent`, and never
 shrinks. A divider, "YOU TIED THE KNOT · 4 October", between red lines. No knot bar. His composer
 gains the gift button (T-8.10's sheet; gifts go to a woman).
+**As built (T-7.11, D-870, D-871):** `src/components/conversation/`. The header is a `--chrome`
+bar under the shell's, sticky below it: back, a 40 px avatar (ringed `--chrome-accent` on a Knot),
+the name and one line of status; her "Free access" pill stays where the shell already draws it.
+His status's time is `Countdown`'s own words ("41m left", "22h left"). The thread's bar fills
+with the part of the hour left, its width set on the client only. The knot bar's "Tie the knot"
+is the `danger` button (an `--accent` outline); once tapped it reads "You tied it. Waiting for
+Priya." His expired sheet is a panel in the composer's place, not a modal, so the history above
+stays in reach, with "Tie the knot" a third, quieter button, and "The hour ran out." as its title
+when she hasn't written since. "Knot tied ✦" draws its ring as a 28 px filled `--chrome-accent`
+dot with a `--chrome` ring inside; hers has no hour, no Velas and no footer. His priced message
+says so above the composer ("Each message here costs 2 Velas." / "This message costs 2 Velas.")
+and in the send button's name: the drawing has no price there. Her mic records on hold or
+tap-and-tap, and plays the recording back with send and discard before anything goes. The
+voice note's bars are seven fixed heights, by classes, never an inline style. An empty Thread
+offers three of the prototype's icebreakers as `--surface` cards that fill the composer. His
+gift button and the kudos prompt went to T-7.12 (the founder, 9 October 2026).
 
 **The shell (T-5.6).** As built: the `--shell-*` tokens unchanged, nav items icon over label, the
 current place a `--chrome-accent` filled icon (§5). No structural change: the design confirms the

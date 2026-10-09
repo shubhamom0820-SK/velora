@@ -1,4 +1,4 @@
-"""Threads — the requests and responses (04-API.md, T-7.1, T-7.2, T-7.6)."""
+"""Threads — the requests and responses (04-API.md, T-7.1, T-7.2, T-7.6, T-7.11)."""
 
 from __future__ import annotations
 
@@ -87,6 +87,17 @@ class CardLite(BaseModel):
     shows_badge: bool
     is_online: bool
     deleted: bool
+
+
+class ThreadView(Thread):
+    """One Thread, as its conversation screen opens it (`GET /threads/{id}`,
+    T-7.11, D-870): the Thread, the other person as the chats list shows them
+    (no profile view counted, D-493), and `send_price`, what my next text
+    message costs now in Velas (0 for her, D-098), worked out by the send's own
+    rules, so the screen shows the price it will send back (P-56, D-600)."""
+
+    other: CardLite
+    send_price: int
 
 
 class LastMessage(BaseModel):

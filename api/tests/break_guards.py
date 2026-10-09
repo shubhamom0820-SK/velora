@@ -10886,6 +10886,98 @@ T810: list[Case] = [
 ]
 
 
+# --- T-7.11: the conversation's Thread, with what the next message costs ----------
+
+T711_SELECTION = [
+    "tests/modules/threads/test_view.py",
+    "tests/modules/threads/test_list.py",
+    "tests/modules/messages/test_send.py",
+]
+T711_ANSWER = "test_answering_her_is_shown_as_the_re_open_once"
+T711_OPEN = "test_writing_first_where_she_opened_is_shown_as_the_open"
+
+T711: list[Case] = [
+    Case(
+        id="t711-01-the-answer-not-shown",
+        what="send_price leaving out what his answer costs",
+        edits=[
+            (
+                MESSAGES_SERVICE,
+                "    if answer is not None:\n        price += await pricing_service.price_for(session, user, answer)\n",
+                "",
+            )
+        ],
+        expect=[T711_ANSWER, T711_OPEN],
+    ),
+    Case(
+        id="t711-02-a-private-message-not-shown",
+        what="send_price leaving out a private message's price",
+        edits=[
+            (
+                MESSAGES_SERVICE,
+                "    if rules.private_message_priced(thread):\n        price += await",
+                "    if False:\n        price += await",
+            )
+        ],
+        expect=["test_every_private_message_of_his_is_shown_at_two"],
+    ),
+    Case(
+        id="t711-03-the-send-forgets-the-answer",
+        what="the send charging no answer while the Thread still shows its price",
+        edits=[
+            (
+                MESSAGES_SERVICE,
+                "    answer = await _answer(session, thread, user.id, other_id)\n",
+                "    answer = None\n",
+            )
+        ],
+        expect=[
+            T711_ANSWER,
+            T711_OPEN,
+            "test_answering_her_costs_him_the_re_open_once",
+        ],
+    ),
+    Case(
+        id="t711-04-my-own-card",
+        what="the header's card read for the viewer instead of the other person",
+        edits=[
+            (
+                THREADS_SERVICE,
+                "card = await repository.card_of(session, view.other_user_id)",
+                "card = await repository.card_of(session, user.id)",
+            )
+        ],
+        expect=["test_the_thread_comes_with_the_other_person_and_counts_no_view"],
+    ),
+    Case(
+        id="t711-05-a-deleted-account-named",
+        what="a deleted account's name, photo and presence shown",
+        edits=[
+            (
+                THREADS_SERVICE,
+                "    deleted = row.other_status is UserStatus.DELETED\n",
+                "    deleted = False\n",
+            )
+        ],
+        expect=[
+            "test_view.py::test_a_deleted_account_is_named_as_one_and_nothing_more",
+            "test_list.py::test_a_deleted_account_is_named_as_one_and_nothing_more",
+        ],
+    ),
+    Case(
+        id="t711-06-her-expiry-shown",
+        what="her Thread's screen given the expiry",
+        edits=[
+            (
+                THREADS_SERVICE,
+                "expires_at=thread.expires_at if rules.sees_the_expiry(viewer.gender) else None,",
+                "expires_at=thread.expires_at,",
+            )
+        ],
+        expect=["test_the_thread_comes_with_the_other_person_and_counts_no_view"],
+    ),
+]
+
 CASES: list[tuple[Case, list[str]]] = (
     [(c, T51_SELECTION) for c in T51]
     + [(c, T54_SELECTION) for c in T54]
@@ -10936,6 +11028,7 @@ CASES: list[tuple[Case, list[str]]] = (
     + [(c, T84_SELECTION) for c in T84]
     + [(c, T77_SELECTION) for c in T77]
     + [(c, T810_SELECTION) for c in T810]
+    + [(c, T711_SELECTION) for c in T711]
 )
 
 # The fifty-connection fixture's own message when Postgres refuses a connection.

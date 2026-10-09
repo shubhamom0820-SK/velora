@@ -457,9 +457,9 @@ secret is left empty. Real secret values are never committed.
   enforced CSP, `default-src 'self'; script-src 'self' 'unsafe-inline'; connect-src 'self' <the
   API>; object-src 'none'; base-uri 'none'; form-action 'self'; frame-ancestors 'none'`;
   `X-Frame-Options: DENY`; `X-Content-Type-Options: nosniff`; `Referrer-Policy:
-  strict-origin-when-cross-origin`; and `Permissions-Policy: camera=(self), microphone=(),
-  geolocation=(self), browsing-topics=()`, the camera for this site alone since T-4.7 and location
-  since T-4.10; and `Strict-Transport-Security: max-age=63072000; includeSubDomains`, never
+  strict-origin-when-cross-origin`; and `Permissions-Policy: camera=(self), microphone=(self),
+  geolocation=(self), browsing-topics=()`, the camera for this site alone since T-4.7, location
+  since T-4.10 and the microphone since T-7.11; and `Strict-Transport-Security: max-age=63072000; includeSubDomains`, never
   preloaded before launch (D-074). **This is what is served, not a target.** On builds that sign
   in by Firebase (staging and production, D-081), T-3.14 adds reCAPTCHA's hosts to `script-src` (`https://www.google.com/recaptcha/`,
   `https://www.gstatic.com/recaptcha/`), a `frame-src 'self' https://www.google.com/recaptcha/
@@ -475,7 +475,10 @@ secret is left empty. Real secret values are never committed.
   allows the camera to the site itself, `camera=(self)`, for the selfie, on every page rather
   than only `/onboarding/selfie`: a page reached by Next's client-side navigation keeps the
   policy of the document first loaded. Its captured frame shows as a `blob:` image, which T-4.6's
-  `img-src` already allows on every build with photo storage. **The sign-in and app routes
+  `img-src` already allows on every build with photo storage. T-7.11 allows the microphone the
+  same way, `microphone=(self)` on every page, for her voice notes, and adds a `media-src 'self'
+  blob: <the private bucket>` on builds with storage: her recording's preview, and a voice note's
+  signed link, which an `<audio>` plays (D-871). **The sign-in and app routes
   (T-6.6, D-541)**, `NONCE_ROUTES` (`/login`, `/onboarding`, `/discover`, `/chats`, `/wallet`,
   `/you`, `/people` and `/share`, and all beneath each, with `/@username` itself, T-6.8), are served the same policy but for `script-src`: `'self'
   'nonce-<a fresh 128-bit nonce per response>' 'strict-dynamic'`, never `'unsafe-inline'`, set by
@@ -489,7 +492,7 @@ secret is left empty. Real secret values are never committed.
   (its phone layout). Razorpay publishes no CSP list: this is what its Checkout asked of the page
   in Chrome, held to it by `web/bench/razorpay-csp.spec.ts`, each source refused without it. Local
   and CI builds and the static pages have none of it. Each task that needs more widens it there,
-  deliberately: App Check (P-68), the microphone (T-7.11), WebSockets (T-7.12), Sentry (T-9.12)
+  deliberately: App Check (P-68), WebSockets (T-7.12), Sentry (T-9.12)
   and analytics (T-10.2). This line changes with each.
 - API headers (`app/core/headers.py`, P-42): `X-Content-Type-Options: nosniff` on every
   response and `Cache-Control: no-store` on every `/v1` response, 500s and CORS preflights

@@ -52,6 +52,15 @@ export const queryKeys = {
   threads: () => ["threads"] as const,
   threadList: (tier: string, filter: string, q: string) =>
     ["threads", "list", tier, filter, q] as const,
+  // One Thread's screen (T-7.11). Three keys, none the prefix of another, so
+  // asking the Thread again never refetches every page of its messages.
+  thread: (id: string) => ["threads", "one", id] as const,
+  messages: (id: string) => ["threads", "messages", id] as const,
+  // Whether the other person is typing: written by the socket (T-7.12) and
+  // read by the screen; never asked of the API.
+  typing: (id: string) => ["threads", "typing", id] as const,
+  // A voice note's signed link, 10 minutes long (D-027).
+  voiceMedia: (messageId: string) => ["messages", messageId, "media"] as const,
   profile: (id: string) => ["profiles", id] as const,
   // The private album (T-8.8): someone's, as the viewer may see it, and the
   // requests to see one's own.

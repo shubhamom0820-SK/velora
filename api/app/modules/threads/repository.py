@@ -191,6 +191,32 @@ class ListFilter:
     q: str | None = None
 
 
+def _card_columns(other: Any, profile: Any) -> list[Any]:
+    """The other person's card-lite columns, for the list and one Thread."""
+    return [
+        other.id.label("other_id"),
+        other.status.label("other_status"),
+        other.last_active_at.label("other_last_active_at"),
+        profile.first_name.label("other_first_name"),
+        profile.username.label("other_username"),
+        main_photo_key(other.id).label("other_photo_key"),
+        badge_of(other.id, other.is_verified).label("other_badge"),
+    ]
+
+
+async def card_of(session: AsyncSession, user_id: UUID) -> Row[Any]:
+    """`user_id`'s card-lite columns, named as `rows_for` names them."""
+    other = aliased(User)
+    profile = aliased(Profile)
+    query = (
+        select(*_card_columns(other, profile))
+        .select_from(other)
+        .join(profile, profile.user_id == other.id)
+        .where(other.id == user_id)
+    )
+    return (await session.execute(query)).one()
+
+
 async def rows_for(
     session: AsyncSession,
     viewer_id: UUID,
@@ -229,13 +255,7 @@ async def rows_for(
     query = (
         select(
             Thread,
-            other.id.label("other_id"),
-            other.status.label("other_status"),
-            other.last_active_at.label("other_last_active_at"),
-            profile.first_name.label("other_first_name"),
-            profile.username.label("other_username"),
-            main_photo_key(other.id).label("other_photo_key"),
-            badge_of(other.id, other.is_verified).label("other_badge"),
+            *_card_columns(other, profile),
             unread.label("unread"),
             last.c.last_kind,
             last.c.last_body,

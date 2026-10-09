@@ -5389,6 +5389,62 @@ some profiles refuse.
 `NOT_FOUND` after the tap (a button that can't work); a `gender` field on `PublicProfile` (the web
 would then re-derive D-653's rule, and drift from the send's).
 
+### D-870 · One Thread's screen: the other person and what his next message costs — Locked
+**The decision (T-7.11; the founder, 9 October 2026, on the advisor's recommendation, Claude in a
+separate chat, relayed; T-7.11's plan, Q1 and Q2):** `GET /threads/{id}` answers `ThreadView`, a
+`Thread` with two more fields:
+- **`send_price`:** the Velas my next text message costs now, worked out by
+  `messages.service.send_price` from the same `_answer` the send charges by, so the price shown
+  and the price charged can't drift apart: his answer where she opened (2 if she wrote, 5 if she
+  hasn't, D-551), nothing once he has written or paid a re-open or an Extend there (D-641); 2 for
+  each of his private messages until knotted (D-231); 0 for her (D-098). The composer shows it
+  when it isn't 0 and sends it back as `shown_price` (P-56, D-600).
+- **`other`:** the other person as a `CardLite`, the chats list's own shape, read without
+  counting a profile view (D-493) and naming a deleted account as `deleted` and nothing more
+  (D-051, D-500).
+
+**Why:** the web can't work out the price itself: who opened the Thread, whether he has paid for
+time, and his own earlier messages (hidden by his clearing, D-006) never reach it. Without it his
+paid sends are either refused with `PRICE_CHANGED` or sent at a price nobody showed. And the
+header needs a name, a photo and presence, which `Thread` didn't carry.
+
+**Rejected:** the screen reading the price from `/prices` and guessing which applies (wrong when
+he cleared the chat or bought time); the header reading `GET /users/{id}`, which records a profile
+view on every open and answers `NOT_FOUND` for a deleted account; the two fields on `Thread`
+itself, which every mutation returns and would have to compute.
+
+### D-871 · The conversation screen: what each side sees, and how a voice note is recorded — Locked
+**The decision (T-7.11; the founder, 9 October 2026, on the advisor's recommendation, relayed;
+T-7.11's plan, Q3 to Q7, and Claude's in the plan the founder approved):**
+- **Her side says nothing about time or money** (D-097, D-554, P-460): no countdown, bar, Extend,
+  expired panel or price, whatever the API sends; the gate is an allowlist (`gender === "male"`).
+  Her "Knot tied" sheet says "This one stays, because you both chose it." and nothing of the hour
+  or Velas, and has no footer; his says "No hour. No Velas." and carries the match sheet's footer.
+- **His expired Thread:** everything stays readable; a panel replaces the composer with "Re-open ·
+  2 Velas" filled, "Re-open and keep it for 24h · 10 Velas" outlined (D-253) and, quieter, "Tie
+  the knot". Its title is "She wrote back. The hour had run out." only when she wrote after it
+  ran out; otherwise "The hour ran out." (Q4).
+- **The ⋯ menu:** "View profile", "Clear chat" (T-7.8's one-sided clear, then back to the list),
+  and on a Knot "Untie the knot", asked twice (Q5). Report and Block are T-9.1's (P-442).
+- **Live state waits for the socket** (Q3): the typing dots read a cache only T-7.12 writes;
+  nothing polls; the screen asks the API on opening and on focus. Their newest message is marked
+  read once it is on screen (`POST /read`, T-7.5).
+- **A voice note's bars are decorative** (Q7), the same for a message every time (from its id):
+  real peaks would mean decoding audio he hasn't paid to hear.
+- **The recorder** (`src/lib/voice-recorder.ts`, the web's only MediaRecorder): the first of WebM
+  Opus, Ogg Opus and MP4 the browser records, at 64 kbps (a minute is about 480 kB, under D-620's
+  2 MB); it stops itself at 60 s; under a second is thrown away (the API takes 1 to 60); its own
+  `start`-to-`stop` length is `duration_s`, only checked by the API. Hold to record and let go, or
+  tap and tap again; nothing is sent before she has heard it back.
+- **The microphone is allowed on every page** (`microphone=(self)`), as the camera is: a
+  client-side navigation keeps the first document's policy. `media-src` adds `blob:` and the
+  private bucket, on builds with storage.
+
+**Rejected:** polling for new messages until T-7.12 (it would be thrown away with the socket);
+a voice note's link asked for only on tap (a browser may refuse to play after the wait, so it is
+asked as the note is drawn, signed for 10 minutes); an expired panel without the knot (an expired
+Thread takes a tap, T-7.7).
+
 ## Adding a decision
 
 Append `D-0NN · Title — Locked|Open`, with Decision, Why, Rejected. Never edit a Locked entry —

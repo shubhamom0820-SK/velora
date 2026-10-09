@@ -37,8 +37,12 @@
  *   T-4.10  Done: location, geolocation=(self). Only this site's own pages,
  *           and only after the person taps to share it (lib/geolocation.ts).
  *           J1 is the proof: the browser hands its position to the page.
- *   T-7.11  Voice notes: microphone=(self); media-src for voice notes and
- *           blob: previews.
+ *   T-7.11  Done: voice notes. microphone=(self), on every page, as the
+ *           camera is, for the same reason (a client-side navigation keeps
+ *           the first document's policy); media-src for blob: (her recording's
+ *           preview before she sends it) and the private bucket (a voice
+ *           note's signed link, which an <audio> plays), on builds with
+ *           storage. The upload is the PUT T-4.6's connect-src already allows.
  *   T-7.12  Real time: connect-src for wss:// on the API.
  *   T-8.7   Done: checkout, on Razorpay builds' nonce routes only (D-761):
  *           Razorpay publishes no CSP list, so RAZORPAY below is what its
@@ -163,12 +167,17 @@ export function apiOrigin(env: BuildEnv = process.env): string | null {
 }
 
 /**
- * Photos' sources (T-4.6), on builds that have photo storage only. A CSP error
- * on the photos step is this list, not an upload bug.
+ * Photos' sources (T-4.6), and voice notes' (T-7.11), on builds that have
+ * storage only. A CSP error on the photos step or a voice note is this list,
+ * not an upload bug.
  */
-function photoSources(env: BuildEnv): { connect: string; img: string } {
+function photoSources(env: BuildEnv): {
+  connect: string;
+  img: string;
+  media: string;
+} {
   const storage = photoStorageFor(env, { dev: isDev(env) });
-  if (!storage) return { connect: "", img: "" };
+  if (!storage) return { connect: "", img: "", media: "" };
   return {
     // The presigned PUT, from src/lib/upload.ts, to the private bucket.
     connect: ` ${storage.privateBucket}`,
@@ -176,6 +185,9 @@ function photoSources(env: BuildEnv): { connect: string; img: string } {
     // bucket: signed links to pending and private photos; the CDN: approved
     // public ones.
     img: ` blob: ${storage.privateBucket} ${storage.cdn}`,
+    // Voice notes (T-7.11) live in the same private bucket: blob: her
+    // recording's preview; the bucket, a voice note's signed link.
+    media: ` blob: ${storage.privateBucket}`,
   };
 }
 
@@ -277,6 +289,8 @@ export function contentSecurityPolicy(
     ...(dev || photos.img
       ? [`img-src 'self'${dev ? " data:" : ""}${photos.img}`]
       : []),
+    // Media falls back to default-src 'self' on a build without storage.
+    ...(photos.media ? [`media-src 'self'${photos.media}`] : []),
     `connect-src 'self'${api ? ` ${api}` : ""}${photos.connect}${extra(FIREBASE.connect)}${pay(RAZORPAY.connect)}`,
     // Frames fall back to default-src 'self' everywhere else; a Firebase build
     // keeps that and adds reCAPTCHA's, and a Razorpay build's nonce routes
@@ -324,10 +338,10 @@ export function securityHeaders(env: BuildEnv = process.env): Header[] {
       key: "Permissions-Policy",
       // Denied until the task that needs each allows it (see above), and
       // then to this site only, never a frame of another: the camera for the
-      // selfie (T-4.7), location (T-4.10). browsing-topics opts users out of
-      // Chrome's ad-topics API.
+      // selfie (T-4.7), location (T-4.10), the microphone for her voice notes
+      // (T-7.11). browsing-topics opts users out of Chrome's ad-topics API.
       value:
-        "camera=(self), microphone=(), geolocation=(self), browsing-topics=()",
+        "camera=(self), microphone=(self), geolocation=(self), browsing-topics=()",
     },
     {
       key: "Strict-Transport-Security",

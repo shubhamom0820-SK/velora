@@ -411,6 +411,142 @@ export const en = {
     // 1 since T-7.6, restarted by her messages (D-097).
     footer: "A Thread lasts an hour from her last message. Knots last.",
   },
+  // One conversation (T-7.11, 08-DESIGN §8). Her side says nothing about time,
+  // expiry or price (D-097, D-554, P-460): no countdown, no Extend, no expired
+  // sheet, no hour, no Velas, anywhere, the Knot's sheet included. Copy that
+  // names the hour follows app_config.thread_hours (1, P-14) and "24h" or "a
+  // day" thread_extend_hours (24): change it with the setting. Drafted by
+  // Claude, for the founder's review.
+  conversation: {
+    title: "Chat",
+    back: "Back to chats",
+    messages: "Messages",
+    online: "Online now",
+    deletedAccount: "Deleted account",
+    notFound: "This chat isn't available",
+    notFoundBody: "Go back to your chats to find another.",
+    failed: "We couldn't load this chat",
+    loadingOlder: "Loading earlier messages",
+    olderFailed: "We couldn't load earlier messages",
+    // The header (his): "41m left · her reply restarts the hour".
+    restarts: "her reply restarts the hour",
+    extend: "Extend 24h · {count}",
+    extendLabel: "Extend by a day, for {velas}",
+    extended: "Extended by a day",
+    extendFailed: "We couldn't extend it just now. Try again.",
+    ranOutAt: "The hour ran out · {time}",
+    knottedToday: "Knotted today",
+    knottedYesterday: "Knotted yesterday",
+    knottedDays: "Knotted {days} days ago",
+    // The ⋯ menu.
+    more: "More",
+    viewProfile: "View profile",
+    clearChat: "Clear chat",
+    cleared: "Cleared from your chats",
+    clearFailed: "We couldn't clear that just now. Try again.",
+    untie: "Untie the knot",
+    untieTitle: "Untie the knot?",
+    untieBody:
+      "It becomes a Thread again. To make it a Knot, you both have to tie it again.",
+    untieConfirm: "Untie",
+    untieKeep: "Keep the knot",
+    untied: "Untied",
+    untieFailed: "We couldn't untie it just now. Try again.",
+    // The list.
+    today: "Today",
+    yesterday: "Yesterday",
+    ranOutDivider: "The hour ran out",
+    tiedDivider: "You tied the knot · {date}",
+    newAt: "New · {time}",
+    seen: "Seen {time}",
+    notSeen: "Not seen yet",
+    sending: "Sending",
+    notSent: "Not sent",
+    retry: "Retry",
+    typing: "{name} is typing",
+    masked:
+      "Phone numbers, emails, UPI IDs and handles are hidden in a Thread's first messages.",
+    // An empty Thread: the prototype's icebreakers, three shown.
+    emptyTitle: "Say hello",
+    emptyBody: "Not sure how to start? Tap one to use it.",
+    icebreakers: {
+      laugh: "What's the last thing that made you laugh?",
+      eaten: "Best thing you've eaten this week?",
+      truths: "Two truths and a lie — go.",
+    },
+    // The knot bar, in each person's words (08-DESIGN §8).
+    knotBarHis:
+      "Tie the knot and this never runs out. Free, if she ties it too.",
+    knotBarHers: "Tie the knot and this stays, always. He has to tie it too.",
+    tie: "Tie the knot",
+    waiting: "You tied it. Waiting for {name}.",
+    tieFailed: "We couldn't tie the knot just now. Try again.",
+    // The "Knot tied ✦" sheet (P-670). Hers says nothing of the hour or Velas.
+    tied: {
+      title: "You and {name} tied the knot",
+      bodyHis: "No hour. No Velas. This one stays, because you both chose it.",
+      bodyHers: "This one stays, because you both chose it.",
+      keepTalking: "Keep talking",
+    },
+    // His expired Thread's sheet (08-DESIGN §8): never hers.
+    expired: {
+      titleWrote: "She wrote back. The hour had run out.",
+      title: "The hour ran out.",
+      bodyWrote: "You can read everything. To reply, open the Thread again.",
+      body: "You can read everything. To write again, open the Thread again.",
+      reopen: "Re-open · {velas}",
+      reopenKeep: "Re-open and keep it for 24h · {velas}",
+      note: "Re-open gives you a fresh hour. Extend adds a day, as many times as you like.",
+      reopenFailed: "We couldn't re-open it just now. Try again.",
+    },
+    priceChanged: "The price changed. It's {velas} now.",
+    // The composer.
+    placeholder: "Message",
+    send: "Send",
+    sendPriced: "Send, for {velas}",
+    // His, when the next message costs something (D-870's send_price).
+    priceDm: "Each message here costs {velas}.",
+    priceOne: "This message costs {velas}.",
+    rejected: {
+      abuse:
+        "That message has words we don't allow. Change it and send it again.",
+      solicitation:
+        "Messages can't ask for money or payments. Change it and send it again.",
+      other: "That message can't be sent. Change it and send it again.",
+    },
+    expiredRefused: "The hour ran out before that was sent.",
+    accountDeleted: "They deleted their account. You can still read your chat.",
+    rateLimited: "That's a lot of messages for now. Try again in a while.",
+    sendFailed: "Not sent. Check your connection and retry.",
+    // Voice notes: hers to record (D-010), his to unlock (T-7.9).
+    voice: {
+      label: "Voice note, {duration}",
+      play: "Play the voice note",
+      pause: "Pause the voice note",
+      unlock: "Unlock · {velas}",
+      unlockLabel: "Unlock this voice note for {velas}",
+      unlockFailed: "We couldn't unlock it just now. Try again.",
+      playFailed: "We couldn't play that voice note. Try again.",
+      record: "Record a voice note",
+      stop: "Stop recording",
+      recording: "Recording, {time}",
+      hint: "Hold to record, or tap to start and tap again to stop.",
+      preview: "Your voice note, {duration}",
+      discard: "Discard the voice note",
+      send: "Send the voice note",
+      uploading: "Sending, {percent}%",
+      capped: "A voice note is a minute at most, so it stopped there.",
+      tooShort: "A voice note is at least a second. Hold a little longer.",
+      denied:
+        "Your browser refused the microphone. Allow it for this site in its settings to record.",
+      unsupported: "This browser can't record voice notes.",
+      failed: "Recording failed. Try again.",
+      notSent: "That voice note wasn't sent. Try again.",
+      tooLarge: "That recording is too large to send.",
+      tooLong: "A voice note is a minute at most.",
+      unreadable: "That recording couldn't be read. Record it again.",
+    },
+  },
   // The balance pill, the wallet screen and the store sheet (T-5.5). Users see
   // Velas, never "credits" (D-049). Drafted by Claude, for the founder's review.
   wallet: {

@@ -284,12 +284,11 @@ def _rows(
     return [_row_of(row, user, now, settings) for row in rows]
 
 
-def _row_of(
-    row: Any, user: User, now: datetime, settings: Settings
-) -> schemas.ThreadRow:
-    thread = view_of(row.Thread, user)
+def _card_of(row: Any, now: datetime, settings: Settings) -> schemas.CardLite:
+    """The other person from their card-lite columns: a deleted account is
+    `deleted` and nothing more (D-051, D-500)."""
     deleted = row.other_status is UserStatus.DELETED
-    other = schemas.CardLite(
+    return schemas.CardLite(
         id=row.other_id,
         first_name=None if deleted else row.other_first_name,
         username=None if deleted else row.other_username,
@@ -302,6 +301,13 @@ def _row_of(
         and row.other_last_active_at >= now - discovery_rules.ONLINE_FOR,
         deleted=deleted,
     )
+
+
+def _row_of(
+    row: Any, user: User, now: datetime, settings: Settings
+) -> schemas.ThreadRow:
+    thread = view_of(row.Thread, user)
+    other = _card_of(row, now, settings)
     last = (
         None
         if row.last_kind is None
@@ -329,15 +335,23 @@ def _row_of(
 
 
 async def get_thread(
-    session: AsyncSession, user: User, thread_id: UUID
-) -> schemas.Thread:
-    """One of `user`'s Threads; anyone else's, or one a block stands across,
-    is `NOT_FOUND`."""
+    session: AsyncSession, user: User, thread_id: UUID, *, settings: Settings
+) -> schemas.ThreadView:
+    """One of `user`'s Threads, with the other person and what `user`'s next
+    message costs (T-7.11, D-870); anyone else's, or one a block stands
+    across, is `NOT_FOUND`."""
     async with session.begin():
         thread = await repository.my_thread(session, thread_id, user.id)
         if thread is None:
             raise _not_found()
-        return view_of(thread, user)
+        view = view_of(thread, user)
+        card = await repository.card_of(session, view.other_user_id)
+        price = await messages_service.send_price(session, user, thread)
+    return schemas.ThreadView(
+        **view.model_dump(),
+        other=_card_of(card, clock.now(), settings),
+        send_price=price,
+    )
 
 
 # --- Clearing (T-7.8) ---------------------------------------------------------------

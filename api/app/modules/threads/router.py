@@ -32,6 +32,7 @@ from app.modules.threads.schemas import (
     OpenThreadRequest,
     Thread,
     ThreadRowPage,
+    ThreadView,
 )
 from app.modules.users.models import User
 
@@ -101,8 +102,9 @@ async def get_thread(
     thread_id: UUID,
     user: Annotated[User, Depends(onboarded_user)],
     session: Annotated[AsyncSession, Depends(get_session)],
-) -> Thread:
-    return await service.get_thread(session, user, thread_id)
+    settings: Annotated[Settings, Depends(app_settings)],
+) -> ThreadView:
+    return await service.get_thread(session, user, thread_id, settings=settings)
 
 
 @router.post("/threads/clear", dependencies=[clear_rate_limit])

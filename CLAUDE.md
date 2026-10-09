@@ -87,7 +87,9 @@ on demand by a Firebase build's `/login`;
 so local and ci builds can't reach Firebase (D-085). `src/components/ui/` holds the shared primitives (T-1.19),
 each with a vitest test beside it; `/dev/ui` shows them all under `next dev` and 404s everywhere
 else. Feature components go in `src/components/<feature>/`. A person's profile has one route,
-`/people/[id]` (the deck's tap, T-6.5; T-6.8's screen). `web/bench/` holds benchmarks run by
+`/people/[id]` (the deck's tap, T-6.5; T-6.8's screen). One conversation is `/chats/[id]`
+(T-7.11, `src/components/conversation/`); `src/lib/voice-recorder.ts` is the only MediaRecorder,
+and `/dev/voice` records with it under `next dev` alone (P-520's recordings). `web/bench/` holds benchmarks run by
 hand, never in `make test`: T-6.5's deck frame rate (`pnpm exec playwright test -c bench`), and
 T-8.7's Razorpay CSP against its live Checkout (`-c bench/razorpay-csp.config.ts`). The app's header and bottom nav are
 `src/components/shell/AppShell.tsx`, inside `(app)`'s gate and PIN lock (T-5.6): its sizes are the
