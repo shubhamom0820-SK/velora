@@ -3569,24 +3569,34 @@ number** per account gets its 5 each, one Thread's worth, and is **accepted**, k
 - [-] **Commit:** `feat(safety): refunds for banned partners [T-9.3]`
 
 ### T-9.4 · Notifications
-- [ ] **Needs:** T-7.4
+- [x] **Needs:** T-7.4
 - **"Only if not connected" needs presence across instances** (T-7.4, 8 October 2026): each
   instance's hub knows only its own sockets (`Hub.count`), so this task records who is connected,
   for example a Redis key per user refreshed while a socket lives, and reads that.
 - [ ] VAPID keys; `POST/DELETE /push/subscriptions`; `send_push` worker (drop subscriptions on 404/410); notification prefs; in-app `notifications` list. Kinds: match, message (only if not connected), like, knot requested/accepted, thread expiring, album decided, low balance.
-- [ ] **A paused account is sent nothing** (T-9.6): no push and no in-app notification while
+  **Open: no VAPID keys exist, because push is off until D-857 and P-755.** Everything else on this
+  line is built and tested: the subscriptions, the sender, the settings, the list and every kind
+  (CI run 37867167873 on `340ce05`). No pair is set and `PUSH_PROVIDER = "off"` in every Fly
+  file until the founder gives D-857 in their own words and P-755 sets the pair.
+- [x] **A paused account is sent nothing** (T-9.6): no push and no in-app notification while
   `paused`. A deleted one has no push subscriptions left (`DELETE /me` drops them).
-- [ ] **P-550: gifts.** T-8.9 writes a `gift` notification (`{gift_send_id, gift_id, user_id}`)
+- [x] **P-550: gifts.** T-8.9 writes a `gift` notification (`{gift_send_id, gift_id, user_id}`)
   for every gift received, and no setting names gifts: decide which one governs its push, and add
   `gift` to the kinds above.
 - [ ] **From T-8.10: a `gift` notification opens the sender's profile,** `/people/{user_id}`:
   the payload's `user_id` is the sender's (T-8.9). Moved here from T-8.10's line (the founder, 9
   October 2026), since the in-app list and `notificationclick` are this task's.
-- [ ] **P-631: album requests.** T-8.4 tells her nothing when someone asks to see her album (D-732):
+  **Open: not built.** T-9.4 sends a gift to `/you`, where her received gifts are, not to
+  `/people/{user_id}`. This line arrived with T-8.10 while T-9.4 was being built, and was missed
+  at the rebase. The fix is one entry in `web/src/lib/notification-view.ts`'s `ROUTES`, and its
+  test.
+- [x] **P-631: album requests.** T-8.4 tells her nothing when someone asks to see her album (D-732):
   add an `album.requested` event and an `album_request` notification, and the setting that
   governs its push.
-- [ ] Web: Serwist service worker (push + notificationclick → open the right route), permission asked **after the first match**, not on load; generic-text option; iOS note when not installed.
-- [ ] Update `/privacy` (T-2.2) to say what push notifications carry and who delivers them.
+- [x] Web: Serwist service worker (push + notificationclick → open the right route), permission asked **after the first match**, not on load; generic-text option; iOS note when not installed.
+  **Built without Serwist** (D-859), and tested in vitest and by eight web breaks. With push off
+  it offers nothing yet (P-755), and no real device has received a push (P-753).
+- [x] Update `/privacy` (T-2.2) to say what push notifications carry and who delivers them.
 - **Built as D-850 to D-859** (the founder's answers to T-9.4's plan, 9 October 2026, on the
   advisor's recommendation, relayed):
   - **The kinds and their settings:** `notify()` is the one writer, for an active account only.
@@ -3606,13 +3616,14 @@ number** per account gets its 5 each, one Thread's worth, and is **accepted**, k
   - **Open (D-857):** pushes leave India through the browser's maker, awaiting the founder's own
     words.
   - **Proved:** the encryption is RFC 8291's example byte for byte. **Broken once each** (`uv run
-    python -m tests.break_guards t94-`): thirty-six cases.
+    python -m tests.break_guards t94-`): thirty-seven cases, and the web's eight.
   - **Landed with push off everywhere** (the founder, 9 October 2026): `PUSH_PROVIDER = "off"` in
     every Fly file, a value added for it (D-856, amended). No keys are needed, no key is served,
     and nothing is sent. In-app notifications work. On again: P-755. No real push service has yet
     accepted one of ours: P-753.
-- [ ] **Commit:** `feat(notifications): web push and in-app list [T-9.4]` (landed as two: the API's,
-  then `feat(web): notifications and the service worker [T-9.4]`)
+- [x] **Commit:** `feat(notifications): web push and in-app list [T-9.4]` (landed as two: the API's,
+  then `feat(web): notifications and the service worker [T-9.4]`: `0e968e2` and `340ce05`, CI run
+  37867167873)
 
 ### T-9.5 · Admin panel
 - [ ] **Needs:** T-9.2
@@ -6341,7 +6352,7 @@ The number comes from the session's own block, given in its brief, from P-100 up
   leaves a `voice/…` copy no message keeps. Sweep both on a cron: an upload older than its URL's 5
   minutes and a grace, and a `voice/` file no `messages.media_key` names. Filed by Claude building
   T-7.9, 8 October 2026; its session's block.
-- [ ] P-550 · Say which notification setting governs a gift, and push it. **In T-9.4.** Worst case:
+- [x] P-550 · Say which notification setting governs a gift, and push it. **In T-9.4.** Worst case:
   T-8.9 writes a `gift` notification for every gift a woman receives, and no setting in
   `notification_prefs` names gifts, so when T-9.4 sends pushes, a woman who turned off what she
   thought covered them is still pushed each one, or the gift kind is left out of the push worker
@@ -6481,7 +6492,7 @@ The number comes from the session's own block, given in its brief, from P-100 up
   row found by its reason, or order by something that can't tie; grep the suite for the same
   pattern (`order_by(LedgerEntry.created_at)` alone: three in `api/tests`). Filed by Claude
   building T-8.10, 9 October 2026.
-- [ ] P-631 · Tell her when someone asks to see her album. **In T-9.4.** Worst case: a man pays a
+- [x] P-631 · Tell her when someone asks to see her album. **In T-9.4.** Worst case: a man pays a
   Vela for a request that sits unseen in her incoming list until she happens to open it, so the
   request reads to him as ignored and to her as nothing at all; T-8.4 writes no event and no
   notification for a new request (D-732), only `album.decided` back to him. Add an
