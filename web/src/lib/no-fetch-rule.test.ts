@@ -3,7 +3,7 @@ import { ESLint } from "eslint";
 import { describe, expect, it } from "vitest";
 
 // Proves eslint.config.mjs's fetch ban both ways (CLAUDE.md rule 14): it flags
-// fetch, and since T-4.6 XMLHttpRequest, outside src/lib, and leaves src/lib
+// fetch, since T-4.6 XMLHttpRequest and since T-7.12 WebSocket, outside src/lib, and leaves src/lib
 // and look-alikes alone. Loading the Next.js ESLint config takes a few seconds,
 // hence the timeout.
 const eslint = new ESLint({ cwd: process.cwd() });
@@ -54,6 +54,36 @@ describe("the fetch ban", { timeout: 30_000 }, () => {
       await banned(
         "src/lib/upload.ts",
         "export const put = () => new XMLHttpRequest();",
+      ),
+    ).toEqual([]);
+  });
+
+  it.each([
+    [
+      "src/components/conversation/Composer.tsx",
+      "export const open = () => new WebSocket('wss://x/ws');",
+    ],
+    [
+      "src/app/(app)/chats/page.tsx",
+      "export const open = () => new window.WebSocket('wss://x/ws');",
+    ],
+    [
+      "src/components/x.tsx",
+      "export const open = () => new globalThis.WebSocket('wss://x/ws');",
+    ],
+    [
+      "src/store/x.ts",
+      "export const open = () => new self.WebSocket('wss://x/ws');",
+    ],
+  ])("flags WebSocket in %s (T-7.12)", async (filePath, code) => {
+    expect(await banned(filePath, code)).toHaveLength(1);
+  });
+
+  it("allows WebSocket inside src/lib, where the socket is", async () => {
+    expect(
+      await banned(
+        "src/lib/ws.ts",
+        "export const open = () => new WebSocket('wss://x/ws');",
       ),
     ).toEqual([]);
   });

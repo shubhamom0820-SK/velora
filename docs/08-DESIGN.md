@@ -496,6 +496,12 @@ tap-and-tap, and plays the recording back with send and discard before anything 
 voice note's bars are seven fixed heights, by classes, never an inline style. An empty Thread
 offers three of the prototype's icebreakers as `--surface` cards that fill the composer. His
 gift button and the kudos prompt went to T-7.12 (the founder, 9 October 2026).
+**As built (T-7.12, D-880, D-881):** the gift button is a 44 px outlined circle with the gift
+glyph beside send, as her mic is, on any Thread whose `can_gift` is true; it opens T-8.10's sheet.
+The kudos prompt is T-8.8's `KudosPrompt` card after the messages, for `can_give`. "Knot tied ✦"
+opens for both, the first to tap included, when the Knot is made with the chat open. The ⋯ menu
+adds "Report" and "Block {name}" in `--accent` (P-764), T-9.1's sheets, there for a deleted
+account too.
 
 **The shell (T-5.6).** As built: the `--shell-*` tokens unchanged, nav items icon over label, the
 current place a `--chrome-accent` filled icon (§5). No structural change: the design confirms the

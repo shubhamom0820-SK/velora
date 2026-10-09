@@ -36,6 +36,8 @@ type ReportSheetProps = {
   open: boolean;
   userId: string;
   firstName: string;
+  /** The Thread it was reported from (P-764): its evidence (D-610). */
+  threadId?: string;
   /** `blocked`: the report blocked them too, so the screen should go. */
   onClose: (blocked: boolean) => void;
 };
@@ -50,6 +52,7 @@ export function ReportSheet({
   open,
   userId,
   firstName,
+  threadId,
   onClose,
 }: ReportSheetProps) {
   const [reason, setReason] = useState<ReportReason | null>(null);
@@ -98,6 +101,7 @@ export function ReportSheet({
               reported_id: userId,
               reason,
               also_block: alsoBlock,
+              ...(threadId ? { thread_id: threadId } : {}),
               ...(said ? { details: said } : {}),
             });
           }}

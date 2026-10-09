@@ -98,6 +98,16 @@ const SCREEN_TEST = "src/components/conversation/ConversationScreen.test.tsx";
 const COMPOSER_TEST = SCREEN_TEST;
 const MIC_TEST = "src/components/conversation/MicButton.test.tsx";
 
+// T-7.12: the socket, its events' caches, the conversation's live parts.
+const WS = "src/lib/ws.ts";
+const WS_TEST = "src/lib/ws.test.ts";
+const REALTIME = "src/lib/queries/realtime.ts";
+const REALTIME_TEST = "src/lib/queries/realtime.test.ts";
+const CSP712 = "src/lib/security-headers.ts";
+const SCREEN712 = "src/components/conversation/ConversationScreen.tsx";
+const REPORT_SHEET712 = "src/components/profile/ReportSheet.tsx";
+const COMPOSER712 = "src/components/conversation/Composer.tsx";
+
 export const CASES: BreakCase[] = [
   // --- The CSP (D-059): each source removed, then widened ---
   {
@@ -244,8 +254,8 @@ export const CASES: BreakCase[] = [
   {
     id: "t46-lint-01-xhr-allowed-outside-lib",
     file: "eslint.config.mjs",
-    old: 'const TRANSPORTS = ["fetch", "XMLHttpRequest"];',
-    new: 'const TRANSPORTS = ["fetch"];',
+    old: 'const TRANSPORTS = ["fetch", "XMLHttpRequest", "WebSocket"];',
+    new: 'const TRANSPORTS = ["fetch", "WebSocket"];',
     run: [LINT_TEST],
     expect: [
       "flags XMLHttpRequest in src/components/onboarding/PhotosStep.tsx",
@@ -254,8 +264,8 @@ export const CASES: BreakCase[] = [
   {
     id: "t46-lint-02-fetch-allowed-outside-lib",
     file: "eslint.config.mjs",
-    old: 'const TRANSPORTS = ["fetch", "XMLHttpRequest"];',
-    new: 'const TRANSPORTS = ["XMLHttpRequest"];',
+    old: 'const TRANSPORTS = ["fetch", "XMLHttpRequest", "WebSocket"];',
+    new: 'const TRANSPORTS = ["XMLHttpRequest", "WebSocket"];',
     run: [LINT_TEST],
     expect: ["flags fetch in src/components/feed/Feed.tsx"],
   },
@@ -1509,7 +1519,7 @@ export const CASES: BreakCase[] = [
   {
     id: "t711-13-untie-at-once",
     file: "src/components/conversation/ConversationMenu.tsx",
-    old: "              onClick={() => setConfirming(true)}\n",
+    old: '              onClick={() => setOpen("confirm")}\n',
     new: "              onClick={() => void onUntie()}\n",
     run: [SCREEN_TEST],
     expect: ["unties a Knot only once asked twice"],
@@ -1616,6 +1626,188 @@ export const CASES: BreakCase[] = [
     new: "",
     run: ["src/lib/security-headers.test.ts"],
     expect: ["has the proxy match exactly NONCE_ROUTES"],
+  },
+  {
+    id: "t712-web-01-her-hour-heard",
+    file: REALTIME,
+    old: '      if (gender !== "male") return;\n',
+    new: "",
+    run: [REALTIME_TEST],
+    expect: [
+      "reaching her changes nothing",
+      "reaching someone whose gender isn't known yet",
+    ],
+  },
+  {
+    id: "t712-web-02-a-message-twice",
+    file: REALTIME,
+    old: "      if (known) return data;\n",
+    new: "",
+    run: [REALTIME_TEST],
+    expect: ["once, and asks the lists again"],
+  },
+  {
+    id: "t712-web-03-read-past-the-one-read",
+    file: REALTIME,
+    old: "            Date.parse(item.created_at) <= until\n",
+    new: "            true\n",
+    run: [REALTIME_TEST],
+    expect: ["marks mine read up to the one they read"],
+  },
+  {
+    id: "t712-web-04-dots-forever",
+    file: REALTIME,
+    old: "  if (on) {\n    typingTimers.set(",
+    new: "  if (false) {\n    typingTimers.set(",
+    run: [REALTIME_TEST],
+    expect: ["lets them go 6 s after the last"],
+  },
+  {
+    id: "t712-web-05-revoked-retried",
+    file: WS,
+    old: "const FINAL: ReadonlySet<number> = new Set([CLOSE.revoked, CLOSE.forbidden]);",
+    new: "const FINAL: ReadonlySet<number> = new Set<number>([]);",
+    run: [WS_TEST],
+    expect: [
+      "never reconnects after revoked sessions",
+      "never reconnects after another origin",
+    ],
+  },
+  {
+    id: "t712-web-06-no-backoff",
+    file: WS,
+    old: "  return ceiling / 2 + (random * ceiling) / 2;",
+    new: "  return 0 * ceiling * random;",
+    run: [WS_TEST],
+    expect: ["waits between half of each ceiling", "keeps backing off"],
+  },
+  {
+    id: "t712-web-07-the-count-never-resets",
+    file: WS,
+    old: "    this.steadyTimer = setTimeout(() => {\n      this.attempt = 0;\n",
+    new: "    this.steadyTimer = setTimeout(() => {\n",
+    run: [WS_TEST],
+    expect: ["starts the count again"],
+  },
+  {
+    id: "t712-web-08-a-silent-socket-kept",
+    file: WS,
+    old: "      // Silent: give it up for a new one.\n      this.drop();\n      this.retry();\n",
+    new: "      // Silent: give it up for a new one.\n",
+    run: [WS_TEST],
+    expect: ["gives the socket up when no pong comes"],
+  },
+  {
+    id: "t712-web-09-never-paused",
+    file: WS,
+    old: "        this.paused = true;\n        this.drop();\n",
+    new: "",
+    run: [WS_TEST],
+    expect: ["closes after 5 minutes hidden"],
+  },
+  {
+    id: "t712-web-10-asked-again-on-first-connect",
+    file: WS,
+    old: "    if (again) this.options.onReconnect();",
+    new: "    this.options.onReconnect();",
+    run: [WS_TEST],
+    expect: ["asks again only after a reconnect"],
+  },
+  {
+    id: "t712-web-11-typing-unthrottled",
+    file: WS,
+    old: "    if (last !== undefined && now - last < TYPING_EVERY_MS) return;\n",
+    new: "",
+    run: [WS_TEST],
+    expect: ["says typing at most once"],
+  },
+  {
+    id: "t712-web-12-socket-on-static-pages",
+    file: CSP712,
+    old: "  const socket = nonce !== undefined ? socketOrigin(env) : null;",
+    new: "  const socket = socketOrigin(env);",
+    run: [CSP_TEST],
+    expect: ["never on the static pages, APP_ENV=staging"],
+  },
+  {
+    id: "t712-web-13-no-socket-allowed",
+    file: CSP712,
+    old: '${socket ? ` ${socket}` : ""}',
+    new: "",
+    run: [CSP_TEST],
+    expect: ["adds wss:// for an https:// API"],
+  },
+  {
+    id: "t712-web-14-gift-by-gender",
+    file: SCREEN712,
+    old: "              view.can_gift\n",
+    new: '              me?.gender === "male"\n',
+    run: [SCREEN_TEST],
+    expect: ["follows can_gift for whoever the Thread says"],
+  },
+  {
+    id: "t712-web-15-kudos-whatever-its-state",
+    file: SCREEN712,
+    old: '        {view.kudos === "can_give" && !deleted && (',
+    new: "        {!deleted && (",
+    run: [SCREEN_TEST],
+    expect: ["is shown for too_early"],
+  },
+  {
+    id: "t712-web-16-knot-sheet-on-opening",
+    file: SCREEN712,
+    old: "    if (knotSeen.current === undefined) {\n      knotSeen.current = knotAt;\n      return;\n    }\n",
+    new: "    if (knotSeen.current === undefined) knotSeen.current = null;\n",
+    run: [SCREEN_TEST],
+    expect: ["never shows 'Knot tied' for a Knot that was already one"],
+  },
+  {
+    id: "t712-web-17-knot-sheet-twice",
+    file: SCREEN712,
+    old: "        knotSeen.current = result.knotted_at;\n",
+    new: "",
+    run: [SCREEN_TEST],
+    expect: ["opens once for my own tap"],
+  },
+  {
+    id: "t712-web-18-knot-sheet-for-the-tapper-only",
+    file: SCREEN712,
+    old: "    if (knotAt !== null && knotAt !== knotSeen.current) setTiedOpen(true);\n",
+    new: "",
+    run: [SCREEN_TEST],
+    expect: ["whose Thread became a Knot while it was open"],
+  },
+  {
+    id: "t712-web-19-report-without-its-thread",
+    file: REPORT_SHEET712,
+    old: "              ...(threadId ? { thread_id: threadId } : {}),\n",
+    new: "",
+    run: [SCREEN_TEST],
+    expect: ["reports with this Thread as the evidence"],
+  },
+  {
+    id: "t712-web-20-the-chat-kept-after-a-block",
+    file: SCREEN712,
+    old: '    router.replace("/chats");\n',
+    new: "",
+    run: [SCREEN_TEST],
+    expect: ["blocks silently and leaves the chat"],
+  },
+  {
+    id: "t712-web-21-typing-for-blanks",
+    file: COMPOSER712,
+    old: '                if (event.target.value.trim() !== "") onTyping?.();',
+    new: "                onTyping?.();",
+    run: [SCREEN_TEST],
+    expect: ["never for blanks"],
+  },
+  {
+    id: "t712-web-22-ws-allowed-outside-lib",
+    file: "eslint.config.mjs",
+    old: 'const TRANSPORTS = ["fetch", "XMLHttpRequest", "WebSocket"];',
+    new: 'const TRANSPORTS = ["fetch", "XMLHttpRequest"];',
+    run: [LINT_TEST],
+    expect: ["flags WebSocket in src/components/conversation/Composer.tsx"],
   },
 ];
 

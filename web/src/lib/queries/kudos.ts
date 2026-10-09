@@ -9,8 +9,9 @@ export type KudosKind = components["schemas"]["Kudos-Input"];
 
 /**
  * Give someone kudos (`POST /kudos`, T-8.5): one of four kinds, once ever.
- * Their profile is asked again however it ends, so its `thread.kudos` says
- * `given` and the prompt goes (D-790).
+ * Their profile and any Thread's screen are asked again however it ends, so
+ * `thread.kudos` and the Thread's `kudos` say `given` and the prompt goes
+ * (D-790, D-880).
  */
 export function useGiveKudos() {
   const client = useQueryClient();
@@ -19,6 +20,9 @@ export function useGiveKudos() {
       api.post("/v1/kudos", { body: { to_id: toId, kind } }),
     onSettled: (_data, _error, { toId }) => {
       void client.invalidateQueries({ queryKey: queryKeys.profile(toId) });
+      void client.invalidateQueries({
+        queryKey: [...queryKeys.threads(), "one"],
+      });
     },
   });
 }

@@ -3200,20 +3200,45 @@ prices don't depend on the web photos step, and the hold is lifted.
 - [x] **Commit:** `feat(web): conversation screen [T-7.11]`
 
 ### T-7.12 · Web real-time client
-- [ ] **Needs:** T-7.4, T-7.11, and **P-460**: the client reads nothing from her null `expires_at`
-- [ ] `src/lib/ws.ts`: ticket → connect; exponential backoff 1→30 s with jitter; pause when tab hidden > 5 min; on reconnect refetch open thread + list. Events update TanStack Query caches (append message, bump row, update wallet, knot state).
-- [ ] **Widen the CSP here (D-059):** `connect-src` for `wss://` on the API host. The socket fails with a CSP error until then.
-- [ ] **His composer's gift button (08-DESIGN §8, "gifts go to a woman"):** T-8.10's `GiftSheet`
+- [x] **Needs:** T-7.4, T-7.11, and **P-460**: the client reads nothing from her null `expires_at`
+- [x] `src/lib/ws.ts`: ticket → connect; exponential backoff 1→30 s with jitter; pause when tab hidden > 5 min; on reconnect refetch open thread + list. Events update TanStack Query caches (append message, bump row, update wallet, knot state).
+- [x] **Widen the CSP here (D-059):** `connect-src` for `wss://` on the API host. The socket fails with a CSP error until then.
+- [x] **His composer's gift button (08-DESIGN §8, "gifts go to a woman"):** T-8.10's `GiftSheet`
   (`src/components/gifts/`), with her id and first name, shown only where her profile's
   `can_gift` is true (`GET /users/{id}`, D-780), never decided from a gender in the browser.
-- [ ] **The kudos prompt here too (T-8.8, D-790):** T-8.8 built it on the profile, from
+- [x] **The kudos prompt here too (T-8.8, D-790):** T-8.8 built it on the profile, from
   `PublicProfile.thread.kudos`, shown only for `can_give`. The conversation shows the same
   `KudosPrompt` by that state: read the other person's profile, or add `kudos` to `Thread` from
   `kudos.service.state`, never a second rule.
   **Moved here from T-7.11** (the founder, 9 October 2026): T-8.10 and T-8.8 added these two
   to T-7.11 while it was being built, and it landed without them; T-7.12 is the next work on
   the conversation screen (`src/components/conversation/`).
-- [ ] **Commit:** `feat(web): realtime client [T-7.12]`
+- **As built 9 October 2026 (D-880, D-881; the founder's answers to the plan, on the advisor's
+  recommendation, relayed):** P-592 first, its own commit (worker jobs publish their events).
+  **The API:** `ThreadView` gains `can_gift` (`discovery.service.can_gift`, the profile's and the
+  send's one rule) and `kudos` (`kudos.service.state`); tests hold each to the profile and to the
+  endpoint it leads to (`test_view.py`). **The socket** (`src/lib/ws.ts`): ticket, backoff from 1 s
+  to 30 s with jitter, its count reset after 10 s open; never again after 4000 or 4403; `ping`
+  every 25 s, a new socket without a `pong` in 10 s; closed after 5 minutes hidden; every
+  reconnect asks the Threads and the wallet again; `typing` sent from the composer, once a Thread
+  every 3 s. **The events** (`src/lib/queries/realtime.ts`) append a message once, mark "Seen",
+  show the dots for 6 s and set the balance; a Thread's state is only asked again (P-460). **The
+  CSP**: the API's host as a socket in `connect-src`, nonce routes only; `e2e/csp.spec.ts` sees
+  the browser allow it there, refuse another host, and refuse it on a static page, signing no one
+  in (P-680). **The screen**: his gift button where `can_gift`, the kudos prompt for `can_give`,
+  "Knot tied ✦" for both once per Knot made while open (the founder's Q4), and P-764's Report and
+  Block. **Broken once each:** the API's (`uv run python -m tests.break_guards t712- t810-
+  t711-04`, 6 of 6 red) and the web's (`node scripts/break-guards.mts t712-web t46-lint t711-13`,
+  25 of 25 red, after one stayed green on its first run: the Knot sheet's once-only test let the
+  refetch land before the sheet closed, and now holds it until then); T-8.10's three and T-7.5's
+  two cases re-anchored on the shared rules, T-4.6's two and T-7.11's one on the changed lines;
+  logs in the main checkout's `out/t712-break-guards-api.log`, `out/t712-break-guards-web.log`
+  (and `-run1.log`). **In the browser:** with the socket's source taken out, Chromium refuses
+  the app's own socket on `/login` (`CSP-VIOLATION connect-src ws://127.0.0.1:8100/ws`,
+  `out/t712-e2e-csp-broken.log`); restored, the CSP spec passes (`out/t712-e2e-csp.log`), and
+  the whole E2E, 30 of 30, each journey now opening the real socket (`out/t712-e2e.log`).
+  Found building it: P-780.
+- [x] **Commit:** `feat(web): realtime client [T-7.12]`
 
 ### T-7.13 · E2E chat
 - [ ] **Needs:** T-7.12
@@ -6160,7 +6185,7 @@ The number comes from the session's own block, given in its brief, from P-100 up
   `tests/modules/payments/test_reversals.py` buys again between two deliveries of one refund, and
   of one dispute, and finds the new Velas untouched and one signal; `test_reversal_races.py`
   delivers it five times at once and finds one record.
-- [ ] P-460 · Keep the countdown and the expiry off her screens. **In T-7.10 and T-7.12** (on
+- [x] P-460 · Keep the countdown and the expiry off her screens. **In T-7.10 and T-7.12** (on
   neither's Needs line yet: the founder to place it). Worst case: she sees a Thread's countdown,
   "Ran out" or an expired state, and so learns that time, and money, stands between her message
   and his reply, which D-097 says she is never shown ("Her side shows only that her message hasn't
@@ -6176,6 +6201,10 @@ The number comes from the session's own block, given in its brief, from P-100 up
   no "Clear expired" and no footer, and a test gives her rows an `expires_at` to prove the
   screen's own gate (`t710-01` to `t710-04` red when broken). T-7.12's half, the client reading
   nothing from her null, stays open.
+  **T-7.12's half built 9 October 2026 (D-881):** no socket event writes a Thread's state into a
+  cache, an expiry least of all; the Thread is asked of the API again, which sends her null. The
+  hour's two events are read by a man alone, an allowlist (`realtime.test.ts`: her client handed
+  `thread.expired` with an `expires_at` changes and asks nothing; `t712-web-01` red when broken).
 - [ ] P-450 · Add Hindi and Hinglish words to the message filters. **Before REL-1,** the first
   time strangers message each other. Worst case: a man writes "paytm kar do", "number do" or a
   Hindi slur, in the language most of our users write in, and it reaches her unmasked and
@@ -6638,7 +6667,7 @@ The number comes from the session's own block, given in its brief, from P-100 up
   numbers with an erased account) and run old and new interleaved, ten rounds each, on a quiet
   machine; if the new one misses, give the viewer's blocked numbers to the query as a constant.
   Filed by Claude building T-9.1, 9 October 2026; its session's block, P-760 to P-769.
-- [ ] P-764 · Report and Block in the conversation's ⋯ menu. **Before beta.** Worst case: a woman
+- [x] P-764 · Report and Block in the conversation's ⋯ menu. **Before beta.** Worst case: a woman
   being harassed in a chat opens its ⋯ menu to block him and finds only "View profile", "Clear
   chat" and "Untie the knot"; she has to open his profile and use its ⋯ menu, one more step at the
   moment it matters, and none at all once his account is deleted (no profile link). The prototype's
@@ -6648,3 +6677,17 @@ The number comes from the session's own block, given in its brief, from P-100 up
   `BlockSheet`, with the Thread's id as the report's `thread_id`, and after a block the chat left
   for the chats list; update that comment. Filed by Claude building T-9.1, 9 October 2026; its
   session's block.
+  **Built in T-7.12 (the founder, 9 October 2026):** "Report" and "Block {name}" in the
+  conversation's ⋯ menu, T-9.1's own sheets; the report sends the Thread as `thread_id`, a block
+  is silent (D-862) and leaves the chat for `/chats`; both stay for a deleted account, which has
+  no profile to open (`ConversationScreen.test.tsx`, three cases; `t712-web-19`, `t712-web-20`).
+- [ ] P-780 · The API's access log prints each socket's ticket. **Before beta.** Worst case: a
+  socket refused before it opens (another origin, 4403) leaves its ticket unspent in Fly's logs
+  for up to its 30 seconds, and anyone reading those logs live could open that person's socket
+  and hear their messages as they arrive. uvicorn's default access log writes every handshake's
+  path with its query, `WebSocket /ws?ticket=…`, against rule 15 (never log tokens); a spent
+  ticket opens nothing, so the accepted ones are only noise. Seen in T-7.12's E2E output, the
+  first time a real client connected. Fix: drop the query from the access log (a filter on
+  `uvicorn.access`), or turn it off where structlog already logs requests, with a test that
+  reads the log. Filed by Claude building T-7.12, 9 October 2026; its session's block, P-780 to
+  P-789.

@@ -215,6 +215,28 @@ async def can_reach(
     return await repository.is_visible(session, viewer, other_id, mutual=mutual)
 
 
+async def can_gift(
+    session: AsyncSession,
+    user: User,
+    other_id: UUID,
+    other_gender: Gender | None,
+    *,
+    viewer: repository.Viewer | None = None,
+) -> bool:
+    """Whether `user` may send `other_id` a gift (D-780), in the caller's
+    transaction: `POST /gifts/send`'s own rule, a man to a woman he could send
+    a private message to (D-653); never your own, which is never both. Read by
+    her profile and by one Thread's screen (D-880), so the gift button shows
+    where a send is taken and nowhere else."""
+    if viewer is None:
+        viewer = await viewer_of(session, user)
+    return (
+        user.gender is Gender.MALE
+        and other_gender is Gender.FEMALE
+        and await repository.is_visible(session, viewer, other_id, mutual=True)
+    )
+
+
 def _not_found() -> AppError:
     """One answer for nobody, someone blocked either way, hidden, not done,
     not active or held back by their band: which, the asker never learns
@@ -269,13 +291,7 @@ async def public_profile_in(
         None if own else await repository.match_between(session, user.id, user_id)
     )
     thread = None if own else await repository.thread_between(session, user.id, user_id)
-    # D-780: `POST /gifts/send`'s own rule, a man to a woman he could send a
-    # private message to (D-653); never your own, which is never both.
-    can_gift = (
-        user.gender is Gender.MALE
-        and row.gender is Gender.FEMALE
-        and await repository.is_visible(session, viewer, user_id, mutual=True)
-    )
+    gift = await can_gift(session, user, user_id, row.gender, viewer=viewer)
     if not own:
         await repository.record_view(session, user.id, user_id, clock.now())
     card = card_of(row, distance, clock.now(), settings)
@@ -297,7 +313,7 @@ async def public_profile_in(
             expires_at=thread.expires_at,
             kudos=await kudos_service.state(session, user.id, user_id, thread),
         ),
-        can_gift=can_gift,
+        can_gift=gift,
     )
 
 

@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import type { ReactNode } from "react";
 
+import { Realtime } from "@/components/realtime/Realtime";
 import { AppGate } from "@/components/session/AppGate";
 import { SessionRestorer } from "@/components/session/SessionRestorer";
 import { AppShell } from "@/components/shell/AppShell";
@@ -15,7 +16,8 @@ import { StoreSheet } from "@/components/wallet/StoreSheet";
  * This layout restores the session, requires onboarding `done`, and shows the
  * PIN lock (T-3.10). The header and nav (T-5.6) sit inside `AppGate`, so they
  * appear only once the gate lets someone in, and the lock covers them too. So
- * does the store sheet (T-5.5), which any screen's mutation can open.
+ * does the store sheet (T-5.5), which any screen's mutation can open, and the
+ * socket (T-7.12), open only while someone is let in.
  */
 export const metadata: Metadata = {
   robots: { index: false, follow: false },
@@ -34,6 +36,7 @@ export default function AppGroupLayout({ children }: { children: ReactNode }) {
       <AppGate>
         <AppShell>{children}</AppShell>
         <StoreSheet />
+        <Realtime />
       </AppGate>
     </>
   );

@@ -49,6 +49,7 @@ from app.core.storage_keys import public_url
 from app.modules.admin import service as admin_service
 from app.modules.discovery import rules as discovery_rules
 from app.modules.discovery import service as discovery_service
+from app.modules.kudos import service as kudos_service
 from app.modules.messages import limits
 from app.modules.messages import service as messages_service
 from app.modules.notifications import service as notifications_service
@@ -337,18 +338,27 @@ async def get_thread(
 ) -> schemas.ThreadView:
     """One of `user`'s Threads, with the other person and what `user`'s next
     message costs (T-7.11, D-870); anyone else's, or one a block stands
-    across, is `NOT_FOUND`."""
+    across, is `NOT_FOUND`. Whether `user` may send them a gift and give them
+    kudos (D-880), each by the rule its own endpoint keeps, and no profile
+    view recorded."""
     async with session.begin():
         thread = await repository.my_thread(session, thread_id, user.id)
         if thread is None:
             raise _not_found()
         view = view_of(thread, user)
-        card = await repository.card_of(session, view.other_user_id)
+        other_id = view.other_user_id
+        card = await repository.card_of(session, other_id)
         price = await messages_service.send_price(session, user, thread)
+        gift = await discovery_service.can_gift(
+            session, user, other_id, await repository.gender_of(session, other_id)
+        )
+        kudos = await kudos_service.state(session, user.id, other_id, thread)
     return schemas.ThreadView(
         **view.model_dump(),
         other=_card_of(card, clock.now(), settings),
         send_price=price,
+        can_gift=gift,
+        kudos=kudos,
     )
 
 

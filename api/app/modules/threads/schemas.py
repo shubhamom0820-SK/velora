@@ -10,6 +10,7 @@ from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from app.core.enums import MessageKind, ThreadOrigin, ThreadStatus
 from app.core.pagination import Page
+from app.modules.kudos.schemas import KudosState
 from app.modules.pricing.schemas import ShownPrice
 
 FIRST_MESSAGE_MAX = 500
@@ -94,10 +95,14 @@ class ThreadView(Thread):
     T-7.11, D-870): the Thread, the other person as the chats list shows them
     (no profile view counted, D-493), and `send_price`, what my next text
     message costs now in Velas (0 for her, D-098), worked out by the send's own
-    rules, so the screen shows the price it will send back (P-56, D-600)."""
+    rules, so the screen shows the price it will send back (P-56, D-600).
+    `can_gift` and `kudos` are her profile's own answers (D-880): whether a
+    gift to them is taken (D-780) and whether kudos can be given (D-790)."""
 
     other: CardLite
     send_price: int
+    can_gift: bool
+    kudos: KudosState
 
 
 class LastMessage(BaseModel):

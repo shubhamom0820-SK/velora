@@ -43,7 +43,13 @@
  *           preview before she sends it) and the private bucket (a voice
  *           note's signed link, which an <audio> plays), on builds with
  *           storage. The upload is the PUT T-4.6's connect-src already allows.
- *   T-7.12  Real time: connect-src for wss:// on the API.
+ *   T-7.12  Done: real time, on the nonce routes only, where the app's
+ *           socket lives (src/lib/ws.ts): connect-src for the API's own host
+ *           as a socket, wss:// where the API is https:// and ws:// under
+ *           local http (socketOrigin below). An http(s) source doesn't match
+ *           ws(s) under CSP 3, so the API's origin alone would refuse it.
+ *           Static pages keep the policy as it was; e2e/csp.spec.ts holds
+ *           the browser to both.
  *   T-8.7   Done: checkout, on Razorpay builds' nonce routes only (D-761):
  *           Razorpay publishes no CSP list, so RAZORPAY below is what its
  *           Checkout asked of the page in Chrome, under this policy, read 9
@@ -167,6 +173,18 @@ export function apiOrigin(env: BuildEnv = process.env): string | null {
 }
 
 /**
+ * The API's own host as a socket (T-7.12), by `apiOrigin()`'s rule: `wss://`
+ * for an `https://` API, `ws://` for local `http://`. None without an API.
+ */
+export function socketOrigin(env: BuildEnv = process.env): string | null {
+  const api = apiOrigin(env);
+  if (api === null) return null;
+  const url = new URL(api);
+  url.protocol = url.protocol === "https:" ? "wss:" : "ws:";
+  return url.origin;
+}
+
+/**
  * Photos' sources (T-4.6), and voice notes' (T-7.11), on builds that have
  * storage only. A CSP error on the photos step or a voice note is this list,
  * not an upload bug.
@@ -271,6 +289,8 @@ export function contentSecurityPolicy(
   const photos = photoSources(env);
   // Checkout lives in the store sheet, on the app's routes: the nonce routes.
   const razorpay = nonce !== undefined && paysByRazorpay(env);
+  // So does the socket (T-7.12): the app's routes, signed in.
+  const socket = nonce !== undefined ? socketOrigin(env) : null;
   const extra = (sources: readonly string[]) =>
     firebase ? ` ${sources.join(" ")}` : "";
   const pay = (sources: readonly string[]) =>
@@ -293,7 +313,7 @@ export function contentSecurityPolicy(
       : []),
     // Media falls back to default-src 'self' on a build without storage.
     ...(photos.media ? [`media-src 'self'${photos.media}`] : []),
-    `connect-src 'self'${api ? ` ${api}` : ""}${photos.connect}${extra(FIREBASE.connect)}${pay(RAZORPAY.connect)}`,
+    `connect-src 'self'${api ? ` ${api}` : ""}${socket ? ` ${socket}` : ""}${photos.connect}${extra(FIREBASE.connect)}${pay(RAZORPAY.connect)}`,
     // Frames fall back to default-src 'self' everywhere else; a Firebase build
     // keeps that and adds reCAPTCHA's, and a Razorpay build's nonce routes
     // Checkout's.

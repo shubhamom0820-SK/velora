@@ -3195,6 +3195,8 @@ export interface components {
          *     (no profile view counted, D-493), and `send_price`, what my next text
          *     message costs now in Velas (0 for her, D-098), worked out by the send's own
          *     rules, so the screen shows the price it will send back (P-56, D-600).
+         *     `can_gift` and `kudos` are her profile's own answers (D-880): whether a
+         *     gift to them is taken (D-780) and whether kudos can be given (D-790).
          */
         ThreadView: {
             /**
@@ -3225,6 +3227,13 @@ export interface components {
             other: components["schemas"]["CardLite"];
             /** Send Price */
             send_price: number;
+            /** Can Gift */
+            can_gift: boolean;
+            /**
+             * Kudos
+             * @enum {string}
+             */
+            kudos: "too_early" | "can_give" | "given";
         };
         /**
          * ThreadWithMe

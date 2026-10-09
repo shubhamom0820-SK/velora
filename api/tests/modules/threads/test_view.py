@@ -15,12 +15,13 @@ from sqlalchemy import func, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core import clock
-from app.core.enums import Gender, UserStatus
+from app.core.enums import Gender, Seeking, UserStatus
 from app.modules.discovery.models import ProfileView
 from app.modules.users.models import User
 from app.modules.wallet.models import LedgerEntry
 from tests.conftest import MakeThread, MakeUser
-from tests.modules.discovery.support import bearer, error
+from tests.modules.discovery.support import bearer, block, error, north, person
+from tests.modules.kudos.test_give import _give, _talked
 
 pytestmark = pytest.mark.usefixtures("test_redis")
 
@@ -90,6 +91,8 @@ async def test_the_thread_comes_with_the_other_person_and_counts_no_view(
         "created_at",
         "other",
         "send_price",
+        "can_gift",
+        "kudos",
     }
     assert mine["other"] == {
         "id": str(woman_id),
@@ -262,3 +265,99 @@ async def test_someone_elses_thread_is_not_found(
 
     assert response.status_code == 404
     assert error(response)["code"] == "NOT_FOUND"
+
+
+# --- Whether a gift and kudos can be given here (D-880) ---------------------------
+#
+# The conversation's gift button and kudos prompt read these, never the other
+# person's profile, which records a view on every open (D-870). Each is the
+# profile's own answer, and the answer of the endpoint it leads to.
+
+
+async def _profile(client: AsyncClient, token: str, user_id: uuid.UUID) -> Any:
+    response = await client.get(f"/v1/users/{user_id}", headers=bearer(token))
+    assert response.status_code == 200, response.text
+    return response.json()
+
+
+@pytest.mark.parametrize(
+    ("viewer", "viewed", "seeking", "gifts"),
+    [
+        (Gender.MALE, Gender.FEMALE, Seeking.MEN, True),
+        (Gender.MALE, Gender.FEMALE, Seeking.EVERYONE, True),
+        (Gender.MALE, Gender.FEMALE, Seeking.WOMEN, False),
+        (Gender.MALE, Gender.MALE, Seeking.MEN, False),
+        (Gender.FEMALE, Gender.MALE, Seeking.WOMEN, False),
+        (Gender.FEMALE, Gender.FEMALE, Seeking.WOMEN, False),
+    ],
+)
+async def test_can_gift_is_the_profiles_and_the_sends_own_answer(
+    db: AsyncSession,
+    client: AsyncClient,
+    make_user: MakeUser,
+    make_thread: MakeThread,
+    viewer: Gender,
+    viewed: Gender,
+    seeking: Seeking,
+    gifts: bool,
+) -> None:
+    me, token = await person(db, make_user, viewer, seeking=Seeking.EVERYONE)
+    them, _ = await person(db, make_user, viewed, at=north(1), seeking=seeking)
+    thread_id, their_id = (await make_thread(me, them)).id, them.id
+
+    assert (await _view(client, token, thread_id))["can_gift"] is gifts
+    assert (await _profile(client, token, their_id))["can_gift"] is gifts
+    assert await _gift_sent(client, token, their_id) is gifts
+
+
+async def _gift_sent(client: AsyncClient, token: str, user_id: uuid.UUID) -> bool:
+    response = await client.post(
+        "/v1/gifts/send",
+        json={"recipient_id": str(user_id), "gift_id": "coffee", "shown_price": 0},
+        headers={**bearer(token), "Idempotency-Key": uuid.uuid4().hex},
+    )
+    assert response.status_code in (200, 404, 422), response.text
+    return response.status_code == 200
+
+
+async def test_a_gift_is_never_offered_across_a_block(
+    db: AsyncSession, client: AsyncClient, make_user: MakeUser, make_thread: MakeThread
+) -> None:
+    """A block hides the Thread itself: `NOT_FOUND`, so no gift is offered."""
+    man, token = await person(db, make_user, Gender.MALE)
+    woman, _ = await person(db, make_user, at=north(1))
+    thread_id = (await make_thread(man, woman)).id
+    assert (await _view(client, token, thread_id))["can_gift"] is True
+    await block(db, woman, man)
+
+    response = await client.get(f"/v1/threads/{thread_id}", headers=bearer(token))
+
+    assert response.status_code == 404
+    assert error(response)["code"] == "NOT_FOUND"
+
+
+@pytest.mark.parametrize(
+    ("mine", "gives", "state"),
+    [(3, False, "too_early"), (5, False, "can_give"), (5, True, "given")],
+)
+async def test_kudos_is_the_profiles_and_post_kudos_own_answer(
+    db: AsyncSession,
+    client: AsyncClient,
+    make_user: MakeUser,
+    make_thread: MakeThread,
+    mine: int,
+    gives: bool,
+    state: str,
+) -> None:
+    man, token = await person(db, make_user, Gender.MALE)
+    woman, _ = await person(db, make_user, at=north(1))
+    woman_id = woman.id
+    thread_id = (await _talked(db, make_thread, man, woman, mine=mine, theirs=1)).id
+    if gives:
+        assert (await _give(client, token, woman_id)).status_code == 201
+
+    assert (await _view(client, token, thread_id))["kudos"] == state
+    assert (await _profile(client, token, woman_id))["thread"]["kudos"] == state
+    # What `POST /kudos` does with it: taken only where the view said so.
+    taken = {"too_early": 422, "can_give": 201, "given": 409}[state]
+    assert (await _give(client, token, woman_id)).status_code == taken

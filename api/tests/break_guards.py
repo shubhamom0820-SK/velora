@@ -10841,9 +10841,14 @@ T88: list[Case] = [
     ),
 ]
 
-T810_SELECTION = ["tests/modules/discovery/test_public_profile.py"]
+T810_SELECTION = [
+    "tests/modules/discovery/test_public_profile.py",
+    # D-880: one Thread's screen reads the same rule.
+    "tests/modules/threads/test_view.py",
+]
 DISCOVERY_SERVICE = "app/modules/discovery/service.py"
 CAN_GIFT = "test_can_gift_is_the_sends_own_answer"
+THREAD_GIFT = "test_can_gift_is_the_profiles_and_the_sends_own_answer"
 
 # T-8.10 (D-780): `can_gift` says where `POST /gifts/send` takes a gift.
 T810: list[Case] = [
@@ -10853,11 +10858,14 @@ T810: list[Case] = [
         edits=[
             (
                 DISCOVERY_SERVICE,
-                "        and await repository.is_visible(session, viewer, user_id, mutual=True)\n",
-                "        and await repository.is_visible(session, viewer, user_id, mutual=False)\n",
+                "        and await repository.is_visible(session, viewer, other_id, mutual=True)\n",
+                "        and await repository.is_visible(session, viewer, other_id, mutual=False)\n",
             )
         ],
-        expect=[f"{CAN_GIFT}[male-female-women-False]"],
+        expect=[
+            f"{CAN_GIFT}[male-female-women-False]",
+            f"{THREAD_GIFT}[male-female-women-False]",
+        ],
     ),
     Case(
         id="t810-2-can-gift-to-a-man",
@@ -10865,11 +10873,14 @@ T810: list[Case] = [
         edits=[
             (
                 DISCOVERY_SERVICE,
-                "        and row.gender is Gender.FEMALE\n",
+                "        and other_gender is Gender.FEMALE\n",
                 "",
             )
         ],
-        expect=[f"{CAN_GIFT}[male-male-men-False]"],
+        expect=[
+            f"{CAN_GIFT}[male-male-men-False]",
+            f"{THREAD_GIFT}[male-male-men-False]",
+        ],
     ),
     Case(
         id="t810-3-can-gift-from-a-woman",
@@ -10877,11 +10888,14 @@ T810: list[Case] = [
         edits=[
             (
                 DISCOVERY_SERVICE,
-                "        user.gender is Gender.MALE\n        and row.gender",
-                "        True\n        and row.gender",
+                "        user.gender is Gender.MALE\n        and other_gender",
+                "        True\n        and other_gender",
             )
         ],
-        expect=[f"{CAN_GIFT}[female-female-women-False]"],
+        expect=[
+            f"{CAN_GIFT}[female-female-women-False]",
+            f"{THREAD_GIFT}[female-female-women-False]",
+        ],
     ),
 ]
 
@@ -10943,7 +10957,7 @@ T711: list[Case] = [
         edits=[
             (
                 THREADS_SERVICE,
-                "card = await repository.card_of(session, view.other_user_id)",
+                "card = await repository.card_of(session, other_id)",
                 "card = await repository.card_of(session, user.id)",
             )
         ],
@@ -11759,6 +11773,39 @@ P592: list[Case] = [
     ),
 ]
 
+# --- T-7.12: one Thread's gift and kudos answers (D-880) -------------------------
+
+T712_SELECTION = ["tests/modules/threads/test_view.py"]
+THREADS_SERVICE712 = "app/modules/threads/service.py"
+THREAD_KUDOS = "test_kudos_is_the_profiles_and_post_kudos_own_answer"
+
+T712: list[Case] = [
+    Case(
+        id="t712-01-gift-by-a-guessed-gender",
+        what="the Thread's gift answer assumes she is a woman instead of reading it",
+        edits=[
+            (
+                THREADS_SERVICE712,
+                "            session, user, other_id, await repository.gender_of(session, other_id)\n",
+                "            session, user, other_id, type(user.gender).FEMALE\n",
+            )
+        ],
+        expect=[f"{THREAD_GIFT}[male-male-men-False]"],
+    ),
+    Case(
+        id="t712-02-kudos-a-second-rule",
+        what="the Thread's kudos answer its own guess, not kudos.service.state",
+        edits=[
+            (
+                THREADS_SERVICE712,
+                "        kudos = await kudos_service.state(session, user.id, other_id, thread)\n",
+                '        kudos = "can_give"\n',
+            )
+        ],
+        expect=[f"{THREAD_KUDOS}[3-False-too_early]", f"{THREAD_KUDOS}[5-True-given]"],
+    ),
+]
+
 CASES: list[tuple[Case, list[str]]] = (
     [(c, T51_SELECTION) for c in T51]
     + [(c, T54_SELECTION) for c in T54]
@@ -11813,6 +11860,7 @@ CASES: list[tuple[Case, list[str]]] = (
     + [(c, T94_SELECTION) for c in T94]
     + [(c, T91_SELECTION) for c in T91]
     + [(c, P592_SELECTION) for c in P592]
+    + [(c, T712_SELECTION) for c in T712]
 )
 
 # The fifty-connection fixture's own message when Postgres refuses a connection.

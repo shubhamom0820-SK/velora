@@ -4,11 +4,12 @@ import nextTs from "eslint-config-next/typescript";
 
 // CLAUDE.md rule 14: server data reaches components only through the api client
 // and the query hooks in src/lib/, never a stray fetch (T-1.18). The same holds
-// for XMLHttpRequest, the photo upload's transport since T-4.6 (src/lib/upload.ts):
-// a request is made in src/lib or not at all.
+// for XMLHttpRequest, the photo upload's transport since T-4.6 (src/lib/upload.ts),
+// and WebSocket, the app's one socket since T-7.12 (src/lib/ws.ts): a request
+// is made in src/lib or not at all.
 const NO_FETCH =
   "Server data goes through src/lib: the api client and the TanStack Query hooks in src/lib/queries (CLAUDE.md rule 14).";
-const TRANSPORTS = ["fetch", "XMLHttpRequest"];
+const TRANSPORTS = ["fetch", "XMLHttpRequest", "WebSocket"];
 
 // zod only through src/lib/zod.ts, which turns its eval probe off: production's
 // CSP reports the probe as a violation (T-3.11).

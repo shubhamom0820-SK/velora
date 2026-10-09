@@ -5687,3 +5687,51 @@ the send sends nothing.
   list) are built from existing parts only and linked from You. There is no bell in the header
   until a design exists (P-750). A man alone sees the expiry and balance switches (P-460).
 - The CSP says `worker-src 'self'`, and `notifications` joins the nonce routes.
+
+### D-880 · One Thread's screen says whether a gift and kudos can be given there — Locked
+**The decision (T-7.12's plan, Q1 and Q2; the founder, 9 October 2026, on the advisor's
+recommendation, Claude in a separate chat, relayed):** `ThreadView` (`GET /threads/{id}`, D-870)
+gains two fields, each the answer of the rule its own endpoint keeps:
+- **`can_gift`:** `discovery.service.can_gift`, the one rule her profile's `can_gift` (D-780) and
+  `POST /gifts/send` keep: a man to a woman he could send a private message to (D-653). His
+  composer's gift button shows wherever it is true, on any Thread, a Knot's or not (Q2: the
+  drawing shows it on a Knot because that is the screen it drew).
+- **`kudos`:** `kudos.service.state`, the profile's `thread.kudos` (D-790, P-580). The kudos
+  prompt shows in the chat, after its messages, for `can_give` alone, and never for a deleted
+  account.
+
+Tests hold each to the profile's answer and to what the endpoint then does, case by case.
+
+**Why:** both items read `GET /users/{id}` as filed, which records a profile view on every open
+of the chat and answers `NOT_FOUND` for a deleted account: what D-870 rejected for the header.
+
+**Rejected:** reading the other person's profile from the conversation (a view per open, D-870);
+deciding the gift button by the viewer's gender in the browser (D-780's rule is the server's).
+
+### D-881 · The web's socket: how it connects, what it writes, and what it never reads — Locked
+**The decision (T-7.12's plan, approved by the founder on 9 October 2026; Q4 the founder's on the
+advisor's recommendation, relayed):**
+- **One socket**, `web/src/lib/ws.ts`, the only code that opens a `WebSocket` (ESLint, as for
+  `fetch`), mounted under `(app)`'s gate. A ticket, then `ws(s)://<the API's host>/ws`.
+- **Reconnects** with backoff, attempt `n` waiting a random time between half of `min(30 s,
+  1 s × 2ⁿ)` and all of it, the count reset once a socket has stayed open 10 s. Never after 4000
+  (sessions revoked) or 4403 (another origin). A `ping` every 25 s; no `pong` in 10 s, a new
+  socket. Closed after the tab has been hidden 5 minutes, opened again when it is shown. Every
+  reconnect asks the Threads' queries and the wallet again.
+- **What an event writes** (`src/lib/queries/realtime.ts`): a new message into its Thread's
+  messages, once by id; "Seen" up to the message read; the typing dots for 6 s; the balance from
+  `wallet.updated`. **A Thread's state is never written from an event**: an opening, its hour or
+  a knot asks the Thread and the lists again, so her `expires_at` stays the API's null (P-460).
+  `thread.expiring` and `thread.expired` are read by a man alone, an allowlist: nobody's while
+  `Me` is unknown. An event that also writes a notification asks the in-app list again.
+- **`typing` is sent** from the composer as something is written, once a Thread every 3 s, the
+  server's own limit (D-670): without it the dots T-7.11 draws could never show.
+- **"Knot tied ✦" opens for both** (Q4), once per Knot, whenever the Knot is made while the chat
+  is open: by one's own tap, or by the other's arriving through the socket. A Knot found already
+  made when the chat opens shows none; the other person learns of it by its notification.
+- **The CSP** adds the API's host as a socket to `connect-src` on the nonce routes alone, `wss://`
+  for an `https://` API (D-059).
+
+**Why:** the plan's line, with the pieces it left to the build: events that could carry a
+Thread's state write none of it, so no screen of hers can be handed an expiry; and two closes
+after which another try changes nothing.

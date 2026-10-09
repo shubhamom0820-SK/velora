@@ -1,6 +1,6 @@
 "use client";
 
-import { Send } from "lucide-react";
+import { Gift, Send } from "lucide-react";
 import { useCallback, useState, type KeyboardEvent } from "react";
 
 import { Icon } from "@/components/ui/Icon";
@@ -29,6 +29,13 @@ type ComposerProps = {
   /** What to tell them above the input: a refusal, a mic's note. */
   note: string | null;
   onNote: (note: string | null) => void;
+  /** Called as they type something, for the other person's dots (T-7.12). */
+  onTyping?: () => void;
+  /**
+   * His gift button (08-DESIGN §8, T-7.12): given only where the Thread says
+   * a gift is taken (`can_gift`, D-880), never decided from a gender here.
+   */
+  gift?: { name: string; onOpen: () => void };
 };
 
 /**
@@ -49,6 +56,8 @@ export function Composer({
   privateMessage,
   note,
   onNote,
+  onTyping,
+  gift,
 }: ComposerProps) {
   const [recording, setRecording] = useState(false);
   const text = draft.trim();
@@ -94,7 +103,10 @@ export function Composer({
               rows={1}
               value={draft}
               maxLength={MESSAGE_MAX}
-              onChange={(event) => onDraftChange(event.target.value)}
+              onChange={(event) => {
+                onDraftChange(event.target.value);
+                if (event.target.value.trim() !== "") onTyping?.();
+              }}
               onKeyDown={onKeyDown}
               placeholder={t("conversation.placeholder")}
               aria-label={t("conversation.placeholder")}
@@ -117,6 +129,16 @@ export function Composer({
               <Icon icon={Send} size={20} />
             </button>
           </>
+        )}
+        {gift && !recording && (
+          <button
+            type="button"
+            onClick={gift.onOpen}
+            aria-label={t("conversation.gift", { name: gift.name })}
+            className="rounded-pill border-line text-ink focus-visible:outline-accent flex size-11 shrink-0 items-center justify-center border focus-visible:outline-2 focus-visible:outline-offset-2"
+          >
+            <Icon icon={Gift} size={20} />
+          </button>
         )}
         {canRecord && (
           <MicButton

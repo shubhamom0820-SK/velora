@@ -75,3 +75,83 @@ test("an injected inline handler runs on a static page and is refused on a nonce
     .toBe(true);
   expect(await ran(page)).toBe(false);
 });
+
+/**
+ * T-7.12 (D-059): the app's socket, allowed to the API's own host on the nonce
+ * routes, where the app lives, and nowhere else. Proved by what the browser
+ * refuses: a socket to another host on an app route, and the API's own on a
+ * static page, whose policy names the API's http origin and no socket.
+ */
+const API_SOCKET = "ws://127.0.0.1:8100/ws";
+const ANOTHER_SOCKET = "ws://127.0.0.1:8101/ws";
+
+async function watchSockets(page: Page): Promise<string[]> {
+  const refused: string[] = [];
+  await page.addInitScript(() => {
+    document.addEventListener("securitypolicyviolation", (event) => {
+      console.error(
+        `CSP-VIOLATION ${event.effectiveDirective} ${event.blockedURI}`,
+      );
+    });
+  });
+  page.on("console", (message) => {
+    if (message.text().startsWith("CSP-VIOLATION connect-src"))
+      refused.push(message.text());
+  });
+  return refused;
+}
+
+/** Opens a socket from the page; how it ended, once it has. */
+function openSocket(page: Page, url: string) {
+  return page.evaluate(
+    (target) =>
+      new Promise<string>((resolve) => {
+        try {
+          const socket = new WebSocket(target);
+          socket.onopen = () => {
+            socket.close();
+            resolve("open");
+          };
+          socket.onerror = () => resolve("error");
+          socket.onclose = (event) => resolve(`closed ${event.code}`);
+        } catch (error) {
+          resolve(`threw ${(error as Error).name}`);
+        }
+      }),
+    url,
+  );
+}
+
+test("an app route lets the socket reach the API's own host and no other", async ({
+  page,
+}) => {
+  const refused = await watchSockets(page);
+  const response = await page.goto("/login");
+
+  // No ticket, so the API refuses it (4401); the browser never did.
+  await openSocket(page, API_SOCKET);
+  await openSocket(page, ANOTHER_SOCKET);
+
+  // The browser's own verdict first: another host refused, ours never.
+  await expect
+    .poll(() => refused.some((v) => v.includes("127.0.0.1:8101")))
+    .toBe(true);
+  expect(refused.filter((v) => v.includes("127.0.0.1:8100"))).toEqual([]);
+  expect(response?.headers()["content-security-policy"]).toContain(
+    "connect-src 'self' http://127.0.0.1:8100 ws://127.0.0.1:8100",
+  );
+});
+
+test("a static page refuses the API's socket: its policy names no socket", async ({
+  page,
+}) => {
+  const refused = await watchSockets(page);
+  const response = await page.goto("/");
+  expect(response?.headers()["content-security-policy"]).not.toMatch(/ws:/);
+
+  await openSocket(page, API_SOCKET);
+
+  await expect
+    .poll(() => refused.some((v) => v.includes("127.0.0.1:8100")))
+    .toBe(true);
+});

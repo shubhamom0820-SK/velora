@@ -18,13 +18,22 @@ import {
 } from "@/lib/testing/fakeApi";
 import { fakeXhr } from "@/lib/testing/fakeXhr";
 import * as recorder from "@/lib/voice-recorder";
+import * as ws from "@/lib/ws";
 
 import { ConversationScreen } from "./ConversationScreen";
 
-const nav = vi.hoisted(() => ({ push: vi.fn() }));
+const nav = vi.hoisted(() => ({ push: vi.fn(), replace: vi.fn() }));
 vi.mock("next/navigation", () => ({
-  useRouter: () => ({ push: nav.push, replace: vi.fn(), prefetch: vi.fn() }),
+  useRouter: () => ({
+    push: nav.push,
+    replace: nav.replace,
+    prefetch: vi.fn(),
+  }),
   usePathname: () => "/chats/t1",
+}));
+vi.mock("@/lib/ws", async (original) => ({
+  ...(await original<typeof import("@/lib/ws")>()),
+  sendTyping: vi.fn(),
 }));
 vi.mock("@/lib/voice-recorder", async (original) => ({
   ...(await original<typeof import("@/lib/voice-recorder")>()),
@@ -65,6 +74,8 @@ function thread(overrides: Partial<ThreadView> = {}): ThreadView {
       deleted: false,
     },
     send_price: 0,
+    can_gift: false,
+    kudos: "too_early",
     ...overrides,
   };
 }
@@ -147,6 +158,8 @@ beforeEach(() => {
   URL.createObjectURL = vi.fn(() => "blob:preview");
   URL.revokeObjectURL = vi.fn();
   nav.push.mockReset();
+  nav.replace.mockReset();
+  vi.mocked(ws.sendTyping).mockReset();
   vi.mocked(recorder.startRecording).mockReset();
 });
 
@@ -919,6 +932,284 @@ describe("its states", () => {
     expect(screen.queryByRole("textbox")).not.toBeInTheDocument();
     expect(
       screen.getByText(t("conversation.accountDeleted")),
+    ).toBeInTheDocument();
+  });
+});
+
+describe("live (T-7.12)", () => {
+  it("tells the other person I'm typing as I write something, never for blanks", async () => {
+    api(thread(), [message()]);
+    renderScreen("female");
+    await loaded();
+
+    await userEvent.type(composer(), "   ");
+    expect(ws.sendTyping).not.toHaveBeenCalled();
+    await userEvent.type(composer(), "Hi");
+
+    expect(ws.sendTyping).toHaveBeenCalledWith(ID);
+  });
+
+  it.each(["male", "female"] as const)(
+    "shows 'Knot tied' to a %s whose Thread became a Knot while it was open, once",
+    async (gender) => {
+      api(thread({ i_tied: true, expires_at: inMinutes(30) }), [message()]);
+      const client = renderScreen(gender);
+      await loaded();
+      const knot = thread({ status: "knotted", knotted_at: inMinutes(0) });
+
+      // What the socket's `knot.accepted` leads to: the Thread asked again.
+      act(() => client.setQueryData(queryKeys.thread(ID), knot));
+
+      const sheet = await screen.findByRole("dialog", {
+        name: "You and Priya tied the knot",
+      });
+      await userEvent.click(
+        within(sheet).getByRole("button", {
+          name: t("conversation.tied.keepTalking"),
+        }),
+      );
+      act(() => client.setQueryData(queryKeys.thread(ID), { ...knot }));
+      expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+    },
+  );
+
+  it("opens once for my own tap, when the Thread asked again then shows that same Knot", async () => {
+    const knot = thread({ status: "knotted", knotted_at: inMinutes(0) });
+    // The Thread asked again after the tap answers only once the sheet is
+    // closed: the order in which a second sheet could open.
+    let release: () => void = () => {};
+    const closed = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    let tapped = false;
+    api(thread({ expires_at: inMinutes(30) }), [message()], {
+      [`GET /v1/threads/${ID}`]: async () => {
+        if (!tapped) return json(200, thread({ expires_at: inMinutes(30) }));
+        await closed;
+        return json(200, knot);
+      },
+      [`POST /v1/threads/${ID}/knot`]: () => {
+        tapped = true;
+        return json(200, knot);
+      },
+    });
+    const client = renderScreen("male");
+    await loaded();
+    await userEvent.click(
+      await screen.findByRole("button", { name: t("conversation.tie") }),
+    );
+    const sheet = await screen.findByRole("dialog", {
+      name: "You and Priya tied the knot",
+    });
+    await userEvent.click(
+      within(sheet).getByRole("button", {
+        name: t("conversation.tied.keepTalking"),
+      }),
+    );
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+
+    release();
+    await waitFor(() =>
+      expect(
+        client.getQueryData<ThreadView>(queryKeys.thread(ID))?.status,
+      ).toBe("knotted"),
+    );
+
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+  });
+
+  it("never shows 'Knot tied' for a Knot that was already one when the chat opened", async () => {
+    api(thread({ status: "knotted", knotted_at: inMinutes(-60) }), [
+      message({ body: "Hello" }),
+    ]);
+    const client = renderScreen("male");
+    await loaded();
+    await screen.findByText("Hello");
+
+    act(() => {
+      void client.invalidateQueries({ queryKey: queryKeys.thread(ID) });
+    });
+
+    await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
+  });
+});
+
+describe("his gift button (T-7.12, D-880)", () => {
+  it("opens the gift sheet for her where the Thread says a gift is taken", async () => {
+    const calls = api(thread({ can_gift: true }), [message()], {
+      "GET /v1/gifts": () =>
+        json(200, {
+          gifts: [{ id: "coffee", label: "Coffee", asset: "☕", credits: 5 }],
+          free_sends_left: 3,
+          free_sends_reset_at: "2026-10-11T18:30:00Z",
+        }),
+    });
+    renderScreen("male");
+    await loaded();
+
+    await userEvent.click(
+      screen.getByRole("button", { name: "Send Priya a gift" }),
+    );
+
+    expect(await screen.findByRole("dialog")).toBeInTheDocument();
+    await waitFor(() => expect(calls.sent()).toContain("GET /v1/gifts"));
+  });
+
+  it.each([
+    ["a man", "male", false, false],
+    ["a woman", "female", false, false],
+    // The browser never reads a gender to decide: the Thread's answer does.
+    ["whoever the Thread says", "female", true, true],
+  ] as const)("follows can_gift for %s", async (_, gender, canGift, shown) => {
+    api(thread({ can_gift: canGift }), [message()]);
+    renderScreen(gender);
+    await loaded();
+
+    expect(
+      screen.queryByRole("button", { name: "Send Priya a gift" }) !== null,
+    ).toBe(shown);
+  });
+});
+
+describe("the kudos prompt (T-7.12, D-790, D-880)", () => {
+  const prompt = () =>
+    screen.queryByRole("region", {
+      name: t("profile.kudosAsk", { name: "Priya" }),
+    });
+
+  it.each([
+    ["can_give", true],
+    ["too_early", false],
+    ["given", false],
+  ] as const)("is shown for %s: %s", async (kudos, shown) => {
+    api(thread({ kudos }), [message({ body: "Hello" })]);
+    renderScreen("female");
+    await loaded();
+    await screen.findByText("Hello");
+
+    expect(prompt() !== null).toBe(shown);
+  });
+
+  it("gives kudos once, and asks the Thread again so the prompt goes", async () => {
+    const calls = api(thread({ kudos: "can_give" }), [message()], {
+      "POST /v1/kudos": () => json(201, { to_id: "u2", kind: "great_chat" }),
+    });
+    renderScreen("male");
+    await loaded();
+    const before = calls.sent().filter((c) => c === `GET /v1/threads/${ID}`);
+
+    await userEvent.click(
+      within(prompt() as HTMLElement).getAllByRole("button")[0] as HTMLElement,
+    );
+
+    await waitFor(() =>
+      expect(
+        calls.sent().filter((c) => c === `GET /v1/threads/${ID}`).length,
+      ).toBeGreaterThan(before.length),
+    );
+    expect(calls.sent()).toContain("POST /v1/kudos");
+  });
+});
+
+describe("Report and Block in the ⋯ menu (P-764)", () => {
+  async function openMenu() {
+    await userEvent.click(
+      screen.getByRole("button", { name: t("conversation.more") }),
+    );
+    return screen.findByRole("dialog", { name: t("conversation.more") });
+  }
+
+  it("reports with this Thread as the evidence, and blocks too unless turned off", async () => {
+    const calls = api(thread(), [message()], {
+      "POST /v1/reports": () => json(201, {}),
+    });
+    renderScreen("female");
+    await loaded();
+
+    await userEvent.click(
+      within(await openMenu()).getByRole("button", {
+        name: t("profile.report"),
+      }),
+    );
+    const sheet = await screen.findByRole("dialog", {
+      name: t("profile.reportTitle", { name: "Priya" }),
+    });
+    await userEvent.click(
+      within(sheet).getAllByRole("radio")[2] as HTMLElement,
+    );
+    await userEvent.click(
+      within(sheet).getByRole("button", { name: t("profile.reportSend") }),
+    );
+
+    await waitFor(() => expect(calls.sent()).toContain("POST /v1/reports"));
+    const sent = calls.calls.find((c) => c.path === "/v1/reports");
+    expect(sent?.body).toMatchObject({
+      reported_id: "u2",
+      reason: "harass",
+      thread_id: ID,
+      also_block: true,
+    });
+  });
+
+  it("blocks silently and leaves the chat, which is gone for both", async () => {
+    const calls = api(thread(), [message()], {
+      "POST /v1/blocks": () => json(201, { id: "b1" }),
+    });
+    renderScreen("female");
+    await loaded();
+
+    await userEvent.click(
+      within(await openMenu()).getByRole("button", {
+        name: t("profile.block", { name: "Priya" }),
+      }),
+    );
+    const sheet = await screen.findByRole("dialog", {
+      name: t("profile.blockTitle", { name: "Priya" }),
+    });
+    await userEvent.click(
+      within(sheet).getByRole("button", {
+        name: t("profile.block", { name: "Priya" }),
+      }),
+    );
+
+    await waitFor(() => expect(nav.replace).toHaveBeenCalledWith("/chats"));
+    const sent = calls.calls.find((c) => c.path === "/v1/blocks");
+    expect(sent?.body).toEqual({ user_id: "u2" });
+    expect(
+      await screen.findByText(t("profile.blocked", { name: "Priya" })),
+    ).toBeInTheDocument();
+  });
+
+  it("still reports and blocks a deleted account, which has no profile to open", async () => {
+    api(
+      thread({
+        other: {
+          id: "u2",
+          first_name: "",
+          username: null,
+          main_photo_url: null,
+          shows_badge: false,
+          is_online: false,
+          deleted: true,
+        },
+      }),
+      [message()],
+    );
+    renderScreen("female");
+    await loaded();
+
+    const menu = await openMenu();
+
+    expect(
+      within(menu).queryByRole("link", { name: t("conversation.viewProfile") }),
+    ).toBeNull();
+    expect(
+      within(menu).getByRole("button", { name: t("profile.report") }),
+    ).toBeInTheDocument();
+    expect(
+      within(menu).getByRole("button", {
+        name: t("profile.block", { name: t("conversation.deletedAccount") }),
+      }),
     ).toBeInTheDocument();
   });
 });

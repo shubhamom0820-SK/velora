@@ -193,6 +193,14 @@ Envelope, both directions: `{ "type": "…", "id": "<uuid>", "data": { … } }`
 
 Sending messages is **REST** (`POST /v1/threads/{id}/messages`) so it goes through validation,
 masking and persistence; the socket only pushes. Client dedupes by `client_msg_id`.
+
+**The web's client** (T-7.12, D-881): `web/src/lib/ws.ts`, mounted under `(app)`'s gate. A ticket,
+then the socket on the API's host; reconnect with backoff, attempt `n` waiting between half of
+`min(30 s, 1 s × 2ⁿ)` and all of it, never after 4000 or 4403; `ping` every 25 s, a new socket
+without a `pong` in 10 s; closed after 5 minutes hidden. A reconnect asks the Threads and the
+wallet again. Events write messages, "Seen", the typing dots and the balance into the caches
+(`src/lib/queries/realtime.ts`); a Thread's state is never written from one, only asked again, and
+the hour's events are read by a man alone (P-460). The composer sends `typing`.
 Fan-out: API publishes to Redis channel `user:{id}`; every API instance subscribes for its
 connected users. A service queues an event in the transaction that makes it true; `get_session`
 publishes the request's committed events when the request ends, after its session has closed, and
@@ -494,8 +502,11 @@ secret is left empty. Real secret values are never committed.
   `style-src 'self' 'unsafe-inline'` for the `<style>` and style attributes its window injects
   (its phone layout). Razorpay publishes no CSP list: this is what its Checkout asked of the page
   in Chrome, held to it by `web/bench/razorpay-csp.spec.ts`, each source refused without it. Local
-  and CI builds and the static pages have none of it. Each task that needs more widens it there,
-  deliberately: App Check (P-68), WebSockets (T-7.12), Sentry (T-9.12)
+  and CI builds and the static pages have none of it. **The socket (T-7.12, D-881)**: on the nonce routes only,
+  `connect-src` adds the API's host as a socket, `wss://` for an `https://` API and `ws://` for the
+  local `http://` one (`socketOrigin`); `web/e2e/csp.spec.ts` holds the browser to it both ways.
+  Each task that needs more widens it there,
+  deliberately: App Check (P-68), Sentry (T-9.12)
   and analytics (T-10.2). This line changes with each.
 - API headers (`app/core/headers.py`, P-42): `X-Content-Type-Options: nosniff` on every
   response and `Cache-Control: no-store` on every `/v1` response, 500s and CORS preflights

@@ -18,8 +18,10 @@ import {
   policyWithNonce,
   policyWithNonceSlot,
   securityHeaders,
+  socketOrigin,
   staticPolicySource,
 } from "./security-headers";
+import { socketUrl } from "./ws";
 
 const STAGING = {
   NODE_ENV: "production",
@@ -308,6 +310,14 @@ function withoutRazorpay(policy: string): string {
     .replace("style-src 'self' 'unsafe-inline'; ", "");
 }
 
+function withoutSocket(
+  policy: string,
+  env: Record<string, string | undefined>,
+): string {
+  const socket = socketOrigin(env);
+  return socket ? policy.replace(` ${socket}`, "") : policy;
+}
+
 describe("the nonce routes' CSP (T-6.6, D-541)", () => {
   const NONCED = [
     "/login",
@@ -366,12 +376,13 @@ describe("the nonce routes' CSP (T-6.6, D-541)", () => {
     ["staging", { ...STAGING, APP_ENV: "staging" }],
     ["production", { ...STAGING, APP_ENV: "production" }],
   ])(
-    "differs from the static one in script-src, a nonce and 'strict-dynamic', never 'unsafe-inline', and in Razorpay's checkout alone (%s)",
+    "differs from the static one in script-src, a nonce and 'strict-dynamic', never 'unsafe-inline', and in Razorpay's checkout and the socket alone (%s)",
     (_, env) => {
       const nonced = policyWithNonce(policyWithNonceSlot(env), "Tm9uY2U=");
       const before = contentSecurityPolicy(env).split("; ");
-      // Razorpay's sources are the nonce routes' alone (T-8.7, below).
-      const after = withoutRazorpay(nonced).split("; ");
+      // Razorpay's sources (T-8.7) and the socket's (T-7.12) are the nonce
+      // routes' alone (below).
+      const after = withoutSocket(withoutRazorpay(nonced), env).split("; ");
 
       expect(after).toHaveLength(before.length);
       after.forEach((directive, i) => {
@@ -430,7 +441,7 @@ describe("Razorpay's checkout (T-8.7, D-761): on a Razorpay build's nonce routes
           "style-src 'self' 'unsafe-inline'",
           R2_FOR[appEnv].img,
           R2_FOR[appEnv].media,
-          `connect-src 'self' https://api.staging.veloraapp.co.in ${R2_FOR[appEnv].upload} https://www.google.com/recaptcha/ https://identitytoolkit.googleapis.com https://securetoken.googleapis.com https://lumberjack.razorpay.com`,
+          `connect-src 'self' https://api.staging.veloraapp.co.in wss://api.staging.veloraapp.co.in ${R2_FOR[appEnv].upload} https://www.google.com/recaptcha/ https://identitytoolkit.googleapis.com https://securetoken.googleapis.com https://lumberjack.razorpay.com`,
           "frame-src 'self' https://www.google.com/recaptcha/ https://recaptcha.google.com/recaptcha/ https://api.razorpay.com",
           "worker-src 'self'",
           "object-src 'none'",
@@ -476,5 +487,61 @@ describe("Razorpay's checkout (T-8.7, D-761): on a Razorpay build's nonce routes
       "https://lumberjack.razorpay.com",
       "https://api.razorpay.com",
     ]);
+  });
+});
+
+describe("the socket (T-7.12, D-059): the API's own host, on the nonce routes alone", () => {
+  afterEach(() => {
+    vi.unstubAllEnvs();
+  });
+
+  function connectSrc(policy: string): string | undefined {
+    return policy.split("; ").find((d) => d.startsWith("connect-src"));
+  }
+
+  it.each(["staging", "production", "ci"])(
+    "adds wss:// for an https:// API on the nonce routes, APP_ENV=%s",
+    (appEnv) => {
+      const nonced = policyWithNonceSlot({ ...STAGING, APP_ENV: appEnv });
+
+      expect(connectSrc(nonced)).toMatch(
+        /^connect-src 'self' https:\/\/api\.staging\.veloraapp\.co\.in wss:\/\/api\.staging\.veloraapp\.co\.in( |$)/,
+      );
+    },
+  );
+
+  it("adds ws:// for the local http:// API under next dev", () => {
+    const nonced = policyWithNonceSlot({
+      NODE_ENV: "development",
+      APP_ENV: "local",
+    });
+
+    expect(connectSrc(nonced)).toMatch(
+      /^connect-src 'self' http:\/\/127\.0\.0\.1:8000 ws:\/\/127\.0\.0\.1:8000 /,
+    );
+  });
+
+  it.each(["staging", "production"])(
+    "never on the static pages, APP_ENV=%s: nothing there opens a socket",
+    (appEnv) => {
+      const csp = contentSecurityPolicy({ ...STAGING, APP_ENV: appEnv });
+
+      expect(csp).not.toMatch(/wss?:/);
+    },
+  );
+
+  it("names no socket when the build has no API, as CI's doesn't", () => {
+    expect(socketOrigin({ NODE_ENV: "production" })).toBeNull();
+    expect(policyWithNonceSlot({ NODE_ENV: "production" })).not.toMatch(
+      /wss?:/,
+    );
+  });
+
+  it("names exactly the origin ws.ts opens, never a wildcard or another host", () => {
+    vi.stubEnv("NEXT_PUBLIC_API_URL", "https://api.example.test/");
+    const opened = new URL(socketUrl("t1"));
+
+    expect(socketOrigin()).toBe(`${opened.protocol}//${opened.host}`);
+    expect(socketOrigin()).toBe("wss://api.example.test");
   });
 });

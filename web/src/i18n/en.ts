@@ -476,6 +476,8 @@ export const en = {
     knottedToday: "Knotted today",
     knottedYesterday: "Knotted yesterday",
     knottedDays: "Knotted {days} days ago",
+    // His composer's gift button (T-7.12).
+    gift: "Send {name} a gift",
     // The ⋯ menu.
     more: "More",
     viewProfile: "View profile",

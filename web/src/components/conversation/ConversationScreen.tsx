@@ -5,6 +5,8 @@ import { MessageCircleOff } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
+import { GiftSheet } from "@/components/gifts/GiftSheet";
+import { KudosPrompt } from "@/components/profile/KudosPrompt";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { ErrorState } from "@/components/ui/ErrorState";
 import { Skeleton } from "@/components/ui/Skeleton";
@@ -33,6 +35,7 @@ import {
 import { usePrices } from "@/lib/queries/wallet";
 import { useNow } from "@/lib/ticker";
 import { durationSeconds, type Recording } from "@/lib/voice-recorder";
+import { sendTyping } from "@/lib/ws";
 
 import { Composer } from "./Composer";
 import { ConversationHeader } from "./ConversationHeader";
@@ -81,6 +84,13 @@ const priceChanged = (error: ApiError) =>
  * Every paid button sends the price it showed (P-56, D-600): re-open and
  * Extend from `/prices`, an unlock from `/prices`, his message from the
  * Thread's `send_price` (D-870).
+ *
+ * Live (T-7.12): the socket writes their messages, "Seen" and the typing dots
+ * into the caches, and asks the Thread again when its state changes. "Knot
+ * tied ✦" opens for both of them, once per Knot, whenever the Knot is made
+ * while this screen is open: by my tap, or by theirs arriving. His gift button
+ * and the kudos prompt follow the Thread's own answers (`can_gift`, `kudos`,
+ * D-880), never a gender read here.
  */
 export function ConversationScreen({ id }: { id: string }) {
   const router = useRouter();
@@ -108,6 +118,7 @@ export function ConversationScreen({ id }: { id: string }) {
   const [note, setNote] = useState<string | null>(null);
   const [pending, setPending] = useState<Pending[]>([]);
   const [tiedOpen, setTiedOpen] = useState(false);
+  const [gifting, setGifting] = useState(false);
   const [buying, setBuying] = useState<"reopen" | "extend" | "tie" | null>(
     null,
   );
@@ -116,10 +127,30 @@ export function ConversationScreen({ id }: { id: string }) {
   const recordings = useRef(new Map<string, Recording>());
   const tapKeys = useRef<{ reopen?: string; extend?: string }>({});
   const marked = useRef<string | null>(null);
+  // The Knot this screen has already shown, or found when it opened: its
+  // `knotted_at`, null for none; undefined until the Thread first loads.
+  const knotSeen = useRef<string | null | undefined>(undefined);
   const top = useRef<HTMLDivElement>(null);
   const bottom = useRef<HTMLDivElement>(null);
 
   const view = thread.data;
+
+  // "Knot tied ✦" for a Knot made while the screen is open, once each: an
+  // untied and re-tied Knot is a new one (P-670, the founder's Q4).
+  const knotAt = view
+    ? view.status === "knotted"
+      ? view.knotted_at
+      : null
+    : undefined;
+  useEffect(() => {
+    if (knotAt === undefined) return;
+    if (knotSeen.current === undefined) {
+      knotSeen.current = knotAt;
+      return;
+    }
+    if (knotAt !== null && knotAt !== knotSeen.current) setTiedOpen(true);
+    knotSeen.current = knotAt;
+  }, [knotAt]);
   const ordered = useMemo(
     () =>
       (messages.data?.pages.flatMap((page) => page.items) ?? [])
@@ -352,7 +383,13 @@ export function ConversationScreen({ id }: { id: string }) {
     setBuying("tie");
     try {
       const result = await tie.mutateAsync(id);
-      if (result.status === "knotted") setTiedOpen(true);
+      if (
+        result.status === "knotted" &&
+        result.knotted_at !== knotSeen.current
+      ) {
+        knotSeen.current = result.knotted_at;
+        setTiedOpen(true);
+      }
     } catch (error) {
       if (error instanceof ApiError && error.code === "ACCOUNT_DELETED") {
         setNote(t("conversation.accountDeleted"));
@@ -420,6 +457,11 @@ export function ConversationScreen({ id }: { id: string }) {
     } catch {
       toast.show({ message: t("conversation.clearFailed"), tone: "error" });
     }
+  }
+
+  function onBlocked() {
+    toast.show({ message: t("profile.blocked", { name: theirName }) });
+    router.replace("/chats");
   }
 
   async function onUntie(): Promise<boolean> {
@@ -531,12 +573,16 @@ export function ConversationScreen({ id }: { id: string }) {
         onExtend={() => void buyTime("extend")}
         menu={
           <ConversationMenu
+            threadId={id}
+            otherId={view.other.id}
+            theirName={theirName}
             profileId={deleted ? null : view.other.id}
             knotted={knotted}
             clearing={clear.isPending}
             untying={untie.isPending}
             onClear={() => void onClear()}
             onUntie={onUntie}
+            onBlocked={onBlocked}
           />
         }
       />
@@ -557,6 +603,11 @@ export function ConversationScreen({ id }: { id: string }) {
           />
         )}
         {list}
+        {view.kudos === "can_give" && !deleted && (
+          <div className="pt-4">
+            <KudosPrompt id={view.other.id} name={theirName} />
+          </div>
+        )}
         <div ref={bottom} />
       </section>
       <div className="sticky bottom-(--shell-nav-height) z-[5] md:bottom-0">
@@ -594,9 +645,22 @@ export function ConversationScreen({ id }: { id: string }) {
             privateMessage={view.origin === "dm"}
             note={note}
             onNote={setNote}
+            onTyping={() => sendTyping(id)}
+            gift={
+              view.can_gift
+                ? { name: theirName, onOpen: () => setGifting(true) }
+                : undefined
+            }
           />
         )}
       </div>
+      {gifting && (
+        <GiftSheet
+          recipientId={view.other.id}
+          name={theirName}
+          onClose={() => setGifting(false)}
+        />
+      )}
       <KnotTiedSheet
         open={tiedOpen}
         myName={me?.profile.first_name ?? ""}
