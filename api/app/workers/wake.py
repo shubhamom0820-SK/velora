@@ -62,6 +62,7 @@ class WakeListener:
         handle: Handler,
         *,
         channel: str = CHANNEL,
+        id_name: str = "verification_id",
         max_backoff_s: float = MAX_BACKOFF_S,
         sleep: Callable[[float], Awaitable[None]] = asyncio.sleep,
     ) -> None:
@@ -70,6 +71,8 @@ class WakeListener:
         # A test listens on a channel of its own: Redis shares channels across
         # databases, so every run on this machine would hear the real one.
         self._channel = channel
+        # What the id heard is, by name, in the logs.
+        self._id_name = id_name
         self._max_backoff_s = max_backoff_s
         self._sleep = sleep
         self._since: datetime | None = None
@@ -137,14 +140,14 @@ class WakeListener:
         except ValueError:
             log.warning("wake.not_an_id")
             return
-        log.info("wake.heard", verification_id=str(verification_id))
+        log.info("wake.heard", **{self._id_name: str(verification_id)})
         try:
             await self._handle(verification_id)
         except Exception as error:  # noqa: BLE001 — the queued job still runs
             log.info(
                 "wake.left_to_the_queue",
-                verification_id=str(verification_id),
                 why=type(error).__name__,
+                **{self._id_name: str(verification_id)},
             )
 
 

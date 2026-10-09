@@ -115,6 +115,11 @@ repo's public test keys, but it can't know a copy of staging's.
   `db-owner`, `velora-api-db`, `jwt-secret`, `phone-pepper`, `phone-enc-key`, `code-pepper`.
 - **After setting the four keys,** read their shapes on the machine (lengths only) and compare
   each with its stored copy by SHA-256, first 8 hex characters, as T-3.1 did for staging.
+- **Web Push's pair (T-9.4, D-856):** `VAPID_PRIVATE_KEY` and `VAPID_PUBLIC_KEY`, made fresh by
+  staging's commands (STAGING.md §4) with `velora-production` and the production app, never
+  staging's pair. Push is off until D-857 is decided (`PUSH_PROVIDER = "off"`, no keys needed).
+  Before switching to `"webpush"`, set the pair, or production refuses to start. Keychain
+  accounts `vapid-private-key`, `vapid-public-key`.
 - **The second copy lives in Apple Passwords, synced through iCloud,** never only on this Mac (the
   founder, 3 October 2026). A Keychain on one laptop is one laptop away from every production
   key being unrecoverable. Only the founder reads its contents; nobody else ever asks for them.

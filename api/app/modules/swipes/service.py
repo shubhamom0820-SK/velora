@@ -26,7 +26,8 @@ from app.core.errors import AppError
 from app.modules.admin import service as admin_service
 from app.modules.discovery import service as discovery_service
 from app.modules.matches import repository as matches_repository
-from app.modules.notifications import repository as notifications_repository
+from app.modules.notifications import service as notifications_service
+from app.modules.notifications.rules import Kind
 from app.modules.pricing import service as pricing_service
 from app.modules.swipes import counter, repository, rules
 from app.modules.swipes.schemas import SwipeResult
@@ -34,7 +35,6 @@ from app.modules.users.models import User
 from app.modules.wallet.rules import Ref, RefType
 
 MATCH_CREATED = "match.created"
-MATCH_NOTIFICATION = "match"
 
 
 def _not_found() -> AppError:
@@ -117,10 +117,18 @@ async def _swipe_in(
         return None
     back = await repository.direction_of(session, target_id, user.id)
     if back not in rules.LIKES:
+        # A like waiting on their swipe (T-9.4): a push only, Liked you is its
+        # place, and to a man it never says who (D-542, `notify` drops it).
+        await notifications_service.notify(
+            session,
+            target_id,
+            Kind.LIKE,
+            {"user_id": str(user.id), "super": direction is SwipeDirection.SUPER},
+        )
         return None
     match_id = await matches_repository.match_pair(session, user.id, target_id)
     for one, other in ((user.id, target_id), (target_id, user.id)):
         payload = {"match_id": str(match_id), "user_id": str(other)}
         events.queue(session, one, MATCH_CREATED, payload)
-        notifications_repository.add(session, one, MATCH_NOTIFICATION, payload)
+        await notifications_service.notify(session, one, Kind.MATCH, payload)
     return match_id

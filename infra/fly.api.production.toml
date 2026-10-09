@@ -34,7 +34,13 @@ primary_region = "sin"
   MODERATION_PROVIDER = "sightengine"
   FACEMATCH_PROVIDER = "sface"
   STORAGE_PROVIDER = "s3"
-  PUSH_PROVIDER = "webpush"
+  # Push is off everywhere until the founder gives D-857 in their own words
+  # (9 October 2026): no keys needed, and GET /push/key is 404, so the web
+  # offers none. Turning it on: "webpush", with the VAPID pair set as two Fly
+  # secrets on the API and the worker first (STAGING.md §4, P-755).
+  PUSH_PROVIDER = "off"
+  # Web Push's contact for the push services (RFC 8292, T-9.4), for when it is on.
+  VAPID_SUBJECT = "https://veloraapp.co.in/contact"
   # The production web's one address. www and the project's vercel.app address
   # both redirect to it (infra/PRODUCTION.md), so this is the one origin.
   CORS_ORIGINS = "https://veloraapp.co.in"

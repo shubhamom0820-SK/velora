@@ -31,7 +31,7 @@ from app.modules.auth import otp_store
 from app.modules.auth.models import BannedIdentity
 from tests.conftest import MakeUser, make_test_settings
 from tests.infra import TEST_DATABASE_URL, session_for_the_app
-from tests.keys import r2_settings, random_keys
+from tests.keys import r2_settings, random_keys, vapid_settings
 
 pytestmark = pytest.mark.usefixtures("test_redis")
 
@@ -467,6 +467,7 @@ _DEPLOYED: dict[str, Any] = {
     "STORAGE_PROVIDER": "s3",
     **r2_settings(),
     "PUSH_PROVIDER": "webpush",
+    **vapid_settings(),
     **random_keys(),
 }
 

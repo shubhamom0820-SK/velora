@@ -10,6 +10,8 @@ from __future__ import annotations
 
 import secrets
 
+from app.core.vapid import new_pair
+
 
 def random_keys() -> dict[str, str]:
     """Four fresh keys: one of each the API requires."""
@@ -32,3 +34,9 @@ def r2_settings() -> dict[str, str]:
         "R2_BUCKET_PRIVATE": "velora-test-private",
         "PUBLIC_CDN_URL": "https://cdn.example.test",
     }
+
+
+def vapid_settings() -> dict[str, str]:
+    """Everything `PUSH_PROVIDER=webpush` needs (T-9.4): a fresh VAPID pair and
+    a subject, pointing nowhere real."""
+    return {**new_pair(), "VAPID_SUBJECT": "mailto:push@example.test"}

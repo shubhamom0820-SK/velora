@@ -49,6 +49,8 @@ from app.modules.messages.schemas import (
     ReadRequest,
     SendMessageRequest,
 )
+from app.modules.notifications import service as notifications_service
+from app.modules.notifications.rules import Kind
 from app.modules.pricing import service as pricing_service
 from app.modules.safety import service as safety_service
 from app.modules.threads import rules as threads_rules
@@ -143,16 +145,21 @@ def view_of(
     )
 
 
-def announce(
+async def announce(
     session: AsyncSession,
     row: MessageRow,
     recipient_id: UUID,
     *,
     recipient_gender: Gender | None = None,
+    notify: bool = True,
 ) -> None:
     """`message.new` to both people, each with their own view of it. A voice
     note reaches the recipient locked unless their gender says they hear it
-    free, so a caller that doesn't say never tells a man it is unlocked."""
+    free, so a caller that doesn't say never tells a man it is unlocked.
+
+    And, unless `notify` is false, a `message` notification to the recipient
+    (T-9.4): a push only, sent only while they have no socket open (D-854),
+    never with the message's text in it."""
     for user_id in (row.sender_id, recipient_id):
         locked = user_id == recipient_id and rules.locked_for(
             row, user_id, recipient_gender, unlocked=False
@@ -165,6 +172,13 @@ def announce(
                 "thread_id": str(row.thread_id),
                 "message": view_of(row, user_id, locked=locked).model_dump(mode="json"),
             },
+        )
+    if notify:
+        await notifications_service.notify(
+            session,
+            recipient_id,
+            Kind.MESSAGE,
+            {"thread_id": str(row.thread_id), "user_id": str(row.sender_id)},
         )
 
 
@@ -500,7 +514,7 @@ async def _send_in(
         if thread.expires_at is None or later > thread.expires_at:
             thread.expires_at = later
             thread.expiry_warned_at = None
-    announce(
+    await announce(
         session,
         row,
         other_id,

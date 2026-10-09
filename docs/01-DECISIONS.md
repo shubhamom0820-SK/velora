@@ -5449,3 +5449,131 @@ Thread takes a tap, T-7.7).
 
 Append `D-0NN · Title — Locked|Open`, with Decision, Why, Rejected. Never edit a Locked entry —
 supersede it with a new one that references the old ID.
+
+### D-850 · Pushes wait in `push_outbox`, sent on a wake and in the worker's minute, never as ARQ jobs — Locked
+**The decision (T-9.4; the founder, 9 October 2026, on the advisor's recommendation (Claude, in a
+separate chat), relayed by the founder; T-9.4's plan):** `notifications.service.notify()` is the
+one way anything tells a person something. In the transaction that makes a thing true, it writes
+the in-app row and, when the kind's setting is on and the person has a subscription, a row in
+`push_outbox`, and queues a wake (`events.wake_push`). Once that transaction commits, the wake is
+published on `wake:send_push` with the request's events: one PUBLISH, however many pushes a request
+wrote. The worker hears it on a second `WakeListener` (D-261's) and sends at once. Its minute
+(D-640) sends anything a lost wake left. A sender claims a batch in one short transaction (`FOR
+UPDATE SKIP LOCKED`, then `claimed_at`), sends with no lock held, and deletes each row once it is
+sent, skipped or given up on. A claim older than 5 minutes is taken again. A failure is tried 3
+times in all, a push an hour old is dropped unsent (and is its Web Push TTL), and 404 or 410
+deletes the subscription.
+
+**Why:** an ARQ job costs about 20 Redis commands (D-640's count, from arq 0.28's source). A few
+thousand pushes a day would be millions a month, against the ~239,000 D-091 leaves for real
+traffic. The outbox spends one PUBLISH per request that writes a push, and one `PUBSUB NUMSUB` per
+message push (D-854). The rest is in Postgres.
+
+**Rejected:** an ARQ job per push (D-091's budget); a push sent from the request after its commit
+(a slow push service would hold the request, and a crash loses it); the in-app row as the outbox (a
+message has no row, D-852).
+
+### D-851 · Two more settings: `gift` and `album` — Locked
+**The decision (T-9.4, P-550 and P-631; the founder, 9 October 2026, on the advisor's
+recommendation, relayed):** `notification_prefs` gains `gift` and `album`, boolean, true by default
+(migration `18fc99762f2a`). `gift` governs a gift's push. `album` governs both a request to see her
+private pictures (`album_request`, to her) and the answer to his (`album_decided`, to him). Each
+kind's setting is `notifications.rules.PREF_FOR`: a Thread opened with you is `message`'s. A
+setting governs the push only: the in-app row is written either way, so a turned-off kind still
+shows in the list.
+
+**Rejected:** folding gifts and album requests into `like` (a woman who turns off likes would lose
+gifts she didn't think she had turned off, P-550's worst case).
+
+### D-852 · A message and a like are pushes only — Locked
+**The decision (T-9.4's plan, Q6; the founder, 9 October 2026):** `message` and `like` write no
+in-app row (`rules.PUSH_ONLY`). The chats list is where a message shows, and Liked you is where a
+like does. A like to a man never says who (D-542): `notify()` drops the liker's id before anything
+is written. A Thread opened with a first message is one push, the opening's, never a second for
+the message.
+
+### D-853 · `low_balance` once per crossing of `low_balance_velas`, 10 — Locked (value tunable)
+**The decision (T-9.4's plan, Q4; the founder, 9 October 2026: "10 (one Extend), not 5"):** a debit
+that takes a man's balance from `app_config.low_balance_velas` (10) or more to below it writes one
+`low_balance` notification, in the debit's transaction. A debit already under the line writes
+none. Read fresh at each debit (migration `bb4531b1f569`). Called from `wallet.service._apply`
+after the ledger row, so it is the wallet's own transaction and lock (CLAUDE.md rule 5).
+
+### D-854 · Presence is Redis's own count of a user's subscribers — Locked
+**The decision (T-9.4; the founder, 9 October 2026, "NUMSUB for presence: yes"):** "only if not
+connected" reads `PUBSUB NUMSUB user:{id}` when a message's push is about to go. Each API instance
+subscribes `user:{id}` while that user has a socket open there (T-7.4's hub), so the count covers
+every instance, with no key to keep fresh and nothing to clean up after a crash. One command per
+message push. If Redis fails, the push goes: a push twice beats a message nobody is told of.
+
+**Rejected:** a Redis key per user refreshed while a socket lives (T-9.4's plan's example). It
+costs a command per refresh per connected user, and a crash leaves a stale "connected" until it
+expires.
+
+### D-855 · A subscription names a known push service, or it is refused — Locked
+**The decision (T-9.4):** the worker POSTs to whatever endpoint a browser gave, so `POST
+/push/subscriptions` takes only `https` endpoints with no port and no credentials, on
+`fcm.googleapis.com`, `updates.push.services.mozilla.com`, `web.push.apple.com`, or a host ending
+`.push.apple.com` or `.notify.windows.com` (after the dot). Anything else is `VALIDATION_ERROR`
+before a row exists (`rules.push_host_allowed`, an allowlist). The keys must be a P-256 point (65
+bytes) and a 16-byte secret. One endpoint, one row: a browser signed in to another account moves
+to it. A person keeps their newest 10 subscriptions. The endpoint and keys are never logged, and
+httpx's request line for a push host is dropped from the logs.
+
+### D-856 · VAPID: two Fly secrets, a subject in the config, a key the web asks for — Locked
+**The decision (T-9.4's plan, Q5; the founder, 9 October 2026):**
+- `VAPID_PRIVATE_KEY` and `VAPID_PUBLIC_KEY` are Fly secrets, the same pair on the API and the
+  worker. `VAPID_SUBJECT` is plain config in the Fly files: `https://veloraapp.co.in/contact`
+  (RFC 8292 takes an https URL; no support email exists yet).
+- With `PUSH_PROVIDER=webpush`, a missing one, a private key that isn't 32 bytes, or a public key
+  that isn't the private key's refuses startup. The message names the setting and never a value.
+- `GET /push/key` gives the web the public key, and 404 where push isn't set up (local and CI run
+  the fake), so the web offers no push there. Nobody pastes a key into the repo.
+- `python -m app.core.vapid` makes a pair as `NAME=value` lines and refuses a terminal, so it is
+  piped into `fly secrets import`, never shown. CI pipes a throwaway pair into `$GITHUB_ENV`.
+
+**What it costs:** with `webpush`, an app refuses to start until the two secrets are set
+(infra/STAGING.md §4, infra/PRODUCTION.md).
+
+**Amended 9 October 2026 (the founder): push is off everywhere for now.** T-9.4 lands with
+`PUSH_PROVIDER = "off"` in all three Fly files, a third value added for it. It needs no keys,
+`GET /push/key` is `NOT_FOUND`, so no browser subscribes, and the worker sends nothing
+(`NoPush`). In-app notifications are written as before. `off` is not a fake: it reaches nothing
+outside, so it is allowed in every environment. Push goes on with `webpush`, once the founder has
+set the pair (P-755) and given D-857 in their own words. A test pins all three files to `off`
+until then.
+
+### D-857 · Pushes are delivered by the browser's maker, outside India — Open
+**What is built (T-9.4):** a push goes through the subscribing browser's own service: Google (FCM)
+for Chrome and Android, Apple for Safari, Mozilla for Firefox, Microsoft (WNS) for Edge, all
+outside India. That is an exception to D-048's "the data stays in India". What crosses is encrypted
+for that browser alone (RFC 8291, aes128gcm), so the service sees the endpoint, the size and the
+time. The content is the kind, ids, and the other person's first name unless "Hide names"
+(`generic_text`) is on. Never a message's text, an expiry or a price (`rules.PUSHED_FIELDS`, an
+allowlist). `/privacy` says so.
+
+**Open:** the founder's own words approving the exception. The brief that approved T-9.4's plan left
+a placeholder where they were to go. **Until they are recorded here, push stays off everywhere**
+(the founder, 9 October 2026): `PUSH_PROVIDER = "off"` in every Fly file (D-856, amended).
+
+### D-858 · Nothing about someone blocked either way, in the list or a push — Locked
+**The decision (P-760, from T-9.1's session, relayed by the founder on 9 October 2026):** `GET
+/notifications` leaves out every row about someone either person has blocked, through
+`discovery.repository.blocked_either_way`, as every other read does. "About" is the row's
+`user_id`, or else the other person in its `thread_id`'s Thread (an hour running out names no
+person). The sender checks the same when a push is about to go, so a block between the write and
+the send sends nothing.
+
+### D-859 · The web's push: no Serwist, `/sw.js` from a route handler, screens from existing parts — Locked
+**The decision (T-9.4's plan, Q1 and Q3; the founder, 9 October 2026):**
+- **No new dependency.** The service worker is generated by `web/src/lib/push-worker.ts` and served
+  at `/sw.js` by a route handler, static at build time. Its words are `en.ts`'s, embedded as data,
+  and a test holds them, its routes and its tags equal to the in-app list's, kind by kind. T-9.7
+  decides on Serwist when offline caching needs it.
+- **Permission is asked after the first match**, on the match sheet, once per browser, and only
+  from a tap. On an iPhone in Safari's tab, the ask is replaced by how to add the app to the Home
+  Screen.
+- **`/you/notifications`** (the settings and this browser's switch) and **`/notifications`** (the
+  list) are built from existing parts only and linked from You. There is no bell in the header
+  until a design exists (P-750). A man alone sees the expiry and balance switches (P-460).
+- The CSP says `worker-src 'self'`, and `notifications` joins the nonce routes.

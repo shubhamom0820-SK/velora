@@ -449,11 +449,16 @@ async def test_a_like_back_makes_one_match_and_tells_both(
     assert match is not None and body["match_id"] == str(match.id)
     assert {match.user_low, match.user_high} == {me_id, her_id}
     assert match.user_low.bytes < match.user_high.bytes
+    # The match's own rows: a Super Like from 10 Velas also leaves him under
+    # `low_balance_velas` (T-9.4), a row of its own.
     told = (
         await db.execute(
-            select(
-                Notification.user_id, Notification.kind, Notification.payload
-            ).execution_options(populate_existing=True)
+            select(Notification.user_id, Notification.kind, Notification.payload)
+            .where(
+                Notification.kind == "match",
+                Notification.user_id.in_((me_id, her_id)),
+            )
+            .execution_options(populate_existing=True)
         )
     ).all()
     assert sorted(told, key=lambda r: str(r[0])) == sorted(
@@ -478,7 +483,14 @@ async def test_a_pass_either_way_makes_no_match(
 
     assert (body["matched"], body["match_id"]) == (False, None)
     assert await db.scalar(select(func.count()).select_from(Match)) == 0
-    assert await db.scalar(select(func.count()).select_from(Notification)) == 0
+    assert (
+        await db.scalar(
+            select(func.count())
+            .select_from(Notification)
+            .where(Notification.user_id.in_((me_id, her_id)))
+        )
+        == 0
+    )
 
 
 # --- The request -------------------------------------------------------------------

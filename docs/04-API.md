@@ -270,12 +270,26 @@ list is the caller's own (D-270).
 ## Notifications
 | Method | Path | Auth | Body → Response | Task |
 |---|---|---|---|---|
-| POST | /push/subscriptions | ✅ | `{endpoint, keys:{p256dh, auth}}` → 201 | T-9.4 |
-| DELETE | /push/subscriptions | ✅ | `{endpoint}` → 204 | T-9.4 |
+| GET | /push/key | ✅ | → `{public_key}`, the VAPID public key, base64url. `NOT_FOUND` where push isn't on: local and CI (the fake), and `PUSH_PROVIDER=off`, staging's and production's until D-857 (D-856) | T-9.4 |
+| POST | /push/subscriptions | ✅ | `{endpoint, keys:{p256dh, auth}}` → 201 `{endpoint}`. The endpoint must be `https`, no port, on a known push service, else `VALIDATION_ERROR` (D-855); the keys a P-256 point and a 16-byte secret, never returned. One row per endpoint: a browser signed in to another account moves to it; a person keeps their newest 10. 10 a minute | T-9.4 |
+| DELETE | /push/subscriptions | ✅ | `{endpoint}` → 204: your own at that endpoint; anyone else's, or none, untouched, the same answer | T-9.4 |
 | GET | /notification-prefs | ✅ | → `Prefs` | T-9.4 |
-| PATCH | /notification-prefs | ✅ | `Partial<Prefs>` → `Prefs` | T-9.4 |
-| GET | /notifications | ✅ | `?cursor=&limit=` → `Page<Notification>` | T-9.4 |
-| POST | /notifications/read | ✅ | → 204 | T-9.4 |
+| PATCH | /notification-prefs | ✅ | `Partial<Prefs>` → `Prefs`. An unknown field, or none sent, `VALIDATION_ERROR` | T-9.4 |
+| GET | /notifications | ✅ | `?cursor=&limit=` → `NotificationPage`, your own, newest first by `(created_at, id)`, none about someone either of you has blocked (P-760, D-858) | T-9.4 |
+| POST | /notifications/read | ✅ | → 204: every unread one of yours, read now | T-9.4 |
+
+`Prefs` (T-9.4, D-851): `{match, message, like, knot, expiry, balance, gift, album, generic_text}`,
+each a boolean. Each kind's setting governs its push only; the in-app row is written either way.
+`generic_text` sends no name in a push.
+
+`Notification`: `{id, kind, data, read_at, created_at}`. `kind` is one of `match`, `thread`,
+`gift`, `album_request`, `album_decided`, `knot_requested`, `knot_accepted`, `thread_expiring` (a
+man's only) or `low_balance` (a man's only); `message` and `like` are pushes only (D-852). `data`
+is the kind's ids and flags (`user_id`, `thread_id`, `match_id`, `gift_send_id`, `gift_id`,
+`album_request_id`, `granted`, `balance`, `expires_at` for his `thread_expiring`). The web turns
+`kind` into words (D-033). A push carries `{kind, …}` with only `rules.PUSHED_FIELDS`' ids and
+flags, and `name`, the other person's first name, unless `generic_text`: never an expiry, a price,
+a balance or a message's text (P-460).
 
 ## Admin 🛡
 | Method | Path | Body → Response | Task |

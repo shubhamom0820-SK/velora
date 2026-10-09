@@ -583,14 +583,23 @@ One subscription per endpoint, across accounts. `p256dh` and `auth` are the subs
 never logged, never returned (rule 15).
 
 ### notification_prefs  (pk user_id)
-`user_id uuid pk fk users`; `match, message, likes, knot, expiry, balance, generic_text` —
-booleans, not null, defaults true except `generic_text` false; `updated_at`.
+`user_id uuid pk fk users`; `match, message, likes, knot, expiry, balance, gift, album,
+generic_text` — booleans, not null, defaults true except `generic_text` false; `updated_at`.
 The column is `likes` because `like` is a reserved word in Postgres. The model attribute and the
-API field of `Prefs` (04-API) stay `like` (T-1.13).
+API field of `Prefs` (04-API) stay `like` (T-1.13). `gift` and `album` since T-9.4 (D-851). Each
+governs its kinds' pushes only (`notifications.rules.PREF_FOR`), never the in-app row.
 
 ### notifications  (in-app list)
 `id uuid pk, user_id uuid fk users, kind text not null, payload jsonb null, read_at timestamptz null,
-created_at`. Index `(user_id, created_at desc)`.
+created_at`. Index `(user_id, created_at desc)`. Written only through `notifications.service.notify()`
+(T-9.4), for an active account only. `message` and `like` have no row (D-852).
+
+### push_outbox  (T-9.4, D-850)
+`id uuid pk, user_id uuid fk users, kind text not null, payload jsonb not null, attempts smallint
+not null default 0 (check ≥ 0), claimed_at timestamptz null, created_at`. Indexes `(created_at)`,
+`(user_id)`. A push waiting to be sent, written in the transaction that makes it true, deleted once
+sent, skipped or given up on (3 attempts), so a row lives seconds. It is not a record (rule 12):
+the erasure and an under-18 refusal delete a user's rows.
 
 ---
 

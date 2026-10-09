@@ -37,7 +37,7 @@ from app.core.providers.moderation import (
     SightengineModeration,
 )
 from app.core.providers.payments import FakePayments, PaymentsProvider, RazorpayPayments
-from app.core.providers.push import FakePush, PushProvider, WebPush
+from app.core.providers.push import FakePush, NoPush, PushProvider, WebPush
 from app.core.providers.sms import FakeSms, Msg91Sms, SmsProvider, guard_real_sms
 from app.core.providers.storage import FakeStorage, S3Storage, StorageProvider
 
@@ -78,6 +78,15 @@ class FakeProviders:
         )
 
 
+def _push(settings: Settings) -> PushProvider:
+    """Each value names its provider; `off` sends nothing (D-856, amended)."""
+    if settings.PUSH_PROVIDER == "webpush":
+        return WebPush(settings.VAPID_PRIVATE_KEY, settings.VAPID_SUBJECT)
+    if settings.PUSH_PROVIDER == "fake":
+        return FakePush()
+    return NoPush()
+
+
 def build_providers(settings: Settings) -> Providers:
     """The providers `settings` selects. A fake SMS echoes codes to the
     terminal: fakes only ever run locally (D-045). A real SMS provider texts
@@ -106,7 +115,7 @@ def build_providers(settings: Settings) -> Providers:
             if settings.FACEMATCH_PROVIDER == "fake"
             else SFaceFaceMatch()
         ),
-        push=FakePush() if settings.PUSH_PROVIDER == "fake" else WebPush(),
+        push=_push(settings),
         storage=(
             FakeStorage()
             if settings.STORAGE_PROVIDER == "fake"

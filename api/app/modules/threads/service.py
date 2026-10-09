@@ -51,7 +51,8 @@ from app.modules.discovery import rules as discovery_rules
 from app.modules.discovery import service as discovery_service
 from app.modules.messages import limits
 from app.modules.messages import service as messages_service
-from app.modules.notifications import repository as notifications_repository
+from app.modules.notifications import service as notifications_service
+from app.modules.notifications.rules import Kind
 from app.modules.pricing import service as pricing_service
 from app.modules.threads import repository, rules, schemas
 from app.modules.threads.models import Thread
@@ -60,18 +61,14 @@ from app.modules.wallet import service as wallet_service
 from app.modules.wallet.rules import Ref, RefType
 
 THREAD_OPENED = "thread.opened"
-THREAD_NOTIFICATION = "thread"
 # T-7.6: to whoever sees the expiry, a man, never her (D-097, D-554).
 THREAD_EXPIRING = "thread.expiring"
 THREAD_EXPIRED = "thread.expired"
-EXPIRING_NOTIFICATION = "thread_expiring"
-# T-7.7: T-9.4's kinds name a knot requested and accepted; an untie is the
-# event alone (D-770).
+# T-7.7: a knot requested and accepted are notifications too (T-9.4's
+# `Kind`); an untie is the event alone (D-770).
 KNOT_REQUESTED = "knot.requested"
 KNOT_ACCEPTED = "knot.accepted"
 KNOT_UNTIED = "knot.untied"
-KNOT_REQUESTED_NOTIFICATION = "knot_requested"
-KNOT_ACCEPTED_NOTIFICATION = "knot_accepted"
 
 
 def _not_found() -> AppError:
@@ -217,7 +214,7 @@ async def _open_in(
         await repository.link_match(session, match.id, thread.id)
     payload = {"thread_id": str(thread.id), "user_id": str(user.id)}
     events.queue(session, other_id, THREAD_OPENED, payload)
-    notifications_repository.add(session, other_id, THREAD_NOTIFICATION, payload)
+    await notifications_service.notify(session, other_id, Kind.THREAD, payload)
     if request.first_message is not None:
         mask_first_n = await admin_service.config_int(
             session, messages_service.MASK_KEY, cache=config
@@ -230,7 +227,8 @@ async def _open_in(
             uuid.uuid4(),
             mask_first_n=mask_first_n,
         )
-        messages_service.announce(session, row, other_id)
+        # The opening's own notification tells her; no second push for it.
+        await messages_service.announce(session, row, other_id, notify=False)
     return _Opened(view_of(thread, user), created=True)
 
 
@@ -537,8 +535,8 @@ async def warn_batch(
 
         told = await _tell(session, rows, THREAD_EXPIRING, data)
         for user_id, payload in told:
-            notifications_repository.add(
-                session, user_id, EXPIRING_NOTIFICATION, payload
+            await notifications_service.notify(
+                session, user_id, Kind.THREAD_EXPIRING, payload
             )
     return len(rows)
 
@@ -611,17 +609,17 @@ async def tie(session: AsyncSession, user: User, thread_id: UUID) -> schemas.Thr
             accepted = {"thread_id": str(thread.id), "knotted_at": now.isoformat()}
             for one in (user_id, other_id):
                 events.queue(session, one, KNOT_ACCEPTED, accepted)
-            notifications_repository.add(
+            await notifications_service.notify(
                 session,
                 other_id,
-                KNOT_ACCEPTED_NOTIFICATION,
+                Kind.KNOT_ACCEPTED,
                 {"thread_id": str(thread.id), "user_id": str(user_id)},
             )
         else:
             requested = {"thread_id": str(thread.id), "user_id": str(user_id)}
             events.queue(session, other_id, KNOT_REQUESTED, requested)
-            notifications_repository.add(
-                session, other_id, KNOT_REQUESTED_NOTIFICATION, requested
+            await notifications_service.notify(
+                session, other_id, Kind.KNOT_REQUESTED, requested
             )
         return view_of(thread, user)
 

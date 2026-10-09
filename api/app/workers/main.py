@@ -23,6 +23,10 @@ themselves).
   channel of its own (`app/workers/wake.py`), started with the worker, so a
   woman's selfie is decided in seconds, not at the next look at the queue. The
   queued job stays the path that is sure to run.
+- **Pushes are sent from `push_outbox`, never as ARQ jobs** (T-9.4, D-850): a
+  second listener, on `wake:send_push`, sends them the moment a notification
+  commits, and the worker's minute sends any a lost wake left. An ARQ job a
+  push would cost about 20 commands each, more than Free has for them.
 - **It refuses to start** without what its jobs need: Sightengine's two keys
   where `MODERATION_PROVIDER` is `sightengine` (the API never moderates, so it
   needs neither), and both face models, exactly D-088's, where
@@ -64,13 +68,15 @@ from app.core.queue import (
     LOG_TURNOVER,
     MATCH_PHOTO,
     MODERATE_PHOTO,
+    SEND_PUSH,
     VERIFY_SELFIE,
     WATERMARK_ALBUM,
     ArqQueue,
+    wake_channel,
 )
 from app.workers.minutely import Minutely
 from app.workers.tasks import log_turnover as log_turnover_job
-from app.workers.tasks import thread_clock
+from app.workers.tasks import send_push, thread_clock
 from app.workers.tasks import verify_selfie as verify_selfie_job
 from app.workers.tasks.blur_photo import BLUR_TRIES, blur_photo
 from app.workers.tasks.delete_files import delete_files
@@ -182,6 +188,7 @@ async def open_resources(
         storage=providers.storage,
         moderation=providers.moderation,
         facematch=providers.facematch,
+        push=providers.push,
     )
     # The models are read now, once, not at the first selfie.
     providers.facematch.load()
@@ -192,12 +199,13 @@ async def startup(ctx: MutableMapping[str, Any]) -> None:
     refuse_unless_ready(settings)
     await open_resources(ctx, settings, build_providers(settings))
     ctx["wake"] = asyncio.create_task(listen_for_wakes(ctx, settings).run())
+    ctx["push_wake"] = asyncio.create_task(listen_for_pushes(ctx, settings).run())
     ctx["minutely"] = asyncio.create_task(each_minute(ctx).run())
     log.info(
         "worker.started",
         jobs=[job.name for job in JOBS],
         cron=[job.name for job in CRON_JOBS],
-        minutely=[THREAD_CLOCK],
+        minutely=[THREAD_CLOCK, SEND_PUSH],
         poll_delay_s=settings.WORKER_POLL_DELAY_S,
         env=settings.ENV,
     )
@@ -210,27 +218,47 @@ def listen_for_wakes(ctx: MutableMapping[str, Any], settings: Settings) -> WakeL
     return WakeListener(connect_to(settings.REDIS_URL), handle)
 
 
-# The worker's minute (D-640): the Thread's clock (T-7.6).
+def listen_for_pushes(
+    ctx: MutableMapping[str, Any], settings: Settings
+) -> WakeListener:
+    """T-9.4 (D-850): a wake names the user a push waits for; every waiting
+    push is sent, whoever's."""
+
+    async def handle(_user_id: UUID) -> object:
+        return await send_push.run(ctx)
+
+    return WakeListener(
+        connect_to(settings.REDIS_URL),
+        handle,
+        channel=wake_channel(SEND_PUSH),
+        id_name="user_id",
+    )
+
+
+# The worker's minute (D-640): the Thread's clock (T-7.6), then any push a lost
+# wake left waiting (T-9.4), the clock's own warnings among them.
 THREAD_CLOCK: Final = "thread_clock"
 
 
 def each_minute(ctx: MutableMapping[str, Any]) -> Minutely:
     async def work() -> dict[str, int]:
-        return await thread_clock.run(ctx)
+        clock_done = await thread_clock.run(ctx)
+        pushed = await send_push.run(ctx)
+        return {**clock_done, **{f"push_{name}": n for name, n in pushed.items()}}
 
     return Minutely(work, name=THREAD_CLOCK)
 
 
 async def shutdown(ctx: MutableMapping[str, Any]) -> None:
     """Release what `startup` opened. Safe if it never ran."""
-    for task in ("minutely", "wake"):
+    for task in ("minutely", "wake", "push_wake"):
         if task in ctx:
             ctx[task].cancel()
             with contextlib.suppress(asyncio.CancelledError):
                 await ctx[task]
     if "engine" in ctx:
         await ctx["engine"].dispose()
-    for name in ("storage", "moderation"):
+    for name in ("storage", "moderation", "push"):
         if name in ctx:
             await ctx[name].aclose()
 

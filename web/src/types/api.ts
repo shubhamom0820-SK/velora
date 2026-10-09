@@ -1399,6 +1399,93 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/push/key": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Push Key */
+        get: operations["push_key_v1_push_key_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/push/subscriptions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Subscribe */
+        post: operations["subscribe_v1_push_subscriptions_post"];
+        /** Unsubscribe */
+        delete: operations["unsubscribe_v1_push_subscriptions_delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/notification-prefs": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Prefs */
+        get: operations["prefs_v1_notification_prefs_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /** Update Prefs */
+        patch: operations["update_prefs_v1_notification_prefs_patch"];
+        trace?: never;
+    };
+    "/v1/notifications": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Notifications */
+        get: operations["notifications_v1_notifications_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/notifications/read": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Mark Read */
+        post: operations["mark_read_v1_notifications_read_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/auth/otp/send": {
         parameters: {
             query?: never;
@@ -2203,6 +2290,38 @@ export interface components {
             next_cursor: string | null;
         };
         /**
+         * Notification
+         * @description One row of the in-app list. `data` is the kind's ids and flags; the web
+         *     turns `kind` into words (en.ts).
+         */
+        Notification: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Kind */
+            kind: string;
+            /** Data */
+            data: {
+                [key: string]: unknown;
+            };
+            /** Read At */
+            read_at: string | null;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+        };
+        /** NotificationPage */
+        NotificationPage: {
+            /** Items */
+            items: components["schemas"]["Notification"][];
+            /** Next Cursor */
+            next_cursor: string | null;
+        };
+        /**
          * OnboardingStep
          * @enum {string}
          */
@@ -2367,6 +2486,56 @@ export interface components {
             lng: number;
         };
         /**
+         * Prefs
+         * @description Which kinds may push (a turned-off kind still shows in the list), and
+         *     `generic_text`, a push with no name in it.
+         */
+        Prefs: {
+            /** Match */
+            match: boolean;
+            /** Message */
+            message: boolean;
+            /** Like */
+            like: boolean;
+            /** Knot */
+            knot: boolean;
+            /** Expiry */
+            expiry: boolean;
+            /** Balance */
+            balance: boolean;
+            /** Gift */
+            gift: boolean;
+            /** Album */
+            album: boolean;
+            /** Generic Text */
+            generic_text: boolean;
+        };
+        /**
+         * PrefsPatch
+         * @description Any of the settings, each only if sent. A field nobody knows is refused,
+         *     and so is a body that changes nothing, as `SettingsPatch` does.
+         */
+        PrefsPatch: {
+            /** Match */
+            match?: boolean | null;
+            /** Message */
+            message?: boolean | null;
+            /** Like */
+            like?: boolean | null;
+            /** Knot */
+            knot?: boolean | null;
+            /** Expiry */
+            expiry?: boolean | null;
+            /** Balance */
+            balance?: boolean | null;
+            /** Gift */
+            gift?: boolean | null;
+            /** Album */
+            album?: boolean | null;
+            /** Generic Text */
+            generic_text?: boolean | null;
+        };
+        /**
          * Prices
          * @description `{action: credits}`: what each active action costs a man, in Velas.
          *     A woman pays nothing for any of them (D-098).
@@ -2442,6 +2611,45 @@ export interface components {
             thread: components["schemas"]["ThreadWithMe"] | null;
             /** Can Gift */
             can_gift: boolean;
+        };
+        /**
+         * PushKey
+         * @description The VAPID public key, base64url: the `applicationServerKey` a browser
+         *     subscribes with.
+         */
+        PushKey: {
+            /** Public Key */
+            public_key: string;
+        };
+        /** PushKeys */
+        PushKeys: {
+            /** P256Dh */
+            p256dh: string;
+            /** Auth */
+            auth: string;
+        };
+        /**
+         * PushSubscribed
+         * @description `POST /push/subscriptions`' answer: the endpoint now held, never its keys.
+         */
+        PushSubscribed: {
+            /** Endpoint */
+            endpoint: string;
+        };
+        /**
+         * PushSubscriptionIn
+         * @description What `PushSubscription.toJSON()` gives, less `expirationTime`. The keys
+         *     are secrets: never logged, never returned (rule 15).
+         */
+        PushSubscriptionIn: {
+            /** Endpoint */
+            endpoint: string;
+            keys: components["schemas"]["PushKeys"];
+        };
+        /** PushSubscriptionOut */
+        PushSubscriptionOut: {
+            /** Endpoint */
+            endpoint: string;
         };
         /**
          * ReadRequest
@@ -5654,6 +5862,193 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["WsTicket"];
                 };
+            };
+        };
+    };
+    push_key_v1_push_key_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PushKey"];
+                };
+            };
+        };
+    };
+    subscribe_v1_push_subscriptions_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PushSubscriptionIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PushSubscribed"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    unsubscribe_v1_push_subscriptions_delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PushSubscriptionOut"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    prefs_v1_notification_prefs_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Prefs"];
+                };
+            };
+        };
+    };
+    update_prefs_v1_notification_prefs_patch: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PrefsPatch"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Prefs"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    notifications_v1_notifications_get: {
+        parameters: {
+            query?: {
+                cursor?: string | null;
+                limit?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["NotificationPage"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    mark_read_v1_notifications_read_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
         };
     };

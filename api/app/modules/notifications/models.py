@@ -1,4 +1,5 @@
-"""`push_subscriptions`, `notification_prefs`, `notifications` — 03-SCHEMA.md §7."""
+"""`push_subscriptions`, `notification_prefs`, `notifications`, `push_outbox` —
+03-SCHEMA.md §7."""
 
 from __future__ import annotations
 
@@ -6,7 +7,17 @@ import uuid
 from datetime import datetime
 from typing import Any
 
-from sqlalchemy import Boolean, DateTime, Index, Text, false, text, true
+from sqlalchemy import (
+    Boolean,
+    CheckConstraint,
+    DateTime,
+    Index,
+    SmallInteger,
+    Text,
+    false,
+    text,
+    true,
+)
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -51,6 +62,9 @@ class NotificationPrefs(Timestamps, Base):
     balance: Mapped[bool] = mapped_column(
         Boolean, nullable=False, server_default=true()
     )
+    # T-9.4 (D-851): gifts (P-550), and album requests and answers (P-631).
+    gift: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default=true())
+    album: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default=true())
     # Generic push text ("You have a new message") instead of names: off by default.
     generic_text: Mapped[bool] = mapped_column(
         Boolean, nullable=False, server_default=false()
@@ -74,4 +88,27 @@ class Notification(CreatedAt, Base):
             "user_id",
             text("created_at DESC"),
         ),
+    )
+
+
+class PushOutbox(CreatedAt, Base):
+    """A push waiting to be sent (T-9.4, D-850), written in the transaction
+    that makes it true. The worker claims it (`claimed_at`), sends it with no
+    lock held, and deletes it once sent, skipped or given up on."""
+
+    __tablename__ = "push_outbox"
+
+    id: Mapped[uuid.UUID] = uuid_pk()
+    user_id: Mapped[uuid.UUID] = uuid_fk("users.id")
+    kind: Mapped[str] = mapped_column(Text, nullable=False)
+    payload: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False)
+    attempts: Mapped[int] = mapped_column(
+        SmallInteger, nullable=False, server_default=text("0")
+    )
+    claimed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+    __table_args__ = (
+        CheckConstraint("attempts >= 0", name="attempts_not_negative"),
+        Index("ix_push_outbox_created_at", "created_at"),
+        Index("ix_push_outbox_user_id", "user_id"),
     )

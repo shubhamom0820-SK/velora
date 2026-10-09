@@ -31,7 +31,7 @@ from app.core.providers.sms import (
 )
 from app.core.providers.storage import FakeStorage, ObjectNotFound, S3Storage
 from tests.conftest import CapturedLogs
-from tests.keys import r2_settings, random_keys
+from tests.keys import r2_settings, random_keys, vapid_settings
 
 PHONE = "+919812345678"
 
@@ -51,6 +51,7 @@ _REAL = {
     "STORAGE_PROVIDER": "s3",
     **r2_settings(),
     "PUSH_PROVIDER": "webpush",
+    **vapid_settings(),
 }
 
 
@@ -384,8 +385,8 @@ async def test_fake_push_records_and_reports_gone_subscriptions() -> None:
     dead = PushSubscription(endpoint="https://push.example/dead", p256dh="k", auth="a")
     push.gone_endpoints.add(dead.endpoint)
 
-    assert await push.send(live, {"kind": "match"}) == "sent"
-    assert await push.send(dead, {"kind": "match"}) == "gone"
+    assert await push.send(live, {"kind": "match"}, ttl_s=60) == "sent"
+    assert await push.send(dead, {"kind": "match"}, ttl_s=60) == "gone"
     assert push.sent == [(live, {"kind": "match"})]
 
 
@@ -425,7 +426,6 @@ async def test_fake_storage_presigns_links_that_go_nowhere() -> None:
 
 _STUB_CALLS: list[tuple[str, Callable[[], Awaitable[object] | object], str]] = [
     ("sms", lambda: Msg91Sms().send_otp(PHONE, "123456"), "P-46"),
-    ("push", lambda: WebPush().send(PushSubscription("e", "k", "a"), {}), "T-9.4"),
 ]
 
 

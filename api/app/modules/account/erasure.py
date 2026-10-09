@@ -32,6 +32,7 @@ from app.modules.messages.models import MessageUnlock
 from app.modules.notifications.models import (
     Notification,
     NotificationPrefs,
+    PushOutbox,
     PushSubscription,
 )
 from app.modules.photos.models import Photo
@@ -77,6 +78,7 @@ ERASED = (
     Erased(Notification, ("user_id",)),
     Erased(NotificationPrefs, ("user_id",)),
     Erased(PushSubscription, ("user_id",)),
+    Erased(PushOutbox, ("user_id",)),
     Erased(Session, ("user_id",)),
 )
 

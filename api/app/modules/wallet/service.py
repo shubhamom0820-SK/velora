@@ -64,6 +64,7 @@ from app.core import events
 from app.core.enums import Gender, LedgerReason
 from app.core.errors import AppError
 from app.core.pagination import Cursor, PageParams
+from app.modules.notifications import service as notifications_service
 from app.modules.wallet import repository, rules, schemas
 from app.modules.wallet.models import LedgerEntry
 from app.modules.wallet.rules import Direction, Ref, RefType
@@ -306,6 +307,12 @@ async def _apply(
         key=key,
     )
     events.queue(session, user_id, "wallet.updated", {"balance": balance_after})
+    if delta < 0:
+        # T-9.4 (D-853): below `low_balance_velas` for the first time since he
+        # was above it, a notification, in this transaction.
+        await notifications_service.balance_fell(
+            session, user_id, before=balance, after=balance_after
+        )
     log.info(
         "wallet.applied",
         user_id=str(user_id),

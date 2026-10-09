@@ -183,6 +183,7 @@ Envelope, both directions: `{ "type": "…", "id": "<uuid>", "data": { … } }`
 | `wallet.updated` | balance changed |
 | `match.created` | a like or Super Like met one back (T-6.4): `{match_id, user_id}`, the other person, to both |
 | `album.decided` | album request granted / declined (T-8.4): `{album_request_id, user_id, granted}`, `user_id` the owner, to the requester |
+| `album.requested` | a new request to see her private pictures (T-9.4, P-631): `{album_request_id, user_id}`, `user_id` the requester, to her |
 | `gift.received` | a gift sent to you (T-8.9): `{gift_send_id, gift_id, user_id}`, the sender |
 
 | Client → server | Effect |
@@ -211,7 +212,7 @@ socket of theirs and is never sent to a client (T-7.4).
 | `expire_export` | `export_data`, 24 h on | delete the export's file, read back as gone; `expired` (D-502) |
 | `erase_accounts` | cron, daily 03:30 IST (the worker's only cron) | erase every account deleted ≥ 29 days ago, files first, by D-503's lists, then anonymise its row (D-500); expire any export file its own job left |
 | `watermark_album` | album request granted or revoked; the album missing a photo's copy; a private photo removed | bring one request's copies in line with it (D-730): while granted, each private photo with a scored copy rendered from `scored_key`, never `raw_key` (D-700), with the viewer's `@username` tiled diagonally at ~20% opacity, written to `album/{request_id}/{photo_id}.jpg` and recorded in `album_copies` only if still granted, else the file deleted; otherwise every copy deleted, file read back as gone, then its row. A job id per reason, since ARQ refuses a finished id for an hour. 3 tries |
-| `send_push` | any notification | Web Push, drop dead subscriptions on 404/410 |
+| `send_push` | a wake on `wake:send_push` after a notification commits, and the worker's minute (D-850); never an ARQ job | `push_outbox` claimed in batches (`SKIP LOCKED`), sent by VAPID Web Push (RFC 8291, D-856) with no lock held: an active account, its setting on, under an hour old, nobody blocked since, and a message only while no socket of theirs is open (`PUBSUB NUMSUB`, D-854). 404/410 deletes the subscription; 3 tries |
 | `expire_threads` | the worker's minute (D-640) | active threads past `expires_at` → `expired`, `thread.expired` to him only, in batches of 500, `SKIP LOCKED` (T-7.6) |
 | `warn_expiring` | the worker's minute (D-640) | threads with `thread_warn_minutes` (10) or less left, warned once per expiry: `thread.expiring` and a notification, him only (T-7.6) |
 | `recompute_fraud` | cron every 10 min + on report | recompute score, apply band actions |
@@ -391,7 +392,7 @@ rule 3, T-8.2) or a charge no Velas were granted for (T-8.3, D-580).
    review. A possible minor (`minor_suspected`, D-093) → rejected, a `fraud_events` score kept,
    every copy deleted and read back as gone; what its owner reads names no minor (D-093, T-4.6).
    Sightengine or storage failing three times leaves it `pending`, logged at error level.
-   Notifying the user is T-9.4's.
+   Notifying the user was left to T-9.4, which didn't list it among its kinds: P-751.
 5. An approved public photo whose record found a face, with a selfie already kept, is queued as
    `match_photo` (T-4.12, D-393): the worker compares it with that selfie and writes
    `selfie_match` into the photo's record, never a rejection. The selfie's own approval queues the

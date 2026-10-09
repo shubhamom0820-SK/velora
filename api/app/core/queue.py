@@ -53,6 +53,11 @@ EXPIRE_EXPORT = "expire_export"
 # T-9.6 (D-500): the daily job, at 03:30 IST, that erases deleted accounts and
 # deletes any export file its own job left behind. Run by the worker's cron.
 ERASE_ACCOUNTS = "erase_accounts"
+# T-9.4 (D-850): never queued as an ARQ job, whose ~20 commands a push would
+# cost Upstash's Free plan more than it has (D-091). The name is the wake
+# channel's: `push_outbox` is the queue, drained when a wake is heard and in
+# the worker's minute.
+SEND_PUSH = "send_push"
 WAKE_TIMEOUT_S = 1.0
 
 

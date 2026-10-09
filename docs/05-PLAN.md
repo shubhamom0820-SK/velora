@@ -3570,7 +3570,32 @@ number** per account gets its 5 each, one Thread's worth, and is **accepted**, k
   governs its push.
 - [ ] Web: Serwist service worker (push + notificationclick → open the right route), permission asked **after the first match**, not on load; generic-text option; iOS note when not installed.
 - [ ] Update `/privacy` (T-2.2) to say what push notifications carry and who delivers them.
-- [ ] **Commit:** `feat(notifications): web push and in-app list [T-9.4]`
+- **Built as D-850 to D-859** (the founder's answers to T-9.4's plan, 9 October 2026, on the
+  advisor's recommendation, relayed):
+  - **The kinds and their settings:** `notify()` is the one writer, for an active account only.
+    Gifts and the album have settings of their own, `gift` and `album` (D-851, closing P-550 and
+    P-631, with `album.requested`).
+  - **Push-only kinds:** a message and a like write no in-app row (D-852).
+  - **Low balance:** `low_balance` fires once per crossing of `low_balance_velas`, 10 (D-853).
+  - **Presence:** read as `PUBSUB NUMSUB user:{id}` (D-854), not a key per user.
+  - **Sending:** pushes wait in `push_outbox` and go on a wake and in the worker's minute, never
+    as ARQ jobs (D-850).
+  - **Subscriptions** name a known push service or are refused (D-855).
+  - **VAPID:** two Fly secrets plus `GET /push/key` (D-856).
+  - **No Serwist:** `/sw.js` comes from a route handler, and `/you/notifications` and
+    `/notifications` are built from existing parts (D-859).
+  - **Blocks (P-760, from T-9.1's session):** the list and the sender leave out anything about
+    someone blocked either way (D-858).
+  - **Open (D-857):** pushes leave India through the browser's maker, awaiting the founder's own
+    words.
+  - **Proved:** the encryption is RFC 8291's example byte for byte. **Broken once each** (`uv run
+    python -m tests.break_guards t94-`): thirty-six cases.
+  - **Landed with push off everywhere** (the founder, 9 October 2026): `PUSH_PROVIDER = "off"` in
+    every Fly file, a value added for it (D-856, amended). No keys are needed, no key is served,
+    and nothing is sent. In-app notifications work. On again: P-755. No real push service has yet
+    accepted one of ours: P-753.
+- [ ] **Commit:** `feat(notifications): web push and in-app list [T-9.4]` (landed as two: the API's,
+  then `feat(web): notifications and the service worker [T-9.4]`)
 
 ### T-9.5 · Admin panel
 - [ ] **Needs:** T-9.2
@@ -6301,6 +6326,8 @@ The number comes from the session's own block, given in its brief, from P-100 up
   a `gift` column is added (a migration, and `Prefs` in 04-API), and that a paused woman is sent
   nothing (T-9.6). Filed by Claude building T-8.9, 8 October 2026; its session's block, P-550 to
   P-559.
+  **Built in T-9.4 (D-851):** a `gift` setting of its own governs a gift's push; the in-app row is
+  written either way; a paused woman is sent nothing.
 - [ ] P-590 · Notice one face verified on many accounts. **In T-9.2** (fraud signals). Worst
   case: a man with N numbers makes N accounts on his own code, matches each selfie with his own
   face (a man's selfie is optional, so it is the cheap trigger) and is paid N referral rewards in
@@ -6433,6 +6460,9 @@ The number comes from the session's own block, given in its brief, from P-100 up
   in `notification_prefs` that governs its push (as P-550 asks for gifts), and nothing to a paused
   woman. Filed by Claude building T-8.4, 9 October 2026, at the founder's direction; its session's
   block, P-630 to P-639.
+  **Built in T-9.4 (D-851):** `album.requested` and an `album_request` notification at the
+  request's commit, `album_decided` back to him, both under an `album` setting; nothing to a paused
+  woman.
 - [x] P-670 · The "Knot tied ✦" sheet and the web's tie and untie hooks go to T-7.11 — 08-DESIGN
   §8 heads the sheet T-7.7, but T-7.7's items are the API alone, and the knot bar that leads to
   the sheet is T-7.11's. Placed on T-7.11 as an item, the founder's answer (D-770); open until
@@ -6481,3 +6511,42 @@ The number comes from the session's own block, given in its brief, from P-100 up
   the MP4 path never ran. Record on a Safari that offers only MP4, or with the recorder made to
   ask for `audio/mp4` on `/dev/voice` alone, and add the files to the recordings test. Filed by
   Claude building T-7.11, 9 October 2026; its session's block.
+- [ ] P-750 · A bell in the header for the in-app list. **With a design** (08-DESIGN §8 has none).
+  Worst case: a gift or a request to see her private pictures sits in a list two taps deep under
+  You, so to her it reads as nothing and to him as ignored, the worst case P-631 was filed for,
+  only moved. T-9.4 links `/notifications` from You (D-859), and the shell's structure is
+  `AppShell.tsx`'s alone, held by `look.test.ts`, so a bell is a design change, never a drive-by.
+  Filed by Claude building T-9.4, 9 October 2026; its session's block, P-750 to P-759.
+- [ ] P-751 · Tell a person when their photo is decided. **Whenever moderation's outcome needs
+  telling.** Worst case: a rejected photo is noticed only by opening the photos screen, so a
+  profile stays without a picture for days. 02-ARCHITECTURE §4 said notifying the user was
+  T-9.4's, but T-9.4's kinds never listed it. A `photo_decided` kind, its setting, and its words.
+  Filed by Claude building T-9.4, 9 October 2026.
+- [ ] P-752 · A Thread's push opens the conversation. **In T-7.11**, once a conversation has a route.
+  Worst case: a message push opens the chats list, one tap short of the message. `web/src/lib/
+  notification-view.ts`'s `ROUTES` sends every Thread kind to `/chats`. Change that one table
+  (and its test) when `/chats/[id]` exists. Filed by Claude building T-9.4, 9 October 2026.
+- [ ] P-753 · See real pushes arrive, on staging, on real devices. **Once the founder has set the
+  VAPID secrets.** Worst case: every push service refuses ours (a 403 from a wrong pair, a 400
+  from a malformed token), each is tried three times and dropped, and nobody is ever told
+  anything, with every test green. The encryption matches RFC 8291's own example and a browser's
+  decryption in the tests, but no push service has yet accepted one of ours. Check Chrome on
+  Android, Chrome on a desktop, Firefox, and an iPhone with the app on its Home Screen: each
+  turned on through the match sheet's ask, sent a match, a message with the app closed, and none
+  with it open. Read the outcome from `push_subscriptions.last_ok_at`, not Fly's logs. Count
+  Upstash's commands for a day of it against D-091. Filed by Claude building T-9.4, 9 October
+  2026.
+- [ ] P-754 · Names in the in-app list. **With P-750's design.** Worst case: ten rows of "You have a
+  new match" and none says who, so the list sends her to each profile to find out. `Notification`
+  carries ids only, so the list says each kind's plain sentence. Either the API adds the other
+  person's `CardLite` (not across a block, D-858), or the web reads it. Filed by Claude building
+  T-9.4, 9 October 2026.
+- [ ] P-755 · Turn staging push on after the founder sets the VAPID pair (STAGING.md §4). **After
+  D-857 is decided in the founder's own words** (push stays off everywhere until then, the founder,
+  9 October 2026). Worst case: push stays off unnoticed, and every notification waits in a list
+  people rarely open. That is P-631's and P-550's worst case again, built and then switched off.
+  The steps: set `VAPID_PRIVATE_KEY` and `VAPID_PUBLIC_KEY` on both staging apps (STAGING.md §4),
+  change `PUSH_PROVIDER` to `"webpush"` in `fly.api.toml` and `fly.worker.toml`, and change
+  `test_push_stays_off_everywhere_until_d857_is_decided` with them. Then P-753's check on real
+  devices. Production follows with its own pair. Filed by Claude building T-9.4, 9 October 2026, at
+  the founder's direction; its session's block.

@@ -15,6 +15,12 @@ request, whose transaction has already committed; that includes a Redis that
 accepts the connection and never answers, cut off after `PUBLISH_TIMEOUT_S`.
 Code outside a request (the seed, a test's session) publishes nothing.
 T-7.4 builds the socket side (`modules/realtime`).
+
+**A push wake** (T-9.4, D-850) rides the same path: a notification's push is
+written to `push_outbox` in its transaction, and `wake_push` queues a wake
+beside it, published on `wake:send_push` (never a user's channel) once that
+transaction commits, at most one per publish. The worker hears it and sends at
+once; a lost wake waits for the worker's minute, never for ever.
 """
 
 from __future__ import annotations
@@ -32,6 +38,8 @@ from sqlalchemy import event
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import Session, SessionTransaction
 
+from app.core.queue import SEND_PUSH, wake_channel
+
 log = structlog.get_logger(__name__)
 
 PUBLISH_TIMEOUT_S = 1.0
@@ -40,10 +48,18 @@ PUBLISH_TIMEOUT_S = 1.0
 # sessions, so a signed-out device stops hearing. The gateway acts on it and
 # never sends it to a client.
 CLOSE_SOCKETS = "socket.close"
+# A push is waiting in `push_outbox` (T-9.4): published on the worker's wake
+# channel, its value the user's id, never a key or a payload.
+PUSH_WAKE = "push.wake"
 
 # On `Session.info`: (the transaction it was queued in, the event).
 _PENDING = "events.pending"
 _COMMITTED = "events.committed"
+
+
+def user_channel(user_id: uuid.UUID) -> str:
+    """The Redis channel a user's sockets hear (02-ARCHITECTURE §6)."""
+    return f"user:{user_id}"
 
 
 @dataclass(frozen=True)
@@ -54,9 +70,13 @@ class Event:
 
     @property
     def channel(self) -> str:
-        return f"user:{self.user_id}"
+        if self.type == PUSH_WAKE:
+            return wake_channel(SEND_PUSH)
+        return user_channel(self.user_id)
 
     def envelope(self) -> str:
+        if self.type == PUSH_WAKE:
+            return str(self.user_id)
         return json.dumps(
             {"type": self.type, "id": str(uuid.uuid4()), "data": self.data}
         )
@@ -81,6 +101,11 @@ def close_sockets(session: AsyncSession, user_id: uuid.UUID) -> None:
     queue(session, user_id, CLOSE_SOCKETS, {})
 
 
+def wake_push(session: AsyncSession, user_id: uuid.UUID) -> None:
+    """Wake the worker's push sender once this transaction commits."""
+    queue(session, user_id, PUSH_WAKE, {})
+
+
 def take_committed(session: AsyncSession) -> list[Event]:
     """The events `session`'s committed transactions queued, handed over once."""
     committed: list[Event] = session.sync_session.info.pop(_COMMITTED, [])
@@ -90,6 +115,9 @@ def take_committed(session: AsyncSession) -> list[Event]:
 async def publish(events: Sequence[Event], redis: Redis) -> None:
     if not events:
         return
+    # One wake is enough: the worker drains every waiting push when it hears it.
+    first_wake = next((each for each in events if each.type == PUSH_WAKE), None)
+    events = [each for each in events if each.type != PUSH_WAKE or each is first_wake]
     try:
         async with asyncio.timeout(PUBLISH_TIMEOUT_S):
             for each in events:

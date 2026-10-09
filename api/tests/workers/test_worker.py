@@ -61,7 +61,7 @@ from app.workers import main as worker
 from tests.committed import fresh_man
 from tests.conftest import CapturedLogs, make_test_settings
 from tests.infra import TEST_DATABASE_URL, TEST_REDIS_URL, require_models
-from tests.keys import random_keys
+from tests.keys import random_keys, vapid_settings
 from tests.modules.verification.test_race import forget_photos
 
 PUBLIC, PRIVATE = "velora-public", "velora-private"
@@ -600,6 +600,8 @@ def test_the_workers_fly_settings_start_as_staging_with_its_secrets() -> None:
         "R2_SECRET_ACCESS_KEY": "staging-token-secret",
         "SIGHTENGINE_API_USER": "staging-user",
         "SIGHTENGINE_API_SECRET": "staging-secret",
+        # The VAPID pair: two Fly secrets (T-9.4, D-856).
+        **vapid_settings(),
         **_env("fly.worker.toml"),
     }
 

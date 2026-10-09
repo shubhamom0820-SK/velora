@@ -240,6 +240,7 @@ async def _everywhere(
         "insert into thread_clears (user_id, thread_id, cleared_at) values (:o, :t, now())",
         "insert into matches (user_low, user_high, thread_id) values (:low, :high, :t)",
         "insert into notifications (user_id, kind) values (:m, 'probe')",
+        "insert into push_outbox (user_id, kind, payload) values (:m, 'probe', '{}')",
         (
             "insert into push_subscriptions (user_id, endpoint, p256dh, auth) "
             "values (:m, 'https://push.invalid/probe', 'p', 'a')"

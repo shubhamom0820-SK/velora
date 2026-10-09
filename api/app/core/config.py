@@ -21,6 +21,8 @@ from pydantic_settings import BaseSettings, NoDecode, SettingsConfigDict
 from redis.asyncio.connection import parse_url as parse_redis_url
 from sqlalchemy.engine import make_url
 
+from app.core.vapid import vapid_private_key, vapid_public_key
+
 # The brand: one constant, so a rename stays cheap (D-015). Thread and Knot are
 # product nouns and never read it (rule 17). The web's twin is web/src/lib/app.ts.
 APP_NAME = "Velora"
@@ -32,7 +34,9 @@ PaymentsProvider = Literal["razorpay", "fake"]
 ModerationProvider = Literal["sightengine", "fake"]
 FaceMatchProvider = Literal["sface", "fake"]
 StorageProvider = Literal["s3", "fake"]
-PushProvider = Literal["webpush", "fake"]
+# "off" (D-856, amended): no push at all, and no keys needed. Not a fake: it
+# sends nothing anywhere, so it is allowed wherever a real provider is.
+PushProvider = Literal["webpush", "fake", "off"]
 
 # Where fake providers may run: an allowlist (CLAUDE.md rule 16, D-045). A fake
 # payments gateway grants free credits and a fake sign-in lets anyone in as
@@ -511,6 +515,44 @@ class Settings(BaseSettings):
                 f"ENV={self.ENV} needs PUBLIC_CDN_URL to start with "
                 f"{' or '.join(schemes)} and not end with /: it is where users' "
                 "public photos are served from."
+            )
+        return self
+
+    @model_validator(mode="after")
+    def _web_push_is_complete(self) -> Settings:
+        """With `PUSH_PROVIDER=webpush`, the VAPID key pair and subject, each
+        checked, named at once and never echoed (T-9.4, D-856). The public key
+        must be the private key's, or every browser that subscribed with it
+        would have its pushes refused."""
+        if self.PUSH_PROVIDER != "webpush":
+            return self
+        wanted = {
+            "VAPID_PUBLIC_KEY": bool(self.VAPID_PUBLIC_KEY),
+            "VAPID_PRIVATE_KEY": bool(self.VAPID_PRIVATE_KEY),
+            "VAPID_SUBJECT": bool(self.VAPID_SUBJECT),
+        }
+        missing = [name for name, present in wanted.items() if not present]
+        if missing:
+            raise ValueError(
+                f"PUSH_PROVIDER=webpush needs {', '.join(missing)} "
+                "(infra/STAGING.md, T-9.4)."
+            )
+        try:
+            private = vapid_private_key(self.VAPID_PRIVATE_KEY)
+        except ValueError:
+            raise ValueError(
+                "VAPID_PRIVATE_KEY must be a P-256 private key's 32 bytes, base64url; "
+                "check for stray quotes or spaces"
+            ) from None
+        if vapid_public_key(private) != self.VAPID_PUBLIC_KEY:
+            raise ValueError(
+                "VAPID_PUBLIC_KEY isn't VAPID_PRIVATE_KEY's public key: set the pair "
+                "made together, base64url, unpadded"
+            )
+        if not self.VAPID_SUBJECT.startswith(("mailto:", "https://")):
+            raise ValueError(
+                "VAPID_SUBJECT must be a mailto: or https: address the push services "
+                "can reach us at (RFC 8292)"
             )
         return self
 

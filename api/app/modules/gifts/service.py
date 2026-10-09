@@ -54,7 +54,8 @@ from app.modules.discovery import rules as discovery_rules
 from app.modules.discovery import service as discovery_service
 from app.modules.gifts import repository, rules, schemas
 from app.modules.gifts.models import GiftSend
-from app.modules.notifications import repository as notifications_repository
+from app.modules.notifications import service as notifications_service
+from app.modules.notifications.rules import Kind
 from app.modules.pricing import service as pricing_service
 from app.modules.threads import repository as threads_repository
 from app.modules.threads import rules as threads_rules
@@ -64,7 +65,6 @@ from app.modules.wallet import service as wallet_service
 from app.modules.wallet.rules import Ref, RefType
 
 GIFT_RECEIVED = "gift.received"
-GIFT_NOTIFICATION = "gift"
 
 
 def _not_found() -> AppError:
@@ -226,7 +226,7 @@ async def _send_in(
         "user_id": str(user.id),
     }
     events.queue(session, recipient_id, GIFT_RECEIVED, payload)
-    notifications_repository.add(session, recipient_id, GIFT_NOTIFICATION, payload)
+    await notifications_service.notify(session, recipient_id, Kind.GIFT, payload)
     return view_of(row)
 
 

@@ -38,6 +38,7 @@ from app.modules.kudos.router import router as kudos_router
 from app.modules.likes.router import router as likes_router
 from app.modules.media.router import router as media_router
 from app.modules.messages.router import router as messages_router
+from app.modules.notifications.router import router as notifications_router
 from app.modules.onboarding.router import router as onboarding_router
 from app.modules.payments.router import router as payments_router
 from app.modules.photos.router import router as photos_router
@@ -182,6 +183,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.include_router(gifts_router, prefix="/v1")
     app.include_router(album_router, prefix="/v1")
     app.include_router(realtime_router, prefix="/v1")
+    app.include_router(notifications_router, prefix="/v1")
     # The socket, at the root (02-ARCHITECTURE §6): `wss://api…/ws`.
     app.include_router(realtime_gateway)
     for sign_in_router, served_for in SIGN_IN_PATHS:

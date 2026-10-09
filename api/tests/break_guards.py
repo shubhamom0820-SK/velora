@@ -2358,8 +2358,8 @@ T45: list[tuple[Case, list[str]]] = [
                         "        except Exception as error:  # noqa: BLE001 — the queued job still runs\n"
                         "            log.info(\n"
                         '                "wake.left_to_the_queue",\n'
-                        "                verification_id=str(verification_id),\n"
                         "                why=type(error).__name__,\n"
+                        "                **{self._id_name: str(verification_id)},\n"
                         "            )\n"
                     ),
                     "        await self._handle(verification_id)\n",
@@ -5001,7 +5001,7 @@ T64: list[tuple[Case, list[str]]] = [
             edits=[
                 (
                     "app/modules/swipes/service.py",
-                    "        notifications_repository.add(session, one, MATCH_NOTIFICATION, payload)\n",
+                    "        await notifications_service.notify(session, one, Kind.MATCH, payload)\n",
                     "",
                 )
             ],
@@ -10695,8 +10695,8 @@ T77: list[Case] = [
         edits=[
             (
                 THREADS_SERVICE,
-                "                other_id,\n                KNOT_ACCEPTED_NOTIFICATION,\n",
-                "                user_id,\n                KNOT_ACCEPTED_NOTIFICATION,\n",
+                "                other_id,\n                Kind.KNOT_ACCEPTED,\n",
+                "                user_id,\n                Kind.KNOT_ACCEPTED,\n",
             )
         ],
         expect=[T77_SECOND_TAP],
@@ -10978,6 +10978,439 @@ T711: list[Case] = [
     ),
 ]
 
+# --- T-9.4: notifications, web push, the outbox ------------------------------------
+
+T94_SELECTION = [
+    "tests/modules/notifications",
+    "tests/workers/test_send_push.py",
+    "tests/modules/account/test_erasure.py",
+    "tests/modules/users/test_dob_gender.py",
+]
+N_RULES = "app/modules/notifications/rules.py"
+N_SERVICE = "app/modules/notifications/service.py"
+N_REPOSITORY = "app/modules/notifications/repository.py"
+N_SENDER = "app/modules/notifications/sender.py"
+T94_NOT_ACTIVE = "test_an_account_that_is_not_active_is_told_nothing"
+T94_BLOCKED = "test_nothing_about_someone_blocked_either_way_is_listed"
+
+T94: list[Case] = [
+    Case(
+        id="t94-01-paused-told",
+        what="a paused account told, against T-9.6",
+        edits=[
+            (
+                N_RULES,
+                "TOLD: Final = frozenset({UserStatus.ACTIVE})",
+                "TOLD: Final = frozenset({UserStatus.ACTIVE, UserStatus.PAUSED})",
+            )
+        ],
+        expect=[f"{T94_NOT_ACTIVE}[paused]"],
+    ),
+    Case(
+        id="t94-02-her-hour-told",
+        what="an hour running out or a balance told to anyone (P-460, D-554)",
+        edits=[
+            (
+                N_RULES,
+                "    return kind not in MEN_ONLY or gender is Gender.MALE\n",
+                "    return True\n",
+            )
+        ],
+        expect=["test_an_hour_and_a_balance_never_reach_anyone_but_a_man"],
+    ),
+    Case(
+        id="t94-03-a-like-names-who",
+        what="a like to a man naming who liked him (D-542)",
+        edits=[
+            (
+                N_SERVICE,
+                "    if kind is Kind.LIKE and not likes_rules.sees_everyone(gender):\n",
+                "    if False:\n",
+            )
+        ],
+        expect=[
+            "test_a_like_to_a_man_never_says_who",
+            "test_a_super_like_to_him_never_names_her",
+        ],
+    ),
+    Case(
+        id="t94-04-a-push-past-its-setting",
+        what="a push written with its setting off",
+        edits=[(N_SERVICE, "    if wanted and subscribed:\n", "    if subscribed:\n")],
+        expect=[
+            "test_a_setting_turned_off_keeps_the_push_and_not_the_row",
+            "test_a_gifts_push_follows_the_gift_setting",
+        ],
+    ),
+    Case(
+        id="t94-05-push-only-kinds-listed",
+        what="a message or a like given a row in the list (D-852)",
+        edits=[(N_SERVICE, "    if kind not in rules.PUSH_ONLY:\n", "    if True:\n")],
+        expect=[
+            "test_messages_and_likes_are_pushes_only",
+            "test_a_like_is_a_push_to_her_naming_him",
+        ],
+    ),
+    Case(
+        id="t94-06-no-wake",
+        what="a push written and the worker never woken (D-850)",
+        edits=[(N_SERVICE, "        events.wake_push(session, user_id)\n", "")],
+        expect=[
+            "test_an_active_account_with_a_subscription_gets_both",
+            "test_a_match_wakes_the_worker_once_after_the_commit",
+        ],
+    ),
+    Case(
+        id="t94-07-a-wake-per-push",
+        what="every queued wake published, a PUBLISH each against D-091",
+        edits=[
+            (
+                "app/core/events.py",
+                "    events = [each for each in events if each.type != PUSH_WAKE or each is first_wake]\n",
+                "",
+            )
+        ],
+        expect=["test_one_wake_is_published_however_many_were_queued"],
+    ),
+    Case(
+        id="t94-08-any-host",
+        what="a subscription naming any host, so the worker posts anywhere (D-855)",
+        edits=[
+            (
+                N_RULES,
+                "    return host in PUSH_HOSTS or host.endswith(PUSH_HOST_SUFFIXES)\n",
+                "    return True\n",
+            )
+        ],
+        expect=["test_an_endpoint_off_the_push_services_is_refused"],
+    ),
+    Case(
+        id="t94-09-a-suffix-without-its-dot",
+        what="a push host's suffix matched without the dot before it",
+        edits=[
+            (
+                N_RULES,
+                'PUSH_HOST_SUFFIXES: Final = (".push.apple.com", ".notify.windows.com")',
+                'PUSH_HOST_SUFFIXES: Final = ("push.apple.com", "notify.windows.com")',
+            )
+        ],
+        expect=["test_an_endpoint_off_the_push_services_is_refused[https://evilpush"],
+    ),
+    Case(
+        id="t94-10-keys-unchecked",
+        what="a subscription's keys taken unread",
+        edits=[
+            (
+                "app/modules/notifications/schemas.py",
+                "        if p256dh is None or len(p256dh) != P256DH_BYTES or p256dh[0] != 0x04:\n",
+                "        if False:\n",
+            )
+        ],
+        expect=["test_keys_that_are_not_keys_are_refused"],
+    ),
+    Case(
+        id="t94-11-unsubscribe-anyones",
+        what="an unsubscribe deleting another account's subscription",
+        edits=[
+            (
+                N_REPOSITORY,
+                (
+                    "        delete(PushSubscription).where(\n"
+                    "            PushSubscription.user_id == user_id, PushSubscription.endpoint == endpoint\n"
+                ),
+                (
+                    "        delete(PushSubscription).where(\n"
+                    "            PushSubscription.endpoint == endpoint\n"
+                ),
+            )
+        ],
+        expect=["test_unsubscribing_removes_only_your_own"],
+    ),
+    Case(
+        id="t94-12-everyones-list",
+        what="the list showing everyone's notifications",
+        edits=[(N_REPOSITORY, "            Notification.user_id == user_id,\n", "")],
+        expect=["test_the_list_is_your_own_newest_first_in_pages"],
+    ),
+    Case(
+        id="t94-13-blocks-listed",
+        what="the list showing rows about someone blocked (P-760)",
+        edits=[
+            (
+                N_REPOSITORY,
+                "            ~blocked_either_way(Notification.user_id, about),\n",
+                "",
+            )
+        ],
+        expect=[T94_BLOCKED],
+    ),
+    Case(
+        id="t94-14-a-threads-block-listed",
+        what="a row about a Thread's blocked other person listed (P-760)",
+        edits=[(N_REPOSITORY, "        other_in_thread,\n", "        None,\n")],
+        expect=[T94_BLOCKED],
+    ),
+    Case(
+        id="t94-15-everyones-read",
+        what="reading marks other people's notifications read",
+        edits=[
+            (
+                N_REPOSITORY,
+                "        .where(Notification.user_id == user_id, Notification.read_at.is_(None))\n",
+                "        .where(Notification.read_at.is_(None))\n",
+            )
+        ],
+        expect=["test_reading_marks_every_unread_one_of_yours"],
+    ),
+    Case(
+        id="t94-16-sent-past-its-setting",
+        what="a push sent after its setting was turned off",
+        edits=[
+            (N_SENDER, " or not wanted or not subscriptions", " or not subscriptions")
+        ],
+        expect=["test_a_setting_turned_off_since_sends_nothing"],
+    ),
+    Case(
+        id="t94-17-sent-while-paused",
+        what="a push sent to an account paused since (T-9.6)",
+        edits=[
+            (
+                N_SENDER,
+                "    if not rules.told(status) or not wanted",
+                "    if not wanted",
+            )
+        ],
+        expect=["test_an_account_paused_since_is_sent_nothing"],
+    ),
+    Case(
+        id="t94-18-sent-across-a-block",
+        what="a push sent about someone blocked since (P-760)",
+        edits=[
+            (N_SENDER, " or not subscriptions or blocked:", " or not subscriptions:")
+        ],
+        expect=["test_a_block_since_sends_nothing"],
+    ),
+    Case(
+        id="t94-19-a-name-despite-generic-text",
+        what="a name sent with generic_text on",
+        edits=[(N_SENDER, "None if generic_text else name", "name")],
+        expect=["test_generic_text_sends_no_name"],
+    ),
+    Case(
+        id="t94-20-pushed-while-connected",
+        what="a message pushed while a socket of hers is open (D-854)",
+        edits=[
+            (
+                N_SENDER,
+                "    if kind in rules.ONLY_IF_NOT_CONNECTED and await connected(redis, user_id):\n",
+                "    if False:\n",
+            )
+        ],
+        expect=["test_a_message_waits_on_presence_by_numsub"],
+    ),
+    Case(
+        id="t94-21-sent-an-hour-late",
+        what="a push sent an hour or more after it was written",
+        edits=[(N_SENDER, "    if age_s >= rules.PUSH_TTL_S:\n", "    if False:\n")],
+        expect=["test_a_push_an_hour_old_is_dropped_not_sent"],
+    ),
+    Case(
+        id="t94-22-a-gone-subscription-kept",
+        what="a subscription the push service called gone, kept",
+        edits=[
+            (
+                N_SENDER,
+                "                await repository.drop_gone(session, user_id, endpoint)\n",
+                "                pass\n",
+            )
+        ],
+        expect=["test_a_gone_subscription_is_deleted_and_the_others_still_sent"],
+    ),
+    Case(
+        id="t94-23-retried-for-ever",
+        what="a failing push tried again with no end",
+        edits=[
+            (
+                N_SENDER,
+                "        if retry and attempts < rules.PUSH_ATTEMPTS:\n",
+                "        if retry:\n",
+            )
+        ],
+        expect=["test_a_failure_is_tried_three_times_then_dropped"],
+    ),
+    Case(
+        id="t94-24-a-claim-ignored",
+        what="a push another sender holds, claimed again before it goes stale",
+        edits=[
+            (
+                N_REPOSITORY,
+                "                PushOutbox.claimed_at < stale_before,\n",
+                "                True,\n",
+            )
+        ],
+        expect=[
+            "test_a_push_mid_send_is_never_taken_by_another_sender",
+            "test_a_claim_gone_stale_is_taken_again",
+        ],
+    ),
+    Case(
+        id="t94-25-a-lock-waited-on",
+        what="a sender waiting on a row another is claiming",
+        edits=[
+            (
+                N_REPOSITORY,
+                "        .with_for_update(skip_locked=True)\n",
+                "        .with_for_update()\n",
+            )
+        ],
+        expect=["test_a_row_being_claimed_is_skipped_not_waited_on"],
+    ),
+    Case(
+        id="t94-26-an-expiry-pushed",
+        what="an hour's expiry carried in a push (P-460)",
+        edits=[
+            (
+                N_RULES,
+                '    Kind.THREAD_EXPIRING: ("thread_id",),\n',
+                '    Kind.THREAD_EXPIRING: ("thread_id", "expires_at"),\n',
+            )
+        ],
+        expect=[
+            "test_nothing_about_an_hour_ever_leaves_in_a_push",
+            "test_no_kind_may_carry_an_expiry_a_price_or_a_text[thread_expiring]",
+        ],
+    ),
+    Case(
+        id="t94-27-album-request-untold",
+        what="a new album request telling her nothing (P-631)",
+        edits=[
+            (
+                "app/modules/album/service.py",
+                "    await notifications_service.notify(session, owner_id, Kind.ALBUM_REQUEST, told)\n",
+                "",
+            )
+        ],
+        expect=["test_a_new_album_request_tells_her"],
+    ),
+    Case(
+        id="t94-28-an-opening-pushed-twice",
+        what="a Thread opened with a message pushing twice",
+        edits=[
+            (
+                "app/modules/threads/service.py",
+                "await messages_service.announce(session, row, other_id, notify=False)",
+                "await messages_service.announce(session, row, other_id, notify=True)",
+            )
+        ],
+        expect=["test_an_opening_with_a_first_message_is_one_push"],
+    ),
+    Case(
+        id="t94-29-low-balance-every-debit",
+        what="low_balance told at every debit under the line, not once (D-853)",
+        edits=[(N_SERVICE, "    if before >= low > after:\n", "    if low > after:\n")],
+        expect=["test_a_balance_falling_under_ten_tells_him_once"],
+    ),
+    Case(
+        id="t94-30-a-pair-unmatched",
+        what="a VAPID public key that isn't the private key's, taken (D-856)",
+        edits=[
+            (
+                "app/core/config.py",
+                "        if vapid_public_key(private) != self.VAPID_PUBLIC_KEY:\n",
+                "        if False:\n",
+            )
+        ],
+        expect=["test_a_wrong_key_or_subject_is_refused_without_its_value"],
+    ),
+    Case(
+        id="t94-31-rfc-8291-info",
+        what="the key info off RFC 8291's by its zero byte",
+        edits=[
+            (
+                "app/core/providers/push.py",
+                '_KEY_INFO: Final = b"WebPush: info\\x00"',
+                '_KEY_INFO: Final = b"WebPush: info"',
+            )
+        ],
+        expect=["test_the_body_is_rfc_8291s_example_byte_for_byte"],
+    ),
+    Case(
+        id="t94-32-gone-read-as-failure",
+        what="404 and 410 read as a failure to try again",
+        edits=[
+            (
+                "app/core/providers/push.py",
+                "_GONE: Final = frozenset({404, 410})",
+                "_GONE: Final = frozenset()",
+            )
+        ],
+        expect=["test_the_push_services_answer_decides"],
+    ),
+    Case(
+        id="t94-33-the-wrong-ear",
+        what="the worker's push listener on another channel",
+        edits=[
+            (
+                "app/workers/main.py",
+                "        channel=wake_channel(SEND_PUSH),\n",
+                "        channel=wake_channel(VERIFY_SELFIE),\n",
+            )
+        ],
+        expect=["test_a_wake_sends_the_waiting_push_at_once"],
+    ),
+    Case(
+        id="t94-34-the-minute-sends-nothing",
+        what="the worker's minute leaving what a lost wake left",
+        edits=[
+            (
+                "app/workers/main.py",
+                "        pushed = await send_push.run(ctx)\n",
+                "        pushed: dict[str, int] = {}\n",
+            )
+        ],
+        expect=["test_the_minute_sends_what_a_lost_wake_left"],
+    ),
+    Case(
+        id="t94-35-erasure-keeps-the-outbox",
+        what="an erased account's waiting pushes kept (D-503)",
+        edits=[
+            (
+                "app/modules/account/erasure.py",
+                '    Erased(PushOutbox, ("user_id",)),\n',
+                "",
+            )
+        ],
+        expect=[
+            "test_an_account_deleted_29_days_ago_is_erased_and_kept_exactly_as_d051_says"
+        ],
+    ),
+    Case(
+        id="t94-36-under-18-keeps-the-outbox",
+        what="an under-18 refusal leaving the outbox's rows (D-078)",
+        edits=[
+            (
+                "app/modules/users/repository.py",
+                '    Attached(PushOutbox, ("user_id",)),\n',
+                "",
+            )
+        ],
+        expect=["test_under_eighteen_deletes_every_row_in_every_table_the_app_may"],
+    ),
+    Case(
+        id="t94-37-a-key-while-push-is-off",
+        what="the VAPID key served with push off, so browsers subscribe to nothing",
+        edits=[
+            (
+                N_SERVICE,
+                'if settings.PUSH_PROVIDER != "webpush" or not settings.VAPID_PUBLIC_KEY:',
+                "if not settings.VAPID_PUBLIC_KEY:",
+            )
+        ],
+        expect=["test_push_off_serves_no_key_even_with_one_set"],
+    ),
+]
+
+
 CASES: list[tuple[Case, list[str]]] = (
     [(c, T51_SELECTION) for c in T51]
     + [(c, T54_SELECTION) for c in T54]
@@ -11029,6 +11462,7 @@ CASES: list[tuple[Case, list[str]]] = (
     + [(c, T77_SELECTION) for c in T77]
     + [(c, T810_SELECTION) for c in T810]
     + [(c, T711_SELECTION) for c in T711]
+    + [(c, T94_SELECTION) for c in T94]
 )
 
 # The fifty-connection fixture's own message when Postgres refuses a connection.

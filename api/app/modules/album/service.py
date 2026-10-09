@@ -62,6 +62,8 @@ from app.modules.album import repository, rules, schemas
 from app.modules.album.models import AlbumRequest
 from app.modules.discovery import rules as discovery_rules
 from app.modules.discovery import service as discovery_service
+from app.modules.notifications import service as notifications_service
+from app.modules.notifications.rules import Kind
 from app.modules.pricing import service as pricing_service
 from app.modules.threads.schemas import CardLite
 from app.modules.users.models import User
@@ -70,6 +72,8 @@ from app.modules.wallet.rules import Ref, RefType
 log = structlog.get_logger(__name__)
 
 ALBUM_DECIDED = "album.decided"
+# T-9.4 (P-631): a new request, to her, at its commit; D-732 had none.
+ALBUM_REQUESTED = "album.requested"
 
 Sessions = Callable[[], AbstractAsyncContextManager[AsyncSession]]
 
@@ -119,6 +123,9 @@ async def _ask_in(
         ref=Ref(RefType.ALBUM_REQUEST, row.id),
     )
     row.credits_charged = 0 if paid is None else -paid.entry.delta
+    told = {"album_request_id": str(row.id), "user_id": str(user.id)}
+    events.queue(session, owner_id, ALBUM_REQUESTED, told)
+    await notifications_service.notify(session, owner_id, Kind.ALBUM_REQUEST, told)
     return row
 
 
@@ -167,15 +174,14 @@ async def decide(
             row.status = wanted
             row.decided_at = clock.now()
             granted_now = grant
-            events.queue(
-                session,
-                row.requester_id,
-                ALBUM_DECIDED,
-                {
-                    "album_request_id": str(row.id),
-                    "user_id": str(user.id),
-                    "granted": grant,
-                },
+            decided = {
+                "album_request_id": str(row.id),
+                "user_id": str(user.id),
+                "granted": grant,
+            }
+            events.queue(session, row.requester_id, ALBUM_DECIDED, decided)
+            await notifications_service.notify(
+                session, row.requester_id, Kind.ALBUM_DECIDED, decided
             )
         elif row.status is not wanted:
             raise rules.already_decided()

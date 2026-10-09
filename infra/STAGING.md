@@ -296,6 +296,32 @@ any step failed. It runs only where `ENV` is local or staging: production's copy
    **Set up by Claude on 4 October 2026 (T-4.4),** first deployed by deploy run 37218077335;
    the secrets compared that day by the prefixes recorded on T-4.4.
 
+   **Web Push's key pair, on both apps (T-9.4, D-856).** **Push is off for now** (`PUSH_PROVIDER =
+   "off"` in both Fly files, the founder, 9 October 2026): it stays off until D-857 is decided,
+   and needs no keys while off. To turn it on (P-755), first set the pair, then change both files
+   to `"webpush"`. The pair is two secrets, `VAPID_PRIVATE_KEY` and `VAPID_PUBLIC_KEY`, **the same
+   pair on `velora-api-staging` and `velora-worker-staging`**: the API hands browsers the public
+   key, and the worker signs with the private one. With `webpush` and no pair, **neither app
+   starts**, naming what's missing.
+   Generate once, into the Keychain (accounts `vapid-private-key`, `vapid-public-key`), then into
+   both apps, never shown. The generator refuses a terminal. In bash, from the repo:
+
+   ```
+   pair="$(cd api && uv run python -m app.core.vapid)"
+   for name in VAPID_PRIVATE_KEY VAPID_PUBLIC_KEY; do
+     account="$(tr '[:upper:]_' '[:lower:]-' <<<"$name")"
+     printf 'add-generic-password -U -s velora-staging -a %s -w %s\n' "$account" \
+       "$(sed -n "s/^$name=//p" <<<"$pair")" | security -i
+   done
+   printf '%s\n' "$pair" | fly secrets import --stage -a velora-api-staging
+   printf '%s\n' "$pair" | fly secrets import --stage -a velora-worker-staging
+   unset pair
+   ```
+
+   The pair changes only if the private key leaks: a new one ends every browser's subscription,
+   and each person turns notifications on again. A push goes through the browser's own service,
+   outside India (D-857, Open until the founder's words are recorded).
+
    **Sightengine is checked where it runs:**
    `flyctl ssh console -a velora-worker-staging -C "python -m app.tools.sightengine_shape"` sends
    Sightengine's two documentation examples, re-encoded as the worker sends a photo, and compares

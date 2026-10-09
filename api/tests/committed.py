@@ -28,6 +28,7 @@ from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession
 from app.core.config import Settings
 from app.core.enums import Gender, LedgerReason
 from app.core.security import E164, decrypt_phone, normalize_phone
+from app.modules.notifications.models import Notification, PushOutbox
 from app.modules.payments.models import Payment, PaymentReversal, RefundRequest
 from app.modules.users import service as users_service
 from app.modules.users.models import User
@@ -43,9 +44,16 @@ FRESH_NUMBERS = 10**8
 NUMBER_LOCK = 97
 
 
+# Every fresh man this test committed, for `take_back_notifications` (T-9.4):
+# a debit across `low_balance_velas` writes him a notification, which the
+# autouse fixture in conftest.py deletes once the test ends.
+COMMITTED_THIS_TEST: list[UUID] = []
+
+
 async def fresh_man(engine: AsyncEngine, *, credits: int = 0) -> UUID:
     """A man, signed up and committed, with `credits` granted through the
-    wallet (an `admin_grant`, as `make_user` does). Never deleted."""
+    wallet (an `admin_grant`, as `make_user` does). Never deleted; what the
+    app told him is (`take_back_notifications`)."""
     settings = make_test_settings()
     async with AsyncSession(engine, expire_on_commit=False) as session:
         async with session.begin():
@@ -62,7 +70,25 @@ async def fresh_man(engine: AsyncEngine, *, credits: int = 0) -> UUID:
                     LedgerReason.ADMIN_GRANT,
                     event="fresh_man",
                 )
+        COMMITTED_THIS_TEST.append(account.user.id)
         return account.user.id
+
+
+async def take_back_notifications(
+    engine: AsyncEngine, user_ids: Sequence[UUID]
+) -> None:
+    """Delete what the app told these committed men: in-app rows and waiting
+    pushes (T-9.4). Neither is a record (rule 12), and both outlive a test
+    that debits a fresh man across `low_balance_velas` (D-853)."""
+    if not user_ids:
+        return
+    async with AsyncSession(engine) as session, session.begin():
+        await session.execute(
+            delete(Notification).where(Notification.user_id.in_(user_ids))
+        )
+        await session.execute(
+            delete(PushOutbox).where(PushOutbox.user_id.in_(user_ids))
+        )
 
 
 async def lock_numbers(session: AsyncSession) -> None:

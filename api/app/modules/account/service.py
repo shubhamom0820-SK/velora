@@ -442,6 +442,8 @@ async def export_document(
                 "knot": prefs.knot,
                 "expiry": prefs.expiry,
                 "balance": prefs.balance,
+                "gift": prefs.gift,
+                "album": prefs.album,
                 "generic_text": prefs.generic_text,
             }
         ),

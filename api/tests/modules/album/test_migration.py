@@ -55,6 +55,9 @@ async def test_both_go_back_and_come_again_when_nothing_is_recorded(
         text("select value::int from app_config where key = 'album_reask_days'")
     )
     assert days == 30
+    # The keys as this revision left them: a later one's (T-9.4's
+    # `low_balance_velas`) goes with its own downgrade.
+    await _alembic(db, command.downgrade, REASK)
     keys = await _keys(db)
 
     await _alembic(db, command.downgrade, COPIES)

@@ -22,6 +22,7 @@ from app.modules.messages.models import MessageUnlock
 from app.modules.notifications.models import (
     Notification,
     NotificationPrefs,
+    PushOutbox,
     PushSubscription,
 )
 from app.modules.payments.models import RefundRequest
@@ -104,6 +105,7 @@ UNDERAGE_DELETES = (
     Attached(RefundRequest, ("user_id",)),
     Attached(Notification, ("user_id",)),
     Attached(PushSubscription, ("user_id",)),
+    Attached(PushOutbox, ("user_id",)),
     Attached(FraudEvent, ("user_id",)),
     Attached(FraudScore, ("user_id",)),
     Attached(DataExport, ("user_id",)),

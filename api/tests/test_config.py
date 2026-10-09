@@ -12,7 +12,7 @@ import yaml  # type: ignore[import-untyped]
 from pydantic import ValidationError
 
 from app.core.config import PUBLIC_TEST_KEYS, Settings
-from tests.keys import r2_settings, random_keys
+from tests.keys import r2_settings, random_keys, vapid_settings
 
 _ALL_VARS = [
     "ENV",
@@ -71,6 +71,8 @@ _FIREBASE = {"FIREBASE_PROJECT_ID": "velora-test"}
 _DEPLOYED = {
     **_REAL_PROVIDERS,
     **_FIREBASE,
+    # What webpush needs (T-9.4).
+    **vapid_settings(),
     # What s3 storage needs (T-4.1).
     **r2_settings(),
     "REDIS_URL": "rediss://default:x@redis.example:6379/0",
@@ -172,7 +174,11 @@ def test_local_may_use_fakes_and_real_providers() -> None:
     assert _settings(ENV="local").PAYMENTS_PROVIDER == "fake"
     assert (
         _settings(
-            ENV="local", **_REAL_PROVIDERS, **_FIREBASE, **r2_settings()
+            ENV="local",
+            **_REAL_PROVIDERS,
+            **_FIREBASE,
+            **r2_settings(),
+            **vapid_settings(),
         ).PAYMENTS_PROVIDER
         == "razorpay"
     )
@@ -553,6 +559,8 @@ def test_stagings_env_block_passes_settings() -> None:
         # R2's token: Fly secrets, never in the file (infra/STAGING.md §4).
         "R2_ACCESS_KEY_ID": "staging-token-id",
         "R2_SECRET_ACCESS_KEY": "staging-token-secret",
+        # The VAPID pair: two Fly secrets (T-9.4, D-856).
+        **vapid_settings(),
         **_fly_env(),
     }
 
@@ -590,6 +598,8 @@ def test_productions_env_block_passes_settings() -> None:
         # R2's token: Fly secrets, set before REL-1 (infra/PRODUCTION.md §4).
         "R2_ACCESS_KEY_ID": "production-token-id",
         "R2_SECRET_ACCESS_KEY": "production-token-secret",
+        # The VAPID pair: two Fly secrets (T-9.4, D-856).
+        **vapid_settings(),
         **production,
     }
 

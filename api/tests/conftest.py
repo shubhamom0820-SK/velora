@@ -202,6 +202,25 @@ async def db(test_engine: AsyncEngine) -> AsyncIterator[AsyncSession]:
 # --- App and client -----------------------------------------------------------
 
 
+@pytest.fixture(autouse=True)
+async def take_back_committed_notifications() -> AsyncIterator[None]:
+    """After each test, what the app told the fresh men it committed is
+    deleted (T-9.4, `tests/committed.py`): committed rows are taken back."""
+    from tests import committed
+
+    committed.COMMITTED_THIS_TEST.clear()
+    yield
+    if committed.COMMITTED_THIS_TEST:
+        engine = build_engine(TEST_DATABASE_URL)
+        try:
+            await committed.take_back_notifications(
+                engine, list(committed.COMMITTED_THIS_TEST)
+            )
+        finally:
+            await engine.dispose()
+            committed.COMMITTED_THIS_TEST.clear()
+
+
 @pytest.fixture
 def fake_providers() -> FakeProviders:
     """Every external service as its fake, for a test to steer and inspect:
