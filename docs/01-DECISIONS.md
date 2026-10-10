@@ -5914,9 +5914,13 @@ unreturned (D-230). **Nothing automatic lifts a freeze**, even once the score ha
 does, with D-906's tool until T-9.5 gives it a screen, and resets the score with it, or the next
 score would freeze the account again.
 
-**Corrected in the build:** Claude's plan froze "on the way in" only. Breaking that check left every
-test green, since the status allowlist already stops a second freeze, and it hid a hole: the
-restored account above stayed active in the freeze band (`t92-09`, `t92-27`).
+**Corrected in the build, then decided:** Claude's plan froze "on the way in" only. Breaking that
+check left every test green, since the status allowlist already stops a second freeze, and it hid a
+hole: the restored account above stayed active in the freeze band (`t92-09`, `t92-27`). Claude
+changed it while building and asked for the founder's answer. **The founder's decision, 10 October
+2026, on the advisor's recommendation (Claude, in a separate chat), relayed by the founder:** "to
+theek hai" (that's fine). The rule as written above, freezing whenever the score is in the freeze
+band and the account can sign in, stands: Locked.
 
 **Why:** no real user exists before T-9.5, and T-9.5 must have its unfreeze before the first one
 (noted on T-9.5); meanwhile the founder can lift any freeze himself (D-906).
