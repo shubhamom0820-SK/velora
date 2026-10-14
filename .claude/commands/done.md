@@ -36,13 +36,20 @@ everything above. It is **only** for `scripts/ci-gate` exiting **4**: it couldn'
 authenticate with GitHub. That is usually a bad or expired token, not an outage — so step 1 is
 always the token.
 
-**Seen once, and open (4 October 2026):** the gate exited 4 while waiting on run 37215825345
+**Seen twice, and open.** First (4 October 2026): the gate exited 4 while waiting on run 37215825345
 (T-5.6's docs, five sessions landing at once). `gh auth status` was fine, `gh api rate_limit`
 showed 5,000 of 5,000 left in a fresh window, and the gate, run again at once, went green.
 **Hypothesis, not established:** several sessions polling GitHub with one token. The arithmetic
 doesn't obviously carry it (five gates polling every 10 s is about 1,800 calls an hour, under
 the 5,000), so a secondary limit is as likely. Don't act on it. If it happens again, record the
 second occurrence here; a token per session is then the test.
+**Second (14 October 2026):** the gate exited 4 while waiting on run 38537036330, CI for e7fd5d8
+on branch `t-9.2-d902` (D-902's docs and P-802's test fix, landed together), saying `gh api
+rate_limit` failed too. `gh auth status` was fine (logged in, scopes `gist`, `read:org`, `repo`,
+`workflow`); moments later `gh api rate_limit` showed 5,000 of 5,000 left, and the gate, run again
+for the same commit, went green on the same run. How many other sessions were polling then wasn't
+recorded, so this neither supports nor rules out the hypothesis above. Per the line above, a token
+per session is now the test; nobody has run it yet.
 
 **It is never for a red run, or for anything GitHub answered.** Exit 1 (CI failed, was cancelled,
 or ran for another commit) means the commit is not good: fix it on the branch and run `/done`
