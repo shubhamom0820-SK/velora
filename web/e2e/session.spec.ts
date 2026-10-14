@@ -78,6 +78,39 @@ test("two tabs reloaded together both stay signed in", async ({
   ).toBeVisible();
 });
 
+test("a signed-in person on /login sends no code before the restore lands (P-850)", async ({
+  page,
+  request,
+}) => {
+  await signIn(page, request, freshNumber());
+  const sends: string[] = [];
+  page.on("request", (sent) => {
+    if (new URL(sent.url()).pathname === "/v1/auth/otp/send") {
+      sends.push(sent.url());
+    }
+  });
+  // The refresh held back, as a slow line to Singapore holds it.
+  let release: () => void = () => undefined;
+  const held = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  await page.route(`${API}/v1/auth/refresh`, async (route) => {
+    await held;
+    await route.continue();
+  });
+
+  await page.goto("/login");
+  await page.getByLabel("Mobile number").fill(freshNumber());
+  const send = page.getByRole("button", { name: "Send code" });
+  await expect(send).toHaveAttribute("aria-busy", "true");
+  await send.click({ force: true });
+  await page.getByLabel("Mobile number").press("Enter");
+  release();
+
+  await expect(page).toHaveURL(/\/onboarding\/birthday$/);
+  expect(sends).toEqual([]);
+});
+
 test("sign-out clears both cookies, and a reload lands on /login", async ({
   page,
   request,

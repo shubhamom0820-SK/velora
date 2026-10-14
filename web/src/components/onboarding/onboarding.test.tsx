@@ -146,6 +146,9 @@ describe("which way /login signs in (D-081)", () => {
 });
 
 describe("signing in by code (T-3.11, Path B)", () => {
+  // /login's restore has answered: nobody is signed in here (P-850).
+  beforeEach(() => useSession.setState({ status: "signed-out" }));
+
   function signInApi(
     verify = () => json(200, { access_token: "t", user: me() }),
   ) {

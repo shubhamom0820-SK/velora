@@ -6,6 +6,7 @@ import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 import { useForm } from "react-hook-form";
 
+import { useSignedInMe } from "@/components/session/useSignedInMe";
 import { Button } from "@/components/ui/Button";
 import { ButtonLink } from "@/components/ui/ButtonLink";
 import { Icon } from "@/components/ui/Icon";
@@ -172,6 +173,13 @@ function PhoneStage({
     defaultValues: { phone: "" },
   });
   const copy = send.isError ? errorCopy(send.error) : null;
+  // A session still restoring may yet move this tab on (T-3.10): a code sent
+  // now is spent on someone signed in already, and arrives after they've gone
+  // (P-850, D-950). It sends once the API has said there's none, or the
+  // restore failed for no signal, which mustn't shut anyone out. Until then
+  // the button is busy, which refuses a tap and Enter alike (Button).
+  const restore = useSignedInMe().kind;
+  const canSend = restore === "signed-out" || restore === "failed";
 
   const submit = form.handleSubmit(({ phone }) => {
     const e164 = `+91${tenDigits(phone)}`;
@@ -191,7 +199,7 @@ function PhoneStage({
             <Button
               type="submit"
               fullWidth
-              loading={send.isPending}
+              loading={send.isPending || !canSend}
               disabled={!form.formState.isValid}
             >
               {t("onboarding.phone.send")}

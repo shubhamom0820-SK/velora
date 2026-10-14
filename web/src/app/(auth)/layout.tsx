@@ -9,7 +9,8 @@ import { SessionRestorer } from "@/components/session/SessionRestorer";
  * pages must stay crawlable for Google to read it (src/lib/site.ts, `robotsFor`).
  *
  * The session is restored from here and `(app)`'s layout, never a marketing
- * page (T-3.10). /login doesn't wait for it; onboarding's own layout does.
+ * page (T-3.10). /login doesn't wait for it, except to send a code (D-950);
+ * onboarding's own layout does.
  */
 export const metadata: Metadata = {
   robots: { index: false, follow: false },

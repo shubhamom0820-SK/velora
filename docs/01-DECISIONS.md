@@ -5971,3 +5971,22 @@ run over `flyctl ssh` like D-264's selfie review:
   only. The person signs in again themselves.
 
 T-9.5 later gives it a screen.
+
+### D-950 · /login shows at once, but sends a code only once the restore has settled — Locked
+**The decision (the founder, approving P-850's plan, 14 October 2026, on the advisor's
+recommendation, relayed):** amends T-3.10's "/login doesn't wait for the restore". The sign-in
+screen still shows at once and the number can be typed, but "Send code" is busy, refusing a tap and
+Enter, until the restore has settled: the API saying there's no session, or a failure that says
+nothing about one (no signal, a 5xx). A restore that finds a session never sends a code, and
+`SignedInRedirect` moves the person on as before. **Why:** the founder, testing staging: "dubara
+login karte hai to otp baad mei aa rha login phele ho jata hai" (signing in again, the OTP comes
+later; the login has already happened). With the API in Singapore, `/auth/refresh` takes 1 to 2 s,
+long enough for someone signed in already to type their number and spend an SMS that arrives after
+they've been moved on. A failed restore leaves sign-in open, so a phone losing signal can't shut
+anyone out of it. Built in `PhoneStage` (`SignIn.tsx`), for both sign-in paths; held by
+`app/(auth)/login/page.test.tsx` and the E2E "a signed-in person on /login sends no code before the
+restore lands".
+
+**Rejected:** the loading screen until the restore settles (every new visitor would wait 1 to 2 s
+for a form they need at once); a greyed-out button (it reads as a wrong number); a second check in
+the submit handler (the busy button already refuses a tap and Enter, so no test could prove it).

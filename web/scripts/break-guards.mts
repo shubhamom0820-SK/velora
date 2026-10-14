@@ -1906,6 +1906,28 @@ export const CASES: BreakCase[] = [
     run: ["src/components/profile/BlockSheet.test.tsx"],
     expect: ["says what a block does"],
   },
+  {
+    id: "p850-web-01-a-code-sent-while-restoring",
+    file: "src/components/onboarding/SignIn.tsx",
+    old: '  const canSend = restore === "signed-out" || restore === "failed";\n',
+    new: "  const canSend = restore !== undefined;\n",
+    run: ["src/app/(auth)/login/page.test.tsx"],
+    expect: [
+      "sends nothing while the restore is on its way",
+      "never sends for someone whose session restores",
+    ],
+  },
+  {
+    id: "p850-web-02-no-signal-shuts-sign-in",
+    file: "src/components/onboarding/SignIn.tsx",
+    old: '  const canSend = restore === "signed-out" || restore === "failed";\n',
+    new: '  const canSend = restore === "signed-out";\n',
+    run: ["src/app/(auth)/login/page.test.tsx"],
+    expect: [
+      "still sends when the restore failed for no signal",
+      "still sends when the restore failed for a 503",
+    ],
+  },
 ];
 
 const WEB = join(import.meta.dirname, "..");

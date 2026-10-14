@@ -6818,7 +6818,7 @@ The number comes from the session's own block, given in its brief, from P-100 up
   hundred measured the same, about 335 ms of its 550). So that test alone has its own timeout,
   30 s; vitest's global 5 s is unchanged. `t710-17-select-past-the-cap` (the cap's `>=` made `>`)
   still red in 1 of 1, the file restored byte for byte (`out/p-802-break-guards.log`).
-- [ ] P-850 · /login sends a code before a live session has restored. **Before beta; first of
+- [x] P-850 · /login sends a code before a live session has restored. **Before beta; first of
   the founder's staging feedback.** Worst case: someone signed in already opens /login, types
   their number and taps "Send code" while `/auth/refresh` is still on its way to Singapore (1 to
   2 s); an SMS is spent, then the restore lands and moves them on before the code arrives, so
@@ -6831,6 +6831,13 @@ The number comes from the session's own block, given in its brief, from P-100 up
   (`test_logout_works_with_an_expired_access_token_and_clears_both_cookies`, E2E "sign-out
   clears both cookies"; every Sign out is `SignOutButton`, one mutation). Filed by Claude, 14
   October 2026; its session's block, P-850 to P-859.
+  **Built, 14 October 2026 (D-950):** `PhoneStage`'s "Send code" is busy until the restore has
+  settled as signed out or failed (no signal, a 5xx), on both sign-in paths; a restore that finds a
+  session sends nothing and moves on. Held by `app/(auth)/login/page.test.tsx` (four cases: held,
+  no signal, a 503, restored) and the E2E "a signed-in person on /login sends no code before the
+  restore lands"; broken once each (`node scripts/break-guards.mts p850`, two cases, both red).
+  The submit handler's own check, in the plan, was left out: with it removed every test stayed
+  green, since the busy button already refuses a tap and Enter.
 - [ ] P-851 · The bio becomes optional. **Before beta.** Worst case: people who'd finish
   sign-up stop at the about screen, which asks for 40 characters before it lets anyone on. The
   founder's words (14 October 2026, relayed by the advisor): "bio mei 40 character likhna needed

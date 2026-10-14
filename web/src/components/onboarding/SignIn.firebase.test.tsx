@@ -140,6 +140,8 @@ beforeEach(() => {
   vi.stubEnv("AUTH_COOKIE_SUFFIX", "staging");
   vi.stubEnv("SIGN_IN_PATH", "firebase");
   setCookie("csrf_staging", "c1");
+  // /login's restore has answered: nobody is signed in here (P-850).
+  useSession.setState({ status: "signed-out" });
   Object.assign(firebase, {
     started: [],
     sent: [],
