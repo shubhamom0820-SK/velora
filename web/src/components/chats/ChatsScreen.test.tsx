@@ -526,7 +526,11 @@ describe("select mode", () => {
     expect(
       screen.getByText(t("chats.selectLimit", { max: 100 })),
     ).toBeInTheDocument();
-  });
+    // Its own timeout, this test's only (P-802): the claim needs a hundred real
+    // selections, and React renders after each click whatever wraps them, so it
+    // can't be made cheaper. About 0.5 s alone; 9.7 s and 22.4 s measured at load
+    // averages 16 and 85, failing unrelated landings at the global 5 s.
+  }, 30_000);
 });
 
 describe("search and the Knots' filters", () => {

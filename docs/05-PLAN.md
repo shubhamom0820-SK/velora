@@ -6806,3 +6806,15 @@ The number comes from the session's own block, given in its brief, from P-100 up
   by time after. Both are fine at today's sizes. Measure at 50,000 people as T-6.2 did, then add
   `fraud_events (created_at)` and `messages (sender_id, created_at)` if the plans say so. Filed by
   Claude building T-9.2, 9 October 2026.
+- [x] P-802 · ChatsScreen's cap test times out on a loaded machine. **Now: it fails unrelated
+  landings.** Worst case: every session's `make test` goes red at "takes at most 100 at a time, as
+  the API does" (T-7.10) while another session tests, as D-902's docs commit did twice on 10
+  October 2026 (9.7 s and 22.4 s at load averages 16 and 85, against vitest's 5 s; about 0.5 s
+  alone), and sessions learn to rerun until green. Filed by Claude, 14 October 2026, at the
+  direction of the founder on the advisor's recommendation (Claude, in a separate chat); its
+  session's block, P-800 to P-809.
+  **Fixed, 14 October 2026:** the test can't be made cheaper and keep its claim: it needs a hundred
+  real selections, and React renders after each click whatever wraps them (one `act()` around all
+  hundred measured the same, about 335 ms of its 550). So that test alone has its own timeout,
+  30 s; vitest's global 5 s is unchanged. `t710-17-select-past-the-cap` (the cap's `>=` made `>`)
+  still red in 1 of 1, the file restored byte for byte (`out/p-802-break-guards.log`).
