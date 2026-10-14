@@ -6818,3 +6818,90 @@ The number comes from the session's own block, given in its brief, from P-100 up
   hundred measured the same, about 335 ms of its 550). So that test alone has its own timeout,
   30 s; vitest's global 5 s is unchanged. `t710-17-select-past-the-cap` (the cap's `>=` made `>`)
   still red in 1 of 1, the file restored byte for byte (`out/p-802-break-guards.log`).
+- [ ] P-850 · /login sends a code before a live session has restored. **Before beta; first of
+  the founder's staging feedback.** Worst case: someone signed in already opens /login, types
+  their number and taps "Send code" while `/auth/refresh` is still on its way to Singapore (1 to
+  2 s); an SMS is spent, then the restore lands and moves them on before the code arrives, so
+  they think sign-in is broken. The founder's words (14 October 2026, relayed by the advisor):
+  "dubara login karte hai to otp baad mei aa rha login phele ho jata hai" (signing in again,
+  the OTP comes later; the login has already happened). Cause: `/login` renders `SignIn` at
+  once (T-3.10) and `SignedInRedirect` moves on only when `restoreSession` settles; nothing in
+  `PhoneStage` reads the session. Fix: "Send code" can't send until the restore has settled as
+  signed out or failed. **Checked, no separate bug:** an explicit Sign out clears both cookies
+  (`test_logout_works_with_an_expired_access_token_and_clears_both_cookies`, E2E "sign-out
+  clears both cookies"; every Sign out is `SignOutButton`, one mutation). Filed by Claude, 14
+  October 2026; its session's block, P-850 to P-859.
+- [ ] P-851 · The bio becomes optional. **Before beta.** Worst case: people who'd finish
+  sign-up stop at the about screen, which asks for 40 characters before it lets anyone on. The
+  founder's words (14 October 2026, relayed by the advisor): "bio mei 40 character likhna needed
+  nahi hona chaiye they can skip". Today: `ABOUT_MIN, ABOUT_MAX = 40, 300` (`profiles/rules.py:21`),
+  copied in `AboutStep.tsx:18` and `EditProfile.tsx:33`; `ck_profiles_about_length` (40 to 300,
+  migration `3571ffd8d110`); onboarding's `done` needs it (`onboarding/rules.py:94`,
+  `PROFILE_INCOMPLETE`); 03-SCHEMA:147. Becomes: none, or 1 to 300 after trimming, with "Skip" on
+  the step (a write that advances past `about` with none) and a way to clear it in Edit
+  profile. A new migration replaces the CHECK (null or 1 to 300); never edit `3571ffd8d110`.
+  **Ranking and completeness: unchanged.** Completeness counts approved photos only
+  (`onboarding/rules.py:116-121`, D-310) and the score reads no bio (D-491), so an empty bio
+  costs nobody a place; cards already show a missing bio as none (`discovery/rules.py:82`). Found
+  beside it, to fix in the same change: a length refusal shows "Leave out links and phone
+  numbers." (`errorCopy.ts:51` ignores the server's `problem`), and the browser counts UTF-16
+  units where the server counts code points, so an emoji bio can pass the counter and be
+  refused. Filed by Claude, 14 October 2026; its session's block.
+- [ ] P-852 · Onboarding: back visible, and forward to where you'd reached. **Before beta.**
+  Worst case: someone who goes back to fix their name can't get forward again without saving
+  the screen they went back to. The founder's words (14 October 2026, relayed by the advisor):
+  "apna personal detail bharte time previous page pe jane ka option rakho left arrow right
+  arrow". Today: a 22 px `ChevronLeft` in `text-mute` (`StepFrame.tsx:51-58`) on every screen
+  from Name on; none on birthday, gender and looking-for, by design (D-080). There's no forward:
+  `onboarding_step` only moves forward, so it is already the furthest step reached, and saving
+  an earlier screen jumps to it (`useAdvance`). Proposed: a clearer back (the arrow with "Back"
+  beside it, in ink, not mute), and a forward arrow on any screen behind `placeOf(me)` that goes
+  there without writing anything; what to do with unsaved edits on that screen is the plan's to
+  say. **Never** a back arrow onto birthday or gender (D-080; gender can't change, CLAUDE.md).
+  Filed by Claude, 14 October 2026; its session's block.
+- [ ] P-853 · The area picker lists India's major cities. **Before beta.** Worst case: anyone
+  outside Phagwara with location off can't finish sign-up truthfully: the picker offers only 17
+  Phagwara neighbourhoods (migration `bc589ac265c2`, P-38), so a woman in Delhi either picks one
+  and appears 1,000 km from where she is, or stops. The founder's words (14 October 2026,
+  relayed by the advisor): "phagwara mei start kar rhe hai but pick my area mei sirf phagwara ke
+  area mat rakho ... bade shehron ke naam, aur yeh bhi ki gps off hai to bade sheron ke naam".
+  D-013 stays (Phagwara is the launch city for marketing); only the picker's data changes: about
+  100 cities (every state and UT capital and the large cities), each with a centroid, in a new
+  data migration that names its coordinate source (Wikidata, CC0, preferred). To settle in the
+  plan: profiles on a Phagwara area (`area_id` is `ON DELETE RESTRICT`; their `location` is the
+  copied centroid and stays); D-220's "nearest area within 2 km", which city centroids would
+  almost never meet; the copy that says Phagwara (`en.ts:925` `cityPlaceholder`, `en.ts:1426`
+  the waitlist line, held by `page.test.tsx:166`); a search box in a 100-row list. Found beside
+  it: 03-SCHEMA:680 still says "40 neighbourhoods", and D-013 still calls Phagwara the
+  registered office, which D-058 superseded. Filed by Claude, 14 October 2026; its session's
+  block.
+- [ ] P-854 · Discovery across India. **Before beta, and before P-391's trigger.** Worst case,
+  of doing it plainly: the feed scores every eligible person in India on every page, so it slows
+  as the country grows, not as a city does (D-495, about 200 ms a page at 50,000; P-391's
+  cell-first fix assumes a city), and someone 2,000 km away who was active today ranks above
+  someone in your street who wasn't. The founder's words (14 October 2026, relayed by the
+  advisor): "ladke ladki sirf 25km ke andar wale nahi show karo jitna bhi user hai sara dikhana
+  hai, specific gender wala rule rakhna". Today: `discovery_radius_km` 25 (`app_config`,
+  migration `fa16c0908c2c`; `discovery/service.py:54`), read by the feed and text search only
+  (D-540); no upper bound on it. D is `1 / (1 + km / 5)`, a fixed 5 km, not the radius
+  (`discovery/rules.py:42`, D-491), so a huge radius doesn't flatten anyone's score: everyone
+  far is near 0 (0.048 at 100 km), and R + V + C (up to 0.60) orders them. To settle in the plan:
+  the radius (a value covering India's box, about 4,600 km corner to corner, or none); whether
+  nearest-first must be strict (distance bands first, then the score) or stays a weight; the
+  card's "1900 km"; text search going India-wide; T-6.2's bench re-run at an India spread before
+  landing, with P-390 and P-391 re-read. The seeking filter stays exactly as it is. Filed by
+  Claude, 14 October 2026; its session's block.
+- [ ] P-855 · Where the founder saw men while seeking women. **Investigation only; before
+  P-854.** Worst case: a surface that should filter by seeking doesn't, and women seeking men
+  are shown women. The founder's words (14 October 2026, relayed by the advisor): "specific
+  gender wala rule rakhna yeh nahi ki ladka bola sirf ladki dekhna hai but usko ladke bhi aa
+  rhe"; and of the profile by link and search, **his decision**: "yeh dono jagha jaisa hai
+  wohi rakho" (keep both as they are, D-493, D-540). Read on `6f4a74c`: the feed, text search,
+  liked-you (and its count), swipes, DMs, gifts and album asks all apply seeking both ways
+  (`discovery/repository.py:197-201`; a man seeking women never sees a man seeking everyone);
+  `@username` search, the profile by id or username, the share page, the chats list and the
+  album view don't, by design. No server cache holds a feed; the deck's client pages are
+  `staleTime: Infinity`, but no screen changes seeking. Seed has no `everyone` account. Next:
+  ask the founder which screen and which two accounts, and read their rows on staging
+  read-only; report the cause, propose a fix only if it was a filtering surface. Filed by
+  Claude, 14 October 2026; its session's block.
