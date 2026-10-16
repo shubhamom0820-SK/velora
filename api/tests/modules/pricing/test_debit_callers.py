@@ -47,6 +47,8 @@ from tests.infra import API_DIR
 ALLOWED = {
     ("app/modules/pricing/service.py", "charge"),
     ("app/modules/gifts/service.py", "_send_in"),
+    # An admin's correction (T-9.5, D-923).
+    ("app/modules/admin/panel.py", "_correct"),
 }
 REVERSE_ALLOWED = {("app/modules/payments/webhooks.py", "_reverse_once")}
 

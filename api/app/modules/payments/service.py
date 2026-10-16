@@ -27,7 +27,7 @@ store for her fails loudly. An allowlist: anyone not a man is refused.
 
 from __future__ import annotations
 
-from datetime import UTC
+from datetime import UTC, datetime
 from uuid import UUID, uuid4
 
 import structlog
@@ -212,6 +212,16 @@ async def turnover(session: AsyncSession, year: FinancialYear) -> Turnover:
         alert_at_paise=rules.TURNOVER_ALERT_PAISE,
         threshold_paise=rules.GST_THRESHOLD_PAISE,
     )
+
+
+async def paid_between(
+    session: AsyncSession, starts_at: datetime, ends_at: datetime
+) -> int:
+    """Paise of paid payments with `paid_at` in `[starts_at, ends_at)`: money
+    in, as turnover counts it (D-483), for the panel's revenue tile (D-926).
+    Runs inside the caller's transaction."""
+    paise, _ = await repository.turnover(session, starts_at, ends_at)
+    return paise
 
 
 async def turnover_for_admin(

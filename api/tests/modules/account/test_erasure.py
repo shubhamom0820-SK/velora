@@ -255,6 +255,11 @@ async def _everywhere(
         ),
         "insert into audit_log (actor_id, action) values (:m, 'probe')",
         (
+            "insert into banned_identities (kind, value, reason, lifted_at, "
+            "lifted_by, lift_reason) values ('phone_hash', 'probe-lifted', 'ban', "
+            "now(), :m, 'a probe lifted by them')"
+        ),
+        (
             "insert into reports (reporter_id, reported_id, reason, resolved_by) "
             "values (:m, :o, 'other', :m)"
         ),

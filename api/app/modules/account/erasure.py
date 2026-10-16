@@ -99,6 +99,8 @@ KEPT: dict[tuple[str, str], str] = {
     ("reports", "reported_id"): "rule 12; moderation",
     ("reports", "resolved_by"): "rule 12; moderation",
     ("audit_log", "actor_id"): "rule 12; what staff did",
+    # T-9.5 (D-922): the admin who lifted a ban, a record of what staff did.
+    ("banned_identities", "lifted_by"): "rule 12; who lifted a ban",
     ("fraud_scores", "user_id"): "moderation records (D-051)",
     ("fraud_events", "user_id"): "moderation records (D-051)",
     (

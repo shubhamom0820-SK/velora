@@ -9343,8 +9343,8 @@ P152: list[Case] = [
         edits=[
             (
                 SERVICE,
-                '        ("app.modules.gifts.service", "_send_in"),\n    }\n',
-                '        ("app.modules.gifts.service", "_send_in"),\n        ("app.modules.threads.service", "_open_in"),\n    }\n',
+                '        ("app.modules.admin.panel", "_correct"),\n    }\n',
+                '        ("app.modules.admin.panel", "_correct"),\n        ("app.modules.threads.service", "_open_in"),\n    }\n',
             )
         ],
         expect=["test_the_run_time_list_is_the_scans"],
@@ -9355,8 +9355,8 @@ P152: list[Case] = [
         edits=[
             (
                 SERVICE,
-                '        ("app.modules.gifts.service", "_send_in"),\n    }\n',
-                "    }\n",
+                '        ("app.modules.gifts.service", "_send_in"),\n        # An admin',
+                "        # An admin",
             )
         ],
         expect=[
@@ -12515,6 +12515,385 @@ P80: list[Case] = [
     ),
 ]
 
+# --- T-9.5: the moderation panel ------------------------------------------------------
+
+ADMIN_ROUTER95 = "app/modules/admin/router.py"
+ADMIN_PANEL95 = "app/modules/admin/panel.py"
+ADMIN_RULES95 = "app/modules/admin/rules.py"
+ADMIN_REPO95 = "app/modules/admin/repository.py"
+AUTH_REPO95 = "app/modules/auth/repository.py"
+LIFT_MIGRATION95 = "alembic/versions/20261016_7c8a628fd3d7_bans_are_lifted_in_place.py"
+REF_MIGRATION95 = (
+    "alembic/versions/20261016_7a758777affd_admin_grant_names_its_audit_row.py"
+)
+SHAPE_MIGRATION95 = (
+    "alembic/versions/20261016_688032b1dc7a_ledger_shape_names_admin_correction.py"
+)
+WALLET_RULES95 = "app/modules/wallet/rules.py"
+WALLET_SERVICE95 = "app/modules/wallet/service.py"
+PHOTOS_SERVICE95 = "app/modules/photos/service.py"
+SEED_RUN95 = "seed/run.py"
+T95_SELECTION = [
+    "tests/modules/admin",
+    "tests/modules/wallet",
+    "tests/modules/auth/test_ban_lift_migration.py",
+    "tests/modules/pricing/test_debit_callers.py",
+]
+T95_SEED_SELECTION = ["tests/seed/test_seed.py"]
+
+T95: list[Case] = [
+    Case(
+        id="t95-01-a-user-reaches-the-panel",
+        what="a user's token let into every panel route",
+        edits=[
+            (
+                ADMIN_ROUTER95,
+                "Staff = Annotated[User, Depends(require_role(*STAFF))]\n",
+                "Staff = Annotated[User, Depends(require_role(Role.USER, *STAFF))]\n",
+            ),
+        ],
+        expect=["test_a_user_is_forbidden_and_nothing_is_written"],
+    ),
+    Case(
+        id="t95-02-a-moderator-moves-velas",
+        what="a moderator granting Velas, at the route and in the panel",
+        edits=[
+            (
+                ADMIN_ROUTER95,
+                "Admin = Annotated[User, Depends(require_role(Role.ADMIN))]\n",
+                "Admin = Annotated[User, Depends(require_role(*STAFF))]\n",
+            ),
+            (
+                ADMIN_PANEL95,
+                '    changes nothing and writes nothing; for another, `ALREADY_EXISTS`."""\n    if staff.role is not Role.ADMIN:\n        raise _forbidden()\n',
+                '    changes nothing and writes nothing; for another, `ALREADY_EXISTS`."""\n',
+            ),
+        ],
+        expect=["test_a_moderator_is_forbidden_what_only_an_admin_may_call"],
+    ),
+    Case(
+        id="t95-03-a-moderator-lifts-a-ban",
+        what="D-922: a moderator allowed every status change",
+        edits=[
+            (
+                ADMIN_RULES95,
+                "    return role is Role.ADMIN or target not in ADMIN_ONLY\n",
+                "    return True\n",
+            ),
+        ],
+        expect=["test_a_moderator_never_bans_unbans_or_unfreezes"],
+    ),
+    Case(
+        id="t95-04-a-ban-leaves-sessions",
+        what="a ban with the person still signed in",
+        edits=[
+            (
+                ADMIN_PANEL95,
+                "        user.status = UserStatus.BANNED\n        await auth_service.sign_out_everywhere(session, user.id)\n",
+                "        user.status = UserStatus.BANNED\n",
+            ),
+        ],
+        expect=["test_an_admins_ban_bars_the_number_signs_out_and_audits"],
+    ),
+    Case(
+        id="t95-05-a-freeze-leaves-sessions",
+        what="a staff freeze with the person still signed in",
+        edits=[
+            (
+                ADMIN_PANEL95,
+                "    user.status = UserStatus.FROZEN\n    await auth_service.sign_out_everywhere(session, user.id)\n",
+                "    user.status = UserStatus.FROZEN\n",
+            ),
+        ],
+        expect=["test_staff_freeze_signs_out_closes_sockets_and_audits"],
+    ),
+    Case(
+        id="t95-06-a-lifted-ban-still-bars",
+        what="sign-in reading a lifted ban as standing",
+        edits=[
+            (AUTH_REPO95, "            BannedIdentity.lifted_at.is_(None),\n", ""),
+        ],
+        expect=["test_an_unban_lifts_the_row_in_place_and_returns_the_account"],
+    ),
+    Case(
+        id="t95-07-an-underage-ban-lifted",
+        what="D-922: the trigger letting any reason be lifted",
+        edits=[
+            (
+                LIFT_MIGRATION95,
+                "                if old.reason is distinct from 'ban' then\n",
+                "                if false then\n",
+            ),
+        ],
+        expect=["test_an_underage_ban_can_never_be_lifted_nor_any_ban_deleted"],
+    ),
+    Case(
+        id="t95-08-an-unban-forgets-the-deletion",
+        what="an unban making active someone who had asked to go",
+        edits=[
+            (
+                ADMIN_PANEL95,
+                "            UserStatus.DELETED\n            if user.deleted_requested_at is not None\n            else UserStatus.ACTIVE\n",
+                "            UserStatus.ACTIVE\n",
+            ),
+        ],
+        expect=["test_an_unban_of_someone_who_asked_to_go_returns_them_to_deleted"],
+    ),
+    Case(
+        id="t95-09-a-correction-past-the-balance",
+        what="a correction beyond the balance, reaching the wallet's 402",
+        edits=[
+            (
+                ADMIN_PANEL95,
+                "        if delta < 0 and balance < -delta:\n",
+                "        if False:\n",
+            ),
+        ],
+        expect=[
+            "test_a_correction_beyond_the_balance_is_not_allowed_and_writes_nothing"
+        ],
+    ),
+    Case(
+        id="t95-10-a-retry-applies-twice",
+        what="the same key again, not answered from the ledger",
+        edits=[
+            (
+                ADMIN_PANEL95,
+                "            if earlier_reason is ledger_reason and earlier.delta == delta:\n                return\n",
+                "            if earlier_reason is ledger_reason and earlier.delta == delta:\n                continue\n",
+            ),
+        ],
+        expect=["test_the_same_key_again_changes_nothing_and_writes_nothing"],
+    ),
+    Case(
+        id="t95-11-admin-grant-ref-optional",
+        what="D-923: the rule letting admin_grant name no audit row",
+        edits=[
+            (
+                WALLET_RULES95,
+                "    LedgerReason.ADMIN_GRANT: Rule(CREDIT, RefType.AUDIT_LOG, caller_names_event=True),\n",
+                "    LedgerReason.ADMIN_GRANT: Rule(\n        CREDIT, RefType.AUDIT_LOG, ref_required=False, caller_names_event=True\n    ),\n",
+            ),
+        ],
+        expect=["test_each_reason_has_exactly_one_ref_type_in_the_database"],
+    ),
+    Case(
+        id="t95-12-the-database-takes-a-grant-with-no-ref",
+        what="D-923: the migration leaving admin_grant's ref optional",
+        edits=[
+            (
+                REF_MIGRATION95,
+                '        "CHECK (ref_id IS NOT NULL) NOT VALID"\n',
+                "        \"CHECK (reason = 'admin_grant' OR ref_id IS NOT NULL) NOT VALID\"\n",
+            ),
+        ],
+        expect=["test_an_admin_grant_with_no_ref_is_refused_by_the_database"],
+    ),
+    Case(
+        id="t95-13-a-correction-one-per-event",
+        what="admin_correction left inside the per-event index",
+        edits=[
+            (
+                SHAPE_MIGRATION95,
+                'REPEATS = (*REPEATS_BEFORE, "admin_correction")\n',
+                "REPEATS = REPEATS_BEFORE\n",
+            ),
+        ],
+        expect=["test_one_entry_per_event_except_the_reasons_that_repeat"],
+    ),
+    Case(
+        id="t95-14-the-masked-text-shown",
+        what="a Thread read as masked, not as written",
+        edits=[
+            (
+                ADMIN_PANEL95,
+                "            body=message.body_raw if message.body_raw is not None else message.body,\n",
+                "            body=message.body,\n",
+            ),
+        ],
+        expect=["test_a_masked_message_is_read_as_written_and_a_voice_note_is_linked"],
+    ),
+    Case(
+        id="t95-15-a-blank-reason-reads",
+        what="D-924: a reason of spaces taken",
+        edits=[
+            (
+                ADMIN_PANEL95,
+                "    if len(reason) < rules.REASON_MIN:\n",
+                "    if False:\n",
+            ),
+        ],
+        expect=["test_a_read_without_a_reason_is_refused_and_unwritten"],
+    ),
+    Case(
+        id="t95-16-a-read-unaudited",
+        what="D-924: a Thread read with no audit row",
+        edits=[
+            (
+                ADMIN_PANEL95,
+                '            "thread.read",\n            {"reason": reason},\n',
+                '            "thread.other",\n            {"reason": reason},\n',
+            ),
+        ],
+        expect=["test_every_message_shows_whatever_either_person_cleared"],
+    ),
+    Case(
+        id="t95-17-a-moderator-sees-the-number",
+        what="D-927: the whole number shown to a moderator",
+        edits=[
+            (
+                ADMIN_PANEL95,
+                "            phone = whole if staff.role is Role.ADMIN else rules.masked(whole)\n",
+                "            phone = whole\n",
+            ),
+        ],
+        expect=["test_a_moderator_sees_it_masked"],
+    ),
+    Case(
+        id="t95-18-the-system-user-listed",
+        what="D-905: the system user in search",
+        edits=[
+            (
+                ADMIN_REPO95,
+                "        .where(User.id != SYSTEM_USER_ID)\n        .order_by(User.created_at.desc(), User.id.desc())\n",
+                "        .order_by(User.created_at.desc(), User.id.desc())\n",
+            ),
+        ],
+        expect=["test_the_system_user_is_never_listed_nor_read"],
+    ),
+    Case(
+        id="t95-19-a-moderator-sees-revenue",
+        what="D-926: money in shown to a moderator",
+        edits=[
+            (
+                ADMIN_PANEL95,
+                "        if staff.role is Role.ADMIN:\n            year = payments_rules.financial_year_of(now)\n",
+                "        if True:\n            year = payments_rules.financial_year_of(now)\n",
+            ),
+        ],
+        expect=["test_staff_see_counts_and_only_an_admin_sees_revenue"],
+    ),
+    Case(
+        id="t95-20-selfies-in-the-queue",
+        what="D-925: selfies and face photos in the panel",
+        edits=[
+            (
+                ADMIN_RULES95,
+                "PANEL_PHOTO_KINDS: Final = frozenset({PhotoKind.PUBLIC, PhotoKind.PRIVATE})\n",
+                "PANEL_PHOTO_KINDS: Final = frozenset(PhotoKind)\n",
+            ),
+        ],
+        expect=["test_the_queue_is_pending_public_and_private_photos_oldest_first"],
+    ),
+    Case(
+        id="t95-21-completeness-stale",
+        what="P-210: a staff decision leaving completeness as it was",
+        edits=[
+            (
+                PHOTOS_SERVICE95,
+                "        )\n    if photo.kind is PhotoKind.PUBLIC:\n        await onboarding_service.refresh_completeness(session, user)\n    return decided\n",
+                "        )\n    return decided\n",
+            ),
+        ],
+        expect=[
+            "test_approving_a_public_photo_publishes_it_and_lifts_completeness",
+            "test_taking_down_an_approved_photo_removes_its_public_copies_and_keeps_the_record",
+        ],
+    ),
+    Case(
+        id="t95-22-a-takedown-stays-public",
+        what="a taken-down photo left in the public bucket",
+        edits=[
+            (
+                PHOTOS_SERVICE95,
+                "    for key in decided.public_keys:\n        await storage.delete(settings.R2_BUCKET_PUBLIC, key)\n",
+                "",
+            ),
+        ],
+        expect=[
+            "test_taking_down_an_approved_photo_removes_its_public_copies_and_keeps_the_record"
+        ],
+    ),
+    Case(
+        id="t95-23-a-report-resolved-twice",
+        what="a resolved report resolved again",
+        edits=[
+            (
+                ADMIN_PANEL95,
+                "        if report.status is not ReportStatus.OPEN:\n",
+                "        if False:\n",
+            ),
+        ],
+        expect=["test_a_report_is_resolved_once"],
+    ),
+    Case(
+        id="t95-24-a-moderator-bans-from-a-report",
+        what="D-921: a moderator's ban from a report, both checks",
+        edits=[
+            (
+                ADMIN_PANEL95,
+                "    if action is ReportAction.BAN and staff.role is not Role.ADMIN:\n        raise _forbidden()\n",
+                "",
+            ),
+            (
+                ADMIN_PANEL95,
+                "    if staff.role is not Role.ADMIN:\n        raise _forbidden()\n    erased = user.anonymised_at is not None\n",
+                "    erased = user.anonymised_at is not None\n",
+            ),
+        ],
+        expect=["test_a_moderator_never_bans_from_a_report"],
+    ),
+    Case(
+        id="t95-25-a-deleted-account-frozen",
+        what="D-902: a staff freeze reaching a deleted account",
+        edits=[
+            (
+                ADMIN_RULES95,
+                "FREEZABLE: Final = frozenset({UserStatus.ACTIVE, UserStatus.PAUSED})\n",
+                "FREEZABLE: Final = frozenset({UserStatus.ACTIVE, UserStatus.PAUSED, UserStatus.DELETED})\n",
+            ),
+        ],
+        expect=["test_only_who_can_sign_in_is_frozen_and_nothing_else_is_written"],
+    ),
+    Case(
+        id="t95-26-the-correction-unlisted",
+        what="P-152: the correction left off debit()'s list",
+        edits=[
+            (
+                WALLET_SERVICE95,
+                '        ("app.modules.admin.panel", "_correct"),\n',
+                "",
+            ),
+        ],
+        expect=[
+            "test_the_run_time_list_is_the_scans",
+            "test_a_correction_is_exactly_one_admin_correction_and_the_ledger_reconciles",
+        ],
+    ),
+    Case(
+        id="t95-27-every-freeze-manual",
+        what="P-800: automatic freezes not marked",
+        edits=[
+            (
+                ADMIN_PANEL95,
+                "        automatic = row.frozen_by == SYSTEM_USER_ID\n",
+                "        automatic = False\n",
+            ),
+        ],
+        expect=["test_the_accounts_frozen_now_automatic_ones_marked_newest_first"],
+    ),
+]
+T95_SEED: list[Case] = [
+    Case(
+        id="t95-28-the-seed-rewrites-an-old-grant",
+        what="an earlier seed's grant with no ref met with a new audit row",
+        edits=[
+            (SEED_RUN95, "    if earlier is not None:\n", "    if False:\n"),
+        ],
+        expect=["test_an_earlier_seeds_grant_with_no_ref_is_left_as_it_is"],
+    ),
+]
+
 CASES: list[tuple[Case, list[str]]] = (
     [(c, T51_SELECTION) for c in T51]
     + [(c, T54_SELECTION) for c in T54]
@@ -12575,6 +12954,8 @@ CASES: list[tuple[Case, list[str]]] = (
     + [(c, T92_SELECTION) for c in T92]
     + [(c, P61_SELECTION) for c in P61]
     + [(c, P80_SELECTION) for c in P80]
+    + [(c, T95_SELECTION) for c in T95]
+    + [(c, T95_SEED_SELECTION) for c in T95_SEED]
 )
 
 # The fifty-connection fixture's own message when Postgres refuses a connection.

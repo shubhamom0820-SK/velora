@@ -35,7 +35,8 @@ and only `payments` calls it (`tests/modules/pricing/test_debit_callers.py`).
 
 **Who may call `debit()` is checked each time it runs (P-152, D-651):** the
 function that awaits it must be `pricing.service.charge` or gift sending's
-`_send_in`, the two that price from a row, or test code, which never ships
+`_send_in`, the two that price from a row, an admin's correction
+(`admin.panel._correct`, T-9.5, D-923), or test code, which never ships
 (`.dockerignore`). Anything else is refused before a row is read, a caller
 reaching it by a name built at run time included, which the source scan in
 `tests/modules/pricing/test_debit_callers.py` can't see. The scan stays, as the
@@ -155,6 +156,9 @@ DEBIT_CALLERS: Final = frozenset(
     {
         ("app.modules.pricing.service", "charge"),
         ("app.modules.gifts.service", "_send_in"),
+        # An admin's correction (T-9.5, D-923): its amount is the admin's,
+        # checked against the balance under the lock, never a price.
+        ("app.modules.admin.panel", "_correct"),
     }
 )
 # Tests prove the wallet by calling it directly. They never ship: the image

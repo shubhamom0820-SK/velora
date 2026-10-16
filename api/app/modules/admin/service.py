@@ -17,7 +17,7 @@ from app.modules.admin import repository
 # nobody did it, as an automatic freeze. Its row is the migration 4800f0e8d5a9's,
 # shaped like an erased account so that it never signs in or appears anywhere
 # people are listed.
-SYSTEM_USER_ID: Final = UUID("00000000-0000-4000-8000-000000000001")
+SYSTEM_USER_ID: Final = repository.SYSTEM_USER_ID
 
 # 03-SCHEMA §8: `app_config` is cached 60 s, so a change reaches every reader
 # within a minute (P-47).

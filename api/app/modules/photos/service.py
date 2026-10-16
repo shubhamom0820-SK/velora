@@ -20,6 +20,7 @@ from __future__ import annotations
 
 from collections.abc import Awaitable, Callable
 from contextlib import AbstractAsyncContextManager
+from dataclasses import dataclass
 from datetime import timedelta
 from uuid import UUID, uuid4
 
@@ -876,3 +877,161 @@ async def _stored(write: Awaitable[None]) -> None:
         await write
     except Exception as error:  # noqa: BLE001 — storage is down: try again
         raise TryAgain("moderation.storage_failed", type(error).__name__) from None
+
+
+# --- A moderator's decision (T-9.5, D-925) ----------------------------------------------
+
+# The kinds staff ever see or decide: never a selfie or the face photo (D-264,
+# D-925), which every staff route answers `NOT_FOUND` for.
+STAFF_KINDS = frozenset({PhotoKind.PUBLIC, PhotoKind.PRIVATE})
+# The reasons staff reject for, moderation's own (D-101), which an owner is
+# told by name (OWNER_REASONS) but `other`.
+STAFF_REASONS = frozenset(
+    {moderation_rules.NUDITY, moderation_rules.TEXT_OVERLAY, moderation_rules.OTHER}
+)
+# Kept in `photos.moderation` beside the model's scores: who decided, and how.
+STAFF = "staff"
+
+
+def _staff_refusal(why: str, message: str) -> AppError:
+    return AppError("NOT_ALLOWED", message, status=422, details={"why": why})
+
+
+@dataclass(frozen=True)
+class StaffDecided:
+    """What a staff decision leaves to do once its transaction commits."""
+
+    photo_id: UUID
+    approved: bool
+    public: bool
+    public_keys: tuple[str, ...]
+    albums: tuple[UUID, ...]
+
+
+async def decide_by_staff(
+    session: AsyncSession,
+    photo_id: UUID,
+    *,
+    approve: bool,
+    reason: str | None,
+    by: UUID,
+    storage: StorageProvider,
+    settings: Settings,
+) -> StaffDecided:
+    """A moderator approves a pending photo, or rejects a pending or approved
+    one, in the caller's transaction, under the owner's row lock as every
+    photo change is (P-210):
+
+    - **approve:** as the worker's approval (`_record`), from the upload
+      re-encoded now (D-092), so no original with its location is published:
+      a public photo's copy to the public bucket, a private one's to its
+      scored copy (D-700). No face comparison is queued: no model counted the
+      faces (D-393's badge waits for a photo the worker approved).
+    - **reject:** `reject_reason` the staff's, its public copy and blurred copy
+      removed after the commit (`after_staff_decision`), and a private one's
+      watermarked copies with them (D-730). The private copy and the row stay
+      (rule 12): a takedown, never a deletion.
+
+    Either way a public photo's completeness is refreshed (P-210), and the
+    decision is kept in `moderation.staff`. A rejected photo is decided:
+    `NOT_ALLOWED`. A selfie, the face photo, or none: `NOT_FOUND`."""
+    found = await repository.photo_by_id(session, photo_id)
+    if found is None or found.kind not in STAFF_KINDS:
+        raise _not_found()
+    user = await users_service.locked_user(session, found.user_id)
+    photo = await repository.photo_for_update(session, found.user_id, photo_id)
+    if photo is None:
+        raise _not_found()
+    await session.refresh(photo)
+    if photo.status is ReviewStatus.REJECTED:
+        raise _staff_refusal("rejected", "This photo was already removed.")
+    if approve and photo.status is ReviewStatus.APPROVED:
+        raise _staff_refusal("approved", "This photo is already approved.")
+
+    photo.moderation = {
+        **(photo.moderation or {}),
+        STAFF: {
+            "by": str(by),
+            "approved": approve,
+            "reason": reason,
+            "at": clock.now().isoformat(),
+        },
+    }
+    if approve:
+        await _approve_by_staff(photo, storage, settings)
+        decided = StaffDecided(photo.id, True, photo.kind is PhotoKind.PUBLIC, (), ())
+    else:
+        photo.status = ReviewStatus.REJECTED
+        photo.reject_reason = reason
+        keys = tuple(key for key in (photo.public_key, photo.blur_key) if key)
+        albums: tuple[UUID, ...] = ()
+        if photo.kind is PhotoKind.PRIVATE:
+            albums = tuple(await album_repository.granted_requests(session, user.id))
+        decided = StaffDecided(
+            photo.id, False, photo.kind is PhotoKind.PUBLIC, keys, albums
+        )
+    if photo.kind is PhotoKind.PUBLIC:
+        await onboarding_service.refresh_completeness(session, user)
+    return decided
+
+
+async def _approve_by_staff(
+    photo: Photo, storage: StorageProvider, settings: Settings
+) -> None:
+    """The worker's approval of `photo`, without its scores: read, re-encode,
+    written back over itself, then published."""
+    private = settings.R2_BUCKET_PRIVATE
+    try:
+        data = await storage.read_prefix(private, photo.raw_key, MAX_UPLOAD_BYTES + 1)
+    except ObjectNotFound:
+        raise _staff_refusal("no_file", "This photo's file is gone.") from None
+    except Exception:  # noqa: BLE001 — storage is down: nothing changed
+        raise AppError(
+            "PROVIDER_UNAVAILABLE",
+            "Storage isn't answering. Try again in a minute.",
+            status=503,
+        ) from None
+    sniffed = sniff(data[:SNIFF_BYTES])
+    if len(data) > MAX_UPLOAD_BYTES or sniffed is None:
+        raise _staff_refusal("unreadable", "This photo can't be read.")
+    try:
+        clean = images.reencode(data, sniffed)
+    except images.UnreadableImage:
+        raise _staff_refusal("unreadable", "This photo can't be read.") from None
+    await storage.put_bytes(private, photo.raw_key, clean.data, "image/jpeg")
+    photo.width, photo.height = clean.width, clean.height
+    if photo.kind is PhotoKind.PUBLIC:
+        key = public_photo_key(photo.id)
+        await storage.put_bytes(
+            settings.R2_BUCKET_PUBLIC, key, clean.data, "image/jpeg"
+        )
+        photo.public_key = key
+    else:
+        key = scored_key(photo.user_id, photo.id)
+        await storage.put_bytes(private, key, clean.data, "image/jpeg")
+        photo.scored_key = key
+    photo.status = ReviewStatus.APPROVED
+
+
+async def after_staff_decision(
+    decided: StaffDecided,
+    *,
+    storage: StorageProvider,
+    settings: Settings,
+    queue: Queue,
+) -> None:
+    """Once the decision is committed: an approved public photo's blurred copy
+    queued (D-543); a rejected one's public copies deleted, and a private
+    one's album copies re-made without it (D-730), as `delete_photo` does."""
+    if decided.approved:
+        if decided.public:
+            await queue_blur(queue, decided.photo_id)
+        return
+    for key in decided.public_keys:
+        await storage.delete(settings.R2_BUCKET_PUBLIC, key)
+    for request_id in decided.albums:
+        await queue.enqueue(
+            WATERMARK_ALBUM,
+            job_id=album_rules.photo_job_id(request_id, decided.photo_id),
+            request_id=str(request_id),
+        )

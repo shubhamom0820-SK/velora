@@ -778,6 +778,210 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/admin/metrics": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Metrics */
+        get: operations["metrics_v1_admin_metrics_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/admin/users": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Users */
+        get: operations["users_v1_admin_users_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/admin/users/{user_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** User Detail */
+        get: operations["user_detail_v1_admin_users__user_id__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/admin/users/{user_id}/status": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Set Status */
+        post: operations["set_status_v1_admin_users__user_id__status_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/admin/users/{user_id}/credits": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Change Credits */
+        post: operations["change_credits_v1_admin_users__user_id__credits_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/admin/reports": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Reports */
+        get: operations["reports_v1_admin_reports_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/admin/reports/{report_id}/resolve": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Resolve Report */
+        post: operations["resolve_report_v1_admin_reports__report_id__resolve_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/admin/moderation": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Moderation */
+        get: operations["moderation_v1_admin_moderation_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/admin/photos/{photo_id}/decide": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Decide Photo */
+        post: operations["decide_photo_v1_admin_photos__photo_id__decide_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/admin/threads/{thread_id}/messages": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Thread Messages */
+        get: operations["thread_messages_v1_admin_threads__thread_id__messages_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/admin/audit": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Audit Log */
+        get: operations["audit_log_v1_admin_audit_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/admin/freezes": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Freezes */
+        get: operations["freezes_v1_admin_freezes_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/discover": {
         parameters: {
             query?: never;
@@ -1621,6 +1825,212 @@ export interface components {
             access_token: string;
         };
         /**
+         * AdminBan
+         * @description The number's standing ban, if any: `ban` an admin's, `underage` D-072's.
+         */
+        AdminBan: {
+            /** Reason */
+            reason: string | null;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+        };
+        /**
+         * AdminFraud
+         * @description `fraud_scores` and the newest events (D-900). A signal, never a verdict.
+         */
+        AdminFraud: {
+            /** Score */
+            score: number;
+            band: components["schemas"]["FraudBand"];
+            /** Signals */
+            signals: {
+                [key: string]: unknown;
+            } | null;
+            /** Counted From */
+            counted_from: string | null;
+            /** Events */
+            events: components["schemas"]["AdminFraudEvent"][];
+        };
+        /** AdminFraudEvent */
+        AdminFraudEvent: {
+            /** Signal */
+            signal: string;
+            /** Weight */
+            weight: number;
+            /** Meta */
+            meta: {
+                [key: string]: unknown;
+            } | null;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+        };
+        /**
+         * AdminFreeze
+         * @description An account frozen now (P-800, D-928): `automatic` when the system user
+         *     froze it (T-9.2), with its rule and score; else a person did.
+         */
+        AdminFreeze: {
+            user: components["schemas"]["AdminUser"];
+            /** Frozen At */
+            frozen_at: string | null;
+            /** Automatic */
+            automatic: boolean;
+            /** Rule */
+            rule: string | null;
+            /** Score */
+            score: number | null;
+        };
+        /**
+         * AdminFreezePage
+         * @description `Page<AdminFreeze>`: the newest freeze first.
+         */
+        AdminFreezePage: {
+            /** Items */
+            items: components["schemas"]["AdminFreeze"][];
+            /** Next Cursor */
+            next_cursor: string | null;
+        };
+        /**
+         * AdminLedgerEntry
+         * @description A ledger row with its ref, which only staff see (D-077).
+         */
+        AdminLedgerEntry: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Delta */
+            delta: number;
+            /** Balance After */
+            balance_after: number;
+            reason: components["schemas"]["LedgerReason"];
+            /** Ref Type */
+            ref_type: string | null;
+            /** Ref Id */
+            ref_id: string | null;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+        };
+        /**
+         * AdminMessage
+         * @description A message as written: `body_raw` where masking changed it, else `body`
+         *     (T-7.3). A voice note's link lasts 10 minutes.
+         */
+        AdminMessage: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Sender Id */
+            sender_id: string | null;
+            kind: components["schemas"]["MessageKind"];
+            /** Body */
+            body: string | null;
+            /** Masked */
+            masked: boolean;
+            /** Duration S */
+            duration_s: number | null;
+            /** Audio Url */
+            audio_url: string | null;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+        };
+        /**
+         * AdminMessagePage
+         * @description `Page<AdminMessage>`: oldest first by `(created_at, id)`, everything
+         *     either person cleared included (T-7.8, D-006).
+         */
+        AdminMessagePage: {
+            /** Items */
+            items: components["schemas"]["AdminMessage"][];
+            /** Next Cursor */
+            next_cursor: string | null;
+        };
+        /**
+         * AdminMetrics
+         * @description The dashboard's counts (D-926). `revenue` is null for a moderator.
+         */
+        AdminMetrics: {
+            /** Users By Status */
+            users_by_status: {
+                [key: string]: number;
+            };
+            /** Signups 24H */
+            signups_24h: number;
+            /** Signups 7D */
+            signups_7d: number;
+            /** Reports Open */
+            reports_open: number;
+            /** Oldest Open Report At */
+            oldest_open_report_at: string | null;
+            /** Photos Pending */
+            photos_pending: number;
+            /** Frozen */
+            frozen: number;
+            /** Claims Open */
+            claims_open: number;
+            revenue: components["schemas"]["AdminRevenue"] | null;
+        };
+        /**
+         * AdminPhoto
+         * @description A public or private photo, never a selfie or the face photo (D-925).
+         *     `reject_reason` is the real one, `minor_suspected` included (D-093);
+         *     `minor_score` the model's, kept below the threshold too (D-101). `url` is
+         *     a 10-minute signed link, or the CDN's for an approved public photo, or none
+         *     once rejected and its file gone.
+         */
+        AdminPhoto: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /**
+             * User Id
+             * Format: uuid
+             */
+            user_id: string;
+            kind: components["schemas"]["PhotoKind"];
+            /** Position */
+            position: number | null;
+            status: components["schemas"]["ReviewStatus"];
+            /** Reject Reason */
+            reject_reason: string | null;
+            /** Minor Score */
+            minor_score: number | null;
+            /** Url */
+            url: string | null;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+        };
+        /**
+         * AdminPhotoPage
+         * @description `Page<AdminPhoto>`: the moderation queue, oldest first by `(created_at, id)`.
+         */
+        AdminPhotoPage: {
+            /** Items */
+            items: components["schemas"]["AdminPhoto"][];
+            /** Next Cursor */
+            next_cursor: string | null;
+        };
+        /**
          * AdminRefundRequest
          * @description The claim as the admin sees it, beside its payment: the gateway's order,
          *     and the row's status. On a grant or a refund, the gateway's payment it was
@@ -1670,6 +2080,174 @@ export interface components {
             items: components["schemas"]["AdminRefundRequest"][];
             /** Next Cursor */
             next_cursor: string | null;
+        };
+        /**
+         * AdminReport
+         * @description A report, its two people and when its day is up (D-921, P-761).
+         */
+        AdminReport: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            reporter: components["schemas"]["AdminUserRef"];
+            reported: components["schemas"]["AdminUserRef"];
+            reason: components["schemas"]["ReportReason"];
+            /** Details */
+            details: string | null;
+            /** Thread Id */
+            thread_id: string | null;
+            status: components["schemas"]["ReportStatus"];
+            action: components["schemas"]["ReportAction"] | null;
+            /** Resolved By */
+            resolved_by: string | null;
+            /** Resolved At */
+            resolved_at: string | null;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /**
+             * Due At
+             * Format: date-time
+             */
+            due_at: string;
+        };
+        /**
+         * AdminReportPage
+         * @description `Page<AdminReport>`: oldest first by `(created_at, id)`, a queue.
+         */
+        AdminReportPage: {
+            /** Items */
+            items: components["schemas"]["AdminReport"][];
+            /** Next Cursor */
+            next_cursor: string | null;
+        };
+        /**
+         * AdminRevenue
+         * @description Paid payments' money in (D-483), never the ledger: an admin's alone.
+         */
+        AdminRevenue: {
+            /** Last 7 Days Paise */
+            last_7_days_paise: number;
+            /** Last 30 Days Paise */
+            last_30_days_paise: number;
+            /** Financial Year */
+            financial_year: string;
+            /** Financial Year Paise */
+            financial_year_paise: number;
+        };
+        /** AdminThread */
+        AdminThread: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            other: components["schemas"]["AdminUserRef"];
+            status: components["schemas"]["ThreadStatus"];
+            origin: components["schemas"]["ThreadOrigin"];
+            /** Message Count */
+            message_count: number;
+            /** Last Message At */
+            last_message_at: string | null;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+        };
+        /**
+         * AdminUser
+         * @description An account as staff see it in a list. `erased` once T-9.6's erasure ran:
+         *     its profile is empty, its number's hash kept (D-500).
+         */
+        AdminUser: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** First Name */
+            first_name: string | null;
+            /** Username */
+            username: string | null;
+            /** City */
+            city: string | null;
+            gender: components["schemas"]["Gender"] | null;
+            /** Age */
+            age: number | null;
+            role: components["schemas"]["Role"];
+            status: components["schemas"]["UserStatus"];
+            onboarding_step: components["schemas"]["OnboardingStep"];
+            /** Erased */
+            erased: boolean;
+            /** Deleted Requested At */
+            deleted_requested_at: string | null;
+            /** Last Active At */
+            last_active_at: string | null;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+        };
+        /**
+         * AdminUserDetail
+         * @description `GET /admin/users/{id}`. `phone` in full for an admin, each view
+         *     audited; masked for a moderator; null once erased (D-927). The lists are
+         *     the newest 50 of each.
+         */
+        AdminUserDetail: {
+            user: components["schemas"]["AdminUser"];
+            /** Phone */
+            phone: string | null;
+            /** Phone Masked */
+            phone_masked: boolean;
+            /** Is Verified */
+            is_verified: boolean;
+            /** Balance */
+            balance: number;
+            ban: components["schemas"]["AdminBan"] | null;
+            /** Photos */
+            photos: components["schemas"]["AdminPhoto"][];
+            fraud: components["schemas"]["AdminFraud"] | null;
+            /** Reports About */
+            reports_about: components["schemas"]["AdminReport"][];
+            /** Reports By */
+            reports_by: components["schemas"]["AdminReport"][];
+            /** Ledger */
+            ledger: components["schemas"]["AdminLedgerEntry"][];
+            /** Threads */
+            threads: components["schemas"]["AdminThread"][];
+        };
+        /**
+         * AdminUserPage
+         * @description `Page<AdminUser>`: newest account first, by `(created_at, id)`.
+         */
+        AdminUserPage: {
+            /** Items */
+            items: components["schemas"]["AdminUser"][];
+            /** Next Cursor */
+            next_cursor: string | null;
+        };
+        /**
+         * AdminUserRef
+         * @description Someone named in another row: a report's two people, a Thread's other.
+         */
+        AdminUserRef: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** First Name */
+            first_name: string | null;
+            /** Username */
+            username: string | null;
+            status: components["schemas"]["UserStatus"];
         };
         /**
          * Album
@@ -1759,6 +2337,50 @@ export interface components {
              * Format: uuid
              */
             area_id: string;
+        };
+        /**
+         * AuditEntry
+         * @description An `audit_log` row. `actor_is_system` for the system user (D-905),
+         *     which the web names "System".
+         */
+        AuditEntry: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /**
+             * Actor Id
+             * Format: uuid
+             */
+            actor_id: string;
+            /** Actor Is System */
+            actor_is_system: boolean;
+            /** Action */
+            action: string;
+            /** Target Type */
+            target_type: string | null;
+            /** Target Id */
+            target_id: string | null;
+            /** Meta */
+            meta: {
+                [key: string]: unknown;
+            } | null;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+        };
+        /**
+         * AuditEntryPage
+         * @description `Page<AuditEntry>`: newest first by `(created_at, id)`.
+         */
+        AuditEntryPage: {
+            /** Items */
+            items: components["schemas"]["AuditEntry"][];
+            /** Next Cursor */
+            next_cursor: string | null;
         };
         /**
          * BlockRequest
@@ -1949,6 +2571,17 @@ export interface components {
             shown_price: number;
         };
         /**
+         * CreditsChange
+         * @description Velas granted (`delta` > 0, `admin_grant`) or taken back (< 0,
+         *     `admin_correction`), at most 1,000 either way (D-923).
+         */
+        CreditsChange: {
+            /** Delta */
+            delta: number;
+            /** Reason */
+            reason: string;
+        };
+        /**
          * DataExport
          * @description A copy of the user's own data (D-502). `url` is a link to the file,
          *     signed until `expires_at`, only while it is `ready`; otherwise null.
@@ -2063,6 +2696,11 @@ export interface components {
             /** Id Token */
             id_token: string;
         };
+        /**
+         * FraudBand
+         * @enum {string}
+         */
+        FraudBand: "normal" | "monitor" | "shadow" | "freeze";
         /**
          * Gender
          * @enum {string}
@@ -2614,6 +3252,19 @@ export interface components {
             from_photo_id?: string | null;
         };
         /**
+         * PhotoDecision
+         * @description Approve a pending photo, or take down a pending or approved one: which
+         *     of moderation's reasons, and a note saying why, kept in audit_log.
+         */
+        PhotoDecision: {
+            /** Approve */
+            approve: boolean;
+            /** Reason */
+            reason?: ("nudity" | "text_overlay" | "other") | null;
+            /** Note */
+            note?: string | null;
+        };
+        /**
          * PhotoKind
          * @enum {string}
          */
@@ -2940,6 +3591,12 @@ export interface components {
             created_at: string;
         };
         /**
+         * ReportAction
+         * @description `reports.action`'s values, the database's check (03-SCHEMA).
+         * @enum {string}
+         */
+        ReportAction: "none" | "warn" | "freeze" | "ban";
+        /**
          * ReportFiled
          * @description The report you just filed: its id and when. Nothing about what
          *     moderation does with it, which the reporter is told later, if at all.
@@ -2961,6 +3618,20 @@ export interface components {
          * @enum {string}
          */
         ReportReason: "fake" | "scam" | "harass" | "sexual" | "minor" | "other";
+        /**
+         * ReportResolution
+         * @description `none` dismisses; `warn`, `freeze` and `ban` action it (D-921).
+         */
+        ReportResolution: {
+            action: components["schemas"]["ReportAction"];
+            /** Note */
+            note: string;
+        };
+        /**
+         * ReportStatus
+         * @enum {string}
+         */
+        ReportStatus: "open" | "actioned" | "dismissed";
         /**
          * RevealRequest
          * @description `POST /likes/{handle}/reveal`'s body (P-56, D-600).
@@ -3127,6 +3798,22 @@ export interface components {
             access_token: string;
             user: components["schemas"]["Me"];
         };
+        /**
+         * StatusChange
+         * @description `frozen` (moderator or admin), `banned` or `active` (admin): D-922.
+         */
+        StatusChange: {
+            status: components["schemas"]["StatusTarget"];
+            /** Reason */
+            reason: string;
+        };
+        /**
+         * StatusTarget
+         * @description What `POST /admin/users/{id}/status` may set: freeze, ban, or lift
+         *     either back to active.
+         * @enum {string}
+         */
+        StatusTarget: "active" | "frozen" | "banned";
         /** SubmitSelfie */
         SubmitSelfie: {
             /**
@@ -4779,6 +5466,393 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["AdminRefundRequest"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    metrics_v1_admin_metrics_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AdminMetrics"];
+                };
+            };
+        };
+    };
+    users_v1_admin_users_get: {
+        parameters: {
+            query?: {
+                /** @description A whole number, an id, or a name's or username's start. */
+                q?: string | null;
+                cursor?: string | null;
+                limit?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AdminUserPage"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    user_detail_v1_admin_users__user_id__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                user_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AdminUserDetail"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    set_status_v1_admin_users__user_id__status_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                user_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["StatusChange"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    change_credits_v1_admin_users__user_id__credits_post: {
+        parameters: {
+            query?: never;
+            header: {
+                "Idempotency-Key": string;
+            };
+            path: {
+                user_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreditsChange"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    reports_v1_admin_reports_get: {
+        parameters: {
+            query?: {
+                /** @description The reports in this status: open if absent. */
+                status?: components["schemas"]["ReportStatus"];
+                cursor?: string | null;
+                limit?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AdminReportPage"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    resolve_report_v1_admin_reports__report_id__resolve_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                report_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ReportResolution"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    moderation_v1_admin_moderation_get: {
+        parameters: {
+            query?: {
+                cursor?: string | null;
+                limit?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AdminPhotoPage"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    decide_photo_v1_admin_photos__photo_id__decide_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                photo_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PhotoDecision"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    thread_messages_v1_admin_threads__thread_id__messages_get: {
+        parameters: {
+            query: {
+                /** @description Why staff read this Thread: kept in audit_log (D-924). */
+                reason: string;
+                cursor?: string | null;
+                limit?: number;
+            };
+            header?: never;
+            path: {
+                thread_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AdminMessagePage"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    audit_log_v1_admin_audit_get: {
+        parameters: {
+            query?: {
+                /** @description Only this action. */
+                action?: string | null;
+                cursor?: string | null;
+                limit?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AuditEntryPage"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    freezes_v1_admin_freezes_get: {
+        parameters: {
+            query?: {
+                cursor?: string | null;
+                limit?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AdminFreezePage"];
                 };
             };
             /** @description Validation Error */

@@ -126,6 +126,8 @@ UNDERAGE_DELETES = (
 # deletion fails whole, a 500, and the bug is in whatever wrote it (D-078).
 UNDERAGE_KEEPS = {
     "audit_log": "rule 12; its key is the staff member acting",
+    # T-9.5 (D-922): `lifted_by`, the admin who lifted a ban, never the person.
+    "banned_identities": "rule 12; its key is the admin who lifted a ban",
     "ledger_entries": "rule 12; money",
     "messages": "rule 12",
     "payments": "rule 12; money",
@@ -208,17 +210,22 @@ async def delete_account(session: AsyncSession, user_id: UUID) -> None:
 
 async def ban_phone_hash(session: AsyncSession, phone_hash: str, reason: str) -> UUID:
     """Keep a number's hash in `banned_identities` (D-009), and return its row's
-    id. A hash already there keeps its row and reason: one row per number,
-    whatever banned it."""
+    id. A hash already standing keeps its row and reason: one standing row per
+    number, whatever banned it. One lifted before is a record, never reused: a
+    new ban is a row of its own (D-922)."""
     await session.execute(
         insert(BannedIdentity)
         .values(kind=BanKind.PHONE_HASH, value=phone_hash, reason=reason)
-        .on_conflict_do_nothing(index_elements=["kind", "value"])
+        .on_conflict_do_nothing(
+            index_elements=["kind", "value"],
+            index_where=BannedIdentity.lifted_at.is_(None),
+        )
     )
     row_id = await session.scalar(
         select(BannedIdentity.id).where(
             BannedIdentity.kind == BanKind.PHONE_HASH,
             BannedIdentity.value == phone_hash,
+            BannedIdentity.lifted_at.is_(None),
         )
     )
     if row_id is None:  # inserted or kept just above, in this transaction

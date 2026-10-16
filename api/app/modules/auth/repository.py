@@ -13,12 +13,14 @@ from app.modules.auth.models import BannedIdentity, Session
 
 
 async def is_banned(session: AsyncSession, phone_hash: str) -> bool:
-    """Whether this number's hash may not sign up again (D-009, D-072)."""
+    """Whether this number's hash may not sign up again (D-009, D-072): a
+    standing row, never one an admin lifted (D-922)."""
     found = await session.scalar(
         select(BannedIdentity.id)
         .where(
             BannedIdentity.kind == BanKind.PHONE_HASH,
             BannedIdentity.value == phone_hash,
+            BannedIdentity.lifted_at.is_(None),
         )
         .limit(1)
     )
