@@ -4,6 +4,7 @@ connection for the whole request (P-52)."""
 from __future__ import annotations
 
 import asyncio
+import traceback
 import uuid
 from collections.abc import AsyncIterator, Iterator
 from datetime import UTC, datetime, timedelta
@@ -18,12 +19,17 @@ from sqlalchemy import event, text
 from sqlalchemy.dialects.postgresql.asyncpg import AsyncAdapt_asyncpg_connection
 from sqlalchemy.engine import make_url
 from sqlalchemy.exc import DBAPIError
-from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker
+from sqlalchemy.ext.asyncio import (
+    AsyncEngine,
+    AsyncSession,
+    async_sessionmaker,
+    create_async_engine,
+)
 from sqlalchemy.pool import QueuePool
 
 from app.core import clock
 from app.core.config import Settings, get_settings
-from app.core.db import build_engine, build_sessionmaker, get_session
+from app.core.db import WITHHELD, build_engine, build_sessionmaker, get_session
 from app.core.providers import FakeProviders
 from app.core.security import E164, make_access_token
 from app.main import close_resources, create_app
@@ -406,3 +412,113 @@ async def test_a_new_connection_is_never_checked(
         assert len(pings) == 1
     finally:
         await engine.dispose()
+
+
+# Rule 15 at the database (P-80, D-990): every way a failed query's error
+# quoted a value past SQLAlchemy's `hide_parameters`, each value short enough
+# that asyncpg's 40-character cut can't hide it by luck.
+_LEAKS = {
+    "a duplicate key, in DETAIL": (
+        "insert into leak (v, n) values (:v, 1)",
+        True,
+    ),
+    "a check's failing row, in DETAIL": (
+        "insert into leak (v, n) values (:v || '-2', -5)",
+        False,
+    ),
+    "a cast Postgres refused, in its message": (
+        "select cast(cast(:v as text) as integer)",
+        False,
+    ),
+    "an argument asyncpg can't encode, in its message": (
+        "select cast(:v as integer)",
+        False,
+    ),
+}
+
+
+async def _fail(
+    engine: AsyncEngine, statement: str, value: str, seed: bool
+) -> DBAPIError:
+    async with engine.connect() as connection:
+        await connection.execute(
+            text("create temp table leak (v text unique, n int check (n > 0))")
+        )
+        if seed:
+            await connection.execute(
+                text("insert into leak (v, n) values (:v, 1)"), {"v": value}
+            )
+        with pytest.raises(DBAPIError) as failure:
+            await connection.execute(text(statement), {"v": value})
+    return failure.value
+
+
+def _everything_it_prints(error: BaseException) -> str:
+    """The whole chain, as a traceback in the logs shows it, and each layer's
+    fields, as an error reporter would read them."""
+    layers = [error, error.__cause__, getattr(error.__cause__, "__cause__", None)]
+    fields = [repr(getattr(layer, "as_dict", dict)()) for layer in layers]
+    return "".join(traceback.format_exception(error)) + "".join(fields)
+
+
+@requires_infra
+@pytest.mark.parametrize("leak", list(_LEAKS), ids=list(_LEAKS))
+async def test_the_apis_database_errors_carry_no_values(
+    real_app: FastAPI, leak: str
+) -> None:
+    statement, seed = _LEAKS[leak]
+    value = f"v-{uuid.uuid4().hex[:12]}"
+    parameters_only = create_async_engine(TEST_DATABASE_URL, hide_parameters=True)
+    try:
+        before = await _fail(parameters_only, statement, value, seed)
+    finally:
+        await parameters_only.dispose()
+    after = await _fail(real_app.state.engine, statement, value, seed)
+
+    assert value in _everything_it_prints(before)  # the check can see it
+    assert value not in _everything_it_prints(after)
+
+
+@requires_infra
+async def test_a_withheld_error_keeps_its_code_and_constraint(
+    real_app: FastAPI,
+) -> None:
+    """The services read both (`sqlstate_of`, a unique key's name)."""
+    value = f"v-{uuid.uuid4().hex[:12]}"
+    error = await _fail(
+        real_app.state.engine, _LEAKS["a duplicate key, in DETAIL"][0], value, True
+    )
+
+    driver = error.__cause__.__cause__ if error.__cause__ else None
+
+    assert users_service.sqlstate_of(error) == "23505"
+    assert getattr(driver, "constraint_name", None) == "leak_v_key"
+    assert getattr(driver, "detail", "absent") is None
+    first_line = str(error).splitlines()[0]
+    assert first_line.startswith(
+        "(sqlalchemy.dialects.postgresql.asyncpg.IntegrityError) "
+        "<class 'asyncpg.exceptions.UniqueViolationError'>: "
+        'duplicate key value violates unique constraint "leak_v_key" [sqlstate=23505 '
+    )
+    assert first_line.endswith("table_name=leak constraint_name=leak_v_key]")
+    assert "DETAIL" not in str(error)
+
+
+@requires_infra
+async def test_postgres_s_words_are_kept_only_where_they_quote_nothing(
+    real_app: FastAPI,
+) -> None:
+    """Our triggers' wording is ours, and tests match it; a cast's names the
+    text it refused, so it goes."""
+    engine = real_app.state.engine
+    async with engine.connect() as connection:
+        with pytest.raises(DBAPIError) as ours:
+            await connection.execute(
+                text("do $$ begin raise exception 'leak % is ours', 3; end $$")
+            )
+    cast = await _fail(
+        engine, _LEAKS["a cast Postgres refused, in its message"][0], "v-1", False
+    )
+
+    assert "leak 3 is ours [sqlstate=P0001]" in str(ours.value)
+    assert f"{WITHHELD} [sqlstate=22P02]" in str(cast)

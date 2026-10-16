@@ -5347,7 +5347,7 @@ The number comes from the session's own block, given in its brief, from P-100 up
   helper under `raw/`, every approved kind given one, the owner shown the upload, either file
   list without it, and the downgrade not refusing: 8 of 8 red, every file restored, SHA-256
   checked. Private photos approved before this have no scored copy; T-8.4 shows only rows that do.
-- [ ] P-80 · Keep query values out of the API's database errors. **Before real users** (on
+- [x] P-80 · Keep query values out of the API's database errors. **Before real users** (on
   T-9.15's Needs line). Worst case: a failed query's error, logged with its parameters, carries a
   phone number's hash, an encrypted number or a storage key into Fly's logs (rule 15). Seen
   building T-4.4: a test's unique-key violation printed `[parameters: (…, 'raw/<user>/<photo>', …)]`.
@@ -5357,6 +5357,17 @@ The number comes from the session's own block, given in its brief, from P-100 up
   names no value.
 
   Found building T-4.4.
+  **Built (16 October 2026, D-990), wider than filed:** with `hide_parameters` on, four ways still
+  quoted a value: a duplicate key's DETAIL (a phone number's hash, by `uq_users_phone_hash_live`), a
+  check's failing row, a cast Postgres refused, and an argument asyncpg can't encode, quoted to 40
+  characters (a storage key's user id; the worker's test passed only because a whole key is
+  longer). `create_app()` sets the flag, and the flag now also installs `_withhold_values`
+  (`core/db.py`), which rebuilds every layer of the error from its SQLSTATE and names; Postgres's
+  message stays only for class 23 and our triggers' P0. Held by `test_db.py`'s
+  `test_the_apis_database_errors_carry_no_values` (each of the four, against SQLAlchemy's option
+  alone as the control), the worker's test with a key too short to be cut, and five break cases,
+  `p80-1` to `p80-5`, all red (`out/p80-break-run.log`, `p80-4` rerun in `out/p80-4-rerun.log` after
+  its claim was narrowed). The flag's name is P-890's.
 - [ ] P-81 · Ask the lawyer whether D-093's deletion may need to yield when a photo is also sexual.
   **Before the first real user, and not with the rest** (on REL-1's and T-9.15's Needs lines; the
   one exception on P-0.7). **The one legal question that must be answered before anyone real
@@ -6957,3 +6968,20 @@ The number comes from the session's own block, given in its brief, from P-100 up
   24:00 UTC on 31 December; nothing reads it today. (3) `core/test_security.py:313` puts one instant
   in 2040 to sit after the wall clock; from 2040 it still passes and proves less. Filed by Claude,
   16 October 2026; its session's block.
+- [ ] P-890 · Rename `build_engine`'s `hide_parameters` to say what it now does. **No deadline.**
+  Worst case if never done: none in behaviour; a reader takes the flag for SQLAlchemy's option of
+  that name, which hides only the parameters line, and trusts it to hide values alone, which is
+  P-80's mistake made again. Since D-990 the flag also installs `_withhold_values`. A rename
+  (`hide_values`, say) touches `core/db.py`, `main.py`, `workers/main.py`, `tools/unfreeze.py`,
+  `tools/selfie_review.py` and `tests/break_guards.py`'s anchors; kept out of P-80 at the
+  founder's direction (16 October 2026). Filed by Claude building P-80; its session's block.
+- [ ] P-891 · Two tests order ledger rows by a `created_at` that ties. **Before the next busy
+  landing day.** Worst case: a good commit's `make test` goes red at random, and landing is held,
+  or a session learns to rerun reds until green, which is how a real red gets through.
+  `test_swipe.py`'s and `threads/test_open.py`'s `_ledger` sort by `LedgerEntry.created_at`; the
+  `db` fixture runs every write in one rolled-back transaction, where `now()` is fixed, so the
+  setup's `admin_grant` and the request's debit carry the same time and either may come last.
+  Seen once, on 16 October 2026: `test_a_mans_super_like_debits_five_through_the_wallet` read
+  `admin_grant` as the last entry on P-80's landing run, having passed on that code twice before.
+  Fix: order by something that follows insertion, or assert on the set. Filed by Claude landing
+  P-80; its session's block.

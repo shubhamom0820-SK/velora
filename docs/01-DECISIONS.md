@@ -6015,3 +6015,33 @@ violations, a dozen reports for every mistyped link).
 **Noted, not filed:** `/onboarding/<no such step>` answers 200, not 404: onboarding's gate streams
 "Loading" before the step's `notFound()`, so the status is sent first. A soft 404 on a page that is
 never indexed.
+
+### D-990 · A database error says names and a code, never a value — Locked
+**The decision (the founder, approving P-80's plan, 16 October 2026, on the advisor's
+recommendation, relayed):** every engine built with `hide_parameters=True` (the API's from P-80,
+the worker's and the tools' already) also rebuilds each failed query's error before anyone sees
+it (`_withhold_values` in `core/db.py`). What stays: the error's class, its SQLSTATE, and the
+schema, table, column and constraint names. Postgres's own message stays only for integrity
+violations (class 23), which name the constraint and put the values in DETAIL, and for our
+triggers' own wording (P0); every other message, and every DETAIL, HINT, context and internal
+query, is withheld. All three layers are rewritten, asyncpg's, SQLAlchemy's adaptation and
+SQLAlchemy's own, since a traceback prints the whole chain.
+
+**Why:** SQLAlchemy's option drops only its `[parameters: …]` line, and P-80 as filed assumed that
+was the whole leak. Measured on 14 October 2026 (P-80's plan), with the option on, four ways still quoted a
+value: a duplicate key's DETAIL (`uq_users_phone_hash_live` would print a phone number's hash), a
+check's failing row, a cast Postgres refused (`invalid input syntax for type integer: "…"`), and
+an argument asyncpg can't encode, quoted up to 40 characters: a storage key's `raw/<user id>`. The
+worker's T-4.4 test passed only because a whole key is longer than that cut. The services read
+SQLSTATE and the constraint's name (`sqlstate_of`, a unique key's name), so both stay.
+
+**Not covered, and why:** a value written into the SQL text itself, not bound as a parameter,
+is still printed in the error's `[SQL: …]` line. No query in `app/` writes a person's value into
+its text (read on 16 October 2026: the one f-string, discovery's `SIMILARITY`, writes a constant
+from `rules`); a query that did would break rule 15 and invite injection alike, so it is refused
+in review, not scrubbed here. And a trigger whose own message formats a row's value would print it:
+ours format counts and operation names only.
+
+**Rejected:** scrubbing in the log pipeline (it would need structlog, uvicorn's and ARQ's stdlib
+loggers, and T-9.12's Sentry each done separately, and miss whichever came next); keeping
+Postgres's message everywhere and dropping only DETAIL (a cast's message quotes the text).

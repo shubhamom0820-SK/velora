@@ -13,6 +13,7 @@ import logging
 import re
 import shutil
 import tomllib
+import traceback
 import uuid
 from collections.abc import AsyncIterator, MutableMapping
 from datetime import UTC, datetime, timedelta
@@ -617,8 +618,10 @@ def test_the_workers_fly_settings_start_as_staging_with_its_secrets() -> None:
 async def test_the_workers_database_errors_carry_no_values() -> None:
     """Rule 15: a failed query's error names its statement, never the values
     it carried, which can be storage keys. The plain engine's does: the check
-    can see what it says is absent."""
-    key = f"raw/{uuid.uuid4()}/{uuid.uuid4()}"
+    can see what it says is absent. The key is short enough that asyncpg's
+    40-character cut can't hide it by luck, as a whole key's length did until
+    P-80: its first 40 characters, the user's id among them, were there."""
+    key = f"raw/{uuid.uuid4().hex[:12]}"
     plain = build_engine(TEST_DATABASE_URL)
     ctx: dict[str, Any] = {"redis": build_redis(TEST_REDIS_URL)}
     await worker.open_resources(
@@ -632,7 +635,7 @@ async def test_the_workers_database_errors_carry_no_values() -> None:
                     await session.execute(
                         text("select cast(:key as integer)"), {"key": key}
                     )
-                errors.append(str(failure.value))
+                errors.append("".join(traceback.format_exception(failure.value)))
     finally:
         await worker.shutdown(ctx)
         await plain.dispose()

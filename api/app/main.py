@@ -155,6 +155,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         settings.DATABASE_URL,
         pool_size=settings.DB_POOL_SIZE,
         max_overflow=settings.DB_MAX_OVERFLOW,
+        hide_parameters=True,
     )
     app.state.sessionmaker = build_sessionmaker(app.state.engine)
     app.state.redis = build_redis(settings.REDIS_URL)

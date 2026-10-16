@@ -12434,6 +12434,89 @@ P61: list[Case] = [
     ),
 ]
 
+# --- P-80: no query value in the API's database errors (D-990) --------------------
+
+DB80 = "app/core/db.py"
+P80_SELECTION = ["tests/core/test_db.py", "tests/workers/test_worker.py"]
+NO_VALUES = "test_the_apis_database_errors_carry_no_values"
+DETAIL_LEAKS = [
+    f"{NO_VALUES}[a duplicate key, in DETAIL]",
+    f"{NO_VALUES}[a check's failing row, in DETAIL]",
+]
+MESSAGE_LEAKS = [
+    f"{NO_VALUES}[a cast Postgres refused, in its message]",
+    f"{NO_VALUES}[an argument asyncpg can't encode, in its message]",
+]
+
+P80: list[Case] = [
+    Case(
+        id="p80-1-the-api-s-engine-shows-values",
+        what="the API's engine built without hide_parameters, as before P-80",
+        edits=[("app/main.py", "        hide_parameters=True,\n", "")],
+        expect=[
+            *DETAIL_LEAKS,
+            *MESSAGE_LEAKS,
+            "test_a_withheld_error_keeps_its_code_and_constraint",
+            "test_postgres_s_words_are_kept_only_where_they_quote_nothing",
+        ],
+    ),
+    Case(
+        id="p80-2-sqlalchemy-s-option-alone",
+        what="hide_parameters trusted to hide values, the hook never installed",
+        edits=[
+            (
+                DB80,
+                '        event.listen(engine.sync_engine, "handle_error", _withhold_values)\n',
+                "        pass\n",
+            )
+        ],
+        expect=[
+            *DETAIL_LEAKS,
+            *MESSAGE_LEAKS,
+            "test_the_workers_database_errors_carry_no_values",
+        ],
+    ),
+    Case(
+        id="p80-3-the-driver-keeps-detail",
+        what="the text rewritten but the driver's DETAIL left for a reporter to read",
+        edits=[
+            (
+                DB80,
+                '            setattr(driver, field, safe if field == "message" else None)\n',
+                "            pass\n",
+            )
+        ],
+        expect=[
+            *DETAIL_LEAKS,
+            "test_a_withheld_error_keeps_its_code_and_constraint",
+        ],
+    ),
+    Case(
+        id="p80-4-every-message-kept",
+        what="Postgres's message kept for every error, a cast's quoted text too",
+        edits=[
+            (DB80, '_MESSAGE_KEPT_FOR = ("23", "P0")\n', '_MESSAGE_KEPT_FOR = ("",)\n')
+        ],
+        # asyncpg's own refusals have no message field, so stay withheld.
+        expect=[
+            MESSAGE_LEAKS[0],
+            "test_postgres_s_words_are_kept_only_where_they_quote_nothing",
+        ],
+    ),
+    Case(
+        id="p80-5-sqlalchemy-s-own-text-kept",
+        what="the driver's layers rewritten, SQLAlchemy's error left as it was built",
+        edits=[
+            (
+                DB80,
+                '    error.args = (f"({type(adapted).__module__}.{type(adapted).__name__}) {adapted}",)\n',
+                "",
+            )
+        ],
+        expect=[*DETAIL_LEAKS, *MESSAGE_LEAKS],
+    ),
+]
+
 CASES: list[tuple[Case, list[str]]] = (
     [(c, T51_SELECTION) for c in T51]
     + [(c, T54_SELECTION) for c in T54]
@@ -12493,6 +12576,7 @@ CASES: list[tuple[Case, list[str]]] = (
     + [(c, P680_SELECTION) for c in P680]
     + [(c, T92_SELECTION) for c in T92]
     + [(c, P61_SELECTION) for c in P61]
+    + [(c, P80_SELECTION) for c in P80]
 )
 
 # The fifty-connection fixture's own message when Postgres refuses a connection.

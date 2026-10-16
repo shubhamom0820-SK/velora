@@ -28,7 +28,7 @@ from fastapi import FastAPI, Request
 from redis.asyncio import Redis
 from sqlalchemy import DateTime, ForeignKey, MetaData, event, exc, func, text
 from sqlalchemy.dialects.postgresql import ENUM, UUID
-from sqlalchemy.engine import Connection, Engine
+from sqlalchemy.engine import Connection, Engine, ExceptionContext
 from sqlalchemy.ext.asyncio import (
     AsyncEngine,
     AsyncSession,
@@ -182,8 +182,9 @@ def build_engine(
     `CHECK_IF_IDLE_FOR` idle (P-53).
 
     `hide_parameters` keeps a query's values out of its errors, so a failed
-    query can't log a storage key or a hash (rule 15); the worker sets it
-    (T-4.4), and P-80 asks whether the API should too.
+    query can't log a storage key or a hash (rule 15): SQLAlchemy's own option
+    drops the parameters line, and `_withhold_values` the rest (D-990). The API,
+    the worker and the tools set it; tests, seed and benches don't.
     """
     engine = create_async_engine(
         url,
@@ -194,7 +195,60 @@ def build_engine(
     )
     event.listen(engine.sync_engine.pool, "checkin", _note_checkin)
     event.listen(engine.sync_engine.pool, "checkout", _check_if_idle)
+    if hide_parameters:
+        event.listen(engine.sync_engine, "handle_error", _withhold_values)
     return engine
+
+
+# What a database error may still say once `_withhold_values` has rebuilt it:
+# names and a code, never a value (D-990). Postgres's own message is kept only
+# where it carries none: an integrity violation names its constraint and puts
+# the values in DETAIL, and P0 is our own triggers' wording. Elsewhere it can
+# quote one (`invalid input syntax for type integer: "raw/…"`).
+_KEPT_FIELDS = frozenset(
+    {"sqlstate", "schema_name", "table_name", "column_name", "constraint_name"}
+)
+_MESSAGE_KEPT_FOR = ("23", "P0")
+WITHHELD = "message withheld: it can carry a query's values (D-990)"
+
+
+def _withhold_values(context: ExceptionContext) -> None:
+    """Rebuild a failed query's error from what can't carry a value (D-990).
+
+    `hide_parameters` drops only SQLAlchemy's parameters line. Postgres still
+    names the duplicate key in DETAIL (a phone number's hash), the failing row
+    of a check, or the text a cast refused; asyncpg quotes an argument it can't
+    encode, cut at 40 characters, which is a storage key's user id (P-80). So
+    every layer of the error is rewritten in place, before anyone sees it: the
+    driver's exception, SQLAlchemy's adaptation of it, and SQLAlchemy's own,
+    since a traceback prints the whole chain. SQLSTATE and the constraint's
+    name stay, for the services that read them.
+    """
+    error = context.sqlalchemy_exception
+    adapted = context.original_exception
+    driver = adapted.__cause__
+    if not isinstance(error, exc.DBAPIError) or driver is None:
+        return
+    sqlstate = getattr(driver, "sqlstate", None)
+    as_dict = getattr(driver, "as_dict", None)
+    fields: dict[str, Any] = as_dict() if callable(as_dict) else {}
+    message = (
+        fields.get("message", WITHHELD)
+        if isinstance(sqlstate, str) and sqlstate.startswith(_MESSAGE_KEPT_FOR)
+        else WITHHELD
+    )
+    names = " ".join(
+        f"{field}={value}"
+        for field, value in fields.items()
+        if field in _KEPT_FIELDS and value is not None
+    )
+    safe = f"{message} [{names}]" if names else message
+    for field in fields:
+        if field not in _KEPT_FIELDS:
+            setattr(driver, field, safe if field == "message" else None)
+    driver.args = (safe,)
+    adapted.args = (f"{type(driver)}: {safe}",)
+    error.args = (f"({type(adapted).__module__}.{type(adapted).__name__}) {adapted}",)
 
 
 def _note_checkin(dbapi_connection: Any, record: ConnectionPoolEntry) -> None:
