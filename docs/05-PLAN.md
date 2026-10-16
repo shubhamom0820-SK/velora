@@ -3687,7 +3687,7 @@ number** per account gets its 5 each, one Thread's worth, and is **accepted**, k
   37867167873)
 
 ### T-9.5 · Admin panel
-- [ ] **Needs:** T-9.2
+- [x] **Needs:** T-9.2
 - **A ban or a freeze closes the sockets** (T-7.4, D-557): `events.close_sockets(session,
   user_id)` in the transaction that sets it, as sign-out does.
   **Built:** `admin.panel._freeze` and `_ban` call `auth.service.sign_out_everywhere`, which does
@@ -3697,46 +3697,46 @@ number** per account gets its 5 each, one Thread's worth, and is **accepted**, k
   separate chat), relayed: `NOT VALID` for the ref rule, an unbanned account that had asked to go
   back to `deleted`, a ban lifted in place and never deleted, the face photo kept out, and an
   `Idempotency-Key` on grants. Built in four commits: the ledger, the API, the web, the docs.
-- [ ] API: all `/admin/*` routes in `04-API.md`, `require_role(moderator)`; Vela grants and bans `admin` only; every call writes `audit_log`; viewing messages of a thread logs who looked and why (reason required).
+- [x] API: all `/admin/*` routes in `04-API.md`, `require_role(moderator)`; Vela grants and bans `admin` only; every call writes `audit_log`; viewing messages of a thread logs who looked and why (reason required).
   **Built (D-920 to D-924):** `app/modules/admin/panel.py` behind `router.py`, its own module since
   `admin.service` is imported by scoring and payments; every route declares its own `require_role`
   and writes `audit_log`, reads included, and `test_admin_roles.py` reads the app's OpenAPI so a new
   `/v1/admin` route without one fails. Added beyond 04-API's list: `GET /admin/freezes` (P-800).
-- [ ] **Vela grants (`/admin/users/{id}/credits`):** a grant can't reach a woman, because the database refuses it (D-076). A negative `delta`, an admin correction, has no ledger reason today, since `admin_grant` is a credit (D-077). Add a debit reason for it here, an enum addition. **Make `admin_grant`'s ref required here:** it is optional (T-5.1) only while its callers are the seed and `make_user`; an admin's grant names the `audit_log` row its call writes, or it is a grant nobody can trace. That is a migration on `ck_ledger_entries_ref_required` and a change to `wallet/rules.py`, which the seed and `make_user` must then follow (at the direction of the advisor directing Sprint 5, 3 October 2026).
+- [x] **Vela grants (`/admin/users/{id}/credits`):** a grant can't reach a woman, because the database refuses it (D-076). A negative `delta`, an admin correction, has no ledger reason today, since `admin_grant` is a credit (D-077). Add a debit reason for it here, an enum addition. **Make `admin_grant`'s ref required here:** it is optional (T-5.1) only while its callers are the seed and `make_user`; an admin's grant names the `audit_log` row its call writes, or it is a grant nobody can trace. That is a migration on `ck_ledger_entries_ref_required` and a change to `wallet/rules.py`, which the seed and `make_user` must then follow (at the direction of the advisor directing Sprint 5, 3 October 2026).
   **Built (D-923):** `admin_correction` (migrations `eb2e5b3a5cc8`, `688032b1dc7a`), every reason
   naming its ref, `NOT VALID` (`7a758777affd`); the seed's grant names the system user's
   `seed.grant` row and leaves an earlier one as it is, the tests' through `tests/grants.py`. The
   route takes an `Idempotency-Key`. The correction's ledger audit, as T-9.9 reads one, is
   `test_a_correction_is_exactly_one_admin_correction_and_the_ledger_reconciles` (critical).
-- [ ] Web `/admin`: metrics tiles, report queue with SLA timer (24 h), user search + detail (photos, reports, fraud signals, ledger, threads), moderation queue (approve/reject), actions with confirmation dialogs, audit log.
+- [x] Web `/admin`: metrics tiles, report queue with SLA timer (24 h), user search + detail (photos, reports, fraud signals, ledger, threads), moderation queue (approve/reject), actions with confirmation dialogs, audit log.
   **Built (D-920):** `src/app/admin/` and `src/components/admin/`, from existing parts only, 760 px;
   confirmations are sheets that ask why. `/admin` is one of `NONCE_ROUTES` (D-541, amended).
-- [ ] **`GET /admin/threads/{id}/messages` shows what either person cleared** (T-7.8, D-006): it
+- [x] **`GET /admin/threads/{id}/messages` shows what either person cleared** (T-7.8, D-006): it
   reads `messages` by `thread_id` with no viewer's `cleared_at`, as 04-API's "includes `body_raw` +
   cleared" says; T-7.8's test reads the same way and finds every message after a clearing.
   **Built (D-924):** `test_every_message_shows_whatever_either_person_cleared`.
-- [ ] **A moderator's approve or reject changes a profile's completeness (P-210):** call `onboarding.service.refresh_completeness` in the same transaction, under the user's row lock, as `photos.service._record` and `delete_photo` do, or discovery ranks that profile by a stale number (D-032).
+- [x] **A moderator's approve or reject changes a profile's completeness (P-210):** call `onboarding.service.refresh_completeness` in the same transaction, under the user's row lock, as `photos.service._record` and `delete_photo` do, or discovery ranks that profile by a stale number (D-032).
   **Built (D-925):** `photos.service.decide_by_staff`, under the owner's row lock;
   `test_approving_a_public_photo_publishes_it_and_lifts_completeness` and the takedown's.
-- [ ] Web `/admin` renders only for `role in (moderator, admin)`, read through `useMe()`; anyone else
+- [x] Web `/admin` renders only for `role in (moderator, admin)`, read through `useMe()`; anyone else
   gets the 404 page — replacing T-1.22's `next dev`-only gate (from P-30). **This gate is UX, not
   protection:** anyone can download the page's JavaScript, and the Next.js server never sees a
   session there (D-024). Every `/admin/*` endpoint must carry its own `require_role(...)`; the
   API's role check is the only thing guarding admin data.
   **Built:** `AdminGate` (`AdminGate.test.tsx`), and P-30's half here.
-- [ ] **User search finds a phone number only in full, never by prefix or part** (D-061). Numbers are
+- [x] **User search finds a phone number only in full, never by prefix or part** (D-061). Numbers are
   stored as a keyed hash and an encrypted copy, so search normalises and hashes the number typed and
   matches it exactly. "Whose number ends in 4321?" has no answer, by design: support asks for the
   whole number.
   **Built (D-927):** `test_part_of_a_number_finds_nobody`.
-- [ ] **Revisit D-101's possible-minor threshold, 0.35, from real scores** (the founder, 4
+- [x] **Revisit D-101's possible-minor threshold, 0.35, from real scores** (the founder, 4
   October 2026). It was chosen for an asymmetry, not from data: nobody had seen how
   Sightengine's `face-age` scores real photos. This is where real scores are first seen (the
   photo's `moderation` column keeps every photo's minor score, below the threshold too).
   Report what they show; the founder decides whether 0.35 moves, recorded on D-101.
   **Read 16 October 2026 (on D-101):** staging only, production has no deployment: 3 photos carry
   a score, 0.01, 0.01 and 0.78 (rejected). Too few to move anything; the founder's to decide.
-- [ ] **An erased account is still found by its number** (T-9.6, D-500): search hashes the number
+- [x] **An erased account is still found by its number** (T-9.6, D-500): search hashes the number
   typed and matches `users.phone_hash`, which an erased row keeps (`ix_users_phone_hash`), so
   support sees it as erased, with its reports. Its row can't leave `deleted`
   (`ck_users_anonymised_is_deleted`): ban its number through `banned_identities` only. And
@@ -3744,10 +3744,10 @@ number** per account gets its 5 each, one Thread's worth, and is **accepted**, k
   **Built (D-922, D-929):** an erased account is banned and unbanned by its number alone; a ban
   during the 29 days stops the erasure and keeps the data, and lifting it returns the account to
   `deleted`.
-- [ ] **The claims screen (P-480):** T-8.3's queue and resolution (`/admin/refund-requests`,
+- [x] **The claims screen (P-480):** T-8.3's queue and resolution (`/admin/refund-requests`,
   D-580 to D-582), admin only, each action behind a confirmation.
   **Built:** `ClaimQueue`, `/admin/claims`.
-- [ ] **Freezes (T-9.2, D-902, D-906):** an unfreeze before the first real user: a screen over
+- [x] **Freezes (T-9.2, D-902, D-906):** an unfreeze before the first real user: a screen over
   `safety.scoring.unfreeze`, the tool's own path, which resets the score and its `counted_from`
   (an unfreeze that leaves them would be frozen again at the next sweep). The automatic freezes
   listed, and P-800. **The system user** (D-905, `SYSTEM_USER_ID`) shown as "System" in the audit
@@ -3755,7 +3755,7 @@ number** per account gets its 5 each, one Thread's worth, and is **accepted**, k
   **Built (D-922, D-928):** an admin's unfreeze is `safety.scoring.unfreeze`; `/admin/freezes`
   marks the automatic ones; the push is filed as P-820. The system user is "System" in the log
   and in no list.
-- [ ] **Commit:** `feat(admin): moderation panel [T-9.5]`
+- [x] **Commit:** `feat(admin): moderation panel [T-9.5]`
 
 ### T-9.6 · Settings and data rights
 - [x] **Needs:** T-3.5
@@ -4141,7 +4141,7 @@ The number comes from the session's own block, given in its brief, from P-100 up
   form, whose value is off the scale. That covers both arbitrary values (`p-[18px]`) and off-scale
   steps (`mt-7` is 28 px, `gap-4.5` is 18 px, `p-9` is 36 px). Prove it both ways: it flags
   those, and passes `p-3.5`, `gap-2.5` and `px-0.5`. Found in T-1.19.
-- [ ] P-30 · Keep `/admin` off the public internet until it is gated. **Due before T-1.22.**
+- [x] P-30 · Keep `/admin` off the public internet until it is gated. **Due before T-1.22.**
 
   **The web gate on `/admin` is UX, not protection.** Anyone can download the page's JavaScript,
   and the Next.js server never sees a session there: D-024 keeps the access token in browser
@@ -6278,7 +6278,7 @@ The number comes from the session's own block, given in its brief, from P-100 up
   **Done 9 October 2026 (T-9.1, D-861):** a block holds against the number, matched through
   `users.phone_hash`, the founder's answer; nobody is told. `test_block_number.py` erases a
   blocked man, signs his number up again, and finds the new account blocked both ways everywhere.
-- [ ] P-401 · Decide what a ban landing during a deletion's 29 days does to the erasure. **In
+- [x] P-401 · Decide what a ban landing during a deletion's 29 days does to the erasure. **In
   T-9.5, where bans are written.** Worst case: someone deletes their account, a moderator bans it
   the next day, and the erasure never runs, because it erases only `deleted` accounts. Their
   photos, profile and number's encrypted copy are then kept indefinitely, against what `/privacy`
@@ -6352,7 +6352,7 @@ The number comes from the session's own block, given in its brief, from P-100 up
   (`pg_advisory_lock`, blocking) rather than polls. Its proof: hold the turn from a second
   connection in the gap and see today's test go red, the fixed one green. Found in P-220's
   session; filed from its block (P-470 to P-479).
-- [ ] P-480 · The admin's claims screen. **In T-9.5** (on its line). Worst case without it: a man's
+- [x] P-480 · The admin's claims screen. **In T-9.5** (on its line). Worst case without it: a man's
   claim that his money went through and no Velas came sits unread, since the queue exists only
   as an API (`GET /admin/refund-requests`, D-582) and nobody looks at it, and the published
   `/refunds` promise ("we fix it") goes unkept. The screen lists the open claims, oldest first,
@@ -6786,7 +6786,7 @@ The number comes from the session's own block, given in its brief, from P-100 up
   **Built by T-9.4 (9 October 2026, D-858),** which read it from T-9.1's session before it
   landed: the list and the sender leave out anything about someone blocked either way, through
   `blocked_either_way`, so by number too (D-861).
-- [ ] P-761 · The report sheet's "A moderator reviews this within 24 hours". **In T-9.5.** Worst
+- [x] P-761 · The report sheet's "A moderator reviews this within 24 hours". **In T-9.5.** Worst
   case: if the line ships before moderators have a queue, a woman reporting harassment is promised
   a review in 24 hours that nothing in the product makes happen. The prototype's sent state says
   it; T-9.1 leaves it out (D-863). Add it to `profile.reportSentBody` (`en.ts`) when T-9.5's
