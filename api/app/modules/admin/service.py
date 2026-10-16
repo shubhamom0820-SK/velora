@@ -68,10 +68,11 @@ async def audit(
     meta: dict[str, Any] | None = None,
     *,
     target: tuple[str, UUID] | None = None,
-) -> None:
+) -> UUID:
     """Record an admin's call in `audit_log`, inside the caller's transaction,
     beside whatever it did or read (02-ARCHITECTURE §12, T-9.5's "every call");
-    `target` is what it acted on, `(type, id)`."""
-    await repository.add_audit(
+    `target` is what it acted on, `(type, id)`. Returns the row's id, which a
+    grant or a correction names as its ref (D-923)."""
+    return await repository.add_audit(
         session, actor_id=actor_id, action=action, meta=meta, target=target
     )

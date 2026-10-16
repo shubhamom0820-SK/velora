@@ -39,15 +39,22 @@ async def test_the_wallets_logs_and_refusals_carry_nothing_secret(
     phone = decrypt_phone(man.phone_enc, make_test_settings())
     grant_event, reopen_event = f"client-{uuid.uuid4()}", f"client-{uuid.uuid4()}"
     thread = Ref(RefType.THREAD, uuid.uuid4())
+    audit = Ref(RefType.AUDIT_LOG, uuid.uuid4())
 
-    await service.credit(db, man.id, 5, LedgerReason.ADMIN_GRANT, event=grant_event)
-    await service.credit(db, man.id, 5, LedgerReason.ADMIN_GRANT, event=grant_event)
+    await service.credit(
+        db, man.id, 5, LedgerReason.ADMIN_GRANT, ref=audit, event=grant_event
+    )
+    await service.credit(
+        db, man.id, 5, LedgerReason.ADMIN_GRANT, ref=audit, event=grant_event
+    )
     await service.debit(
         db, man.id, 3, LedgerReason.THREAD_REOPEN, ref=thread, event=reopen_event
     )
     refusals: list[str] = []
     try:
-        await service.credit(db, man.id, 6, LedgerReason.ADMIN_GRANT, event=grant_event)
+        await service.credit(
+            db, man.id, 6, LedgerReason.ADMIN_GRANT, ref=audit, event=grant_event
+        )
     except WalletMisuse as misuse:
         refusals.append(str(misuse))
     try:

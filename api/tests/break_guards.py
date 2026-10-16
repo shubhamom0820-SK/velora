@@ -570,9 +570,7 @@ T51: list[Case] = [
         edits=[
             (
                 CONFTEST,
-                """            await wallet_service.credit(
-                db, user.id, credits, LedgerReason.ADMIN_GRANT, event="make_user"
-            )""",
+                """            await grant(db, user.id, credits, event="make_user")""",
                 """            await db.execute(
                 text("update wallets set balance = :c where user_id = :u"),
                 {"c": credits, "u": user.id},

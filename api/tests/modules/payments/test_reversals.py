@@ -24,6 +24,7 @@ from app.modules.wallet import service as wallet_service
 from app.modules.wallet.models import LedgerEntry, Wallet
 from app.modules.wallet.rules import Ref, RefType
 from tests.conftest import CapturedLogs, MakeUser
+from tests.grants import grant
 from tests.modules.payments.support import captured, deliver, dispute, order, refund
 
 pytestmark = pytest.mark.usefixtures("test_redis")
@@ -96,9 +97,7 @@ async def _spend(db: AsyncSession, man: User, credits: int) -> None:
 
 async def _grant(db: AsyncSession, man: User, credits: int) -> None:
     await _balance(db, man.id)
-    await wallet_service.credit(
-        db, man.id, credits, LedgerReason.ADMIN_GRANT, event="another-purchase"
-    )
+    await grant(db, man.id, credits, event="another-purchase")
 
 
 # --- Refunds --------------------------------------------------------------------------

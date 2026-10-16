@@ -28,7 +28,7 @@ from app.modules.users import service as users_service
 from app.modules.users.models import User
 from app.modules.wallet import service as wallet_service
 from app.modules.wallet.models import LedgerEntry, Wallet
-from app.modules.wallet.rules import RULES, Direction, RefType
+from app.modules.wallet.rules import RULES, Direction, Ref, RefType
 from app.modules.wallet.service import WalletMisuse
 from tests.conftest import make_test_settings
 from tests.infra import API_DIR
@@ -41,6 +41,9 @@ GENDERS: list[Gender | None] = [*Gender, None]
 
 D077 = "97ddae55f597"  # the ledger's shape
 D076 = "190d7bebf133"  # only men hold credits
+
+# A grant's ref: the audit row its call wrote (D-923). No FK, so any id.
+AUDIT = Ref(RefType.AUDIT_LOG, uuid.uuid4())
 
 
 # --- Helpers ---------------------------------------------------------------------
@@ -122,7 +125,7 @@ def _row(
 
 async def _ledger_row(db: AsyncSession, user: User) -> str | None:
     return await _attempt(
-        db, LEDGER_INSERT, _row(user.id, LedgerReason.ADMIN_GRANT, ref_type=None)
+        db, LEDGER_INSERT, _row(user.id, LedgerReason.ADMIN_GRANT, ref_type="pinned")
     )
 
 
@@ -199,7 +202,7 @@ async def test_no_gender_yet_is_refused_so_choosing_female_holds_nothing(
 
     with pytest.raises(WalletMisuse, match=r"only a man may hold credits \(D-076\)"):
         await wallet_service.credit(
-            db, user.id, 5, LedgerReason.ADMIN_GRANT, event="before-gender"
+            db, user.id, 5, LedgerReason.ADMIN_GRANT, ref=AUDIT, event="before-gender"
         )
     assert await _ledger_row(db, user) == LEDGER_ONLY_MEN
     assert await _balance_set(db, user) == WALLETS_ONLY_MEN
@@ -213,7 +216,7 @@ async def test_no_gender_yet_is_refused_so_choosing_female_holds_nothing(
     assert await _balance_set(db, user) == WALLETS_ONLY_MEN
     with pytest.raises(WalletMisuse, match=r"only a man may hold credits \(D-076\)"):
         await wallet_service.credit(
-            db, user.id, 5, LedgerReason.ADMIN_GRANT, event="after-gender"
+            db, user.id, 5, LedgerReason.ADMIN_GRANT, ref=AUDIT, event="after-gender"
         )
     assert await _held(db, user.id) == (0, 0)
 
@@ -292,11 +295,12 @@ async def test_the_debit_reasons_are_the_priced_actions_and_gift(
     """action_prices name every paid action, D-004's and T-5.2's two (D-098,
     D-251); `gift` is priced by the gifts table (D-016), and is a debit too
     (D-076). `purchase_reversal` is no purchase: it takes back a payment's
-    Velas when its money goes back, at no price (T-8.2, D-521)."""
+    Velas when its money goes back, at no price (T-8.2, D-521), and
+    `admin_correction` is an admin's, at no price either (T-9.5, D-923)."""
     priced = set(await db.scalars(text("select action from action_prices")))
     debits = {r.value for r, rule in RULES.items() if rule.direction is Direction.DEBIT}
 
-    assert debits == priced | {"gift", "purchase_reversal"}
+    assert debits == priced | {"gift", "purchase_reversal", "admin_correction"}
 
 
 async def test_each_reason_has_one_direction_in_the_database(db: AsyncSession) -> None:
@@ -322,8 +326,8 @@ async def test_each_reason_has_exactly_one_ref_type_in_the_database(
     db: AsyncSession,
 ) -> None:
     """Every reason against every ref type there is, none, and one that isn't:
-    the database takes exactly the pinned one, and no ref only for
-    `admin_grant`."""
+    the database takes exactly the pinned one, and no ref for none of them,
+    `admin_grant` included since T-9.5 (D-923)."""
     man = await _person(db, Gender.MALE)
     candidates: list[str | None] = [None, *(t.value for t in RefType), "bogus"]
     outcomes: dict[tuple[LedgerReason, str | None], str | None] = {}
@@ -352,9 +356,10 @@ async def test_one_entry_per_event_except_the_reasons_that_repeat(
     db: AsyncSession,
 ) -> None:
     """One event under two keys, as two code paths might spell it: refused by
-    the per-event index for every reason but the five that repeat for one ref
+    the per-event index for every reason but the six that repeat for one ref
     (Extend since T-5.2, D-250; a payment's reversals and restores since T-8.2,
-    one per refund or dispute, D-521)."""
+    one per refund or dispute, D-521; an admin's correction since T-9.5, as
+    an admin's grant, D-923)."""
     man = await _person(db, Gender.MALE)
     repeated: set[LedgerReason] = set()
 
@@ -375,6 +380,7 @@ async def test_one_entry_per_event_except_the_reasons_that_repeat(
         LedgerReason.THREAD_EXTEND,
         LedgerReason.PURCHASE_REVERSAL,
         LedgerReason.PURCHASE_RESTORED,
+        LedgerReason.ADMIN_CORRECTION,
     }
     assert repeated == {r for r, rule in RULES.items() if rule.caller_names_event}
 

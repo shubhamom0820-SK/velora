@@ -17,10 +17,10 @@ from sqlalchemy import update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core import events
-from app.core.enums import Gender, LedgerReason
+from app.core.enums import Gender
 from app.modules.notifications.models import NotificationPrefs
-from app.modules.wallet import service as wallet_service
 from tests.conftest import MakeThread, MakeUser
+from tests.grants import grant
 from tests.modules.album.support import album_of, asked, decide
 from tests.modules.discovery.support import HERE, bearer, north, person
 from tests.modules.gifts.support import sent
@@ -252,7 +252,5 @@ async def test_a_balance_falling_under_ten_tells_him_once(
 
 
 async def _grant(db: AsyncSession, user_id: uuid.UUID, credits: int) -> None:
-    await wallet_service.credit(
-        db, user_id, credits, LedgerReason.ADMIN_GRANT, event=f"test-{uuid.uuid4()}"
-    )
+    await grant(db, user_id, credits, event=f"test-{uuid.uuid4()}")
     await db.flush()

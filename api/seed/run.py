@@ -63,6 +63,7 @@ from app.core.providers import build_providers
 from app.core.providers.storage import FakeStorage, StorageProvider
 from app.core.security import hash_phone, hash_pin, normalize_phone
 from app.core.storage_keys import public_photo_key, raw_key
+from app.modules.admin import service as admin_service
 from app.modules.auth import pins
 from app.modules.onboarding import repository as onboarding_repository
 from app.modules.onboarding import rules as onboarding_rules
@@ -84,6 +85,7 @@ from app.modules.users.models import User
 from app.modules.verification import rules as verification_rules
 from app.modules.verification.models import Verification
 from app.modules.wallet import service as wallet_service
+from app.modules.wallet.rules import Ref, RefType
 from app.modules.wallet.service import WalletMisuse
 from seed.data import PEOPLE, SWIPES, Person, SeedSwipe
 from seed.photos import placeholder
@@ -114,6 +116,9 @@ SCATTER_RADIUS_M = 250
 # The event in the key of every credit the seed grants, `{user_id}:admin_grant:
 # dev-seed` (D-077): one per person, however many times the seed runs.
 SEED_EVENT = "dev-seed"
+# The audit row a seed grant names, as the system user (D-905): every
+# `admin_grant` names its row since T-9.5 (D-923).
+SEED_GRANT_ACTION = "seed.grant"
 
 
 # Who has a photo: everyone past the photos step (T-4.4).
@@ -709,22 +714,43 @@ async def _badge(
 async def _grant(
     session: AsyncSession, person: Person, user_id: UUID, report: SeedReport
 ) -> None:
+    """A grant names the system user's audit row (D-923). One already in the
+    ledger is read first, never written again: one an earlier seed made before
+    T-9.5 has no ref, and is left exactly as it is (the ledger keeps every row)."""
+    earlier = await wallet_service.entry_for(
+        session, user_id, LedgerReason.ADMIN_GRANT, SEED_EVENT
+    )
+    if earlier is not None:
+        if earlier.delta != person.credits:
+            raise SeedRefused(
+                f"{person.key}'s credits were refused: an earlier seed granted "
+                f"{earlier.delta}, not {person.credits}. A grant is made once and "
+                "never changed, so start over with make infra-reset, then make "
+                "infra-up migrate seed."
+            )
+        report.already_credited.append(person.key)
+        return
+    audit = await admin_service.audit(
+        session,
+        admin_service.SYSTEM_USER_ID,
+        SEED_GRANT_ACTION,
+        {"credits": person.credits},
+        target=("user", user_id),
+    )
     try:
-        granted = await wallet_service.credit(
+        await wallet_service.credit(
             session,
             user_id,
             person.credits,
             LedgerReason.ADMIN_GRANT,
+            ref=Ref(RefType.AUDIT_LOG, audit),
             event=SEED_EVENT,
         )
     except WalletMisuse as refused:
         raise SeedRefused(
-            f"{person.key}'s credits were refused: {refused}. A grant is made "
-            "once and never changed, so if an earlier seed granted another "
-            "amount, start over with make infra-reset, then make infra-up "
-            "migrate seed."
+            f"{person.key}'s credits were refused: {refused}."
         ) from refused
-    (report.credited if granted.applied else report.already_credited).append(person.key)
+    report.credited.append(person.key)
 
 
 def _require_catalogues(

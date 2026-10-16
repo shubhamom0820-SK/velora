@@ -26,14 +26,14 @@ from sqlalchemy import delete, select, text
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession
 
 from app.core.config import Settings
-from app.core.enums import Gender, LedgerReason
+from app.core.enums import Gender
 from app.core.security import E164, decrypt_phone, normalize_phone
 from app.modules.notifications.models import Notification, PushOutbox
 from app.modules.payments.models import Payment, PaymentReversal, RefundRequest
 from app.modules.users import service as users_service
 from app.modules.users.models import User
-from app.modules.wallet import service as wallet_service
 from tests.conftest import make_test_settings
+from tests.grants import grant
 
 # `+9197` and eight digits: a valid Indian mobile, in a block nothing else uses.
 FRESH_PREFIX = "+9197"
@@ -63,13 +63,7 @@ async def fresh_man(engine: AsyncEngine, *, credits: int = 0) -> UUID:
             account.user.gender = Gender.MALE
             await session.flush()
             if credits:
-                await wallet_service.credit(
-                    session,
-                    account.user.id,
-                    credits,
-                    LedgerReason.ADMIN_GRANT,
-                    event="fresh_man",
-                )
+                await grant(session, account.user.id, credits, event="fresh_man")
         COMMITTED_THIS_TEST.append(account.user.id)
         return account.user.id
 

@@ -26,6 +26,7 @@ from app.modules.wallet.models import LedgerEntry
 from app.modules.wallet.rules import Ref, RefType
 from tests.committed import fresh_man
 from tests.conftest import MakeUser
+from tests.grants import grant
 
 FIELDS = {"id", "delta", "balance_after", "reason", "created_at"}
 
@@ -35,9 +36,7 @@ def _auth(token: str) -> dict[str, str]:
 
 
 async def _grant(db: AsyncSession, user_id: uuid.UUID, amount: int) -> None:
-    await service.credit(
-        db, user_id, amount, LedgerReason.ADMIN_GRANT, event=f"grant-{uuid.uuid4()}"
-    )
+    await grant(db, user_id, amount, event=f"grant-{uuid.uuid4()}")
 
 
 async def _spend(db: AsyncSession, user_id: uuid.UUID, amount: int) -> Ref:

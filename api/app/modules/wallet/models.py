@@ -50,8 +50,13 @@ _DEBITS = _reasons(lambda rule: rule.direction is Direction.DEBIT)
 _DIRECTION = (
     f"(reason IN ({_CREDITS}) AND delta > 0) OR (reason IN ({_DEBITS}) AND delta < 0)"
 )
+# Every reason names its ref since T-9.5 (D-923, migration 7a758777affd, which
+# adds it NOT VALID, so a dev database's earlier seed grants stay as written).
+_REF_OPTIONAL = _reasons(lambda rule: not rule.ref_required)
 _REF_REQUIRED = (
-    f"reason IN ({_reasons(lambda rule: not rule.ref_required)}) OR ref_id IS NOT NULL"
+    f"reason IN ({_REF_OPTIONAL}) OR ref_id IS NOT NULL"
+    if _REF_OPTIONAL
+    else "ref_id IS NOT NULL"
 )
 _REF_TYPE = "ref_type IS NULL OR (reason, ref_type) IN ({})".format(
     ", ".join(f"('{reason}', '{rule.ref_type}')" for reason, rule in RULES.items())

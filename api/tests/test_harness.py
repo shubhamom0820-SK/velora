@@ -28,10 +28,12 @@ from app.core.security import (
     hash_phone,
     normalize_phone,
 )
+from app.modules.admin.models import AuditLogEntry
 from app.modules.profiles.models import Profile
 from app.modules.users.models import User
 from app.modules.wallet import service as wallet_service
 from app.modules.wallet.models import LedgerEntry, Wallet
+from app.modules.wallet.rules import Ref, RefType
 from app.modules.wallet.service import WalletMisuse
 from tests.conftest import MakeUser, shuffled
 from tests.infra import (
@@ -419,7 +421,24 @@ async def test_credits_arrive_as_an_admin_grant(
     assert [
         (e.reason, e.delta, e.balance_after, e.ref_type, e.idempotency_key)
         for e in entries
-    ] == [(LedgerReason.ADMIN_GRANT, 5, 5, None, f"{user.id}:admin_grant:make_user")]
+    ] == [
+        (
+            LedgerReason.ADMIN_GRANT,
+            5,
+            5,
+            "audit_log",
+            f"{user.id}:admin_grant:make_user",
+        )
+    ]
+    # The grant names an audit row, as every grant does since T-9.5 (D-923).
+    audit = await db.get(AuditLogEntry, entries[0].ref_id)
+    assert audit is not None
+    assert (audit.actor_id, audit.action, audit.target_id, audit.meta) == (
+        user.id,
+        "test.grant",
+        user.id,
+        {"credits": 5},
+    )
 
 
 async def test_make_user_never_writes_a_balance_itself(
@@ -438,7 +457,15 @@ async def test_make_user_never_writes_a_balance_itself(
 
     wallet = await db.get(Wallet, user.id)
     assert wallet is not None and wallet.balance == 0
-    assert calls == [(user.id, 5, LedgerReason.ADMIN_GRANT, ("event", "make_user"))]
+    [(called_user, amount, reason, ref_pair, event)] = calls
+    assert (called_user, amount, reason, event) == (
+        user.id,
+        5,
+        LedgerReason.ADMIN_GRANT,
+        ("event", "make_user"),
+    )
+    assert isinstance(ref_pair, tuple) and ref_pair[0] == "ref"
+    assert isinstance(ref_pair[1], Ref) and ref_pair[1].type is RefType.AUDIT_LOG
 
 
 @pytest.mark.parametrize(

@@ -23,11 +23,14 @@ from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession
 from app.core.enums import LedgerReason
 from app.modules.wallet import service
 from app.modules.wallet.models import Wallet
+from app.modules.wallet.rules import Ref, RefType
 from app.modules.wallet.service import WalletMisuse
 from tests.committed import fresh_man
 from tests.conftest import MakeUser
 
 GRANT = LedgerReason.ADMIN_GRANT
+# A grant names its audit row (D-923); no FK, so any id.
+AUDIT = Ref(RefType.AUDIT_LOG, uuid.uuid4())
 
 
 async def _low_high(make_user: MakeUser) -> tuple[uuid.UUID, uuid.UUID]:
@@ -50,10 +53,10 @@ async def test_a_wallet_below_one_held_is_refused_and_nothing_is_written(
     db: AsyncSession, make_user: MakeUser
 ) -> None:
     low, high = await _low_high(make_user)
-    await service.credit(db, high, 3, GRANT, event="first")
+    await service.credit(db, high, 3, GRANT, ref=AUDIT, event="first")
 
     with pytest.raises(WalletMisuse, match="user_id order"):
-        await service.credit(db, low, 3, GRANT, event="second")
+        await service.credit(db, low, 3, GRANT, ref=AUDIT, event="second")
 
     assert await _entries(db, low) == 0
 
@@ -61,8 +64,8 @@ async def test_a_wallet_below_one_held_is_refused_and_nothing_is_written(
 async def test_in_order_both_apply(db: AsyncSession, make_user: MakeUser) -> None:
     low, high = await _low_high(make_user)
 
-    await service.credit(db, low, 3, GRANT, event="first")
-    await service.credit(db, high, 3, GRANT, event="second")
+    await service.credit(db, low, 3, GRANT, ref=AUDIT, event="first")
+    await service.credit(db, high, 3, GRANT, ref=AUDIT, event="second")
 
     assert await _entries(db, low, high) == 2
 
@@ -71,10 +74,10 @@ async def test_a_wallet_already_held_locks_again_whatever_its_place(
     db: AsyncSession, make_user: MakeUser
 ) -> None:
     low, high = await _low_high(make_user)
-    await service.credit(db, low, 3, GRANT, event="first")
-    await service.credit(db, high, 3, GRANT, event="second")
+    await service.credit(db, low, 3, GRANT, ref=AUDIT, event="first")
+    await service.credit(db, high, 3, GRANT, ref=AUDIT, event="second")
 
-    await service.credit(db, low, 3, GRANT, event="third")
+    await service.credit(db, low, 3, GRANT, ref=AUDIT, event="third")
 
     assert await _entries(db, low, high) == 3
 
@@ -87,8 +90,8 @@ async def test_lock_wallets_sorts_them_so_any_order_of_credits_applies(
     ids = [low, high] if given == "ascending" else [high, low]
 
     await service.lock_wallets(db, ids)
-    await service.credit(db, high, 3, GRANT, event="first")
-    await service.credit(db, low, 3, GRANT, event="second")
+    await service.credit(db, high, 3, GRANT, ref=AUDIT, event="first")
+    await service.credit(db, low, 3, GRANT, ref=AUDIT, event="second")
 
     assert await _entries(db, low, high) == 2
 
@@ -97,7 +100,7 @@ async def test_lock_wallets_still_refuses_one_below_a_wallet_held(
     db: AsyncSession, make_user: MakeUser
 ) -> None:
     low, high = await _low_high(make_user)
-    await service.credit(db, high, 3, GRANT, event="first")
+    await service.credit(db, high, 3, GRANT, ref=AUDIT, event="first")
 
     with pytest.raises(WalletMisuse, match="user_id order"):
         await service.lock_wallets(db, [low, high])
@@ -109,11 +112,11 @@ async def test_what_a_transaction_holds_ends_with_it(
     """A commit ends the locks, so the next transaction starts holding none:
     the lower wallet locks freely after it."""
     low, high = await _low_high(make_user)
-    await service.credit(db, high, 3, GRANT, event="first")
+    await service.credit(db, high, 3, GRANT, ref=AUDIT, event="first")
     await db.commit()
     await db.connection()
 
-    await service.credit(db, low, 3, GRANT, event="second")
+    await service.credit(db, low, 3, GRANT, ref=AUDIT, event="second")
 
     assert await _entries(db, low, high) == 2
 

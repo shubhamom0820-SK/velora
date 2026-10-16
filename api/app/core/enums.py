@@ -146,6 +146,8 @@ class LedgerReason(StrEnum):
     PURCHASE_RESTORED = "purchase_restored"
     # D-470, T-8.11: every new man's Velas at sign-up, once per number.
     WELCOME = "welcome"
+    # D-923, T-9.5: an admin taking Velas back, the other half of admin_grant.
+    ADMIN_CORRECTION = "admin_correction"
 
 
 class PaymentStatus(StrEnum):

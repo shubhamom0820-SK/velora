@@ -77,7 +77,6 @@ from app.core.config import Settings
 from app.core.db import build_engine, get_session, session_opener
 from app.core.enums import (
     Gender,
-    LedgerReason,
     MessageKind,
     OnboardingStep,
     Role,
@@ -98,7 +97,7 @@ from app.modules.messages.models import Message
 from app.modules.threads.models import Thread
 from app.modules.users import service as users_service
 from app.modules.users.models import User
-from app.modules.wallet import service as wallet_service
+from tests.grants import grant
 
 
 def pytest_configure(config: pytest.Config) -> None:
@@ -354,9 +353,7 @@ def make_user(db: AsyncSession) -> MakeUser:
             # the caller had it before.
             await db.commit()
             await db.connection()
-            await wallet_service.credit(
-                db, user.id, credits, LedgerReason.ADMIN_GRANT, event="make_user"
-            )
+            await grant(db, user.id, credits, event="make_user")
             await db.commit()
             await db.connection()
         token = make_access_token(

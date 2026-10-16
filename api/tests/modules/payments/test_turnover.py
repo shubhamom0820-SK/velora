@@ -13,12 +13,12 @@ from httpx import AsyncClient
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.enums import LedgerReason, PaymentStatus, Role
+from app.core.enums import PaymentStatus, Role
 from app.modules.admin.models import AuditLogEntry
 from app.modules.payments import rules, service
 from app.modules.payments.rules import FinancialYear, TurnoverLevel
-from app.modules.wallet import service as wallet_service
 from tests.conftest import MakeUser
+from tests.grants import grant
 from tests.modules.payments.support import add_payment, auth
 
 pytestmark = pytest.mark.usefixtures("test_redis")
@@ -95,9 +95,7 @@ async def test_turnover_is_money_in_never_velas(
         db, man.id, status=PaymentStatus.PAID, amount_paise=150_000
     )
     paid.bonus_credits = 6
-    await wallet_service.credit(
-        db, man.id, 90, LedgerReason.ADMIN_GRANT, event=f"grant-{uuid.uuid4()}"
-    )
+    await grant(db, man.id, 90, event=f"grant-{uuid.uuid4()}")
     await db.flush()
 
     async with db.begin_nested():

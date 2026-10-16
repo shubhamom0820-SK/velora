@@ -36,6 +36,8 @@ from app.core.enums import (
 )
 from app.core.providers.storage import FakeStorage
 from app.core.security import decrypt_phone, hash_phone, normalize_phone, verify_pin
+from app.modules.admin.models import AuditLogEntry
+from app.modules.admin.service import SYSTEM_USER_ID
 from app.modules.matches.models import Match
 from app.modules.notifications.models import NotificationPrefs
 from app.modules.onboarding import repository as onboarding_repository
@@ -497,10 +499,20 @@ async def test_only_the_test_man_holds_credits_granted_once(
             LedgerReason.ADMIN_GRANT,
             60,
             60,
-            None,
+            "audit_log",
             f"{test_man.id}:admin_grant:dev-seed",
         )
     ]
+    # The grant names the system user's audit row (D-905, D-923).
+    [entry] = await _seeded_entries(db)
+    audit = await db.get(AuditLogEntry, entry.ref_id)
+    assert audit is not None
+    assert (audit.actor_id, audit.action, audit.target_id, audit.meta) == (
+        SYSTEM_USER_ID,
+        "seed.grant",
+        test_man.id,
+        {"credits": 60},
+    )
     assert "Credits granted to test_man." in summary(seeded)
 
 
@@ -853,10 +865,49 @@ async def test_a_grant_is_never_changed_by_a_later_seed(
         await write_seed(db, make_test_settings(), people=_with("test_man", credits=70))
 
     assert str(refused.value).startswith(
-        "test_man's credits were refused: admin_grant: this event is in the "
-        "ledger already, with other details"
+        "test_man's credits were refused: an earlier seed granted 60, not 70."
     )
     assert "make infra-reset" in str(refused.value)
+
+
+async def test_an_earlier_seeds_grant_with_no_ref_is_left_as_it_is(
+    db: AsyncSession,
+) -> None:
+    """A dev database seeded before T-9.5 holds a grant naming no audit row,
+    which the ledger keeps (T-1.12). Seeding again reads it and writes
+    nothing, so no infra-reset is needed (the founder, 16 October 2026; D-923).
+    The old row is made as the old rule allowed, inside the test's
+    transaction, which rolls the rule back with it."""
+    first = await write_seed(
+        db, make_test_settings(), people=_with("test_man", credits=0)
+    )
+    assert first.credited == []
+    test_man = await _user(db, BY_KEY["test_man"].phone)
+    await db.execute(
+        text(
+            "alter table ledger_entries drop constraint ck_ledger_entries_ref_required"
+        )
+    )
+    await db.execute(
+        text(
+            "insert into ledger_entries (user_id, delta, balance_after, reason, "
+            "idempotency_key) values (:u, 60, 60, 'admin_grant', :k)"
+        ),
+        {"u": test_man.id, "k": f"{test_man.id}:admin_grant:dev-seed"},
+    )
+    await db.execute(
+        text("update wallets set balance = 60 where user_id = :u"), {"u": test_man.id}
+    )
+    audits_before = await db.scalar(select(func.count()).select_from(AuditLogEntry))
+
+    again = await write_seed(db, make_test_settings())
+
+    assert again.credited == [] and again.already_credited == ["test_man"]
+    assert [(e.ref_type, e.ref_id) for e in await _seeded_entries(db)] == [(None, None)]
+    assert (
+        await db.scalar(select(func.count()).select_from(AuditLogEntry))
+        == audits_before
+    )
 
 
 async def test_a_username_someone_else_holds_is_refused(

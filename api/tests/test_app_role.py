@@ -27,6 +27,7 @@ from app.modules.users import service as users_service
 from app.modules.wallet import service as wallet_service
 from app.modules.wallet.rules import Ref, RefType
 from tests.conftest import make_test_settings
+from tests.grants import grant
 from tests.infra import TEST_DATABASE_URL
 
 APP_ROLE = "velora_app"
@@ -178,9 +179,7 @@ async def test_the_app_role_credits_and_debits_through_the_wallet(
     await session.flush()
     man = account.user.id
 
-    credited = await wallet_service.credit(
-        session, man, 10, LedgerReason.ADMIN_GRANT, event="app-role"
-    )
+    credited = await grant(session, man, 10, event="app-role")
     debited = await wallet_service.debit(
         session, man, 4, LedgerReason.THREAD_OPEN, ref=Ref(RefType.THREAD, uuid.uuid4())
     )

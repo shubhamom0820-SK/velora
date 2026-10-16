@@ -23,13 +23,12 @@ from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession
 
 from app.core import events
 from app.core.db import get_session
-from app.core.enums import LedgerReason
 from app.core.providers import FakeProviders
 from app.main import close_resources, create_app
-from app.modules.wallet import service as wallet_service
 from app.modules.wallet.models import Wallet
 from tests.committed import fresh_man
 from tests.conftest import CapturedLogs, make_test_settings
+from tests.grants import grant
 
 USER = uuid.uuid4()
 
@@ -137,13 +136,7 @@ async def real_app(test_redis: Redis) -> AsyncIterator[FastAPI]:
         fail: bool = False,
     ) -> dict[str, bool]:
         async with session.begin():
-            await wallet_service.credit(
-                session,
-                user_id,
-                amount,
-                LedgerReason.ADMIN_GRANT,
-                event=f"events-test-{uuid.uuid4()}",
-            )
+            await grant(session, user_id, amount, event=f"events-test-{uuid.uuid4()}")
             if fail:
                 raise RuntimeError("rolled back on purpose")
         return {"ok": True}

@@ -107,10 +107,13 @@ async def test_a_debit_takes_from_the_balance(
     assert (result.entry.delta, result.entry.balance_after) == (-4, 6)
     assert result.entry.idempotency_key == f"{man.id}:thread_open:{thread.id}"
     assert await _balance(db, man.id) == 6
-    assert await _entries(db, man.id) == {
-        (ADMIN_GRANT, 10, 10, None, None),
-        (THREAD_OPEN, -4, 6, "thread", thread.id),
+    entries = await _entries(db, man.id)
+    # make_user's grant names an audit row of its own (D-923).
+    assert {entry[:4] for entry in entries} == {
+        (ADMIN_GRANT, 10, 10, "audit_log"),
+        (THREAD_OPEN, -4, 6, "thread"),
     }
+    assert (THREAD_OPEN, -4, 6, "thread", thread.id) in entries
 
 
 async def test_a_debit_may_take_the_whole_balance(
@@ -219,15 +222,29 @@ async def test_bare_refund_is_refused_and_writes_nothing(
             {"ref": _ref(RefType.PAYMENT), "event": "client-key"},
             "purchase takes no event: the event is the ref's id",
         ),
-        (ADMIN_GRANT, {}, "admin_grant repeats, so needs an event its caller names"),
         (
             ADMIN_GRANT,
-            {"event": ""},
+            {"event": "grant"},
+            "admin_grant needs its ref, of type audit_log",
+        ),
+        (
+            LedgerReason.ADMIN_CORRECTION,
+            {"event": "correction"},
+            "admin_correction needs its ref, of type audit_log",
+        ),
+        (
+            ADMIN_GRANT,
+            {"ref": _ref(RefType.AUDIT_LOG)},
             "admin_grant repeats, so needs an event its caller names",
         ),
         (
             ADMIN_GRANT,
-            {"event": "x" * 201},
+            {"event": "", "ref": _ref(RefType.AUDIT_LOG)},
+            "admin_grant repeats, so needs an event its caller names",
+        ),
+        (
+            ADMIN_GRANT,
+            {"event": "x" * 201, "ref": _ref(RefType.AUDIT_LOG)},
             "admin_grant repeats, so needs an event its caller names, 1 to 200",
         ),
         (
@@ -250,6 +267,8 @@ async def test_bare_refund_is_refused_and_writes_nothing(
         "no ref",
         "another ref type",
         "an event where the ref is the event",
+        "admin_grant with no ref",
+        "admin_correction with no ref",
         "admin_grant with no event",
         "an empty event",
         "an event too long",
@@ -283,12 +302,14 @@ async def test_an_event_of_1_to_200_characters_is_taken(
 ) -> None:
     man, _ = await make_user()
 
-    result = await service.credit(db, man.id, 5, ADMIN_GRANT, event="e" * length)
+    result = await service.credit(
+        db, man.id, 5, ADMIN_GRANT, ref=_ref(RefType.AUDIT_LOG), event="e" * length
+    )
 
     assert result.entry.idempotency_key == f"{man.id}:admin_grant:{'e' * length}"
 
 
-async def test_an_admin_grant_may_name_its_audit_entry(
+async def test_an_admin_grant_names_its_audit_entry(
     db: AsyncSession, make_user: MakeUser
 ) -> None:
     man, _ = await make_user()
@@ -338,7 +359,9 @@ async def test_a_user_with_no_wallet_is_refused(db: AsyncSession) -> None:
     await db.flush()
 
     with pytest.raises(WalletMisuse, match=r"^this user has no wallet"):
-        await service.credit(db, user.id, 5, ADMIN_GRANT, event="g")
+        await service.credit(
+            db, user.id, 5, ADMIN_GRANT, ref=_ref(RefType.AUDIT_LOG), event="g"
+        )
 
 
 # --- 5. Repeats ------------------------------------------------------------------
@@ -377,7 +400,7 @@ async def test_a_repeat_is_returned_even_when_the_balance_has_gone(
 
 @pytest.mark.parametrize(
     "change",
-    ["another amount", "another ref", "no ref"],
+    ["another amount", "another ref"],
 )
 async def test_one_key_with_other_details_raises_and_writes_nothing(
     db: AsyncSession, make_user: MakeUser, change: str
@@ -389,7 +412,6 @@ async def test_one_key_with_other_details_raises_and_writes_nothing(
     changes: dict[str, dict[str, Any]] = {
         "another amount": {"amount": 6, "ref": audit},
         "another ref": {"amount": 5, "ref": _ref(RefType.AUDIT_LOG)},
-        "no ref": {"amount": 5, "ref": None},
     }
     second = changes[change]
 
@@ -436,7 +458,7 @@ async def test_the_two_reasons_that_repeat_apply_once_per_named_event(
 @pytest.mark.parametrize(
     ("reason", "shared"),
     [
-        (ADMIN_GRANT, {"event": "shared-event"}),
+        (ADMIN_GRANT, {"event": "shared-event", "ref": _ref(RefType.AUDIT_LOG)}),
         (THREAD_REOPEN, {"event": "client-key-1", "ref": _ref(RefType.THREAD)}),
         (LedgerReason.REFERRAL_REWARD, {"ref": _ref(RefType.REFERRAL)}),
     ],
@@ -552,7 +574,9 @@ async def test_the_same_reversal_twice_takes_once(
     man, _ = await make_user(credits=10)
     payment = _ref(RefType.PAYMENT)
     first = await service.reverse(db, man.id, 36, REVERSAL, ref=payment, event="rfnd_1")
-    await service.credit(db, man.id, 50, ADMIN_GRANT, event="later")
+    await service.credit(
+        db, man.id, 50, ADMIN_GRANT, ref=_ref(RefType.AUDIT_LOG), event="later"
+    )
 
     again = await service.reverse(db, man.id, 36, REVERSAL, ref=payment, event="rfnd_1")
 

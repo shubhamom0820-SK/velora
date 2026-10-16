@@ -34,6 +34,9 @@ const ledgerReasons = {
   purchase_restored: "Purchase restored",
   // T-8.11 (D-470): every new man's Velas when he finishes sign-up.
   welcome: "Welcome Velas",
+  // T-9.5 (D-923): an admin's correction, the other half of "Added by {app}".
+  // Drafted by Claude, for the founder's review.
+  admin_correction: "Corrected by {app}",
 } as const satisfies Record<LedgerReason, string>;
 
 /**

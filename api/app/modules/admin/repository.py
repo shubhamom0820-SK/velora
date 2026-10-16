@@ -23,14 +23,18 @@ async def add_audit(
     action: str,
     meta: dict[str, Any] | None,
     target: tuple[str, UUID] | None = None,
-) -> None:
+) -> UUID:
     target_type, target_id = target if target is not None else (None, None)
-    await session.execute(
-        insert(AuditLogEntry).values(
+    added = await session.scalar(
+        insert(AuditLogEntry)
+        .values(
             actor_id=actor_id,
             action=action,
             meta=meta,
             target_type=target_type,
             target_id=target_id,
         )
+        .returning(AuditLogEntry.id)
     )
+    assert added is not None  # an insert returns its row
+    return added
