@@ -230,6 +230,9 @@ export const NONCE_ROUTES = [
   "share",
   // The in-app notifications list (T-9.4).
   "notifications",
+  // The moderation panel (T-9.5): reports, chats and names, other people's
+  // text read by staff (D-541's trigger).
+  "admin",
 ] as const;
 
 /**

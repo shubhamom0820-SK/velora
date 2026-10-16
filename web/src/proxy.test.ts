@@ -53,11 +53,13 @@ describe("the proxy (T-6.6, D-541)", () => {
 });
 
 describe("the nonce routes render per request (D-541)", () => {
-  it("has (auth) and (app) force dynamic rendering, so no page is built ahead without its nonce", async () => {
+  it("has (auth), (app) and /admin force dynamic rendering, so no page is built ahead without its nonce", async () => {
     const auth = await import("./app/(auth)/layout");
     const app = await import("./app/(app)/layout");
+    const admin = await import("./app/admin/layout");
 
     expect(auth.dynamic).toBe("force-dynamic");
     expect(app.dynamic).toBe("force-dynamic");
+    expect(admin.dynamic).toBe("force-dynamic");
   });
 });

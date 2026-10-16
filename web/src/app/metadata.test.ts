@@ -7,6 +7,7 @@ import { homeTitle } from "@/lib/site";
 
 import { metadata as appGroup } from "./(app)/layout";
 import { metadata as authGroup } from "./(auth)/layout";
+import { metadata as adminGroup } from "./admin/layout";
 import { generateMetadata as contact } from "./(marketing)/contact/page";
 import { generateMetadata as home } from "./(marketing)/page";
 import { generateMetadata as privacy } from "./(marketing)/privacy/page";
@@ -17,6 +18,7 @@ describe("pages that never belong in search results", () => {
   it.each([
     ["(app)", appGroup],
     ["(auth)", authGroup],
+    ["/admin", adminGroup],
   ])("%s says noindex, in every environment", (_, metadata: Metadata) => {
     expect(metadata.robots).toEqual({ index: false, follow: false });
   });

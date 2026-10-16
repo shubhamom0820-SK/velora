@@ -332,13 +332,15 @@ describe("the nonce routes' CSP (T-6.6, D-541)", () => {
     "/wallet",
     "/you",
     "/people/5f0c2b9e-0d1a-4c55-9a43-0c1a2b3c4d5e",
+    "/admin",
+    "/admin/users/5f0c2b9e-0d1a-4c55-9a43-0c1a2b3c4d5e",
   ];
   const STATIC = [
     "/",
     "/terms",
     "/privacy",
     "/dev/ui",
-    "/admin",
+    "/administrator",
     "/discoverx",
     "/peoples",
     "/shared",

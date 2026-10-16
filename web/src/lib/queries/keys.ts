@@ -92,4 +92,17 @@ export const queryKeys = {
   dataExport: () => ["export"] as const,
   profileByUsername: (username: string) =>
     ["profiles", "by-username", username] as const,
+  // The admin panel (T-9.5): `admin()` is the prefix of every one, so an
+  // action asks every list again together.
+  admin: () => ["admin"] as const,
+  adminMetrics: () => ["admin", "metrics"] as const,
+  adminUsers: (q: string) => ["admin", "users", q] as const,
+  adminUser: (id: string) => ["admin", "user", id] as const,
+  adminReports: (status: string) => ["admin", "reports", status] as const,
+  adminModeration: () => ["admin", "moderation"] as const,
+  adminThread: (id: string, reason: string) =>
+    ["admin", "thread", id, reason] as const,
+  adminAudit: (action: string) => ["admin", "audit", action] as const,
+  adminFreezes: () => ["admin", "freezes"] as const,
+  adminClaims: () => ["admin", "claims"] as const,
 };

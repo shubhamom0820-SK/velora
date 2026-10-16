@@ -37,6 +37,7 @@ export const config = {
     "/people/:path*",
     "/share/:path*",
     "/notifications/:path*",
+    "/admin/:path*",
     "/@:username([A-Za-z0-9._]{4,20})",
   ],
 };

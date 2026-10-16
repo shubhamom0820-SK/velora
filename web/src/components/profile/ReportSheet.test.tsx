@@ -57,6 +57,9 @@ describe("the report sheet (T-9.1)", () => {
     const sent = await screen.findByRole("status");
     expect(within(sent).getByText(t("profile.reportSentTitle"))).toBeVisible();
     expect(within(sent).getByText(t("profile.reportSentBody"))).toBeVisible();
+    // P-761: the review the queue's 24-hour timer makes happen (T-9.5),
+    // in its words, read as the literal so a change of copy shows here.
+    expect(sent).toHaveTextContent("A moderator reviews this within 24 hours.");
     expect(api.calls.map((call) => call.body)).toEqual([
       {
         reported_id: "u2",
@@ -128,7 +131,7 @@ describe("the report sheet (T-9.1)", () => {
     );
   });
 
-  it("never says they're told, nor promises when a moderator looks", () => {
+  it("never says they're told, and promises only the queue's 24 hours", () => {
     fakeApi({});
     renderSheet();
 
@@ -137,7 +140,10 @@ describe("the report sheet (T-9.1)", () => {
       t("profile.reportSentBody"),
       t("profile.reportSentTitle"),
     ].join(" ");
-    expect(copy).not.toMatch(/hours?|minutes?|today|soon/i);
+    // P-761: from T-9.5 the queue's 24-hour timer exists, so the sheet says
+    // so, in its words, and promises nothing sooner (D-863 until then).
+    expect(copy.match(/hours?|minutes?|today|soon/gi)).toEqual(["hours"]);
+    expect(copy).toMatch(/within 24 hours/);
     expect(copy).toMatch(/never told/);
   });
 });
