@@ -2741,6 +2741,14 @@ refused. "A vendor adding something harmless" must not stop every upload.
 for moderation (rule 12), and T-4.6 proposes naming to the owner only reasons on a list, so
 `minor_suspected` reaches them as `other`, in D-093's words.
 
+**Real scores, first read 16 October 2026 (T-9.5):** staging is the only place with any;
+production has no deployment yet. Of 7 public, private and face photos, 5 were moderated and 3 carry
+a `minor` score: 0.01, 0.01 and 0.78, the last rejected `minor_suspected`. Read by Claude, read-only,
+inside the staging API machine (counts and percentiles only, never a photo or an id). Three scores
+from test accounts say nothing about where real faces fall, so they give no reason to move 0.35; the
+threshold stays until real photos exist to read, and the panel shows each photo's `minor` score from
+now on (`AdminPhoto.minor_score`). The founder decides; nothing here changes it.
+
 **Its number predates the D-number blocks** (CLAUDE.md, "P- and D-numbers"): it was on `main`
 before that rule, so it keeps it; renumbering would risk the stale reference the rule prevents.
 
@@ -4399,6 +4407,9 @@ reCAPTCHA on a Firebase build) and nothing injected. The `(auth)` and `(app)` la
 request (`force-dynamic`): a page built ahead carries no nonce. Every other page keeps the static
 policy with `'unsafe-inline'` and stays static: none renders anyone's text but ours. `/admin`
 waits for T-9.5, the first admin screen with anyone's text; today it is a `next dev` placeholder.
+**Amended by T-9.5 (16 October 2026):** `/admin` and all beneath it are one of `NONCE_ROUTES`,
+served by the proxy with a nonce and rendered per request (`src/app/admin/layout.tsx`), since the
+panel shows other people's text.
 
 **Proved by effect, in the E2E** (`web/e2e/csp.spec.ts`): an injected `<img onerror>` runs on `/`
 and is refused on `/login` with a `script-src` violation; every journey runs through `/login`,
@@ -4990,6 +5001,10 @@ T-5.2's source scan (`tests/modules/pricing/test_debit_callers.py`) stays, as th
 names a caller at review, before anything runs. A test holds its list and `DEBIT_CALLERS` equal,
 and the scan's own blind spot is proved in the same file: a module whose source the scan passes
 is refused at run time, having written nothing.
+
+**Amended by T-9.5 (16 October 2026, D-923):** a third caller, `admin.panel._correct`, an admin's
+correction (`admin_correction`). It prices from no row: its amount is the admin's, at most 1,000,
+checked against the balance under the wallet's lock before it is awaited. Both lists name it.
 
 **Why:** P-152's worst case: a caller the scan can't see charges a man a literal price no row
 holds, and `test_only_charge_reaches_the_debit` stays green. D-084's lesson: prove the stronger
@@ -5973,6 +5988,135 @@ run over `flyctl ssh` like D-264's selfie review:
   only. The person signs in again themselves.
 
 T-9.5 later gives it a screen.
+
+### D-920 · The moderation panel: existing parts, 760 px, every read audited — Locked
+**The decision (T-9.5; the founder's answers in T-9.5's brief, Q1):** no new visual design (P-57):
+`/admin` is built from `src/components/ui`'s primitives and the tokens, 760 px wide at most
+(08-DESIGN §3), with no app shell. Its sections: the dashboard, reports, photos, people (search and
+detail), freezes, claims (an admin's) and the audit log; every action behind a confirmation that
+asks why, in at least 10 characters, which `audit_log.meta` keeps. **Every call writes `audit_log`,
+reads included**, inside the transaction that read or changed what it names; a refused call changes
+nothing and writes nothing. So the web asks again only when staff ask: the panel's queries never
+refetch on focus or reconnect, and its lists load more on a button, never as they scroll.
+`/admin` renders only for `moderator` and `admin` (`AdminGate`, from `Me.role`), anyone else the 404
+page: UX, never protection (P-30, D-024). Every `/v1/admin/*` route declares its own `require_role`,
+and a test reads the app's routes so a new one without it fails.
+
+**Rejected:** a designed panel now (P-57: nothing is designed without the founder); loading pages as
+they scroll (each page read is an audit row nobody asked for).
+
+### D-921 · Resolving a report: dismissed or actioned, the note in the audit log — Locked
+**The decision (T-9.5; the founder's answers in T-9.5's brief, Q2):** `POST /admin/reports/{id}/
+resolve {action, note}`. No new column: the note goes in `audit_log.meta` (`report.resolve`).
+`none` → `dismissed`; `warn`, `freeze` and `ban` → `actioned`. `warn` is recorded only: nobody is
+told. `freeze` and `ban` change the reported person's status as `POST /admin/users/{id}/status`
+does, a ban an admin's alone (a moderator's is `FORBIDDEN`); someone already frozen or banned is
+left as they are and the report still resolves (T-9.2's three reports freeze at once). A report is
+resolved once (`NOT_ALLOWED`, `why: resolved`). The queue is the open reports, oldest first, each
+with `due_at`, its `created_at` and 24 hours: the timer P-761's "within 24 hours" names.
+
+### D-922 · Status: a moderator freezes; bans and lifts are an admin's; a ban is lifted in place — Locked
+**The decision (T-9.5; the founder's answers in T-9.5's brief, Q3; the lift in place, on the
+advisor's recommendation (Claude, in a separate chat), relayed, 16 October 2026):**
+`POST /admin/users/{id}/status {status, reason}`:
+- **`frozen`**, a moderator or an admin: an account that can sign in (`active`, `paused`), as
+  D-902's automatic one; every session revoked and socket closed in the transaction (D-557).
+- **`banned`**, an admin: any account not banned, a deleted one inside its 29 days included
+  (D-929); sessions revoked and sockets closed; the number's hash in `banned_identities` with
+  reason `ban`. **An erased account is banned by its number alone:** its row can't leave `deleted`
+  (`ck_users_anonymised_is_deleted`).
+- **`active` from `frozen`**, an admin: `safety.scoring.unfreeze`, the founder's tool's path
+  (D-906), which starts the score again from now.
+- **`active` from `banned`**, an admin: the ban's row **lifted in place, never deleted** (golden
+  rule 12): `lifted_at`, `lifted_by` and `lift_reason`, all three or none. The account returns to
+  `deleted` if it had asked to go before the ban, so the erasure runs as `/privacy` promises; else
+  `active`. An erased account's number is lifted alone.
+
+The database holds it (migration `7c8a628fd3d7`): `refuse_banned_identity_change()` refuses every
+UPDATE but a standing `ban` row's lift, so an `underage` row (D-072) can never be lifted and a lift
+never changes again; every DELETE; TRUNCATE by `refuse_change()`. The app role keeps INSERT and
+SELECT and may UPDATE the three lift columns only. Sign-in reads standing rows only, and one stands
+per number (`uq_banned_identities_standing`, partial), so a number banned again gets a row of its own.
+
+**Rejected:** deleting the row on an unban (the founder: rule 12 keeps what moderation may need);
+`active` for an unbanned account that had asked to go (its erasure would never run).
+
+### D-923 · An admin's Velas: `admin_correction`, every grant naming its audit row, under a key — Locked
+**The decision (T-9.5; the founder's answers in T-9.5's brief, Q4; NOT VALID and the key on the
+advisor's recommendation, relayed, 16 October 2026):** `POST /admin/users/{id}/credits {delta,
+reason}`, an admin's, a man's only (D-076, `NOT_ALLOWED` `why: not_a_man` before the wallet's
+own refusal), `0 < |delta| ≤ 1000`, with a required `Idempotency-Key` as `/payments/orders` takes:
+- a positive delta is an `admin_grant`; a negative one an **`admin_correction`**, a new debit
+  (migration `eb2e5b3a5cc8`), `ref_type` `audit_log`, outside the per-event index as `admin_grant`
+  is (`688032b1dc7a`), awaited only by `admin.panel._correct`, named in `DEBIT_CALLERS` (P-152);
+- **every reason names its ref, `admin_grant` included** (`7a758777affd`): each grant and
+  correction names the `audit_log` row its call writes (`user.credits`, `{delta, reason}`); the
+  seed's names the system user's `seed.grant` row, the tests' a `test.grant` row. The CHECK is
+  added **`NOT VALID`**: every new row is checked, and the seed grants a dev database already holds
+  stay as written, so no `infra-reset` is needed (the founder: "never require an infra-reset");
+- **the key:** the same key again for the same change changes nothing and writes nothing; for
+  another change, `ALREADY_EXISTS`. The wallet is locked before the key is looked up, so two at
+  once take turns (D-077's layer 4);
+- a correction beyond the balance is `NOT_ALLOWED` `why: balance`, never `INSUFFICIENT_CREDITS`,
+  which the web reads as the man's own and answers by opening his store sheet.
+
+**Rejected:** a confirmation alone against a double submit (a retry after a timeout would grant
+twice); validating the CHECK (it would fail on every dev database with an older seed grant).
+
+### D-924 · Reading a Thread: a reason, every message, each page audited — Locked
+**The decision (T-9.5; the founder's answers in T-9.5's brief, Q5):** `GET /admin/threads/{id}/
+messages?reason=&cursor=&limit=`, the reason at least 10 characters once trimmed
+(`VALIDATION_ERROR` otherwise), written into `audit_log.meta` (`thread.read`) with each page read.
+Every message, oldest first, by `thread_id` alone: what either person cleared included (T-7.8,
+D-006); the text as written where masking changed it (`body_raw`, T-7.3), else `body`; a voice note
+by a 10-minute signed link. A report's chat link starts the reason with the report.
+
+### D-925 · The moderation queue: public and private photos, never a selfie or the face photo — Locked
+**The decision (T-9.5; the founder's answers in T-9.5's brief, Q6, and 16 October 2026, Q4):**
+`GET /admin/moderation`, pending public and private photos, oldest first; `POST /admin/photos/{id}/
+decide {approve, reason?, note?}`. Staff approve a pending photo, as the worker's approval does
+(re-encoded first, D-092; a public copy to the CDN, a private one's scored copy, D-700; a blurred
+copy queued, D-543), or take down a pending or approved one with one of moderation's reasons
+(`nudity`, `text_overlay`, `other`; never the model's `minor_suspected`) and a note: its public and
+blurred copies deleted and a private one's album copies re-made without it (D-730), the private copy
+and the row kept (rule 12). The decision is kept in `photos.moderation.staff`, and a finished
+profile's completeness follows in the same transaction, under the owner's row lock (P-210).
+**Selfies and the face photo (`verification`) never reach the panel** (D-264's reasoning: a role
+check is a weaker gate than Fly's login): every staff route answers `NOT_FOUND` for one. Reported
+public photos and reported content are viewable there, for the 2-hour takedown (the founder, 16
+October 2026). A staff approval queues no face comparison: no model counted the faces (D-393's badge
+waits for a photo the worker approved).
+
+### D-926 · The dashboard: counts for staff, money in for an admin — Locked
+**The decision (T-9.5; the founder's answers in T-9.5's brief, Q7):** `GET /admin/metrics`:
+accounts by status, sign-ups in 24 hours and 7 days, open reports and the oldest one's time,
+photos waiting, frozen now, open claims; and `revenue` (paid payments' money in, last 7 and 30 days
+and this financial year, as D-483 counts it, never the ledger), null for a moderator.
+
+### D-927 · A phone number: whole for an admin, each view audited; masked for a moderator — Locked
+**The decision (T-9.5; the founder's answers in T-9.5's brief, Q8):** `GET /admin/users/{id}`
+decrypts the number in the API (D-061) and sends it whole to an admin, the view's audit row saying
+`phone_shown: true` (never the number); a moderator gets `+91******5678`, the fake SMS's own mask;
+an erased account, none. Search takes only a whole number, normalised and hashed and matched exactly,
+and its audit row says only `by: phone`, never what was typed (rule 15).
+
+### D-928 · Automatic freezes listed on the panel; the push to admins is P-820's — Locked
+**The decision (T-9.5; the founder's answers in T-9.5's brief, Q9):** `GET /admin/freezes`, the
+accounts frozen now, the newest freeze first, each marked automatic (the system user's
+`fraud.freeze`, with its rule and score) or by staff (`user.freeze`), the half of P-800 the panel
+holds. Telling every active admin by push when one happens is filed as P-820, not built here.
+
+### D-929 · A ban during a deletion's 29 days stops the erasure and keeps the data — Locked
+**The decision (T-9.5, P-401; the founder's answers in T-9.5's brief, Q10):** today's behaviour,
+written down. The erasure takes only `deleted` accounts (`erase_accounts`), so a ban landing inside
+the 29 days stops it: the photos, profile and number's encrypted copy stay for moderation, and
+`deleted_requested_at` stays as the record of the ask. Lifting the ban returns the account to
+`deleted` (D-922), and the erasure runs at its next pass. An account already erased is banned by its
+number alone.
+
+**Why:** the case a ban answers, a person who harmed someone and then deleted to escape review, is
+the one where moderation needs what the account held; `/privacy` already says a hashed number is
+kept so deletion can't escape a ban (D-051).
 
 ### D-950 · /login shows at once, but sends a code only once the restore has settled — Locked
 **The decision (the founder, approving P-850's plan, 14 October 2026, on the advisor's

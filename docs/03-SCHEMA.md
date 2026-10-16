@@ -44,7 +44,8 @@ ledger_reason_t   ('purchase','purchase_bonus','referral_reward','admin_grant','
                    'super_like','liked_you_reveal',
                    'thread_extend','dm_message',   -- T-5.2's (D-251)
                    'purchase_reversal','purchase_restored',   -- T-8.2's (D-521)
-                   'welcome')   -- T-8.11's (D-470)
+                   'welcome',   -- T-8.11's (D-470)
+                   'admin_correction')   -- T-9.5's (D-923)
 payment_status_t  ('created','paid','failed','refunded')
 fraud_band_t      ('normal','monitor','shadow','freeze')
 ban_kind_t        ('phone_hash','device_id')
@@ -105,7 +106,16 @@ Index: `(user_id) where revoked_at is null`.
 | kind | ban_kind_t | |
 | value | text | hash |
 | reason | text | e.g. `underage`, `ban` |
-Unique `(kind, value)`.
+| lifted_at | timestamptz null | when an admin lifted a `ban` (T-9.5, D-922) |
+| lifted_by | uuid null fk users | the admin who lifted it |
+| lift_reason | text null | why |
+One standing row per number: unique `(kind, value) where lifted_at is null`
+(`uq_banned_identities_standing`); a number banned again after a lift gets a row of its own, and
+sign-in reads standing rows only. Check `ck_banned_identities_lift_complete`: the three lift
+columns are set together or not at all. **Never deleted** (migration `7c8a628fd3d7`, D-922):
+`refuse_banned_identity_change()` refuses every DELETE and every UPDATE but a standing `ban` row's
+lift, so an `underage` row is never lifted and a lift never changes again; `refuse_change()` refuses
+TRUNCATE. The app role has INSERT and SELECT, and UPDATE on the three lift columns only.
 
 ### welcome_grants  (T-8.11, D-470, P-371)
 | column | type | notes |
@@ -457,7 +467,7 @@ wipe the money record. Both raise `restrict_violation` (23001) (T-1.12).
 |---|---|---|---|
 | `purchase`, `purchase_bonus` | credit | `payment` | the payment's id |
 | `referral_reward` | credit | `referral` | the referee's id (`referrals`' key) |
-| `admin_grant` | credit | `audit_log`, **optional** | named by the caller |
+| `admin_grant` | credit | `audit_log` (required since T-9.5, D-923) | named by the caller: the admin's `Idempotency-Key` |
 | `refund` | credit | `ledger_entry` | refused by the service until a task gives it a meaning |
 | `refund_banned_partner` | credit | `ledger_entry` | unused since D-230: never repurposed |
 | `refund_album_declined` | credit | `album_request` | unused since D-230: never repurposed |
@@ -472,16 +482,20 @@ wipe the money record. Both raise `restrict_violation` (23001) (T-1.12).
 | `purchase_reversal` | debit | `payment` | named by the caller: the refund's or dispute's own Razorpay id, one per refund or dispute (T-8.2, D-521) |
 | `purchase_restored` | credit | `payment` | named by the caller: the same id as the reversal it gives back (D-520) |
 | `welcome` | credit | `user` | the man himself: one per account, ever, inside the per-event index; one per number by `welcome_grants` (T-8.11, D-470) |
+| `admin_correction` | debit | `audit_log` | named by the caller: the admin's `Idempotency-Key` (T-9.5, D-923) |
 
 - `ck_ledger_entries_reason_direction`: credits positive, debits negative. Both lists are
   allowlists, so a reason added to `ledger_reason_t` can't be written until a migration names it.
-- `ck_ledger_entries_ref_required`: every reason but `admin_grant` names its ref.
+- `ck_ledger_entries_ref_required`: every reason names its ref, `admin_grant` included since T-9.5
+  (migration `7a758777affd`, D-923), added **`NOT VALID`**: every new row is checked, and the seed
+  grants a dev database already held stay as written, so nothing runs `VALIDATE CONSTRAINT`.
 - `ck_ledger_entries_reason_ref_type`: the pinned `ref_type` or none, so a credit naming a payment
   can only be `purchase`, `purchase_bonus` or `purchase_restored`.
 - `uq_ledger_entries_one_per_event`: partial unique index on `(user_id, reason, ref_type, ref_id)`
-  where the reason is not `admin_grant`, `thread_reopen`, `thread_extend`, `purchase_reversal` or
-  `purchase_restored`, the five that repeat for one ref (the third since T-5.2's a1d7de534ef7, the
-  last two since T-8.2's fb0a7ce8dd16): one entry per event, even if a key is built wrong.
+  where the reason is not `admin_grant`, `thread_reopen`, `thread_extend`, `purchase_reversal`,
+  `purchase_restored` or `admin_correction`, the six that repeat for one ref (the third since T-5.2's
+  a1d7de534ef7, the next two since T-8.2's fb0a7ce8dd16, the last since T-9.5's 688032b1dc7a): one
+  entry per event, even if a key is built wrong.
 - `idempotency_key` is `{user_id}:{reason}:{event}`, built by the wallet module, never by a caller;
   a client's `Idempotency-Key` only ever fills the event part.
 - Trigger `ledger_entries_only_men` (D-076): before every insert, refuses unless the user's gender
@@ -627,7 +641,12 @@ target_id uuid null, meta jsonb null, created_at`.
 "a bug forgot to set it"; automated actions use a dedicated system user, created by T-9.2's
 migration `4800f0e8d5a9` (D-905): `00000000-0000-4000-8000-000000000001`, a row shaped like an
 erased account, so it never signs in or appears where people are listed. Its actions are
-`fraud.band` and `fraud.freeze`; the founder's unfreeze writes `fraud.unfreeze` as himself (D-906).
+`fraud.band` and `fraud.freeze`, and the dev seed's grants, `seed.grant`; the founder's unfreeze
+writes `fraud.unfreeze` as himself (D-906). The panel (T-9.5, D-920) writes a row for every staff
+call, reads included: `metrics.read`, `users.search` (`{by}`, never what was typed), `user.read`
+(`{phone_shown}`), `user.freeze`, `user.ban`, `user.unban`, `user.credits` (the row a grant or
+correction names, D-923), `reports.list`, `report.resolve` (the note, D-921), `moderation.list`,
+`photo.decide`, `thread.read` (the reason, D-924), `audit.read` and `freezes.list`.
 Triggers `audit_log_no_update_delete` and `audit_log_no_truncate` (statement-level) reuse T-1.12's
 `refuse_change()` and raise `restrict_violation` (23001): the person with a reason to erase the
 trace is exactly the person with admin access (T-1.13).

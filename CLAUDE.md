@@ -79,7 +79,7 @@ none says a person is verified, real, live or who they say (T-4.5). `src/lib/sit
 that only production is indexed (T-2.4), from `APP_ENV`, which `next build` refuses unless it is
 local, ci, staging or production (`src/lib/build-env.ts`, T-2.6). `src/lib/security-headers.ts` is
 the CSP and the other security headers, exactly as strict as today's pages: a task that needs more
-widens it there (D-059); HSTS covers every subdomain (D-074). The sign-in and app routes, and
+widens it there (D-059); HSTS covers every subdomain (D-074). The sign-in and app routes, `/admin`, and
 `/@username` (`NONCE_ROUTES` there) get a nonce per response in place of `'unsafe-inline'`, from `src/proxy.ts`,
 and render per request; a new signed-in place joins that list (D-541). `src/lib/storage-origins.ts` says
 where photos live by `APP_ENV`, each bucket by its path, for the CSP (T-4.6).
@@ -89,7 +89,10 @@ on demand by a Firebase build's `/login`;
 so local and ci builds can't reach Firebase (D-085). `src/components/ui/` holds the shared primitives (T-1.19),
 each with a vitest test beside it; `/dev/ui` shows them all under `next dev` and 404s everywhere
 else. Feature components go in `src/components/<feature>/`. A person's profile has one route,
-`/people/[id]` (the deck's tap, T-6.5; T-6.8's screen). One conversation is `/chats/[id]`
+`/people/[id]` (the deck's tap, T-6.5; T-6.8's screen). `/admin` is the moderation panel (T-9.5,
+D-920): `src/app/admin/` and `src/components/admin/`, shown only to `moderator` and `admin` by
+`AdminGate`, which is UX: every `/v1/admin/*` route declares its own `require_role` (D-024, P-30),
+and every call to one writes `audit_log`. One conversation is `/chats/[id]`
 (T-7.11, `src/components/conversation/`); `src/lib/voice-recorder.ts` is the only MediaRecorder,
 and `/dev/voice` records with it under `next dev` alone (P-520's recordings). `web/bench/` holds benchmarks run by
 hand, never in `make test`: T-6.5's deck frame rate (`pnpm exec playwright test -c bench`), and

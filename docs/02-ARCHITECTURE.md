@@ -327,7 +327,7 @@ on a shared CI runner fails at random), its numbers in T-6.2's tick.
 2. `wallet.debit(session, user_id, amount, reason, ref=Ref(...))` locks the wallet row, checks
    balance, updates balance, inserts ledger entry. The caller never builds the key: the wallet
    does, from the reason and the ref, or from an event the caller names for the reasons that
-   repeat (`thread_reopen`, `thread_extend`, `admin_grant`). A retry returns the first entry with
+   repeat (`thread_reopen`, `thread_extend`, `admin_grant`, `admin_correction`). A retry returns the first entry with
    `applied=False` (D-077, T-5.1).
 3. The thing being bought (thread row) is created **in the same transaction**. Either both happen
    or neither does.
@@ -540,8 +540,11 @@ secret is left empty. Real secret values are never committed.
 | Everything else | 300 / min / user, in `current_user`, so every authenticated route has it (T-3.5) |
 
 - Logs are structured JSON with `request_id`; never log phone, OTP, tokens, message bodies.
-- Admin routes require `role in (moderator, admin)`; every admin action writes `audit_log`.
-  `GET /admin/turnover` is admin only: it is revenue (D-483).
+- Admin routes require `role in (moderator, admin)`, each declaring its own `require_role` (P-30);
+  every admin call writes `audit_log`, reads included (D-920). `GET /admin/turnover`, the claims
+  and `POST /admin/users/{id}/credits` are admin only: revenue, and Velas or money moved (D-483,
+  D-582, D-923); so are a ban and lifting a ban or a freeze (D-922). The web's `/admin` gate is UX
+  only (D-024).
 
 ## 13. Environments
 

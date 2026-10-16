@@ -265,7 +265,8 @@ handles once, by its Razorpay id, whatever it took (`payment_reversals`, D-581),
 redelivery never takes Velas bought since.
 
 `LedgerEntry` (T-5.3): `id`, `delta`, `balance_after`, `reason` (`LedgerReason`, every value, with
-`purchase_reversal` and `purchase_restored` since T-8.2, `welcome` since T-8.11) and
+`purchase_reversal` and `purchase_restored` since T-8.2, `welcome` since T-8.11, `admin_correction`
+since T-9.5) and
 `created_at`. Never its ref or its key. The web turns `reason` into words from `en.ts` (D-033,
 P-26); the API sends the enum only. Entries from one transaction share `created_at`, so among them
 the order is by `id`: stable, though not the order they were written. Whatever the cursor, the
@@ -296,22 +297,28 @@ flags, and `name`, the other person's first name, unless `generic_text`: never a
 a balance or a message's text (P-460).
 
 ## Admin 🛡
+**Every route declares its own `require_role`** (P-30): the web's `/admin` gate is UX, never
+protection (D-024). 🛡 is a moderator or an admin unless a row says admin only. **Every call writes
+`audit_log`**, a read included, in the transaction that read or changed what it names; a refused call
+changes nothing and writes nothing (D-920). Reasons and notes are 10 to 500 characters.
+
 | Method | Path | Body → Response | Task |
 |---|---|---|---|
-| GET | /admin/metrics | → counts, revenue, reports open | T-9.5 |
+| GET | /admin/metrics | → `AdminMetrics`: `{users_by_status, signups_24h, signups_7d, reports_open, oldest_open_report_at, photos_pending, frozen, claims_open, revenue}`; `revenue` `{last_7_days_paise, last_30_days_paise, financial_year, financial_year_paise}`, paid payments as D-483 counts them, **null for a moderator** (D-926) | T-9.5 |
 | GET | /admin/turnover | `?year=` (the financial year's first, 2026 for 2026-27; this one if absent) → `Turnover`: `{financial_year, starts_at, ends_at, turnover_paise, paid_payments, alert_at_paise, threshold_paise}`, paid payments in the year, 1 April to 31 March in IST. **Admin only**, never a moderator; each call writes `audit_log` (D-483) | T-8.1 |
 | GET | /admin/refund-requests | `?status=&cursor=&limit=` → `Page<AdminRefundRequest>`: the claims in `status` (`open` if absent), oldest first by `(created_at, id)`, each `{id, user_id, payment_id, order_id, payment_status, reason, status, note, provider_payment_id, provider_refund_id, created_at, resolved_at}`. **Admin only**, never a moderator; each call writes `audit_log` (D-582) | T-8.3 |
 | POST | /admin/refund-requests/{id}/resolve | `{action, note?}` → `AdminRefundRequest`. `action`: `grant`, `refund` or `reject` (`note` required, `VALIDATION_ERROR` otherwise). The gateway's payments on the order decide (D-580): a grant needs no credit yet and a captured payment for the order's amount, else `NOT_ALLOWED`, `details.why` `credited` or `nothing_to_grant`; a refund needs a captured, untouched payment that isn't the credited one nor one a grant could credit, else `nothing_to_refund`; a claim not `open`, `resolved`. Gateway down: `PROVIDER_UNAVAILABLE`, nothing changed. None: `NOT_FOUND`. **Admin only**; each resolution writes `audit_log` | T-8.3 |
-| GET | /admin/users | `?q=&cursor=&limit=` → `Page<AdminUser>` | T-9.5 |
-| GET | /admin/users/{id} | → full detail incl. fraud, reports, ledger | T-9.5 |
-| POST | /admin/users/{id}/status | `{status, reason}` → 204 (freeze/ban/unban) | T-9.5 |
-| POST | /admin/users/{id}/credits | `{delta, reason}` → 204 | T-9.5 |
-| GET | /admin/reports | `?status=open&cursor=&limit=` → `Page<Report>` | T-9.5 |
-| POST | /admin/reports/{id}/resolve | `{action, note}` → 204 | T-9.5 |
-| GET | /admin/moderation | `?cursor=&limit=` → `Page<Photo>` pending/flagged | T-9.5 |
-| POST | /admin/photos/{id}/decide | `{approve, reason?}` → 204 | T-9.5 |
-| GET | /admin/threads/{id}/messages | → includes `body_raw` + cleared (audited) | T-9.5 |
-| GET | /admin/audit | `?cursor=&limit=` → `Page<AuditEntry>` | T-9.5 |
+| GET | /admin/users | `?q=&cursor=&limit=` → `Page<AdminUser>`, newest first by `(created_at, id)`, never the system user. `q`: a whole Indian number, normalised and hashed and matched exactly, every account it had, an erased one too (D-061, D-500); an account's id; or 2 to 50 characters, a username's or first name's start (`@` optional, `_` and `%` as characters); absent, the newest. A number one digit short, or any `q` out of shape, `VALIDATION_ERROR`. The audit row says how, never what was typed (D-927) | T-9.5 |
+| GET | /admin/users/{id} | → `AdminUserDetail`: `{user: AdminUser, phone, phone_masked, is_verified, balance, ban, photos, fraud, reports_about, reports_by, ledger, threads}`, each list its newest 50; `phone` whole for an admin, the view audited `phone_shown`, masked for a moderator, null once erased (D-927); `photos` public and private only, never a selfie or the face photo (D-925); `ledger` with each entry's ref. None, or the system user, `NOT_FOUND` | T-9.5 |
+| POST | /admin/users/{id}/status | `{status, reason}` → 204. `frozen` (moderator or admin) for an `active` or `paused` account; `banned` (admin) for any not banned, an erased one by its number alone; `active` (admin) lifts a freeze through D-906's path or a ban in place, to `deleted` if it had asked to go (D-922). A freeze or ban revokes every session and closes every socket (D-557). A moderator's ban or lift `FORBIDDEN`; any other move `NOT_ALLOWED` with `details.why` (`already_frozen`, `already_banned`, `not_banned`, `not_frozen`, or the status); `reason` 10 to 500 | T-9.5 |
+| POST | /admin/users/{id}/credits | `{delta, reason}` + `Idempotency-Key` (8 to 64 of `A-Za-z0-9_-`) → 204. **Admin only.** `delta` an integer, 1 to 1,000 either way, never 0: positive an `admin_grant`, negative an `admin_correction`, each naming its call's `audit_log` row (D-923). A man's only, else `NOT_ALLOWED` `why: not_a_man` (D-076); a correction beyond the balance `NOT_ALLOWED` `why: balance` with `details.balance`, never `INSUFFICIENT_CREDITS`. The same key again for the same change: 204, nothing written; for another, `ALREADY_EXISTS` | T-9.5 |
+| GET | /admin/reports | `?status=open&cursor=&limit=` → `Page<AdminReport>`: oldest first by `(created_at, id)`, each with its two people (`AdminUserRef`), `thread_id` and `due_at`, 24 hours from `created_at` (D-921) | T-9.5 |
+| POST | /admin/reports/{id}/resolve | `{action, note}` → 204: `none` dismisses; `warn` (recorded only), `freeze` and `ban` action, the last two as `/status` would, someone already frozen or banned left so; `ban` an admin's (`FORBIDDEN`). The note, 10 to 500, kept in `audit_log.meta`. Resolved already, `NOT_ALLOWED` `why: resolved` (D-921) | T-9.5 |
+| GET | /admin/moderation | `?cursor=&limit=` → `Page<AdminPhoto>`: pending public and private photos, oldest first, never a selfie or the face photo (D-925); each with `minor_score` (D-101) and a 10-minute signed link | T-9.5 |
+| POST | /admin/photos/{id}/decide | `{approve, reason?, note?}` → 204. Approve a pending photo, published as the worker would; or take down a pending or approved one, `reason` `nudity`, `text_overlay` or `other` and a `note` 10 to 500, its public copies deleted and the private one kept; an approval takes neither (`VALIDATION_ERROR`). Completeness follows (P-210). Rejected already `NOT_ALLOWED` `why: rejected`; approved already `why: approved`; a selfie, the face photo or none, `NOT_FOUND`; storage down, `PROVIDER_UNAVAILABLE` (D-925) | T-9.5 |
+| GET | /admin/threads/{id}/messages | `?reason=&cursor=&limit=` → `Page<AdminMessage>`: every message, oldest first, what either person cleared included (T-7.8, D-006); `body` as written (`body_raw` where masked), `masked`, a voice note's 10-minute `audio_url`. `reason` 10 to 500 once trimmed, else `VALIDATION_ERROR`; each page read audited with it (D-924). None, `NOT_FOUND` | T-9.5 |
+| GET | /admin/audit | `?action=&cursor=&limit=` → `Page<AuditEntry>` `{id, actor_id, actor_is_system, action, target_type, target_id, meta, created_at}`, newest first, `action` filtering to one (D-920, D-905) | T-9.5 |
+| GET | /admin/freezes | `?cursor=&limit=` → `Page<AdminFreeze>` `{user: AdminUser, frozen_at, automatic, rule, score}`: the accounts frozen now, the newest freeze first, the system user's marked `automatic` with its rule and score (P-800, D-928) | T-9.5 |
 
 ## Misc
 | Method | Path | Auth | Task |
