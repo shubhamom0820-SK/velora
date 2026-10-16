@@ -94,6 +94,67 @@ async def test_a_500_carries_both(app: FastAPI, client: AsyncClient) -> None:
     _assert_v1(response)
 
 
+ALLOWED_ORIGIN = "http://127.0.0.1:3000"  # the test settings' CORS_ORIGINS
+
+
+def _cors(response: Response) -> dict[str, str]:
+    return {
+        name: value
+        for name, value in response.headers.items()
+        if name.startswith("access-control-")
+    }
+
+
+async def test_a_500_carries_the_cors_headers_a_200_does(
+    app: FastAPI, client: AsyncClient
+) -> None:
+    """P-61: without them a browser can't read the INTERNAL envelope, and the
+    web takes every 500 for a lost connection. Compared with what CORSMiddleware
+    gives a 200, so the two can't drift."""
+
+    @app.get("/v1/_test/ok")
+    async def _ok() -> dict[str, bool]:
+        return {"ok": True}
+
+    @app.get("/v1/_test/boom")
+    async def _boom() -> None:
+        raise RuntimeError("boom")
+
+    origin = {"Origin": ALLOWED_ORIGIN}
+    ok = await client.get("/v1/_test/ok", headers=origin)
+    boom = await client.get("/v1/_test/boom", headers=origin)
+
+    assert boom.status_code == 500
+    assert boom.json()["error"]["code"] == "INTERNAL"
+    assert _cors(boom) == {
+        "access-control-allow-origin": ALLOWED_ORIGIN,
+        "access-control-allow-credentials": "true",
+        "access-control-expose-headers": "X-Request-ID",
+    }
+    assert _cors(boom) == _cors(ok)
+    assert "Origin" in boom.headers["vary"]
+    _assert_v1(boom)
+
+
+@pytest.mark.parametrize(
+    "headers",
+    [{"Origin": "https://evil.example"}, {"Origin": ALLOWED_ORIGIN + "0"}, {}],
+    ids=["another origin", "a near miss", "no origin"],
+)
+async def test_a_500_for_any_other_origin_carries_no_cors_header(
+    app: FastAPI, client: AsyncClient, headers: dict[str, str]
+) -> None:
+    @app.get("/v1/_test/boom")
+    async def _boom() -> None:
+        raise RuntimeError("boom")
+
+    response = await client.get("/v1/_test/boom", headers=headers)
+
+    assert response.status_code == 500
+    assert _cors(response) == {}
+    _assert_v1(response)
+
+
 async def test_a_cors_preflight_carries_both(client: AsyncClient) -> None:
     response = await client.options(
         "/v1/waitlist",

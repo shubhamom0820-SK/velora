@@ -12392,6 +12392,48 @@ T92: list[Case] = [
     ),
 ]
 
+# --- P-61: a 500 carries its CORS headers, for an allowed origin only ----------
+
+P61_SELECTION = ["tests/core/test_headers.py"]
+HEADERS61 = "app/core/headers.py"
+ERRORS61 = "app/core/errors.py"
+CORS_CALL61 = (
+    "            **cors_headers(\n"
+    '                request.headers.get("origin"),\n'
+    "                request.app.state.settings.CORS_ORIGINS,\n"
+    "            ),\n"
+)
+
+P61: list[Case] = [
+    Case(
+        id="p61-01-a-500-without-cors",
+        what="P-61: the 500 left without its CORS headers, unreadable to the web",
+        edits=[
+            (
+                ERRORS61,
+                CORS_CALL61,
+                "",
+            )
+        ],
+        expect=["test_a_500_carries_the_cors_headers_a_200_does"],
+    ),
+    Case(
+        id="p61-02-any-origin-reads-a-500",
+        what="P-61: a 500's CORS headers given to an origin CORS_ORIGINS doesn't name",
+        edits=[
+            (
+                HEADERS61,
+                "    if origin is None or origin not in allowed:\n",
+                "    if origin is None:\n",
+            )
+        ],
+        expect=[
+            "test_a_500_for_any_other_origin_carries_no_cors_header[another origin]",
+            "test_a_500_for_any_other_origin_carries_no_cors_header[a near miss]",
+        ],
+    ),
+]
+
 CASES: list[tuple[Case, list[str]]] = (
     [(c, T51_SELECTION) for c in T51]
     + [(c, T54_SELECTION) for c in T54]
@@ -12450,6 +12492,7 @@ CASES: list[tuple[Case, list[str]]] = (
     + [(c, T98_SELECTION) for c in T98]
     + [(c, P680_SELECTION) for c in P680]
     + [(c, T92_SELECTION) for c in T92]
+    + [(c, P61_SELECTION) for c in P61]
 )
 
 # The fifty-connection fixture's own message when Postgres refuses a connection.

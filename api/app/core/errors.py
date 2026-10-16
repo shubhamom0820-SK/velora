@@ -20,7 +20,7 @@ from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
-from app.core.headers import security_headers
+from app.core.headers import cors_headers, security_headers
 
 log = structlog.get_logger(__name__)
 
@@ -130,11 +130,18 @@ async def _handle_unexpected(request: Request, exc: Exception) -> JSONResponse:
     """
     log.exception("unhandled_exception", exc_type=type(exc).__name__)
     # Starlette builds this response outside every middleware, so it carries
-    # the API's security headers only if it adds them itself (P-42).
+    # the API's security headers (P-42) and, for an allowed origin, its CORS
+    # headers (P-61) only if it adds them itself.
     return JSONResponse(
         status_code=500,
         content=envelope("INTERNAL", "Something went wrong on our end."),
-        headers=security_headers(request.url.path),
+        headers={
+            **security_headers(request.url.path),
+            **cors_headers(
+                request.headers.get("origin"),
+                request.app.state.settings.CORS_ORIGINS,
+            ),
+        },
     )
 
 

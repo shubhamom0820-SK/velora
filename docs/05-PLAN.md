@@ -4864,7 +4864,7 @@ The number comes from the session's own block, given in its brief, from P-100 up
   now exits 6 there, naming no branch. A HEAD already on `main` while on a branch still passes,
   which is this item's own fix, still open.
   **Deadline passed, 8 October 2026** (the audit, P-490): many `/done`s have run since.
-- [ ] P-61 · Give the API's 500s their CORS headers. **Before T-9.12,** or sooner if a screen needs to
+- [x] P-61 · Give the API's 500s their CORS headers. **Before T-9.12,** or sooner if a screen needs to
   tell a crash from no signal. Worst case: a browser can't read the API's `INTERNAL` envelope at all,
   so every 500 looks to the web exactly like a lost connection ("Failed to fetch"), and a bug in
   production hides behind "check your connection". Starlette builds a 500 outside every middleware,
@@ -4873,6 +4873,13 @@ The number comes from the session's own block, given in its brief, from P-100 up
   `otp_sms_daily_cap` made OTP send fail. The web copes today (a failed restore offers a retry, never
   `/login`), so this is about seeing errors, not losing sessions. Add the CORS headers to the 500
   for an allowed origin only, with a test that a disallowed origin still gets none. Found in T-3.10.
+  **Closed, 16 October 2026, before T-9.12 (the founder's order):** `_handle_unexpected` adds
+  `cors_headers()` (`app/core/headers.py`), for an origin in `CORS_ORIGINS` only, compared exactly;
+  it and `main.py`'s CORSMiddleware read one pair of settings, so the 500 can't drift from a 200.
+  The tests compare a 500's `Access-Control-*` headers with a 200's for the same origin, and find
+  none for another origin, a near miss (`…:30000`) or none at all. Broken once each
+  (`uv run python -m tests.break_guards p61-`, `out/p61-break-guards.log`): 2 of 2 red, no file
+  differing after.
 - [ ] P-62 · Give T-1.9's identity trigger a constraint name. **Before the next migration that
   touches `users`; needs P-65 first,** since this fix is a migration itself. Worst case: a refusal reported as the wrong one. `users_identity_immutable()`
   raises `check_violation` (23514) and names no constraint, so its tests can only match its message,

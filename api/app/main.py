@@ -17,7 +17,11 @@ from fastapi.middleware.cors import CORSMiddleware
 from app.core.config import APP_NAME, Settings, get_settings
 from app.core.db import build_engine, build_sessionmaker
 from app.core.errors import register_error_handlers
-from app.core.headers import SecurityHeadersMiddleware
+from app.core.headers import (
+    CORS_ALLOW_CREDENTIALS,
+    CORS_EXPOSE_HEADERS,
+    SecurityHeadersMiddleware,
+)
 from app.core.logging import RequestIDMiddleware, configure_logging
 from app.core.providers import build_providers
 from app.core.queue import ArqQueue
@@ -129,10 +133,10 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         app.add_middleware(
             CORSMiddleware,
             allow_origins=settings.CORS_ORIGINS,
-            allow_credentials=True,
+            allow_credentials=CORS_ALLOW_CREDENTIALS,
             allow_methods=["*"],
             allow_headers=["*"],
-            expose_headers=["X-Request-ID"],
+            expose_headers=list(CORS_EXPOSE_HEADERS),
         )
 
     # nosniff everywhere and no-store on /v1 (P-42). Added last, so it is the
