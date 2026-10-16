@@ -5688,7 +5688,7 @@ outside, so it is allowed in every environment. Push goes on with `webpush`, onc
 set the pair (P-755) and given D-857 in their own words. A test pins all three files to `off`
 until then.
 
-### D-857 · Pushes are delivered by the browser's maker, outside India — Open
+### D-857 · Pushes are delivered by the browser's maker, outside India — Locked
 **What is built (T-9.4):** a push goes through the subscribing browser's own service: Google (FCM)
 for Chrome and Android, Apple for Safari, Mozilla for Firefox, Microsoft (WNS) for Edge, all
 outside India. That is an exception to D-048's "the data stays in India". What crosses is encrypted
@@ -5697,9 +5697,11 @@ time. The content is the kind, ids, and the other person's first name unless "Hi
 (`generic_text`) is on. Never a message's text, an expiry or a price (`rules.PUSHED_FIELDS`, an
 allowlist). `/privacy` says so.
 
-**Open:** the founder's own words approving the exception. The brief that approved T-9.4's plan left
-a placeholder where they were to go. **Until they are recorded here, push stays off everywhere**
-(the founder, 9 October 2026): `PUSH_PROVIDER = "off"` in every Fly file (D-856, amended).
+**Decided:** the founder's own words approving the exception, which the brief that approved T-9.4's
+plan left a placeholder for. **The founder's decision, 15 October 2026, 01:29 IST, on the advisor's
+recommendation (Claude, in a separate chat), relayed by the founder:** "ha yeh theek hai" (yes,
+this is fine). Locked. **Push stays off everywhere until P-755:** `PUSH_PROVIDER = "off"` in every
+Fly file (D-856, amended) until the founder has staged the VAPID pair and P-755 turns it on.
 
 ### D-858 · Nothing about someone blocked either way, in the list or a push — Locked
 **The decision (P-760, from T-9.1's session, relayed by the founder on 9 October 2026):** `GET
