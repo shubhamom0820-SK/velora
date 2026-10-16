@@ -32,7 +32,7 @@ describe("the web's breaking runs (T-4.6)", () => {
     expect(new Set(ids).size).toBe(ids.length);
     expect(
       ids.every((id) =>
-        /^(?:t(?:4(?:[5-8]|12)|811|6[5-9]|71[012]|87|94|98)|p850)-/.test(id),
+        /^(?:t(?:4(?:[5-8]|12)|811|6[5-9]|71[012]|87|94|98)|p85[06])-/.test(id),
       ),
     ).toBe(true);
   });

@@ -164,6 +164,7 @@ beforeEach(() => {
 });
 
 afterEach(() => {
+  vi.useRealTimers();
   vi.unstubAllGlobals();
   vi.unstubAllEnvs();
 });
@@ -809,6 +810,11 @@ describe("the knot (T-7.7, P-670)", () => {
   });
 
   it("shows a Knot as permanent: no countdown, no knot bar, its day marked", async () => {
+    // Midday, so "10 minutes ago" is today whenever the suite runs: on the real
+    // clock it was yesterday for 10 minutes after each midnight (P-856).
+    const midday = new Date();
+    midday.setHours(12, 0, 0, 0);
+    vi.useFakeTimers({ now: midday, toFake: ["Date"] });
     api(
       thread({
         status: "knotted",

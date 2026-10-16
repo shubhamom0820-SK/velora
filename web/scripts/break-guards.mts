@@ -1928,6 +1928,16 @@ export const CASES: BreakCase[] = [
       "still sends when the restore failed for a 503",
     ],
   },
+  {
+    // CI's run of 16 October 2026 at 00:02 UTC: a Knot tied 10 minutes before
+    // was yesterday's, so the pin is what keeps the test to its claim.
+    id: "p856-web-01-the-knot-test-just-after-midnight",
+    file: "src/components/conversation/ConversationScreen.test.tsx",
+    old: "    midday.setHours(12, 0, 0, 0);\n",
+    new: "    midday.setHours(0, 2, 30, 0);\n",
+    run: ["src/components/conversation/ConversationScreen.test.tsx"],
+    expect: ["shows a Knot as permanent"],
+  },
 ];
 
 const WEB = join(import.meta.dirname, "..");

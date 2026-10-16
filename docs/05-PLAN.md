@@ -6915,3 +6915,38 @@ The number comes from the session's own block, given in its brief, from P-100 up
   ask the founder which screen and which two accounts, and read their rows on staging
   read-only; report the cause, propose a fix only if it was a filtering surface. Filed by
   Claude, 14 October 2026; its session's block.
+- [x] P-856 · The Knot test reads the real clock. **Now: it fails CI every night.** Worst case:
+  every session landing between 00:00 and 00:10 UTC (05:30 to 05:40 IST, when sessions land) gets
+  a red CI on a commit that broke nothing, and learns to rerun until green. Seen on 16 October
+  2026: D-857's docs-only commit `b30bdc0` failed CI run 38827085059 at 00:02:59 UTC on
+  `ConversationScreen.test.tsx` › "shows a Knot as permanent", which expected "Knotted today" and
+  found "Knotted yesterday": `knotted_at` was `inMinutes(-10)` from the real clock, and
+  `knottedAgo` counts days in the reader's zone, UTC on CI. Reproduced locally at 00:02:30 UTC.
+  Filed by Claude, 16 October 2026, at the direction of the founder on the advisor's
+  recommendation (Claude, in a separate chat); its session's block, P-850 to P-859.
+  **Fixed, 16 October 2026:** the test fakes `Date` alone at local midday today
+  (`vi.useFakeTimers({ toFake: ["Date"] })`, undone in the file's `afterEach`). Broken once:
+  `p856-web-01-the-knot-test-just-after-midnight` moves the pin to 00:02:30 and the test goes red
+  (`node scripts/break-guards.mts p856`). **Swept:** the web's only day-boundary code is
+  `conversation/format.ts` (the Knot header and the message dividers). The whole web suite run in
+  UTC with its clock moved to 12:00, 00:02:30, 00:30, 01:30, 03:00, 05:45 and 23:58 failed only
+  this test, at 00:02:30, and passed whole at 00:02:30 with the fix (1,701); the conversation tests
+  passed at eleven times from 23:50 to 00:45 (`out/p-856-clock-sweep/`, the scratch clock shift
+  beside its logs). No other web test needed fixing. The API's are P-857.
+- [ ] P-857 · API tests that depend on when they run. **Before 2033; the rest is noted, not
+  urgent.** Worst case: from 1 January 2033 00:00 IST, `test_a_code_applied_then_an_under_18_date_
+  deletes_the_referral` (`referrals/test_apply.py:252`, `@critical`, D-078) fails on every run: its
+  `"dob": "2015-01-01"` is checked against the real `today_ist()` and that person turns 18. Fix:
+  freeze the clock first, as `safety/test_fraud_signals.py:354` does for the same date. Found by
+  P-856's sweep of `api/tests` (a read, not a run: the API's clock can be frozen but Postgres's
+  `now()` can't be moved), which found no test failing over a window the way the web's did. Also
+  noted: (1) a few tests make two requests unfrozen and expect one IST day, week or financial year,
+  so they fail, or pass wrongly, only if 18:30 UTC (or Monday 00:00 IST, or 1 April IST) falls
+  between the two requests: milliseconds, about 2 s for `gifts/test_race.py:182`
+  (`swipes/test_swipe.py:199, 229`; `discovery/test_feed.py:575`; `threads/test_open.py:628,
+  643`; `messages/test_send.py:610, 639, 655, 669`; `gifts/test_lists.py:65`;
+  `payments/test_reversals.py:546`); freezing each would close it. (2) `safety/support.py:100` takes
+  the UTC year for a dob where conftest takes the IST one, so the age is 26, not 25, from 18:30 to
+  24:00 UTC on 31 December; nothing reads it today. (3) `core/test_security.py:313` puts one instant
+  in 2040 to sit after the wall clock; from 2040 it still passes and proves less. Filed by Claude,
+  16 October 2026; its session's block.
