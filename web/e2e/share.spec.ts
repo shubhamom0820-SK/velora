@@ -1,6 +1,4 @@
-import { expect, test as plain } from "@playwright/test";
-
-import { test } from "./fixtures";
+import { expect, test } from "./fixtures";
 
 /**
  * `/@username` (T-6.8, D-001, D-544), served through next.config's rewrite to
@@ -32,11 +30,11 @@ test("/@username serves its page with a nonce, never indexed, as its own address
   expect(page.url()).toMatch(/\/@nobody_here$/);
 });
 
-// Plain `@playwright/test`: Next's own 404 page sets inline styles, which the
-// static policy has never allowed, on every 404 of the site (P-445). Its
-// subject here is the status alone.
-plain("what follows an @ but isn't a username is no page", async ({ page }) => {
+test("what follows an @ but isn't a username is no page", async ({ page }) => {
   const response = await page.goto("/@a!b");
 
   expect(response?.status()).toBe(404);
+  await expect(
+    page.getByRole("heading", { name: "This page isn't here" }),
+  ).toBeVisible();
 });

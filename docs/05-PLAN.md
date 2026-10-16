@@ -6385,7 +6385,7 @@ The number comes from the session's own block, given in its brief, from P-100 up
   harassed opens the profile to block or report and finds only Share. T-6.8's menu holds Share
   alone until T-9.1 builds both. Filed by Claude building T-6.8, 8 October 2026; its session's block.
   **Done 9 October 2026 (T-9.1, D-863):** both, on someone else's profile only.
-- [ ] P-445 · Next's own 404 page breaks the CSP on every build. **Before REL-1.** Worst case: every
+- [x] P-445 · Next's own 404 page breaks the CSP on every build. **Before REL-1.** Worst case: every
   404 a person reaches renders with its styles refused (five `style-src` violations, read in
   Playwright's Chromium on 8 October 2026 at `/no-such-page` under the static policy), and once
   T-9.12 reports violations to Sentry, every mistyped link is noise there. Next's built-in
@@ -6393,6 +6393,9 @@ The number comes from the session's own block, given in its brief, from P-100 up
   `default-src 'self'`). Ours, a `not-found.tsx` styled by classes, would fix it; its proof, the
   E2E watch passing on a 404. Found building T-6.8, whose share E2E had to visit one with plain
   `@playwright/test`; filed by Claude, 8 October 2026; its session's block.
+  **Done 16 October 2026 (D-980):** ours, class-styled, rendered per request so a nonce route's
+  404 carries its nonce; `e2e/not-found.spec.ts` holds a 404 under each policy to no violation and
+  to hydrating, and `/@a!b` is now under the watch.
 - [ ] P-446 · `/@username`'s limit counts the web's server, not each visitor. **Before
   `/@username` is shared at scale.** Worst case: one link shared widely, read more than 60 times a
   minute in all, and every reader after the 60th sees "isn't public" until the minute passes, and

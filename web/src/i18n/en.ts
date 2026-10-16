@@ -501,6 +501,13 @@ export const en = {
     unavailable: "This profile isn't public",
     unavailableBody: "Join {app} to meet people near you.",
   },
+  // Any page that isn't there (P-445): ours, not Next's, whose inline styles
+  // the CSP refuses. Approved by the founder, 14 October 2026.
+  notFound: {
+    title: "This page isn't here",
+    body: "The link may be old or mistyped.",
+    home: "Go to {app}",
+  },
   // Liked you (T-6.7, D-542): who liked you and is waiting on your swipe. A
   // man reveals each for the price `/prices` gives, never written here; a
   // woman sees everyone. Drafted by Claude, for the founder's review.

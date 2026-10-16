@@ -5992,3 +5992,26 @@ restore lands".
 **Rejected:** the loading screen until the restore settles (every new visitor would wait 1 to 2 s
 for a form they need at once); a greyed-out button (it reads as a wrong number); a second check in
 the submit handler (the busy button already refuses a tap and Enter, so no test could prove it).
+
+### D-980 · Every 404 is ours, and renders per request — Locked
+**The decision (the founder, approving P-445's plan and then its second option, 14 and 16 October
+2026, on the advisor's recommendation, relayed):** `web/src/app/not-found.tsx` replaces Next's
+built-in 404, styled by classes only, and awaits `connection()`, so no 404 is prerendered and the
+build emits no `_not-found.html`. **Why:** Next's page sets inline styles, which neither policy
+allows (five `style-src` violations on every 404, P-445). A class-styled page alone fixed the styles
+but not a 404 beneath a nonce route (`/login/no-such-page`, under the proxy's matcher): it was
+served from the prerendered page, built before any request, so it carried no nonce and the browser
+refused every script on it, twelve refusals: nine of Next's chunks, one of them twice, and two inline
+scripts (Playwright's Chromium, 16 October 2026). It rendered and never hydrated: its link home
+reloaded the document, which the spec's hydration check caught with `connection()` removed. Rendered per request, it carries the request's nonce like every other page there (D-541).
+A not-found file takes no `dynamic` export, hence `connection()`. Held by `e2e/not-found.spec.ts`
+(one 404 under each policy, no violation, and the link home navigating on the client, which only a
+hydrated page does) and `src/app/not-found.test.tsx`.
+
+**Rejected:** widening `style-src` with `'unsafe-inline'` for Next's page (every page would carry
+it); leaving the nonce routes' 404 prerendered (a page that never hydrates, and once T-9.12 reports
+violations, a dozen reports for every mistyped link).
+
+**Noted, not filed:** `/onboarding/<no such step>` answers 200, not 404: onboarding's gate streams
+"Loading" before the step's `notFound()`, so the status is sent first. A soft 404 on a page that is
+never indexed.
