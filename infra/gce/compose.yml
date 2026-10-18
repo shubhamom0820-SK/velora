@@ -1,0 +1,90 @@
+# The API, the worker and Caddy on one VM (P-49, D-1020). Used only by
+# `infra/gce/deploy`, from the release it copies to /opt/velora/releases/<sha>,
+# never by hand; `infra/docker-compose.yml` is the local stack, not this.
+#
+# The deploy writes `.env` beside this file with VELORA_IMAGE (the API's image,
+# by digest) and VELORA_ENV (staging or production). Secrets come from
+# /etc/velora, rendered from Secret Manager at deploy time; settings that aren't
+# secret come from `<env>.env` in the release.
+#
+# Only Caddy publishes ports. The API listens on the Compose network alone, so
+# from outside the VM nothing reaches it but through Caddy (P-49's check).
+
+name: velora
+
+x-app: &app
+  image: ${VELORA_IMAGE:?the deploy sets VELORA_IMAGE}
+  restart: unless-stopped
+  networks: [app]
+
+services:
+  api:
+    <<: *app
+    env_file:
+      - path: ./${VELORA_ENV:?the deploy sets VELORA_ENV}.env
+        format: raw
+      - path: /etc/velora/api.env
+        format: raw
+    # Readiness, as Fly's check was: the deploy waits on it, and a failing check
+    # puts the previous image back. /readyz reaches Postgres and Redis.
+    healthcheck:
+      test:
+        - CMD
+        - python
+        - -c
+        - "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/readyz', timeout=9)"
+      interval: 15s
+      timeout: 10s
+      start_period: 30s
+      retries: 3
+
+  worker:
+    <<: *app
+    command: ["python", "-m", "app.workers"]
+    # Started only where /etc/velora/worker-on exists (the deploy checks): never
+    # two workers at once, here and elsewhere (D-091, the connection budget).
+    profiles: [worker]
+    env_file:
+      - path: ./${VELORA_ENV}.env
+        format: raw
+      - path: /etc/velora/worker.env
+        format: raw
+    environment:
+      # One process: at most 2 + 1 = 3 connections to Postgres (the budget in
+      # infra/STAGING.md). D-091: a look at the queue every 10 seconds.
+      DB_POOL_SIZE: "2"
+      DB_MAX_OVERFLOW: "1"
+      WORKER_POLL_DELAY_S: "10"
+
+  caddy:
+    image: caddy:2.11.7@sha256:685ae3d7c34d9b5f8caeddc5d14051db7bbd88ff1f5a2fa0c16bd8ca328fb7af
+    restart: unless-stopped
+    networks: [app]
+    ports:
+      - "80:80"
+      - "443:443"
+    # Copied out of the release by the deploy, to a place that outlives it: old
+    # releases are pruned, and a mount into one would break Caddy's next restart.
+    env_file:
+      - path: /opt/velora/edge/edge.env
+        format: raw
+    volumes:
+      - /opt/velora/edge/Caddyfile:/etc/caddy/Caddyfile:ro
+      # Certificates survive restarts, so a restart never asks Let's Encrypt again.
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on: [api]
+
+networks:
+  app:
+    # IPv6 for the way out: Supabase's direct host has only an IPv6 address.
+    # Nothing comes in over IPv6: the firewall has no IPv6 rule.
+    enable_ipv6: true
+    ipam:
+      config:
+        - subnet: 172.30.0.0/24
+        - subnet: fd4d:6169:6e00::/64
+
+volumes:
+  caddy_data:
+  caddy_config:

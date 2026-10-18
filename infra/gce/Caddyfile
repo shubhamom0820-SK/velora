@@ -1,0 +1,23 @@
+# Caddy in front of the API on the VM (P-49, D-1020, D-1021). It terminates TLS
+# with Let's Encrypt certificates it obtains and renews itself, for the hosts in
+# API_HOSTS (from `<env>.edge.env`), and proxies everything, WebSockets
+# included, to the API on the Compose network. The API publishes no port of its
+# own, so this is the only way in.
+{
+	# No admin endpoint: a config change is a container restart, made by the deploy.
+	admin off
+	servers {
+		# TCP only, as the firewall is: HTTP/3 would need UDP 443.
+		protocols h1 h2
+	}
+}
+
+{$API_HOSTS} {
+	reverse_proxy api:8000 {
+		# The client's address, as the TCP connection shows it, set by Caddy and
+		# never taken from the request: `header_up` replaces any value a client
+		# sends under this name. Per-IP rate limits read only this (D-056, D-1021).
+		header_up Caddy-Client-IP {remote_host}
+	}
+	# No access log: client addresses are written nowhere.
+}

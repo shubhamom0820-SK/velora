@@ -1,0 +1,141 @@
+#!/usr/bin/env bash
+# Deploys one image to this VM (P-49, D-1022). Run as root on the VM by the deploy
+# workflows, from the release folder they copy over IAP:
+#
+#   sudo bash <release>/deploy ENV IMAGE SHA
+#
+#   ENV    staging or production (an allowlist, rule 16)
+#   IMAGE  this project's API image, by digest only:
+#          asia-south1-docker.pkg.dev/<project>/velora/api@sha256:<64 hex>
+#   SHA    the commit, 40 hex
+#
+# In order: copy the release to /opt/velora/releases/<SHA>; pull the image; write
+# each container's secrets from Secret Manager to /etc/velora (root only, never
+# printed); check the worker's settings in a one-off container, as Fly's release
+# command did, before anything is replaced; replace the API and wait for its
+# healthcheck, putting the previous release back if it fails; restart Caddy only
+# if its hosts or config changed; replace the worker only where
+# /etc/velora/worker-on exists, and make sure it's stopped everywhere else.
+# Exits non-zero, naming the step, on any failure.
+set -euo pipefail
+umask 077
+
+say() { printf 'deploy: %s\n' "$*"; }
+die() { say "STOP: $*"; exit 1; }
+
+[[ $# -eq 3 ]] || die "usage: deploy ENV IMAGE SHA"
+env="$1" image="$2" sha="$3"
+case "$env" in
+  staging) project=velora-ic-staging ;;
+  production) project=velora-ic-prod ;;
+  *) die "ENV must be staging or production, not '$env'" ;;
+esac
+image_re="^asia-south1-docker\.pkg\.dev/${project}/velora/api@sha256:[0-9a-f]{64}$"
+[[ "$image" =~ $image_re ]] || die "IMAGE must be ${project}'s API image by digest"
+[[ "$sha" =~ ^[0-9a-f]{40}$ ]] || die "SHA must be a full commit hash"
+[[ $EUID -eq 0 ]] || die "run as root"
+
+files=(compose.yml Caddyfile "$env.env" "$env.edge.env" secrets.api secrets.worker deploy)
+src="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+rel="/opt/velora/releases/$sha"
+state=/opt/velora/state
+edge=/opt/velora/edge
+
+# --- The release, copied where it will stay ------------------------------------
+if [[ "$src" != "$rel" ]]; then
+  install -d -m 0755 "$rel"
+  for f in "${files[@]}"; do
+    [[ -f "$src/$f" ]] || die "the release lacks $f"
+    install -m 0644 "$src/$f" "$rel/$f"
+  done
+fi
+printf 'VELORA_IMAGE=%s\nVELORA_ENV=%s\n' "$image" "$env" > "$rel/.env"
+chmod 0644 "$rel/.env"
+compose() { docker compose --project-directory "$rel" -f "$rel/compose.yml" "$@"; }
+
+say "pulling ${image##*@}"
+docker pull -q "$image" >/dev/null || die "pulling the image"
+
+# --- Secrets: Secret Manager to /etc/velora/<service>.env, never printed --------
+render() {
+  local service="$1" list="$rel/secrets.$1" out="/etc/velora/$1.env" tmp line name optional value
+  tmp="$(mktemp "/etc/velora/.$service.XXXXXX")"
+  while IFS= read -r line || [[ -n "$line" ]]; do
+    [[ -z "$line" || "$line" == \#* ]] && continue
+    name="${line%\?}"
+    optional=no
+    [[ "$line" == *\? ]] && optional=yes
+    [[ "$name" =~ ^[A-Z][A-Z0-9_]*$ ]] || { rm -f "$tmp"; die "secrets.$service: '$name' isn't a setting's name"; }
+    if value="$(gcloud secrets versions access latest --secret="$name" --project="$project" 2>/dev/null)" \
+      && [[ -n "$value" ]]; then
+      if [[ "$value" == *$'\n'* ]]; then
+        rm -f "$tmp"
+        die "$name holds a line break; an env file can't carry it"
+      fi
+      printf '%s=%s\n' "$name" "$value" >> "$tmp"
+    elif [[ "$optional" == no ]]; then
+      rm -f "$tmp"
+      die "$name has no value in Secret Manager ($project)"
+    fi
+  done < "$list"
+  unset value
+  chmod 0600 "$tmp"
+  mv -f "$tmp" "$out"
+  say "secrets written for $service ($(wc -l < "$out" | tr -d ' ') names)"
+}
+render api
+render worker
+
+# --- The worker's settings, checked before anything is replaced -----------------
+compose --profile worker run --rm --no-deps -T worker python -m app.workers --check \
+  || die "the worker's settings check refused (its message is above)"
+
+# --- The API: replaced, then healthy, or the previous release goes back ---------
+previous="$(readlink /opt/velora/current 2>/dev/null || true)"
+ln -sfn "$rel" /opt/velora/current
+say "starting the API"
+if ! compose up -d --no-deps --wait --wait-timeout 150 api; then
+  if [[ -n "$previous" && -d "$previous" && "$previous" != "$rel" ]]; then
+    say "the API isn't healthy; putting $(basename "$previous") back"
+    ln -sfn "$previous" /opt/velora/current
+    docker compose --project-directory "$previous" -f "$previous/compose.yml" \
+      up -d --no-deps --wait --wait-timeout 150 api \
+      || say "the previous release isn't healthy either"
+  fi
+  die "the API didn't become healthy within 150 s"
+fi
+say "API healthy"
+
+# --- Caddy: restarted only when its hosts or config changed ---------------------
+want="$(cat "$rel/Caddyfile" "$rel/$env.edge.env" | sha256sum | cut -d' ' -f1)"
+have="$(cat "$state/edge.sha256" 2>/dev/null || true)"
+if [[ "$want" != "$have" ]]; then
+  install -m 0644 "$rel/Caddyfile" "$edge/Caddyfile"
+  install -m 0644 "$rel/$env.edge.env" "$edge/edge.env"
+  compose up -d --no-deps --force-recreate caddy || die "starting Caddy"
+  printf '%s\n' "$want" > "$state/edge.sha256"
+  say "Caddy restarted with new hosts or config"
+else
+  compose up -d --no-deps caddy || die "starting Caddy"
+fi
+
+# --- The worker: only where this VM is the one that runs it ---------------------
+if [[ -e /etc/velora/worker-on ]]; then
+  compose --profile worker up -d --no-deps worker || die "starting the worker"
+  say "worker started"
+else
+  compose --profile worker rm -sf worker >/dev/null 2>&1 || true
+  say "worker off on this VM (no /etc/velora/worker-on)"
+fi
+
+# --- What runs now, and tidying -------------------------------------------------
+printf '%s\n' "$image" > "$state/image"
+printf '%s\n' "$sha" > "$state/sha"
+chmod 0644 "$state/image" "$state/sha"
+# Keep the five newest releases, never the current one.
+ls -1t /opt/velora/releases | tail -n +6 | while IFS= read -r old; do
+  [[ "/opt/velora/releases/$old" == "$rel" ]] || rm -rf "/opt/velora/releases/${old:?}"
+done
+docker image prune -af --filter "until=168h" >/dev/null 2>&1 || true
+
+say "done: $env runs ${sha:0:12} (${image##*@})"
