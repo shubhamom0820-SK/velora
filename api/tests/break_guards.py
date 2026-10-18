@@ -12084,10 +12084,8 @@ P49: list[Case] = [
                 ),
             )
         ],
-        expect=[
-            f"{ONLY_NAMED}[Caddy-Client-IP-Fly-Client-IP]",
-            f"{ONLY_NAMED}[Fly-Client-IP-Caddy-Client-IP]",
-        ],
+        # Behind Caddy only: with Fly's header configured, preferring it is right.
+        expect=[f"{ONLY_NAMED}[Caddy-Client-IP-Fly-Client-IP]"],
     ),
 ]
 
