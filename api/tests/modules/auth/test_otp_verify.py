@@ -737,7 +737,7 @@ async def _client_for(
 _DEPLOYED: dict[str, Any] = {
     "DATABASE_URL": TEST_DATABASE_URL,
     "REDIS_URL": TEST_REDIS_URL,
-    "CLIENT_IP_HEADER": "Fly-Client-IP",
+    "CLIENT_IP_HEADER": "Caddy-Client-IP",
     **random_keys(),
 }
 

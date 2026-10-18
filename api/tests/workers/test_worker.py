@@ -12,7 +12,6 @@ import io
 import logging
 import re
 import shutil
-import tomllib
 import traceback
 import uuid
 from collections.abc import AsyncIterator, MutableMapping
@@ -61,6 +60,7 @@ from app.modules.verification.models import Verification
 from app.workers import main as worker
 from tests.committed import fresh_man
 from tests.conftest import CapturedLogs, make_test_settings
+from tests.gce import compose, worker_env
 from tests.infra import TEST_DATABASE_URL, TEST_REDIS_URL, require_models
 from tests.keys import random_keys, vapid_settings
 from tests.modules.verification.test_race import forget_photos
@@ -564,53 +564,47 @@ def test_the_started_line_keeps_the_jobs_name_and_timing() -> None:
 
 # --- Its Fly config, and its engine ------------------------------------------------------
 
-FLY = Path(__file__).resolve().parents[3] / "infra"
-# The API's settings the worker has no use for: they shape HTTP responses.
-API_ONLY = {"CORS_ORIGINS", "COOKIE_DOMAIN"}
 # Each app's own pool, budgeted together in infra/STAGING.md.
 OWN = {"DB_POOL_SIZE", "DB_MAX_OVERFLOW", "WORKER_POLL_DELAY_S"}
 
 
-def _env(name: str) -> dict[str, str]:
-    with (FLY / name).open("rb") as f:
-        env: dict[str, str] = tomllib.load(f)["env"]
-    return env
+def test_the_worker_reads_the_same_settings_as_the_api() -> None:
+    """One settings file for both containers (P-49): a bucket, a CDN or a
+    provider changed for the API alone would send the worker's photos somewhere
+    else. compose.yml gives the worker the API's file and sets only its own."""
+    services = compose()["services"]
+    api_files = [f["path"] for f in services["api"]["env_file"]]
+    worker_files = [f["path"] for f in services["worker"]["env_file"]]
+
+    assert worker_files[0] == api_files[0]
+    assert api_files[0].startswith("./${VELORA_ENV")
+    assert set(services["worker"]["environment"]) == OWN
+    assert services["worker"]["environment"]["WORKER_POLL_DELAY_S"] == "10"  # D-091
 
 
-def test_the_worker_reads_the_same_settings_as_the_api_on_staging() -> None:
-    """One `Settings` for both apps: a bucket, a CDN or a provider changed on
-    the API alone would send the worker's photos somewhere else."""
-    api, worker_env = _env("fly.api.toml"), _env("fly.worker.toml")
-
-    assert set(api) - API_ONLY - OWN == set(worker_env) - OWN
-    assert {k: v for k, v in worker_env.items() if k not in OWN} == {
-        k: v for k, v in api.items() if k not in API_ONLY | OWN
-    }
-    assert worker_env["WORKER_POLL_DELAY_S"] == "10"  # D-091
-
-
-def test_the_workers_fly_settings_start_as_staging_with_its_secrets() -> None:
-    # fly.worker.toml says FACEMATCH_PROVIDER=sface, so the worker's check reads
+@pytest.mark.parametrize("env", ["staging", "production"])
+def test_the_workers_settings_start_with_its_secrets(env: str) -> None:
+    # The settings say FACEMATCH_PROVIDER=sface, so the worker's check reads
     # the models (D-088): skipped without `make models` locally, failed in CI.
     require_models()
     values = {
         "DATABASE_URL": "postgresql+asyncpg://app:x@db.example:5432/postgres",
         "REDIS_URL": "rediss://default:x@redis.example:6379/0",
         **random_keys(),
-        "R2_ACCESS_KEY_ID": "staging-token-id",
-        "R2_SECRET_ACCESS_KEY": "staging-token-secret",
-        "SIGHTENGINE_API_USER": "staging-user",
-        "SIGHTENGINE_API_SECRET": "staging-secret",
-        # The VAPID pair: two Fly secrets (T-9.4, D-856).
+        "R2_ACCESS_KEY_ID": f"{env}-token-id",
+        "R2_SECRET_ACCESS_KEY": f"{env}-token-secret",
+        "SIGHTENGINE_API_USER": f"{env}-user",
+        "SIGHTENGINE_API_SECRET": f"{env}-secret",
+        # The VAPID pair: two Secret Manager slots (T-9.4, D-856).
         **vapid_settings(),
-        **_env("fly.worker.toml"),
+        **worker_env(env),
     }
 
     settings = Settings(_env_file=None, **values)  # type: ignore[arg-type]
 
     worker.refuse_unless_ready(settings)
     assert (settings.ENV, settings.DB_POOL_SIZE + settings.DB_MAX_OVERFLOW) == (
-        "staging",
+        env,
         3,
     )
 

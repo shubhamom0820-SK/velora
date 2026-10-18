@@ -94,7 +94,7 @@ def deployed_settings(env: str) -> Settings:
         ENV=env,
         DATABASE_URL=NOTHING_LISTENS,
         REDIS_URL="rediss://default:x@redis.example:6379/0",
-        CLIENT_IP_HEADER="Fly-Client-IP",
+        CLIENT_IP_HEADER="Caddy-Client-IP",
         AUTH_PHONE_PROVIDER="firebase",
         FIREBASE_PROJECT_ID="velora-test",
         SMS_PROVIDER="msg91",

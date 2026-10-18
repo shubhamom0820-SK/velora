@@ -45,7 +45,7 @@ services:
     # two workers at once, here and elsewhere (D-091, the connection budget).
     profiles: [worker]
     env_file:
-      - path: ./${VELORA_ENV}.env
+      - path: ./${VELORA_ENV:?the deploy sets VELORA_ENV}.env
         format: raw
       - path: /etc/velora/worker.env
         format: raw

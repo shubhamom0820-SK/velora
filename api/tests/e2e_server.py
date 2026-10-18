@@ -37,8 +37,8 @@ they would share D-066's 20 OTP sends an hour, and the suite outgrew them. The
 per-IP limits here read `E2E_CLIENT_IP_HEADER` instead, which `web/e2e/
 fixtures.ts` sets to an address of each context's own on its requests to this
 API: each person in a journey is a client, as on the phone, and the limit stays
-D-066's. A request without it shares one bucket (D-056), as on Fly. Only ENV
-local may read such a header: a deployed build reads Fly-Client-IP and nothing
+D-066's. A request without it shares one bucket (D-056), as behind Caddy. Only ENV
+local may read such a header: a deployed build reads Caddy-Client-IP and nothing
 else (`PROXY_CLIENT_IP_HEADERS`), and this file is never in the image.
 """
 

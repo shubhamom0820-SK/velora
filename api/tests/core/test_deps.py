@@ -43,25 +43,27 @@ def _settings(**overrides: str) -> Settings:
     return Settings(_env_file=None, **{**_REQUIRED, **overrides})  # type: ignore[arg-type]
 
 
-# Local settings shaped like Fly's: the address comes from the proxy's header.
-_FLY = _settings(CLIENT_IP_HEADER="Fly-Client-IP")
+# Local settings shaped like the VMs': the address comes from the proxy's header.
+_CADDY = _settings(CLIENT_IP_HEADER="Caddy-Client-IP")
 _FORGED = {"X-Forwarded-For": "198.51.100.9, 10.1.2.3"}
 
 
-def test_on_fly_the_proxy_header_decides_not_the_socket_or_forwarded_for() -> None:
-    request = _request(_FLY, {"Fly-Client-IP": "203.0.113.7", **_FORGED})
+def test_behind_caddy_the_proxy_header_decides_not_the_socket_or_forwarded_for() -> (
+    None
+):
+    request = _request(_CADDY, {"Caddy-Client-IP": "203.0.113.7", **_FORGED})
 
     assert client_bucket(request) == "203.0.113.7"
 
 
-def test_on_fly_a_request_without_the_header_shares_one_bucket() -> None:
+def test_behind_caddy_a_request_without_the_header_shares_one_bucket() -> None:
     """Leaving the header out, or forging X-Forwarded-For, escapes nothing."""
-    assert client_bucket(_request(_FLY)) == UNKNOWN_CLIENT
-    assert client_bucket(_request(_FLY, _FORGED)) == UNKNOWN_CLIENT
+    assert client_bucket(_request(_CADDY)) == UNKNOWN_CLIENT
+    assert client_bucket(_request(_CADDY, _FORGED)) == UNKNOWN_CLIENT
 
 
-def test_on_fly_a_garbled_header_shares_one_bucket() -> None:
-    request = _request(_FLY, {"Fly-Client-IP": "198.51.100.9, 203.0.113.7"})
+def test_behind_caddy_a_garbled_header_shares_one_bucket() -> None:
+    request = _request(_CADDY, {"Caddy-Client-IP": "198.51.100.9, 203.0.113.7"})
 
     assert client_bucket(request) == UNKNOWN_CLIENT
 
@@ -118,14 +120,15 @@ def test_bucket_for(raw: str | None, bucket: str) -> None:
     ],
 )
 def test_client_ipv6_48(raw: str | None, network: str | None) -> None:
-    headers = {} if raw is None else {"Fly-Client-IP": raw}
+    headers = {} if raw is None else {"Caddy-Client-IP": raw}
 
-    assert client_ipv6_48(_request(_FLY, headers)) == network
+    assert client_ipv6_48(_request(_CADDY, headers)) == network
 
 
 def test_the_48_comes_from_the_proxy_header_never_forwarded_for() -> None:
     request = _request(
-        _FLY, {"Fly-Client-IP": "2001:db8:abcd::1", "X-Forwarded-For": "2001:db8:9::1"}
+        _CADDY,
+        {"Caddy-Client-IP": "2001:db8:abcd::1", "X-Forwarded-For": "2001:db8:9::1"},
     )
 
     assert client_ipv6_48(request) == "2001:db8:abcd::/48"

@@ -6,9 +6,7 @@ and a message is opened again with the browser's key, as a browser would."""
 from __future__ import annotations
 
 import json
-import tomllib
 from datetime import UTC, datetime
-from pathlib import Path
 
 import httpx
 import jwt
@@ -37,6 +35,7 @@ from app.core.vapid import (
 )
 from app.modules.notifications import service
 from tests.conftest import make_test_settings
+from tests.gce import gce_env
 from tests.keys import r2_settings, random_keys
 from tests.modules.notifications.support import browser_keys
 
@@ -260,8 +259,6 @@ def test_a_wrong_key_or_subject_is_refused_without_its_value(
 
 # --- Push off (D-856, amended; D-857) ---------------------------------------------
 
-INFRA = Path(__file__).resolve().parents[4] / "infra"
-
 
 def _deployed(env: str, **values: str) -> Settings:
     """Everything staging or production needs, push aside (test_config's way)."""
@@ -270,7 +267,7 @@ def _deployed(env: str, **values: str) -> Settings:
         **base,
         "ENV": env,
         "REDIS_URL": "rediss://default:x@redis.example:6379/0",
-        "CLIENT_IP_HEADER": "Fly-Client-IP",
+        "CLIENT_IP_HEADER": "Caddy-Client-IP",
         "AUTH_PHONE_PROVIDER": "firebase",
         "FIREBASE_PROJECT_ID": "velora-test",
         "SMS_PROVIDER": "msg91",
@@ -309,12 +306,9 @@ async def test_push_off_sends_nothing() -> None:
     assert await NoPush().send(subscription, {"kind": "match"}, ttl_s=60) == "gone"
 
 
-@pytest.mark.parametrize(
-    "name", ["fly.api.toml", "fly.worker.toml", "fly.api.production.toml"]
-)
+@pytest.mark.parametrize("name", ["staging", "production"])
 def test_push_stays_off_everywhere_until_d857_is_decided(name: str) -> None:
     """The founder, 9 October 2026: push off everywhere until D-857 is given in
-    their own words. Turning it on changes this test with the file (P-755)."""
-    with (INFRA / name).open("rb") as f:
-        env = tomllib.load(f)["env"]
-    assert env["PUSH_PROVIDER"] == "off"
+    their own words. Turning it on changes this test with the file (P-755). The
+    API and the worker read the same file on each VM (P-49)."""
+    assert gce_env(name)["PUSH_PROVIDER"] == "off"

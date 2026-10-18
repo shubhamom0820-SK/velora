@@ -627,23 +627,23 @@ async def test_the_eleventh_exchange_from_one_ip_in_an_hour_is_refused(
     assert (await _exchange(client, "not-a-token")).status_code == 401
 
 
-async def test_the_ip_limit_reads_flys_header_never_x_forwarded_for(
+async def test_the_ip_limit_reads_caddys_header_never_x_forwarded_for(
     db: AsyncSession, fake_providers: FakeProviders, clock: ModuleType
 ) -> None:
-    """D-056: the address Fly's proxy saw. A forged X-Forwarded-For escapes
-    nothing; another Fly-Client-IP is another bucket."""
+    """D-056: the address Caddy saw. A forged X-Forwarded-For escapes
+    nothing; another Caddy-Client-IP is another bucket."""
     clock.freeze(START)
-    settings = _settings(CLIENT_IP_HEADER="Fly-Client-IP")
+    settings = _settings(CLIENT_IP_HEADER="Caddy-Client-IP")
     async with _client_for(settings, fake_providers) as client:
         for _ in range(10):
-            await _exchange(client, "x", **{"Fly-Client-IP": "203.0.113.7"})
+            await _exchange(client, "x", **{"Caddy-Client-IP": "203.0.113.7"})
 
         forged = await _exchange(
             client,
             "x",
-            **{"Fly-Client-IP": "203.0.113.7", "X-Forwarded-For": "198.51.100.1"},
+            **{"Caddy-Client-IP": "203.0.113.7", "X-Forwarded-For": "198.51.100.1"},
         )
-        other = await _exchange(client, "x", **{"Fly-Client-IP": "203.0.113.8"})
+        other = await _exchange(client, "x", **{"Caddy-Client-IP": "203.0.113.8"})
 
     assert forged.status_code == 429
     assert other.status_code == 401

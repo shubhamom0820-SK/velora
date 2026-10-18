@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import re
-import tomllib
 from pathlib import Path
 from urllib.parse import urlsplit
 
@@ -12,6 +11,7 @@ import yaml  # type: ignore[import-untyped]
 from pydantic import ValidationError
 
 from app.core.config import PUBLIC_TEST_KEYS, Settings
+from tests.gce import gce_env
 from tests.keys import r2_settings, random_keys, vapid_settings
 
 _ALL_VARS = [
@@ -76,7 +76,7 @@ _DEPLOYED = {
     # What s3 storage needs (T-4.1).
     **r2_settings(),
     "REDIS_URL": "rediss://default:x@redis.example:6379/0",
-    "CLIENT_IP_HEADER": "Fly-Client-IP",
+    "CLIENT_IP_HEADER": "Caddy-Client-IP",
     **random_keys(),
 }
 
@@ -323,7 +323,7 @@ def test_outside_local_an_empty_list_is_fine(env: str) -> None:
 def test_no_client_ip_header_outside_local_refuses_to_start(env: str) -> None:
     message = _error(ENV=env, **{**_DEPLOYED, "CLIENT_IP_HEADER": ""})
 
-    assert f"ENV={env} needs CLIENT_IP_HEADER (Fly-Client-IP on Fly)" in message
+    assert f"ENV={env} needs CLIENT_IP_HEADER (Caddy-Client-IP behind Caddy)" in message
     assert "X-Forwarded-For is written by the client" in message
     assert "D-056" in message
 
@@ -331,20 +331,20 @@ def test_no_client_ip_header_outside_local_refuses_to_start(env: str) -> None:
 def test_local_may_read_the_socket_or_a_header() -> None:
     assert _settings(ENV="local").CLIENT_IP_HEADER == ""
     assert (
-        _settings(ENV="local", CLIENT_IP_HEADER="Fly-Client-IP").CLIENT_IP_HEADER
-        == "Fly-Client-IP"
+        _settings(ENV="local", CLIENT_IP_HEADER="Caddy-Client-IP").CLIENT_IP_HEADER
+        == "Caddy-Client-IP"
     )
 
 
 @pytest.mark.parametrize("env", ["staging", "production"])
 @pytest.mark.parametrize("header", ["X-Forwarded-For", "X-E2E-Client-IP"])
-def test_outside_local_only_flys_header_is_read(env: str, header: str) -> None:
+def test_outside_local_only_caddys_header_is_read(env: str, header: str) -> None:
     """A header the client writes can't be configured where it would count
     (D-890): the E2E server's per-context address and X-Forwarded-For alike."""
     message = _error(ENV=env, **{**_DEPLOYED, "CLIENT_IP_HEADER": header})
 
     assert (
-        f"ENV={env} reads the client's IP only from Fly-Client-IP, not {header}"
+        f"ENV={env} reads the client's IP only from Caddy-Client-IP, not {header}"
         in message
     )
     assert "is one the client can write" in message
@@ -352,8 +352,8 @@ def test_outside_local_only_flys_header_is_read(env: str, header: str) -> None:
 
 
 @pytest.mark.parametrize("env", ["staging", "production"])
-def test_outside_local_flys_header_is_read_in_any_case(env: str) -> None:
-    for header in ("Fly-Client-IP", "fly-client-ip"):
+def test_outside_local_caddys_header_is_read_in_any_case(env: str) -> None:
+    for header in ("Caddy-Client-IP", "caddy-client-ip"):
         assert _settings(ENV=env, **{**_DEPLOYED, "CLIENT_IP_HEADER": header})
 
 
@@ -551,22 +551,14 @@ def test_other_providers_need_no_firebase_project(provider: str) -> None:
     assert _settings(AUTH_PHONE_PROVIDER=provider).FIREBASE_PROJECT_ID == ""
 
 
-# --- Staging's own settings, as fly.api.toml sets them (T-3.3) -----------------
-
-FLY_API_TOML = Path(__file__).resolve().parents[2] / "infra" / "fly.api.toml"
-
-
-def _fly_env() -> dict[str, str]:
-    with FLY_API_TOML.open("rb") as f:
-        env: dict[str, str] = tomllib.load(f)["env"]
-    return env
+# --- Staging's own settings, as infra/gce/staging.env sets them (T-3.3, P-49) ---
 
 
 def test_stagings_csrf_cookie_reaches_its_web_and_never_production() -> None:
     """Parsed, not matched as text. The CSRF cookie's Domain must cover the
     staging web's host, the one CORS allows, so its pages can read it; and
     must sit under staging's name, so it never reaches production (D-055)."""
-    env = _fly_env()
+    env = gce_env("staging")
     domain = env["COOKIE_DOMAIN"]
     [origin] = env["CORS_ORIGINS"].split(",")
     web_host = urlsplit(origin).hostname or ""
@@ -577,18 +569,18 @@ def test_stagings_csrf_cookie_reaches_its_web_and_never_production() -> None:
 
 
 def test_stagings_env_block_passes_settings() -> None:
-    """Everything fly.api.toml sets, plus secrets shaped as Fly holds them,
-    starts: a value there that Settings refuses would stop the deploy."""
+    """Everything staging.env sets, plus secrets shaped as Secret Manager holds
+    them, starts: a value there that Settings refuses would stop the deploy."""
     values = {
         "DATABASE_URL": "postgresql+asyncpg://app:x@db.example:5432/postgres",
         "REDIS_URL": "rediss://default:x@redis.example:6379/0",
         **random_keys(),
-        # R2's token: Fly secrets, never in the file (infra/STAGING.md §4).
+        # R2's token: in Secret Manager, never in the file (infra/STAGING.md).
         "R2_ACCESS_KEY_ID": "staging-token-id",
         "R2_SECRET_ACCESS_KEY": "staging-token-secret",
-        # The VAPID pair: two Fly secrets (T-9.4, D-856).
+        # The VAPID pair: two Secret Manager slots (T-9.4, D-856).
         **vapid_settings(),
-        **_fly_env(),
+        **gce_env("staging"),
     }
 
     settings = Settings(_env_file=None, **values)  # type: ignore[arg-type]
@@ -599,35 +591,27 @@ def test_stagings_env_block_passes_settings() -> None:
     )
 
 
-FLY_API_PRODUCTION_TOML = FLY_API_TOML.with_name("fly.api.production.toml")
-
-
 def test_staging_and_production_both_accept_velora_ic_tokens() -> None:
     """One Firebase project for both (D-065), never a test number in it. P-66
     gives staging a project of its own: when it does, staging's line changes and
     this test with it, so production refuses staging's tokens as an audience."""
-    with FLY_API_PRODUCTION_TOML.open("rb") as f:
-        production: dict[str, str] = tomllib.load(f)["env"]
-
-    assert _fly_env()["FIREBASE_PROJECT_ID"] == "velora-ic"
-    assert production["FIREBASE_PROJECT_ID"] == "velora-ic"
+    assert gce_env("staging")["FIREBASE_PROJECT_ID"] == "velora-ic"
+    assert gce_env("production")["FIREBASE_PROJECT_ID"] == "velora-ic"
 
 
 def test_productions_env_block_passes_settings() -> None:
     """The same for production's file: what CI's "Starts as production" step
     runs, here too, so a refusal shows before the image is built."""
-    with FLY_API_PRODUCTION_TOML.open("rb") as f:
-        production: dict[str, str] = tomllib.load(f)["env"]
     values = {
         "DATABASE_URL": "postgresql+asyncpg://app:x@db.example:5432/postgres",
         "REDIS_URL": "rediss://default:x@redis.example:6379/0",
         **random_keys(),
-        # R2's token: Fly secrets, set before REL-1 (infra/PRODUCTION.md §4).
+        # R2's token: in Secret Manager (infra/PRODUCTION.md).
         "R2_ACCESS_KEY_ID": "production-token-id",
         "R2_SECRET_ACCESS_KEY": "production-token-secret",
-        # The VAPID pair: two Fly secrets (T-9.4, D-856).
+        # The VAPID pair: two Secret Manager slots (T-9.4, D-856).
         **vapid_settings(),
-        **production,
+        **gce_env("production"),
     }
 
     settings = Settings(_env_file=None, **values)  # type: ignore[arg-type]
@@ -650,9 +634,8 @@ _LOCAL_S3 = {
 
 
 def test_staging_and_production_each_name_their_own_buckets_and_cdn() -> None:
-    with FLY_API_PRODUCTION_TOML.open("rb") as f:
-        production: dict[str, str] = tomllib.load(f)["env"]
-    staging = _fly_env()
+    production = gce_env("production")
+    staging = gce_env("staging")
 
     assert (staging["R2_BUCKET_PUBLIC"], staging["R2_BUCKET_PRIVATE"]) == (
         "velora-staging-public",

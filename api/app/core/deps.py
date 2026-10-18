@@ -25,8 +25,8 @@ from app.modules.admin.service import ConfigCache
 from app.modules.users import service as users_service
 from app.modules.users.models import User
 
-# The bucket for a request whose address can't be read. On Fly every request
-# arrives with the proxy's header, so one without it, or with a garbled one, came
+# The bucket for a request whose address can't be read. Behind Caddy every
+# request arrives with the proxy's header, so one without it, or with a garbled one, came
 # some other way; all such requests share this one bucket, so leaving the header
 # out or mangling it can't escape a limit.
 UNKNOWN_CLIENT = "unknown"
@@ -51,12 +51,12 @@ def app_redis(request: Request) -> Redis:
 
 
 def client_address(request: Request) -> str | None:
-    """The client's address as the platform's proxy saw it (D-056), unparsed.
+    """The client's address as our proxy saw it (D-056), unparsed.
 
-    It comes from `CLIENT_IP_HEADER`, set by the platform's proxy
-    (`Fly-Client-IP`). Never from `X-Forwarded-For`, whose leftmost entries the
-    client writes, and never from `request.client` outside local: behind Fly
-    that is the proxy, or, through uvicorn's forwarded-header handling, the
+    It comes from `CLIENT_IP_HEADER`, set by Caddy from the connection itself
+    (`Caddy-Client-IP`, D-1021). Never from `X-Forwarded-For`, whose leftmost
+    entries the client writes, and never from `request.client` outside local:
+    behind Caddy that is the proxy, or, through uvicorn's forwarded-header handling, the
     client's own choice again. A limiter keyed on either passes every test,
     because no test forges a header, and limits nothing.
     """

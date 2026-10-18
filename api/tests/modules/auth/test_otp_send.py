@@ -68,11 +68,11 @@ def _assert_rate_limited(response: Response, retry_after_s: int) -> None:
 
 
 @pytest.fixture
-async def fly_client(app: FastAPI) -> AsyncIterator[AsyncClient]:
-    """The app configured like Fly: the client's IP comes from `Fly-Client-IP`
+async def caddy_client(app: FastAPI) -> AsyncIterator[AsyncClient]:
+    """The app configured like the VMs: the client's IP comes from `Caddy-Client-IP`
     (D-056), so a test can be many clients."""
     app.state.settings = app.state.settings.model_copy(
-        update={"CLIENT_IP_HEADER": "Fly-Client-IP"}
+        update={"CLIENT_IP_HEADER": "Caddy-Client-IP"}
     )
     transport = ASGITransport(app=app, raise_app_exceptions=False)
     async with AsyncClient(transport=transport, base_url="http://test") as c:
@@ -261,35 +261,35 @@ async def test_the_eleventh_send_in_a_day_is_refused(
 
 async def test_the_21st_send_from_one_ip_in_an_hour_is_refused(
     db: AsyncSession,
-    fly_client: AsyncClient,
+    caddy_client: AsyncClient,
     fake_providers: FakeProviders,
     clock: ModuleType,
 ) -> None:
     clock.freeze(START)
-    ip = {"Fly-Client-IP": "203.0.113.7"}
+    ip = {"Caddy-Client-IP": "203.0.113.7"}
     for i in range(20):
-        assert (await _send(fly_client, _phone(i), **ip)).status_code == 200
+        assert (await _send(caddy_client, _phone(i), **ip)).status_code == 200
 
-    _assert_rate_limited(await _send(fly_client, _phone(20), **ip), 3600)
-    other = {"Fly-Client-IP": "203.0.113.8"}
-    assert (await _send(fly_client, _phone(21), **other)).status_code == 200
+    _assert_rate_limited(await _send(caddy_client, _phone(20), **ip), 3600)
+    other = {"Caddy-Client-IP": "203.0.113.8"}
+    assert (await _send(caddy_client, _phone(21), **other)).status_code == 200
     assert len(fake_providers.sms.sent) == 21
 
 
 async def test_invalid_numbers_count_toward_the_ip_limit(
-    db: AsyncSession, fly_client: AsyncClient, clock: ModuleType
+    db: AsyncSession, caddy_client: AsyncClient, clock: ModuleType
 ) -> None:
     clock.freeze(START)
-    ip = {"Fly-Client-IP": "203.0.113.7"}
+    ip = {"Caddy-Client-IP": "203.0.113.7"}
     for _ in range(20):
-        assert (await _send(fly_client, "12345", **ip)).status_code == 400
+        assert (await _send(caddy_client, "12345", **ip)).status_code == 400
 
-    _assert_rate_limited(await _send(fly_client, _phone(1), **ip), 3600)
+    _assert_rate_limited(await _send(caddy_client, _phone(1), **ip), 3600)
 
 
 async def test_the_101st_send_from_one_ipv6_48_in_an_hour_is_refused(
     db: AsyncSession,
-    fly_client: AsyncClient,
+    caddy_client: AsyncClient,
     fake_providers: FakeProviders,
     clock: ModuleType,
 ) -> None:
@@ -297,13 +297,13 @@ async def test_the_101st_send_from_one_ipv6_48_in_an_hour_is_refused(
     /48's does. One cloud customer's /48 holds 65,536 /64s (D-066)."""
     clock.freeze(START)
     for i in range(100):
-        ip = {"Fly-Client-IP": f"2001:db8:abcd:{i:x}::1"}
-        assert (await _send(fly_client, _phone(i), **ip)).status_code == 200
+        ip = {"Caddy-Client-IP": f"2001:db8:abcd:{i:x}::1"}
+        assert (await _send(caddy_client, _phone(i), **ip)).status_code == 200
 
-    same_48 = {"Fly-Client-IP": "2001:db8:abcd:ff00::1"}
-    _assert_rate_limited(await _send(fly_client, _phone(100), **same_48), 3600)
-    other_48 = {"Fly-Client-IP": "2001:db8:abce::1"}
-    assert (await _send(fly_client, _phone(101), **other_48)).status_code == 200
+    same_48 = {"Caddy-Client-IP": "2001:db8:abcd:ff00::1"}
+    _assert_rate_limited(await _send(caddy_client, _phone(100), **same_48), 3600)
+    other_48 = {"Caddy-Client-IP": "2001:db8:abce::1"}
+    assert (await _send(caddy_client, _phone(101), **other_48)).status_code == 200
     assert len(fake_providers.sms.sent) == 101
 
 
@@ -457,7 +457,7 @@ async def test_a_known_and_an_unknown_number_are_answered_alike(
 _DEPLOYED: dict[str, Any] = {
     "DATABASE_URL": TEST_DATABASE_URL,
     "REDIS_URL": "rediss://default:x@redis.example:6379/0",
-    "CLIENT_IP_HEADER": "Fly-Client-IP",
+    "CLIENT_IP_HEADER": "Caddy-Client-IP",
     # Path A names its project (D-085).
     "FIREBASE_PROJECT_ID": "velora-test",
     "SMS_PROVIDER": "msg91",
@@ -622,7 +622,7 @@ def _formats(phone: str) -> list[str]:
 
 async def test_no_number_code_hash_or_key_reaches_a_response_or_log(
     db: AsyncSession,
-    fly_client: AsyncClient,
+    caddy_client: AsyncClient,
     fake_providers: FakeProviders,
     test_redis: Redis,
     clock: ModuleType,
@@ -634,17 +634,17 @@ async def test_no_number_code_hash_or_key_reaches_a_response_or_log(
     # The banned number counts against the cap like any other (D-066), so the
     # warning comes at its send: 2 of 4.
     await _set_cap(db, 4)
-    ip = {"Fly-Client-IP": "203.0.113.7"}
+    ip = {"Caddy-Client-IP": "203.0.113.7"}
 
     with capture_logs() as events:
         responses = [
-            await _send(fly_client, TYPED, **ip),  # sent
-            await _send(fly_client, TYPED, **ip),  # too soon
-            await _send(fly_client, banned, **ip),  # banned
-            await _send(fly_client, _phone(2), **ip),  # sent
-            await _send(fly_client, _phone(3), **ip),  # sent: 4 of 4
-            await _send(fly_client, _phone(4), **ip),  # past the cap
-            await _send(fly_client, "+91 22 2222 2222", **ip),  # a landline
+            await _send(caddy_client, TYPED, **ip),  # sent
+            await _send(caddy_client, TYPED, **ip),  # too soon
+            await _send(caddy_client, banned, **ip),  # banned
+            await _send(caddy_client, _phone(2), **ip),  # sent
+            await _send(caddy_client, _phone(3), **ip),  # sent: 4 of 4
+            await _send(caddy_client, _phone(4), **ip),  # past the cap
+            await _send(caddy_client, "+91 22 2222 2222", **ip),  # a landline
         ]
 
     assert [r.status_code for r in responses] == [200, 429, 200, 200, 200, 503, 400]

@@ -1175,15 +1175,15 @@ T44: list[tuple[Case, list[str]]] = [
     (
         Case(
             id="t44-31-the-worker-s-fly-config-drifts-from-the",
-            what="the worker's Fly config drifts from the API's",
+            what="the worker's settings drift from the API's (P-49: compose.yml)",
             edits=[
                 (
-                    "../infra/fly.worker.toml",
-                    'R2_BUCKET_PUBLIC = "velora-staging-public"',
-                    'R2_BUCKET_PUBLIC = "velora-staging-other"',
+                    "../infra/gce/compose.yml",
+                    '      WORKER_POLL_DELAY_S: "10"\n',
+                    '      WORKER_POLL_DELAY_S: "10"\n      R2_BUCKET_PUBLIC: velora-staging-other\n',
                 ),
             ],
-            expect=["test_the_worker_reads_the_same_settings_as_the_api_on_staging"],
+            expect=["test_the_worker_reads_the_same_settings_as_the_api"],
         ),
         ["tests/workers/test_worker.py"],
     ),
@@ -12001,7 +12001,7 @@ T98: list[Case] = [
 P680_SELECTION = ["tests/test_config.py", "tests/test_e2e_server.py"]
 CONFIG = "app/core/config.py"
 E2E_SERVER = "tests/e2e_server.py"
-FLY_ONLY = "test_outside_local_only_flys_header_is_read"
+CADDY_ONLY = "test_outside_local_only_caddys_header_is_read"
 
 P680: list[Case] = [
     Case(
@@ -12015,15 +12015,15 @@ P680: list[Case] = [
             )
         ],
         expect=[
-            f"{FLY_ONLY}[X-Forwarded-For-staging]",
-            f"{FLY_ONLY}[X-Forwarded-For-production]",
-            f"{FLY_ONLY}[X-E2E-Client-IP-staging]",
-            f"{FLY_ONLY}[X-E2E-Client-IP-production]",
+            f"{CADDY_ONLY}[X-Forwarded-For-staging]",
+            f"{CADDY_ONLY}[X-Forwarded-For-production]",
+            f"{CADDY_ONLY}[X-E2E-Client-IP-staging]",
+            f"{CADDY_ONLY}[X-E2E-Client-IP-production]",
         ],
     ),
     Case(
         id="p680-2-header-name-case-sensitive",
-        what="Fly's header refused in another case, which HTTP treats as the same",
+        what="Caddy's header refused in another case, which HTTP treats as the same",
         edits=[
             (
                 CONFIG,
@@ -12031,7 +12031,7 @@ P680: list[Case] = [
                 "            and self.CLIENT_IP_HEADER not in PROXY_CLIENT_IP_HEADERS\n",
             )
         ],
-        expect=["test_outside_local_flys_header_is_read_in_any_case"],
+        expect=["test_outside_local_caddys_header_is_read_in_any_case"],
     ),
     Case(
         id="p680-3-e2e-reads-the-socket",

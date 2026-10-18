@@ -81,7 +81,7 @@ def test_real_settings_build_every_real_provider(env: str) -> None:
         _settings(
             ENV=env,
             REDIS_URL="rediss://default:x@redis.example:6379/0",
-            CLIENT_IP_HEADER="Fly-Client-IP",
+            CLIENT_IP_HEADER="Caddy-Client-IP",
             **_REAL,
         )
     )
@@ -233,7 +233,7 @@ def test_staging_and_production_text_anyone(env: str) -> None:
         _settings(
             ENV=env,
             REDIS_URL="rediss://default:x@redis.example:6379/0",
-            CLIENT_IP_HEADER="Fly-Client-IP",
+            CLIENT_IP_HEADER="Caddy-Client-IP",
             **_REAL,
         ),
     )

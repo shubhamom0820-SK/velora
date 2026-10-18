@@ -35,12 +35,12 @@ async def _rows(db: AsyncSession) -> list[tuple[str, str | None]]:
 
 
 @pytest.fixture
-async def fly_client(app: FastAPI) -> AsyncIterator[AsyncClient]:
-    """A client for the app configured like Fly: the client's IP comes from
-    `Fly-Client-IP`, the header Fly's proxy sets (D-056). Settings are read per
+async def caddy_client(app: FastAPI) -> AsyncIterator[AsyncClient]:
+    """A client for the app configured like the VMs: the client's IP comes from
+    `Caddy-Client-IP`, the header Caddy sets (D-056, D-1021). Settings are read per
     request, so swapping them here is enough."""
     app.state.settings = app.state.settings.model_copy(
-        update={"CLIENT_IP_HEADER": "Fly-Client-IP"}
+        update={"CLIENT_IP_HEADER": "Caddy-Client-IP"}
     )
     transport = ASGITransport(app=app, raise_app_exceptions=False)
     async with AsyncClient(transport=transport, base_url="http://test") as c:
@@ -189,32 +189,34 @@ async def test_it_opens_again_as_the_window_slides(
     assert (await _post(client, {"email": "ontime@example.com"})).status_code == 201
 
 
-async def test_on_fly_each_client_ip_has_its_own_allowance(
-    fly_client: AsyncClient, db: AsyncSession, clock: ModuleType
+async def test_behind_caddy_each_client_ip_has_its_own_allowance(
+    caddy_client: AsyncClient, db: AsyncSession, clock: ModuleType
 ) -> None:
     clock.freeze(START)
 
-    assert await _six_tries(fly_client, **{"Fly-Client-IP": "203.0.113.7"}) == (
+    assert await _six_tries(caddy_client, **{"Caddy-Client-IP": "203.0.113.7"}) == (
         [201] * 5 + [429]
     )
     other = await _post(
-        fly_client, {"email": "other@example.com"}, **{"Fly-Client-IP": "203.0.113.8"}
+        caddy_client,
+        {"email": "other@example.com"},
+        **{"Caddy-Client-IP": "203.0.113.8"},
     )
     assert other.status_code == 201
 
 
-async def test_on_fly_a_forged_forwarded_for_escapes_nothing(
-    fly_client: AsyncClient, db: AsyncSession, clock: ModuleType
+async def test_behind_caddy_a_forged_forwarded_for_escapes_nothing(
+    caddy_client: AsyncClient, db: AsyncSession, clock: ModuleType
 ) -> None:
     """The limit holds however X-Forwarded-For is rewritten from try to try."""
     clock.freeze(START)
     statuses = [
         (
             await _post(
-                fly_client,
+                caddy_client,
                 {"email": f"forged{i}@example.com"},
                 **{
-                    "Fly-Client-IP": "203.0.113.7",
+                    "Caddy-Client-IP": "203.0.113.7",
                     "X-Forwarded-For": f"198.51.100.{i}",
                 },
             )
@@ -225,16 +227,16 @@ async def test_on_fly_a_forged_forwarded_for_escapes_nothing(
     assert statuses == [201] * 5 + [429]
 
 
-async def test_on_fly_one_ipv6_slash_64_is_one_client(
-    fly_client: AsyncClient, db: AsyncSession, clock: ModuleType
+async def test_behind_caddy_one_ipv6_slash_64_is_one_client(
+    caddy_client: AsyncClient, db: AsyncSession, clock: ModuleType
 ) -> None:
     clock.freeze(START)
     statuses = [
         (
             await _post(
-                fly_client,
+                caddy_client,
                 {"email": f"v6-{i}@example.com"},
-                **{"Fly-Client-IP": f"2001:db8:1:2::{i + 1:x}"},
+                **{"Caddy-Client-IP": f"2001:db8:1:2::{i + 1:x}"},
             )
         ).status_code
         for i in range(6)
@@ -242,21 +244,21 @@ async def test_on_fly_one_ipv6_slash_64_is_one_client(
 
     assert statuses == [201] * 5 + [429]
     next_door = await _post(
-        fly_client,
+        caddy_client,
         {"email": "next-door@example.com"},
-        **{"Fly-Client-IP": "2001:db8:1:3::1"},
+        **{"Caddy-Client-IP": "2001:db8:1:3::1"},
     )
     assert next_door.status_code == 201
 
 
-async def test_on_fly_requests_without_the_header_share_one_allowance(
-    fly_client: AsyncClient, db: AsyncSession, clock: ModuleType
+async def test_behind_caddy_requests_without_the_header_share_one_allowance(
+    caddy_client: AsyncClient, db: AsyncSession, clock: ModuleType
 ) -> None:
     clock.freeze(START)
     statuses = [
         (
             await _post(
-                fly_client,
+                caddy_client,
                 {"email": f"noheader{i}@example.com"},
                 **{"X-Forwarded-For": f"198.51.100.{i}"},
             )
