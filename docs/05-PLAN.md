@@ -4706,7 +4706,8 @@ The number comes from the session's own block, given in its brief, from P-100 up
     12:01:40 UTC no request from the phone reached either API at all (checked again at 12:10:25
     UTC, after the founder reported a photo shown as uploaded), so the later photo attempts never
     reached staging's servers. Not a web bug on this evidence: opening the photo screen makes
-    requests of its own, and none came. Proving moderation on the VM is P-927.
+    requests of its own, and none came. Moderation on the VM is left to the first real photo, the
+    founder's call (P-927, a note, not a blocker).
 - [ ] P-50 · Cut the round trips every request pays. **Before Sprint 6 adds routes on
   `current_user`; worth doing wherever the API runs.** Worst case without it: the fixed cost in P-49
   multiplies with every route that inherits it. Measured on 3 October 2026 (P-49's method):
@@ -7215,12 +7216,11 @@ The number comes from the session's own block, given in its brief, from P-100 up
   `/etc/systemd/resolved.conf.d/`, restarts `systemd-resolved`, and a check from the VM shows
   nothing on 5355; the metadata set again and the VMs rebooted, on the founder's word. Filed by
   Claude building P-49, at the founder's direction.
-- [ ] P-927 · Prove photo moderation through the Mumbai VM's worker, end to end. **Before P-920
-  destroys Fly's worker app** (its rollback). Worst case if left: the worker's main job, moderation
-  with Sightengine and R2, has run on the VM only in tests and its settings check, and a fault there
-  (an egress rule, a key, a memory peak on a 12-megapixel photo, P-49's 1,013 MB with the worker
-  idle) shows first as every new photo stuck at `pending`. A real photo uploaded on staging, signed
-  in on a phone: its upload-link request and its photo row seen, the row reaching `approved` (or a
-  decided `rejected`), the VM worker's `moderation.decided` naming it, and `docker stats` read during
-  it. On 18 October 2026 the founder's photo attempts never reached staging's servers (P-49's record).
-  Filed by Claude building P-49, 18 October 2026.
+- [x] P-927 · Photo moderation through the Mumbai VM's worker, end to end: **closed as a note, the
+  founder's call, not proved** (18 October 2026, on the advisor's recommendation, relayed): not a
+  blocker, and P-920 doesn't wait for it; the first real photo will show it. What stays unproved:
+  moderation (Sightengine and R2) has run on the VM only in tests and its settings check, so a fault
+  there (an egress rule, a key, a memory peak on a 12-megapixel photo; P-49 read 1,013 MB with the
+  worker idle) would show first as new photos stuck at `pending`. The founder's photo attempts on 18
+  October never reached staging's servers (P-49's record). Filed by Claude building P-49, 18 October
+  2026.
