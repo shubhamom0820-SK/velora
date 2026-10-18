@@ -12967,8 +12967,8 @@ def sha(path: Path) -> str:
 
 
 def tracked() -> dict[str, str]:
-    """Every file under api/ but caches and the virtualenv, infra/'s Fly configs
-    (T-4.4 breaks one), the landing guard's scripts and `migrate-with-url`
+    """Every file under api/ but caches and the virtualenv, infra/gce/ (T-4.4's
+    case breaks its compose.yml, P-49), the landing guard's scripts and `migrate-with-url`
     (T-4.8 breaks it), by SHA-256, keyed by
     their path from api/."""
     skip = {".venv", "__pycache__", ".pytest_cache", ".mypy_cache", ".ruff_cache"}
@@ -12977,8 +12977,9 @@ def tracked() -> dict[str, str]:
         for path in API.rglob("*")
         if path.is_file() and not skip & set(path.relative_to(API).parts)
     }
-    for path in (API.parent / "infra").glob("fly.*.toml"):
-        files[f"../infra/{path.name}"] = sha(path)
+    for path in (API.parent / "infra" / "gce").iterdir():
+        if path.is_file():
+            files[f"../infra/gce/{path.name}"] = sha(path)
     for name in (
         "push-gate",
         "mark-checked",
