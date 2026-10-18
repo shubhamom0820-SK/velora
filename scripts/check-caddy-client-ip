@@ -1,0 +1,78 @@
+#!/usr/bin/env bash
+# D-1021's guard (P-49): our Caddyfile, in the Caddy image compose.yml pins, must
+# hand the API the client's own address as Caddy-Client-IP, whatever the client
+# sends under that name or as X-Forwarded-For. Per-IP rate limits read only that
+# header (D-056), so a Caddyfile that passed a forged one through would let anyone
+# choose their bucket, and no other test would go red.
+#
+#   scripts/check-caddy-client-ip [CADDYFILE]     (default: infra/gce/Caddyfile)
+#
+# Three containers on a network of their own: Caddy with the Caddyfile, plain
+# HTTP, proxying to "api:8000"; a stub at "api" that answers with the header it
+# received; and a client that sends forged headers and knows its own address.
+# Run in CI and by hand; needs Docker. Exits 1 naming what the stub saw.
+set -euo pipefail
+
+repo="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+caddyfile="$(cd "$(dirname "${1:-$repo/infra/gce/Caddyfile}")" && pwd)/$(basename "${1:-$repo/infra/gce/Caddyfile}")"
+image="$(grep -o 'caddy:[^ ]*@sha256:[0-9a-f]\{64\}' "$repo/infra/gce/compose.yml" | head -n 1)"
+[[ -n "$image" ]] || { echo "check-caddy-client-ip: no pinned Caddy image in compose.yml"; exit 2; }
+[[ -f "$caddyfile" ]] || { echo "check-caddy-client-ip: no Caddyfile at $caddyfile"; exit 2; }
+
+run="caddy-ip-check-$$-$RANDOM"
+work="$(mktemp -d)"
+cleanup() {
+  docker rm -f "$run-front" "$run-api" >/dev/null 2>&1 || true
+  docker network rm "$run" >/dev/null 2>&1 || true
+  rm -rf "$work"
+}
+trap cleanup EXIT
+
+# The stub: answers every request with the Caddy-Client-IP it was given, all
+# values joined, so a duplicate passed through shows.
+cat > "$work/Stub" <<'CADDY'
+{
+	admin off
+}
+:8000 {
+	respond "{http.request.header.Caddy-Client-IP}"
+}
+CADDY
+chmod 0644 "$work/Stub"
+cp "$caddyfile" "$work/Caddyfile"
+chmod 0644 "$work/Caddyfile"
+
+docker network create "$run" >/dev/null
+docker run -d --name "$run-api" --network "$run" --network-alias api \
+  -v "$work/Stub:/etc/caddy/Caddyfile:ro" "$image" >/dev/null
+docker run -d --name "$run-front" --network "$run" --network-alias front \
+  -e API_HOSTS=http://:80 -v "$work/Caddyfile:/etc/caddy/Caddyfile:ro" "$image" >/dev/null
+
+# The client: its own address first, then what the stub saw for each forgery.
+# Busybox wget, in the same image, so nothing else is pulled.
+out="$(docker run --rm --network "$run" "$image" sh -c '
+  for _ in $(seq 1 50); do wget -q -O /dev/null http://front/ 2>/dev/null && break; sleep 0.2; done
+  hostname -i | cut -d" " -f1
+  wget -q -O - --header "Caddy-Client-IP: 203.0.113.66" http://front/; echo
+  wget -q -O - --header "caddy-client-ip: 203.0.113.67" --header "X-Forwarded-For: 203.0.113.68" http://front/; echo
+  wget -q -O - --header "Caddy-Client-IP: 203.0.113.69" --header "Caddy-Client-IP: 203.0.113.70" http://front/; echo
+  wget -q -O - http://front/; echo
+')"
+
+client="$(sed -n 1p <<<"$out")"
+failures=0
+names=("forged Caddy-Client-IP" "forged lower-case name, with X-Forwarded-For" "two forged Caddy-Client-IP" "nothing forged")
+for i in 0 1 2 3; do
+  saw="$(sed -n "$((i + 2))p" <<<"$out")"
+  if [[ -n "$client" && "$saw" == "$client" ]]; then
+    echo "check-caddy-client-ip: ok   ${names[$i]}: the API saw the client's own address"
+  else
+    echo "check-caddy-client-ip: FAIL ${names[$i]}: the API saw '${saw}', not the client's address '${client}'"
+    failures=$((failures + 1))
+  fi
+done
+if ((failures > 0)); then
+  echo "check-caddy-client-ip: $failures check(s) failed: per-IP limits behind this Caddyfile could be chosen by the client (D-1021)."
+  exit 1
+fi
+echo "check-caddy-client-ip: every check passed."
