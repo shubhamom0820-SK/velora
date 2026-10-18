@@ -35,6 +35,16 @@ if [[ -f "$FAKE_DIR/unreachable" ]]; then
   echo "error connecting to api.github.com" >&2
   exit 1
 fi
+# A moment's trouble while a run is read (P-842): the next N reads of the run,
+# and the rate_limit check each failure makes, can't reach GitHub.
+if [[ -f "$FAKE_DIR/unreachable-reads" ]] && [[ "$1 $2" == "run view" || "$1 $2" == "api rate_limit" ]]; then
+  left="$(cat "$FAKE_DIR/unreachable-reads")"
+  if ((left > 0)); then
+    echo $((left - 1)) >"$FAKE_DIR/unreachable-reads"
+    echo "error connecting to api.github.com" >&2
+    exit 1
+  fi
+fi
 case "$1 $2" in
   "api rate_limit") echo '{}'; exit 0 ;;
   "run list")
@@ -92,7 +102,7 @@ check() {
   local name="$1" want="$2" message="$3" dir="$4" got=0
   shift 4
   (cd "$dir" && env PATH="$work/bin:$PATH" FAKE_DIR="$work/$name" CI_GATE_INTERVAL=1 \
-    CI_GATE_APPEAR_TIMEOUT=2 CI_GATE_FINISH_TIMEOUT=2 "$@") >"$work/$name.out" 2>&1 || got=$?
+    CI_GATE_APPEAR_TIMEOUT=2 CI_GATE_FINISH_TIMEOUT=2 CI_GATE_RETRY_WAIT=1 "$@") >"$work/$name.out" 2>&1 || got=$?
   if [[ "$got" == "$want" ]] && grep -qF -- "$message" "$work/$name.out"; then
     passed=$((passed + 1))
     printf 'ok    %-48s exit %s\n' "$name" "$got"
@@ -183,16 +193,47 @@ scenario detached-head-names-no-branch "[$(run 11 "$rsha" 2026-01-01T00:00:00Z C
   11 completed success "$rsha" feature-x
 expect_in "$repo" detached-head-names-no-branch 6 "a detached HEAD (a rebase stopped part way?) has none"
 
+# retried NAME TIMES: the gate's "trying once more" line appears exactly TIMES.
+retried() {
+  local got
+  got="$(grep -c "trying once more in 1s (P-842)" "$work/$1.out" || true)"
+  if [[ "$got" == "$2" ]]; then
+    passed=$((passed + 1))
+    printf 'ok    %-48s retried %s\n' "$1" "$got"
+  else
+    failed=$((failed + 1))
+    printf 'FAIL  %-48s retried %s times, want %s\n' "$1" "$got" "$2"
+  fi
+}
+
 scenario github-unreachable "[]"
 touch "$work/github-unreachable/unreachable"
-expect github-unreachable 4 "couldn't reach or authenticate with GitHub"
+expect github-unreachable 4 "couldn't reach or authenticate with GitHub, and once more after 1s"
+retried github-unreachable 1
 
-# GitHub is reachable and says no: never the manual path.
+# --- One more try on exit 4 (P-842) --------------------------------------------
+# A moment's trouble reading the run: the same run, read once more, is green.
+scenario flake-clears "[$(run 11 "$sha" 2026-01-01T00:00:00Z)]" 11 completed success "$sha" ""
+echo 2 >"$work/flake-clears/unreachable-reads"
+expect flake-clears 0 "CI is green for ${sha:0:7} (run 11)"
+retried flake-clears 1
+grep -qE "couldn't reach GitHub while reading run 11 at [0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9:]{8}Z; trying once more" \
+  "$work/flake-clears.out" ||
+  { failed=$((failed + 1)); echo "FAIL  flake-clears doesn't record the run and the time"; }
+
+# The trouble outlasts the one more try: exit 4, after exactly one.
+scenario flake-persists "[$(run 11 "$sha" 2026-01-01T00:00:00Z)]" 11 completed success "$sha" ""
+echo 4 >"$work/flake-persists/unreachable-reads"
+expect flake-persists 4 "couldn't reach or authenticate with GitHub, and once more after 1s, while reading run 11"
+retried flake-persists 1
+
+# GitHub is reachable and says no: never the manual path, and never retried.
 scenario github-answers-with-an-error "[]"
 echo "HTTP 404: Not Found (https://api.github.com/repos/o/r/actions/runs)" >"$work/github-answers-with-an-error/list-error"
 expect github-answers-with-an-error 5 "GitHub answered with an error while listing runs"
 grep -qF "HTTP 404: Not Found" "$work/github-answers-with-an-error.out" ||
   { failed=$((failed + 1)); echo "FAIL  github-answers-with-an-error doesn't show GitHub's error"; }
+retried github-answers-with-an-error 0
 
 echo "ci-gate-test: $passed passed, $failed failed"
 ((failed == 0))

@@ -7365,7 +7365,7 @@ The number comes from the session's own block, given in its brief, from P-100 up
   every mismatch, as its approved plan says (D-940). Decide with T-9.12's Sentry plan in hand: a
   cap of lines per run with a count in a summary, or Sentry grouping and a rate limit on that
   event. Filed by Claude building T-9.9, 18 October 2026.
-- [ ] P-842 · `scripts/ci-gate` (or `/done`) tries once more on exit 4, after a short wait, and
+- [x] P-842 · `scripts/ci-gate` (or `/done`) tries once more on exit 4, after a short wait, and
   records that it did. **Before more sessions land at once; small.** Worst case: a gate that exits
   4 on a moment's trouble reading GitHub sends a session down `/done`'s manual path, so a commit
   lands on `main` with only the local half of the landing guard (`VELORA_PUSH_GATE_MANUAL_PATH=1`)
@@ -7379,7 +7379,12 @@ The number comes from the session's own block, given in its brief, from P-100 up
   and time, so each occurrence is on the record; a second exit 4 is final. `scripts/ci-gate-test`
   covers both: a flake that clears on the retry, and one that doesn't. `/done`'s exit-4 paragraph
   then says the gate retries itself. Filed by Claude after T-9.9 landed, at the founder's
-  direction, 18 October 2026.
+  direction, 18 October 2026. **Done 19 October 2026:** the gate's own, after
+  `CI_GATE_RETRY_WAIT` (30 s): the same request once more, its line naming what it was reading and
+  the time; a second exit 4 is final and says so; exit 5 never retries. `scripts/ci-gate-test`'s
+  `flake-clears`, `flake-persists` and `github-answers-with-an-error` hold it (red on the gate
+  before it; a gate that retried exit 5 too was caught). `/done` says it. A network failure the
+  gate reads as exit 5 is P-881.
 - [ ] P-880 · `/login` tells people it is protected by reCAPTCHA, as Google requires. **Before
   REL-1** (on its Needs line). Worst case: a Firebase build's `/login` runs Google's invisible
   reCAPTCHA (T-3.14) with its badge hidden and no notice in its place, which breaks reCAPTCHA's
@@ -7435,3 +7440,15 @@ The number comes from the session's own block, given in its brief, from P-100 up
   with a test that a socket's ticket, and a query on any other path, never reach the log line.
   Filed by Claude building T-9.11, 18 October 2026, at the founder's direction; its block, P-860
   to P-869.
+- [ ] P-881 · `scripts/ci-gate` reads a network failure as "couldn't reach" (exit 4), not "GitHub
+  answered" (exit 5). **Before more sessions land at once; small.** Worst case: a TLS timeout or a
+  dropped connection while the gate reads a run exits 5, "never a case for the manual path" and
+  never retried (P-842), so a session either stops a good landing or reruns a gate whose exit is
+  meant to forbid it. The gate tells 4 from 5 only by whether `gh api rate_limit` fails a moment
+  later; a network blip that has cleared by then reads as an error GitHub gave. Seen 18 October
+  2026: P-222's gate exited 5 with "TLS handshake timeout" from `gh run view`, and was rerun once
+  by the rule for network errors. Fix: also read gh's own error text, so transport failures (TLS
+  handshake timeout, connection reset or refused, a timeout awaiting headers, no such host) are
+  exit 4 and go through P-842's one more try, while anything GitHub answered (an HTTP status) stays
+  5; tests in `scripts/ci-gate-test` for each. Filed by Claude building P-842, at the founder's
+  direction, 19 October 2026, from this session's block (P-880 to P-889).
