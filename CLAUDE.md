@@ -33,7 +33,7 @@ Permanence is granted by the other person, never bought.
 | Cache/queue | Redis + ARQ |
 | HTTP out | httpx (async) — never `requests` |
 | Storage | Cloudflare R2 via aioboto3, presigned URLs only |
-| Hosting | Vercel (web) · Fly.io `sin` (api + worker) · Supabase `ap-south-1` · Upstash Mumbai — data stays in India (D-048) |
+| Hosting | Vercel (web) · Fly.io `sin` (api + worker), moving to one Compute Engine VM per environment in `asia-south1` with Docker Compose and Caddy (P-49, D-1020; staging's beside Fly until P-920, production's at P-921) · Supabase `ap-south-1` · Upstash Mumbai — data stays in India (D-048) |
 | Tooling | uv, ruff, mypy, pytest, pnpm, eslint, prettier, vitest + Testing Library, Playwright, pre-commit, gitleaks — D-039, D-042 |
 
 ## Repo layout
@@ -53,7 +53,8 @@ velora/
     app/workers/        ARQ worker (main.py, `python -m app.workers`) + tasks/
     app/tools/          checks run by hand inside a deployed machine (storage_probe, T-4.1;
                         sightengine_shape, T-4.4; selfie_review, the founder's, T-4.5, D-264;
-                        unfreeze, the founder's, lifting any freeze, T-9.2, D-906)
+                        unfreeze, the founder's, lifting any freeze, T-9.2, D-906; roundtrip_probe,
+                        Postgres and Redis round trips from where the API runs, P-49)
     alembic/            migrations
     seed/               make seed: dev data, local stack only, never in the image (D-064)
     bench/              benchmarks run by hand, never in the image nor `make test`: liveness/,
@@ -63,10 +64,13 @@ velora/
     tests/              mirrors app/ (and seed/, bench/)
   web/                  Next.js app (App Router, TypeScript strict, Tailwind v4)
   infra/                docker-compose.yml, fly.api.toml + fly.worker.toml + STAGING.md (staging's
-                        runbook), fly.api.production.toml + PRODUCTION.md (production's: released by tag)
+                        runbook), fly.api.production.toml + PRODUCTION.md (production's: released by tag),
+                        gce/ (the Mumbai VMs, P-49: startup.sh, compose.yml, Caddyfile, deploy, each
+                        environment's settings and secret names; Fly's files go with P-920)
   scripts/              ci-gate, push-gate, release-gate, ci-vouch + ci-e2e-needed (CI's minutes,
                         D-410), with-tools, staging-smoke, check-image-no-env,
-                        check-image-no-bench-tools, migrate-with-url
+                        check-image-no-bench-tools, migrate-with-url, check-caddy-client-ip (D-1021's
+                        guard), gcp-secrets (secrets into Secret Manager and the Keychain, P-49)
   Makefile
 ```
 

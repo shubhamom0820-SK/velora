@@ -131,7 +131,7 @@ never done silently.
   **How:** an Indian billing address means Google's mandatory identity verification. As an individual: PAN or e-Aadhaar through DigiLocker, and proof of address. As a business: a GST or Udyam certificate. **GST:** the advisor directing T-3.2 to T-3.10 says Velora has none, deliberately, below the threshold; P-0.2 still lists GST as unconfirmed, so the founder confirms it there. Without GST or a Udyam registration, it goes through as an individual.
   **If the payment method is refused** (AWS's was, P-0.6), write down exactly what Google said, as P-36 did for Fly, before trying anything else.
   **Closed 3 October 2026 (the founder):** Blaze is active, not just linked: the project shows "Blaze via Google Cloud free-of-charge trial", with ₹28,796.63 of credit valid until 2 January 2027. The ₹1,000 one-off payment is made, and India's tax info is submitted as an unregistered individual with PAN. The 30-day suspension clock is moot. **It leaves a worse-shaped risk in its place, dated: P-0.18,** the trial's end.
-- [ ] **P-0.18** Convert the Google Cloud billing account from its free trial to a paid billing account, **after App Check is enforced and proved by its effect (P-68), and before launch.** **Owner: the founder, Shubham Kumar. Due: before launch (REL-1 if its tag includes T-3.14, T-9.15 at the latest), and in any case before 2 January 2027, or before the trial's ₹28,796.63 of credit runs out if that comes first.** Recorded 3 October 2026, when P-0.13 closed; rewritten 4 October 2026, when the daily SMS cap turned out not to be a setting.
+- [x] **P-0.18** Convert the Google Cloud billing account from its free trial to a paid billing account, **after App Check is enforced and proved by its effect (P-68), and before launch.** **Owner: the founder, Shubham Kumar. Due: before launch (REL-1 if its tag includes T-3.14, T-9.15 at the latest), and in any case before 2 January 2027, or before the trial's ₹28,796.63 of credit runs out if that comes first.** Recorded 3 October 2026, when P-0.13 closed; rewritten 4 October 2026, when the daily SMS cap turned out not to be a setting.
   **Why** (the founder): on that date the trial ends, and unless the account has been converted by then, Firebase Auth stops and nobody can sign in, staging or production (they share `velora-ic`, D-065), with nothing wrong in the code and no deploy to blame. "This is exactly the kind of thing that is obvious in January and invisible in October." And the API must not move onto this account while it is a trial (P-49), since the trial's end would then stop the whole API, not just sign-in.
   **In this order** (the founder, 3 and 4 October 2026). On the trial an SMS flood ends the trial: an outage, no bill. Converted, a flood costs money. Neither is acceptable on its own, so something must bound a flood before converting to paid, and no console field does (below):
   1. **App Check enforced on Authentication and proved by its effect, first** (P-68). It is a prerequisite of the conversion, not a sibling: it makes a flood need our web app rather than a script, the strongest lever left. Until then, converting hands one person's card a bill bounded only by Firebase's own limits, and staying on the trial lets a stranger take sign-in down for everyone.
@@ -145,6 +145,12 @@ never done silently.
   **`velora-ic` is on plain Firebase Authentication** (established 4 October 2026). Its console offers SMS multi-factor authentication behind "Upgrade to enable", the Identity Platform upgrade, which the founder deliberately didn't take; and Firebase offers SMS MFA only after that upgrade: "If you've upgraded to Firebase Authentication with Identity Platform, you can add SMS multi-factor authentication". Read from the console and Google's docs, not from an API: this machine has no Google Cloud credentials. **If the project is ever upgraded, the picture changes** (the founder): the 3,000 a day goes, so this item's bound is re-derived before any upgrade, not after. P-68 may force that question, and says how.
   **Google's terms** (its Free Trial page, read by Claude on 3 October 2026): the trial account closes when 90 days pass or the credit is spent, whichever is first; "All resources you created during the trial are stopped"; and without an upgrade within a 30-day grace period they "are permanently deleted". Upgrading early keeps the remaining credit, usable within the original 90 days, and ends the trial's guarantee: "You will not be billed for any Google Cloud usage during your Free Trial."
   **Where it is read:** dated, in 07-CHECKLISTS §F; on REL-1's Needs line if REL-1's tag includes T-3.14 or falls on or after 2 December 2026; on T-9.15's Needs line; on P-49, which may not land on this account while it is a trial; and P-68 is its first step.
+  **Done 17 October 2026, out of order (the founder):** the billing account `01C4E8-84A5D8-4255F2`
+  was upgraded from its trial, **before P-68**, so the order above didn't hold; the trial's leftover
+  credit still offsets costs. P-49's two projects bill to it (D-1020). **What that leaves, until
+  P-68:** an SMS flood now costs money rather than ending the trial, bounded only by Firebase's
+  fixed limits above (3,000 verification SMS a day per project) and the India-only region policy.
+  P-68 stays the next step, not a sibling. Recorded by Claude building P-49, 18 October 2026.
 - [ ] **P-0.14** Decide where the registered office is, before `v0.1.0`, production's first release (REL-1). **Blocks that release, not the build:** on REL-1's Needs line, since a registered office is a judgement no check can make. `/contact` publishes D-058's registered office, the founder's home in Hajipur, and from `v0.1.0` it is public, crawled and archived: once Google and archive.org hold the address, no later change removes it.
   **Why it's a decision** (the founder, 3 October 2026): a sole proprietorship must publish a registered address, but it needn't be where the founder sleeps. A virtual-office or registered-address service in India, roughly ₹1,000 to ₹2,000 a month, meets the same requirement with a commercial address. For a dating app, where some users will be angry at whoever banned them, the difference matters.
   **If it changes:** a new decision supersedes D-058's office, `REGISTERED_OFFICE` in `web/src/lib/legal.ts` changes (its guard test names D-058), and the court follows the office (D-058), so a new city means a new court line too.
@@ -4623,6 +4629,33 @@ The number comes from the session's own block, given in its brief, from P-100 up
   **Deadline missed, 8 October 2026 (the audit, P-490):** Sprint 6 is landing with the split in
   place (T-6.2, T-6.3, T-6.4). **Now before REL-1, measured on staging** (the advisor's
   recommendation; the founder to confirm). Nothing above changes.
+  **Decided and under way, 16 to 18 October 2026 (D-1020 to D-1023; the founder, on the advisor's
+  recommendation, Claude in a separate chat, relayed):** Option A, both environments, on Compute
+  Engine in `asia-south1`; Fly and Singapore leave entirely. Built by Claude in session block
+  P-920 to P-929, D-1020 to D-1029, in steps the founder set:
+  - **Done, by the founder's own commands (blocks 1 to 5, `out/`, each read by the advisor first):**
+    projects `velora-ic-staging` and `velora-ic-prod` on billing account `01C4E8-84A5D8-4255F2`;
+    each a custom VPC (TCP 80/443 in, 22 from IAP only, the default network and its open rules
+    deleted), a static IPv4 (staging `34.47.244.114`, production `34.180.56.204`), two service
+    accounts, an Artifact Registry and 16 Secret Manager slots in Mumbai, WIF for GitHub; the VMs
+    `velora-api-staging` (e2-small) and `velora-api-prod` (e2-medium), both reporting
+    `velora-startup: ready`. Staging's 13 values moved from Fly and the Keychain, all compared equal
+    by SHA-256 prefix across Secret Manager, the Keychain, Fly's API and Fly's worker; a fresh VAPID
+    pair and the Sentry DSN into Secret Manager. Production's four keys and VAPID pair generated
+    fresh, different from staging's; R2's from the Keychain; its database, Redis, Razorpay and
+    Sightengine values not set yet (P-921).
+  - **This landing:** the VM's files (`infra/gce/`), `Caddy-Client-IP` (D-1021), the deploy jobs
+    beside Fly's, `roundtrip_probe`, `check-caddy-client-ip`, `gcp-secrets`. Fly's staging deploy
+    is untouched and keeps running from `main` until the founder retires it.
+  - **A hand-built image never reached the VM:** pushing from the founder's Mac broke twice in
+    Docker Desktop's own proxy (P-924), so the first image the VM runs is CI's, from `main`.
+  - **Left, in order:** the VM's first deploy from `main`; the checks from outside (Caddy's
+    certificate, `Server: Caddy`, `/readyz`, the API's port closed, IPv6 to Supabase) and the
+    round trips, measured with `roundtrip_probe` against this entry's estimates; the forged-header
+    check on staging; then, on the founder's word, the worker swap (Fly's to 0 first, D-091) and
+    `api.staging`'s DNS; the phone test; then P-920 removes Fly. Production: P-921.
+  **Ticks when** staging serves from Mumbai, measured, with Fly's worker at 0; P-920 and P-921
+  carry the rest.
 - [ ] P-50 · Cut the round trips every request pays. **Before Sprint 6 adds routes on
   `current_user`; worth doing wherever the API runs.** Worst case without it: the fixed cost in P-49
   multiplies with every route that inherits it. Measured on 3 October 2026 (P-49's method):
@@ -7056,3 +7089,59 @@ The number comes from the session's own block, given in its brief, from P-100 up
   on a staff approval when the owner is verified, and let `match_photo` find the face itself, or
   send the photo back through the worker for its scores first. Filed by Claude building T-9.5,
   16 October 2026.
+- [ ] P-920 · Remove Fly from Velora. **After `api.staging` serves from Mumbai and the founder's
+  phone test passes, on his word.** Worst case if left: two deploy paths for one environment, a
+  Fly app billing for nothing, and `Fly-Client-IP` still allowed, a header any later Fly-shaped
+  mistake could configure where the client writes it. One small commit: `infra/fly.*.toml`, Fly's
+  jobs in `deploy.yml` and `deploy-production.yml`'s Fly path, `Fly-Client-IP` out of
+  `PROXY_CLIENT_IP_HEADERS` (and the tests and break cases that allow it), the tools' `flyctl
+  ssh` lines (`selfie_review`, `unfreeze`, `storage_probe`, `sightengine_shape`) to `gcloud compute
+  ssh … docker compose exec`, `infra/STAGING.md`'s Fly sections, `CLAUDE.md`'s stack and infra
+  lines, `scripts/migrate-with-url`'s comment, `README.md`. Then the founder removes
+  `FLY_API_TOKEN` and `FLY_WORKER_API_TOKEN` from GitHub's `staging` environment and destroys
+  `velora-api-staging`, `velora-worker-staging` and the empty `velora-api` on Fly. Filed by Claude
+  building P-49, 18 October 2026.
+- [ ] P-921 · Production on its Mumbai VM. **Before REL-1.** Worst case: a release tag deploys to
+  Fly's empty `velora-api`, or to a VM whose secrets are half set, and fails on release day.
+  `deploy-production.yml` deploys the exact image staging ran (its digest, copied from staging's
+  registry, which production's deploy account may read, D-1022) to `velora-api-prod` on a `v*` tag
+  only (D-075), and its smoke checks `api.veloraapp.co.in` with `EXPECT_API_SERVER=Caddy`.
+  Before it: production's `DATABASE_URL` (the `velora_api` role on `velora-prod` first), `REDIS_URL`,
+  Razorpay's three and Sightengine's two into Secret Manager by `scripts/gcp-secrets production`,
+  and the Apple Passwords copies; the `production` environment's three GCP variables; the
+  Cloudflare record `api` from Fly's CNAME to an A record for `34.180.56.204`, DNS only; the
+  worker on (`/etc/velora/worker-on`); and `/privacy`'s "Every request you make is handled by our
+  servers in Singapore" changed to Mumbai **in the same change** that moves production's path (the
+  founder, 17 October 2026), with `infra/PRODUCTION.md` rewritten. Filed by Claude building P-49,
+  18 October 2026.
+- [ ] P-922 · Nobody is told when a VM is down. **Before real users.** Worst case: production's
+  only VM stops, or Caddy can't renew its certificate, and the first to notice is a user. Fly
+  didn't alert either. An uptime check on `/readyz` from outside (Google Cloud Monitoring's, or
+  any), alerting the founder; and a disk-space alert. Filed by Claude building P-49, 18 October
+  2026.
+- [ ] P-923 · Clean up the setup wizard's projects. **When convenient; before any new project is
+  needed.** Worst case: projects billing for nothing, an organisation-wide log sink copying logs to
+  a `global` bucket, and no free slot on the billing account (5 projects at most, D-1023), so a new
+  project can't be linked. Created 16 October 2026 by Google Cloud's setup wizard: organisations
+  `312879430450` and `760891178918` (both `shubhamom0820-org`), four folders, and the projects
+  `cs-project-enarzzsb` (development), `cs-project-hnou8upo` (central-logging-monitoring, still
+  billed), `cs-project-imxxsyf5` (prod), `cs-project-p1ikf4nc` (nonprod) and three `google-mpf-*`;
+  also `project-07f07992-5151-4c8d-8ad` (My First Project, 3 October 2026, still billed) and
+  `project-379ffb37-d51c-4141-8d2` (14 September 2026). The founder unlinked billing from
+  `cs-project-enarzzsb` and `cs-project-imxxsyf5` on 17 October 2026. The founder decides what goes.
+  Filed by Claude building P-49, 18 October 2026, at the founder's request.
+- [ ] P-924 · Images are built and pushed by CI, never from the founder's Mac. **Noted, nothing to
+  build.** On 18 October 2026, pushing P-49's image from the Mac to Artifact Registry broke twice
+  on the same 150 MB layer inside Docker Desktop's own proxy (`http.docker.internal:3128`: a broken
+  pipe, then a timeout); Google refused nothing. Restarting Docker Desktop to change its upload
+  settings would stop every session's shared Postgres, Redis and S3 (`restart=no`), so it wasn't
+  done. If a hand push is ever needed, from somewhere other than Docker Desktop. Filed by Claude
+  building P-49, 18 October 2026.
+- [ ] P-925 · Staging's smoke check expects `/admin` to be a 404, and T-9.5 made it a page.
+  **Now: every staging deploy since `cc04268` is red.** Worst case: production's release gate
+  refuses every release, since it needs a green staging deploy of the commit (D-075), and a real
+  failure in the smoke check hides behind the known one. Run 38904036696 (16 October 2026): every
+  job green but `smoke`, which says `web /admin hidden (P-30): …/admin returned 200, want 404`.
+  `scripts/staging-smoke` should check what P-30 meant now that the panel exists: the page shows
+  nothing but its gate to a visitor without a moderator's session. Found by Claude building P-49,
+  18 October 2026; outside P-49, so not changed there.

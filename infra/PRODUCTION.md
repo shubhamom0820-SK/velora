@@ -13,6 +13,13 @@ How production is set up, released and checked (T-2.6, D-074, D-075). It copies 
 (`infra/STAGING.md`): this page names production's pieces and says what differs. Where it says "as
 staging", follow `infra/STAGING.md` with these names.
 
+> **Moving to Mumbai (P-49, D-1020): not yet deployed to.** Production's Google Cloud project
+> `velora-ic-prod` and its VM `velora-api-prod` (`e2-medium`, `asia-south1-a`, static IP
+> `34.180.56.204`) exist, with WIF for GitHub's `production` environment and 16 Secret Manager
+> slots: the four keys and a VAPID pair generated fresh (18 October 2026), R2's pair set, the
+> database, Redis, Razorpay and Sightengine values not yet. Nothing deploys there, and
+> `api.veloraapp.co.in` still points at Fly, until P-921. This page describes Fly until then.
+
 ## What runs where
 
 | Piece | Where | Name |

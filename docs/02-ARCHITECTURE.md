@@ -431,7 +431,7 @@ rule 3, T-8.2) or a charge no Velas were granted for (T-8.3, D-580).
 | `CODE_PEPPER` | api, worker | `openssl rand -hex 32`. The key behind PIN hashes, and OTP codes from T-3.2, kept off the database (D-062, D-063). Never `PHONE_PEPPER`'s value |
 | `CORS_ORIGINS` | api | comma list, exact origins |
 | `COOKIE_DOMAIN` | api | the readable CSRF cookie's domain (D-055): `veloraapp.co.in` in production, `staging.veloraapp.co.in` on staging. The refresh cookie has none: host-only on the API (D-054) |
-| `CLIENT_IP_HEADER` | api | the header the platform's proxy puts the client's IP in, for per-IP rate limits: `Fly-Client-IP` on Fly. Empty only where `ENV` is `local`, which reads the socket (D-056) |
+| `CLIENT_IP_HEADER` | api | the header our proxy puts the client's IP in, for per-IP rate limits: `Caddy-Client-IP` on the VMs, set by Caddy from the connection (D-1021), `Fly-Client-IP` on Fly until P-920; a deployment reads only the one it names. Empty only where `ENV` is `local`, which reads the socket (D-056) |
 | `AUTH_PHONE_PROVIDER` | api | `firebase` \| `msg91` \| `fake`. The web never reads it: a build signs in by the path its `APP_ENV` names, Path B where it's `local` or `ci`, Firebase on `staging` and `production` (D-081) |
 | `FIREBASE_PROJECT_ID` | api | token verification: the project whose ID tokens sign in. A token's audience must be it and its issuer `https://securetoken.google.com/` followed by it; with Google's public keys, that is all verifying takes. Required where `AUTH_PHONE_PROVIDER` is `firebase`, checked at startup; `velora-ic` on staging and production, in each Fly config's `[env]`, until P-66 (D-065, D-085). No service account: none is needed to verify, and an unneeded one is a key guarded for nothing (P-39's deletes would need one, and would add it then, with the reason) |
 | Firebase web config | web (build) | not a variable: apiKey, authDomain, projectId and appId are committed in `web/src/lib/firebase-config.ts`, by `APP_ENV`, staging and production only, public by design (D-085). `next.config` builds this `APP_ENV`'s into the bundle; local and ci get none. App Check's site key joins it with P-68 |
@@ -551,7 +551,7 @@ secret is left empty. Real secret values are never committed.
 | | local | staging | production |
 |---|---|---|---|
 | Web | `pnpm dev` :3000 | Vercel project `velora-staging` at `staging.veloraapp.co.in` | Vercel project `velora-production` at `veloraapp.co.in` |
-| API | uvicorn :8000 | Fly `velora-api-staging` at `api.staging.veloraapp.co.in` | Fly `velora-api` at `api.veloraapp.co.in`, until P-49 |
+| API | uvicorn :8000 | Fly `velora-api-staging` at `api.staging.veloraapp.co.in`; the Mumbai VM `velora-api-staging` beside it at `api-mumbai.staging.veloraapp.co.in` until the switch (P-49) | Fly `velora-api` at `api.veloraapp.co.in`, until P-921 moves it to the VM `velora-api-prod` |
 | DB | docker postgis | Supabase project `velora-staging` | Supabase project `velora-prod`, in its own organisation |
 | Providers | fake | real (test keys) | real (live keys) |
 

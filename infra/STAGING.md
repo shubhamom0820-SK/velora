@@ -1,8 +1,10 @@
 # Staging
 
-> **Region (D-048):** the API runs on Fly in **Singapore**, because Fly retired Mumbai. Postgres and
-> Redis stay in **Mumbai**, so Indian users' data stays in India — and every query crosses Singapore
-> to Mumbai and back, the latency D-048 accepts for now.
+> **Region (D-048, moving: D-1020):** the API runs on Fly in **Singapore**, because Fly retired
+> Mumbai. Postgres and Redis stay in **Mumbai**, so Indian users' data stays in India — and every
+> query crosses Singapore to Mumbai and back, the latency D-048 accepted. **P-49 is moving the API
+> and the worker to a VM in Mumbai** ("The Mumbai VM", below): it runs beside Fly, at
+> `api-mumbai.staging`, until the founder switches `api.staging` to it and Fly is removed (P-920).
 
 How staging is built, deployed and checked (T-1.22, D-046). Production follows the same shape, on
 a page of its own that names its pieces and says what differs: `infra/PRODUCTION.md` (T-2.6).
@@ -418,6 +420,72 @@ replaced: read it in the deploy job's log.
 **The worker is working** when a photo uploaded on staging reaches `approved` within a poll and a
 Sightengine call (T-4.4): its machine's log says `worker.started` once, then `moderation.decided`
 for each photo, by the photo's id, never a key.
+
+## The Mumbai VM (P-49, D-1020 to D-1023: in proof, beside Fly)
+
+| Piece | Where | Name |
+|---|---|---|
+| Project | Google Cloud, billing account `01C4E8-84A5D8-4255F2`, no organisation (D-1023) | `velora-ic-staging` |
+| VM | Compute Engine `asia-south1-a`, `e2-small`, Debian 12 | `velora-api-staging`, static IP `34.47.244.114` |
+| On it | Docker Compose (`infra/gce/compose.yml`): `api`, `worker` (off until the swap), `caddy` | Caddy serves the hosts in `infra/gce/staging.edge.env` |
+| Images | Artifact Registry, `asia-south1` | `asia-south1-docker.pkg.dev/velora-ic-staging/velora/api`, by digest |
+| Secrets | Secret Manager, stored in `asia-south1` only | one per setting, the names in `infra/gce/secrets.api` and `secrets.worker` |
+| Provisional host | Cloudflare, DNS only | `A api-mumbai.staging → 34.47.244.114` |
+
+**What is open on it:** TCP 80 and 443 from anywhere (Caddy), and 22 only from Google's IAP range
+(`35.235.240.0/20`). The API publishes no port: only Caddy, on the Compose network, reaches it.
+Nothing comes in over IPv6; the VM's IPv6 address is for the way out, to Supabase's direct host.
+
+**How it deploys** (`.github/workflows/deploy.yml`, the `image`, `vm` and `vm-smoke` jobs, beside
+Fly's): `image` builds the commit's image, pushes it, and reads its digest back from the registry;
+`vm` copies `infra/gce` at that commit to the VM over IAP and runs `infra/gce/deploy staging
+<image@digest> <sha>` as root, which writes the secrets from Secret Manager to root-only files
+(names and counts printed, never a value), checks the worker's settings in a one-off container,
+replaces the API and waits for its healthcheck (`/readyz`), putting the previous release back if it
+fails, then restarts Caddy only if its hosts or config changed. `vm-smoke` runs
+`scripts/staging-smoke` against `STAGING_VM_API_URL` with `EXPECT_API_SERVER=Caddy`, the web still
+calling `api.staging`. The jobs sign in by Workload Identity Federation: no key exists (D-1022).
+GitHub's `staging` environment holds four variables, none secret: `GCP_PROJECT_ID`,
+`GCP_WIF_PROVIDER`, `GCP_DEPLOY_SA` and `STAGING_VM_API_URL`.
+
+**Never two workers.** The VM's worker starts only where `/etc/velora/worker-on` exists, and the
+deploy stops it everywhere else. Two would double D-091's Redis budget and push the connection sum
+(17, the table above) past `velora_api`'s 20. The swap, on the founder's word: `fly scale count 0 -a
+velora-worker-staging`, and **only once that succeeded**, `sudo touch /etc/velora/worker-on` on the
+VM and the next deploy (or `sudo docker compose -p velora --project-directory /opt/velora/current
+--profile worker up -d worker`). Rollback is the reverse, in the same order: stop the VM's worker
+and remove the file first, then scale Fly's back to 1.
+
+**Getting in** (the founder, or Claude with his yes; your account needs no key of your own, OS
+Login makes one):
+
+```
+gcloud compute ssh velora-api-staging --project=velora-ic-staging --zone=asia-south1-a --tunnel-through-iap
+sudo docker compose -p velora ps                       # what runs, and its health
+sudo docker compose -p velora logs --tail 100 api      # the API's log (worker, caddy likewise)
+sudo docker compose -p velora exec -T api python -m app.tools.roundtrip_probe
+```
+
+The tools that run inside the API's machine on Fly (`selfie_review`, `unfreeze`, `storage_probe`,
+`sightengine_shape`) run here the same way, `exec -T api` (the worker's, `exec -T worker`); both
+reach the same database and buckets. Their own `flyctl ssh` lines change with P-920.
+
+**Secrets** go in with `scripts/gcp-secrets staging` (the founder, on his Mac): from the Keychain,
+or for Razorpay's three from Fly's machine, into Secret Manager and the Keychain, every copy
+compared by SHA-256 prefix across Secret Manager, the Keychain, Fly's API and Fly's worker. Done on
+18 October 2026: all 16 the same. A new value is a new version (`gcloud secrets versions add NAME
+--data-file=-`, piped), read at the next deploy.
+
+**The VM itself:** `infra/gce/startup.sh` runs at every boot from the instance's metadata: Docker
+from Docker's repository (its key checked by fingerprint), rotating logs, unattended security
+updates with a reboot at 04:00 IST when one is needed, the registry's login. Changing the file
+changes the VM only once its metadata is set again, by the founder:
+`gcloud compute instances add-metadata velora-api-staging --project=velora-ic-staging
+--zone=asia-south1-a --metadata-from-file=startup-script=infra/gce/startup.sh`, then a reboot.
+
+**Rollback before P-920:** Fly's API and worker still deploy from `main`. If the VM misbehaves
+after `api.staging` moves: put the `api.staging` CNAME back to `rkq9qd8.velora-api-staging.fly.dev`
+(DNS only; Fly's certificate is still issued), and swap the worker back as above.
 
 ## Looking at selfies (D-264)
 

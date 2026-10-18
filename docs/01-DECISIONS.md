@@ -6189,3 +6189,107 @@ ours format counts and operation names only.
 **Rejected:** scrubbing in the log pipeline (it would need structlog, uvicorn's and ARQ's stdlib
 loggers, and T-9.12's Sentry each done separately, and miss whichever came next); keeping
 Postgres's message everywhere and dropping only DETAIL (a cast's message quotes the text).
+
+### D-1020 · The API and the worker leave Fly for Mumbai: one Compute Engine VM per environment — Locked
+**The decision (the founder, 16 and 17 October 2026, on the advisor's recommendation, Claude in a
+separate chat, relayed):** P-49's Option A. Staging's and production's API and worker run in
+Mumbai (`asia-south1`), next to Supabase and Upstash, each environment on one Compute Engine VM of
+its own, in a Google Cloud project of its own (D-1023): staging on an `e2-small`
+(`velora-api-staging`), production on an `e2-medium` (`velora-api-prod`). Each VM runs the API,
+the worker and Caddy in Docker Compose (`infra/gce/`). Singapore and Fly leave Velora entirely,
+staging and production, in steps: the staging VM is proved at `api-mumbai.staging` beside Fly,
+then the worker and `api.staging` move, then Fly is removed (P-920); production follows (P-921).
+Not Cloud Run, for P-49's figures: WebSockets and the always-on worker make it the dearest host.
+
+**Supersedes** D-048's region for the API and the worker (Locked, not edited: it named Mumbai
+"the right home eventually"), D-023's `bom`, and D-095's Fly worker. D-087 stands: Google is not
+AWS, and Supabase and Upstash remain processors in Mumbai.
+
+**Billing, as it happened:** the API was not to move onto a free-trial account (P-49, the founder,
+3 October 2026). The billing account `01C4E8-84A5D8-4255F2` was upgraded from its trial on 17
+October 2026, so P-0.18 is done, **before P-68 (App Check), out of the order P-0.18 set**; the
+trial's leftover credit still offsets costs. Both projects bill to that account.
+
+**What the VMs cost us, accepted (P-49):** OS updates (unattended, Debian security and Docker's
+packages, a reboot at 04:00 IST when one is needed), TLS (Caddy renews its own), deploys and
+restarts are ours; one VM per environment is one point of failure, and a deploy restarts the API,
+dropping WebSockets, which clients reconnect (T-7.12). Nobody is told yet when a VM is down: P-922.
+
+**Cost, list prices (estimates until the first invoice):** staging about $20.55 a month (VM $14.70,
+disk $2.20, static IP $3.65), production about $35.25 (VM $29.40), plus Secret Manager and Artifact
+Registry under $1 each. Fly's staging apps, about $12.50 a month, go with P-920.
+
+### D-1021 · Behind Caddy, per-IP limits read Caddy-Client-IP; Fly's header too, until Fly goes — Locked
+**The decision (P-49; the founder, 18 October 2026, on the advisor's recommendation, relayed):**
+Caddy on each VM sets `Caddy-Client-IP` to the TCP connection's own address (`header_up
+Caddy-Client-IP {remote_host}`), replacing any value a client sends under that name, and the API
+reads only that header there (`CLIENT_IP_HEADER`, D-056). Docker's userland proxy is off on the
+VMs, so the connection's address is the client's, not Docker's gateway. While Fly's staging
+deploy still runs from `main`, `Fly-Client-IP` stays allowed beside it
+(`PROXY_CLIENT_IP_HEADERS`); it leaves with P-920. **Each deployment reads only the one header its
+`CLIENT_IP_HEADER` names:** behind Caddy a forged `Fly-Client-IP` escapes nothing, and the reverse
+(`tests/core/test_deps.py`, held by break cases p49-1 and p49-2), the founder's condition.
+
+**Why it's a decision:** as D-056's, the failure is invisible: a Caddyfile that passed a
+client's header through would pass every test of the API and limit nothing. So the guard is on
+the Caddyfile itself: `scripts/check-caddy-client-ip` runs ours, in the pinned image, in front of
+a stub that echoes what it received, and forges the header (any case, twice, beside a forged
+`X-Forwarded-For`); its test shows it failing without `header_up` and with an appending `+`. CI
+runs it. Proved on staging, by forging against a limited route, when the VM serves (P-49).
+
+**Rejected:** `X-Real-IP` or `X-Forwarded-For`, names other software writes and clients forge;
+naming the header after the brand (rule 17).
+
+### D-1022 · How the VMs deploy and where their secrets live — Locked
+**The decision (P-49; the founder, 17 and 18 October 2026, on the advisor's recommendation,
+relayed):**
+- **No long-lived key.** GitHub Actions signs in by Workload Identity Federation: each project
+  has a pool `github` and a provider `velora` that accepts only this repository, by its numeric id
+  (`1384017905`, so a renamed or re-created repository can't inherit it), and only a job in the
+  matching GitHub environment (`staging` or `production`, whose deployment branches are `main` and
+  `v*` tags). That job may act as the project's deploy account and nothing else. No JSON key
+  exists; creating one is never part of any runbook.
+- **Images by digest, in Mumbai.** Each project has an Artifact Registry `velora` in
+  `asia-south1`, keeping the 10 newest images and deleting the rest after 30 days. The deploy
+  names an image by the digest the registry reports, never by its tag; production's deploy account
+  may read staging's registry, so a release can ship the exact image staging ran (P-921).
+- **SSH only through IAP, by OS Login.** The firewall allows TCP 80 and 443 from anywhere and 22
+  only from Google's IAP range; no SSH key lives in metadata. The deploy account holds
+  `compute.osAdminLogin` on its one VM, so it is root there: it can run any image with that
+  environment's secrets, as `FLY_API_TOKEN` could on Fly. It can't read Secret Manager, touch the
+  other environment, or create anything outside its registry. It also holds Compute Viewer on its
+  project, for `gcloud compute ssh`'s reads.
+- **Secrets in Secret Manager, in Mumbai only** (user-managed replication, `asia-south1`); the VM's
+  own account reads them at deploy time into root-only files (`infra/gce/deploy`), never printed.
+  The founder's Keychain keeps the second copy (and Apple Passwords, production's), every copy
+  compared by SHA-256 prefix (`scripts/gcp-secrets`). GitHub never holds them.
+
+**New dependencies (rule 4), approved by the founder on 18 October 2026:**
+`google-github-actions/auth` v3.0.0 (`7c6bc770dae815cd3e89ee6cdf493a5fab2cc093`) and
+`google-github-actions/setup-gcloud` v3.0.1 (`aa5489c8933f4cc7a4f7d45035b3b1440c9c10db`), pinned
+by SHA; Caddy 2.11.7 by digest (`sha256:685ae3d7c34d9b5f8caeddc5d14051db7bbd88ff1f5a2fa0c16bd8ca328fb7af`);
+on the VMs, Docker from Docker's own apt repository, its key checked by fingerprint
+(`9DC858229FC7DD38854AE2D88D81803C0EBFCD88`) before it is trusted.
+
+**Rejected:** a service account key in GitHub (a secret that never expires); pull-based deploys
+(the VM watching the registry), which hide a failed deploy from the run that caused it; Cloud
+Logging for the containers' logs for now: its default bucket isn't in India, so logs stay on the
+VM, rotated (10 MB × 5 a container).
+
+### D-1023 · Two Google Cloud projects, outside any organisation — Locked
+**The decision (the founder, 17 and 18 October 2026):** staging is `velora-ic-staging`, production
+`velora-ic-prod`, each its own project, so staging's IAM, keys and mistakes can't reach
+production's, and neither touches `velora-ic` (Firebase, which staging and production share,
+D-065). Both are created with no organisation, as `velora-ic` is. Each project's default network
+(SSH and RDP open to the internet) is deleted, and its default Compute account, which Google makes
+an Editor of the project outside an organisation, is stripped of that role and disabled; each VM
+runs as an account of its own.
+
+**Why no organisation:** a Google Cloud setup wizard run on the founder's account on 16 October
+2026 created two organisations, four folders and seven projects, and an organisation-wide log
+sink copying every child project's logs to a bucket stored `global` (read by Claude, read-only, 18
+October 2026). Outside it, our projects' audit logs aren't copied there. Its cleanup is P-923.
+
+**The billing account holds at most 5 linked projects** (Google's quota, met on 17 October 2026:
+"Cloud billing quota exceeded"). To link these two, the founder unlinked two of the wizard's
+projects. Any new project needs a free slot first, or a quota increase from Google.
