@@ -171,6 +171,27 @@ describe("signing in by code (T-3.11, Path B)", () => {
     await userEvent.keyboard(code);
   }
 
+  // P-70: a foreign number's ten digits behind the fixed +91 would text a
+  // stranger in India, so the screen says so before anything is typed.
+  it("says it takes Indian numbers only before anything is typed, with +91 fixed outside the field", () => {
+    signInApi();
+    renderUi(<SignIn />);
+
+    const field = screen.getByLabelText("Mobile number");
+    expect(field).toHaveValue("");
+    expect(field).toHaveAccessibleDescription(
+      "Velora takes Indian mobile numbers only. We're starting in Phagwara.",
+    );
+    expect(
+      screen.getByText(
+        "Velora takes Indian mobile numbers only. We're starting in Phagwara.",
+      ),
+    ).toBeVisible();
+    const prefix = screen.getByText("+91");
+    expect(field).not.toContainElement(prefix);
+    expect(prefix.tagName).not.toBe("INPUT");
+  });
+
   it("needs ten digits before it sends, and sends them as +91", async () => {
     const api_ = signInApi();
     renderUi(<SignIn />);

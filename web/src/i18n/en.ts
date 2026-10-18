@@ -865,6 +865,11 @@ export const en = {
       label: "Mobile number",
       prefix: "+91",
       placeholder: "98765 43210",
+      // Under the number, before anything is typed (P-70): a foreign number's
+      // ten digits behind the fixed +91 would text a stranger in India. The
+      // launch city is D-013's; change it with the decision.
+      indiaOnly:
+        "{app} takes Indian mobile numbers only. We're starting in Phagwara.",
       send: "Send code",
       // Firebase builds only (T-3.14, D-081), before the number goes to
       // Google: worded as /privacy's "Your phone number and Google" (D-048).

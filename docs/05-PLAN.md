@@ -5246,7 +5246,7 @@ The number comes from the session's own block, given in its brief, from P-100 up
   founder, 4 October 2026.
 
   Found building T-3.14.
-- [ ] P-70 · Stop a number from outside India being texted as an Indian one. **Before REL-1** (on
+- [x] P-70 · Stop a number from outside India being texted as an Indian one. **Before REL-1** (on
   its Needs line). **It protects a person who isn't our user.** Worst case, and it can happen today:
   someone with a foreign number, in Dubai or living in Phagwara, types their own ten digits; the
   screen puts +91 in front, and the code lands as an SMS on the phone of a stranger in India who
@@ -5261,7 +5261,10 @@ The number comes from the session's own block, given in its brief, from P-100 up
   it. At the direction of the advisor directing T-3.14 (Claude, in a separate chat), relayed by the
   founder, 4 October 2026.
 
-  Found building T-3.14.
+  Found building T-3.14. **Done 18 October 2026:** under the number, on both sign-in paths and
+  before anything is typed, "{app} takes Indian mobile numbers only. We're starting in Phagwara."
+  (the founder's copy), the field's description; +91 stays outside it. `onboarding.test.tsx` and
+  `SignIn.firebase.test.tsx` hold it (both red without it).
 - [ ] P-71 · Name reCAPTCHA on `/privacy`. **Before REL-1** (on its Needs line). Worst case:
   `/privacy` is published, and is inaccurate from the moment `/login` ships on a Firebase build:
   `/login` loads Google's reCAPTCHA as it opens (T-3.14 renders it then, so the first tap is quick),

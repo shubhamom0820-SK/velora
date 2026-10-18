@@ -224,10 +224,16 @@ function PhoneStage({
             autoFocus
             placeholder={t("onboarding.phone.placeholder")}
             aria-invalid={copy?.fields.phone ? true : undefined}
+            aria-describedby="phone-hint"
             className="text-input text-ink placeholder:text-mute min-w-0 flex-1 bg-transparent outline-none"
             {...form.register("phone")}
           />
         </div>
+        {/* Before anything is typed (P-70): a foreign number's ten digits
+            would go to a stranger in India behind the fixed +91. */}
+        <p id="phone-hint" className="text-small text-mute mt-1.5">
+          {t("onboarding.phone.indiaOnly", { app: APP_NAME })}
+        </p>
         {copy?.fields.phone ? (
           <p role="alert" className="text-small text-accent mt-3">
             {copy.fields.phone}

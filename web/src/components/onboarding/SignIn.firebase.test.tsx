@@ -180,6 +180,10 @@ describe("a Firebase build's /login (T-3.14)", () => {
     expect(
       screen.getByRole("link", { name: "How we use your number" }),
     ).toHaveAttribute("href", "/privacy");
+    // P-70: on Firebase builds too, before anything is typed.
+    expect(screen.getByLabelText("Mobile number")).toHaveAccessibleDescription(
+      "Velora takes Indian mobile numbers only. We're starting in Phagwara.",
+    );
     expect(firebase.sent).toEqual([]);
     expect(api_.calls).toHaveLength(0);
   });
