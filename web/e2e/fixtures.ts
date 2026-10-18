@@ -1,3 +1,5 @@
+import { join, resolve } from "node:path";
+
 import {
   expect,
   test as base,
@@ -109,12 +111,15 @@ export async function unlock(page: Page) {
 /**
  * A new man, through every onboarding screen, into the app (J1's way,
  * shortened: an area picked, no photo, no selfie). His username, which is
- * his number's last six digits after `kabir_`.
+ * his number's last six digits after his first name, lower-cased, and `_`
+ * (`kabir_` unless a journey names him: T-7.13's deck tells people apart by
+ * the name on the card).
  */
 export async function signUpMan(
   page: Page,
   context: BrowserContext,
   request: APIRequestContext,
+  firstName = "Kabir",
 ): Promise<string> {
   await context.clearPermissions();
   const phone = freshNumber();
@@ -131,7 +136,7 @@ export async function signUpMan(
   await page.getByRole("button", { name: "Something serious" }).click();
   await page.getByRole("button", { name: "Continue" }).click();
   await expect(page).toHaveURL(/\/onboarding\/name$/);
-  await page.getByLabel("First name").fill("Kabir");
+  await page.getByLabel("First name").fill(firstName);
   await page.getByLabel("Hometown, where you're from").fill("Jalandhar");
   await page.getByLabel("Where you live now").fill("Phagwara");
   await page.getByRole("button", { name: "Continue" }).click();
@@ -146,7 +151,7 @@ export async function signUpMan(
   await page.getByRole("button", { name: "Continue" }).click();
 
   await expect(page).toHaveURL(/\/onboarding\/username$/);
-  const username = `kabir_${phone.slice(-6)}`;
+  const username = `${firstName.toLowerCase()}_${phone.slice(-6)}`;
   await page.getByLabel("Username").fill(username);
   await expect(page.getByText("That one's free.")).toBeVisible();
   await page.getByRole("button", { name: "Continue" }).click();
@@ -170,6 +175,120 @@ export async function signUpMan(
   await tapPin(page, PIN);
   await expect(page).toHaveURL(/\/onboarding\/selfie$/);
   await page.getByRole("button", { name: "Skip for now" }).click();
+  await expect(page).toHaveURL(/\/discover$/);
+  return username;
+}
+
+// Her face photo is the 2021 portrait; Chromium's fake camera plays the 2017
+// one (playwright.config.ts), so the real models compare one person's two.
+const FACES = resolve(__dirname, "../../api/tests/fixtures/faces");
+
+/** Birthday to Name, ending on the location question. */
+export async function asFarAsLocation(
+  page: Page,
+  who: { gender: RegExp; seeking: string; firstName: string },
+) {
+  await page.getByLabel("Date of birth").fill("2000-01-15");
+  await page.getByRole("button", { name: "Continue" }).click();
+  await page.getByRole("button", { name: "Yes, that's right" }).click();
+  await expect(page).toHaveURL(/\/onboarding\/gender$/);
+  await page.getByRole("radio", { name: who.gender }).check();
+  await page.getByRole("button", { name: "Continue" }).click();
+  await expect(page).toHaveURL(/\/onboarding\/looking-for$/);
+  await page.getByRole("button", { name: who.seeking, exact: true }).click();
+  await page.getByRole("button", { name: "Something serious" }).click();
+  await page.getByRole("button", { name: "Continue" }).click();
+  await expect(page).toHaveURL(/\/onboarding\/name$/);
+  await page.getByLabel("First name").fill(who.firstName);
+  await page.getByLabel("Hometown, where you're from").fill("Jalandhar");
+  await page.getByLabel("Where you live now").fill("Phagwara");
+  await page.getByRole("button", { name: "Continue" }).click();
+  await expect(page).toHaveURL(/\/onboarding\/location$/);
+}
+
+/** Username and About, from the username step to the photos step. */
+export async function usernameAndAbout(page: Page, username: string) {
+  await expect(page).toHaveURL(/\/onboarding\/username$/);
+  await page.getByLabel("Username").fill(username);
+  await expect(page.getByText("That one's free.")).toBeVisible();
+  await page.getByRole("button", { name: "Continue" }).click();
+  await expect(page).toHaveURL(/\/onboarding\/about$/);
+  await page
+    .getByLabel("About you")
+    .fill("Pottery on weekends, street food on weeknights.");
+  await page.getByRole("button", { name: "Continue" }).click();
+  await expect(page).toHaveURL(/\/onboarding\/photos$/);
+}
+
+export async function pickInterests(page: Page) {
+  for (const label of INTERESTS) {
+    await page.getByRole("button", { name: label, exact: true }).click();
+  }
+  await page.getByRole("button", { name: "Continue" }).click();
+  await expect(page).toHaveURL(/\/onboarding\/pin$/);
+}
+
+/**
+ * A woman all the way into the app, as J2 (P-663: moved here from J13's
+ * `gifts.spec.ts`, T-7.13): her position shared, which the journey grants
+ * first, her face photo approved by the worker and her selfie matched by the
+ * real models, so Chromium only (its fake camera); no PIN. Her username, her
+ * first name lower-cased (`priya` unless a journey names her), `_` and her
+ * number's last six digits.
+ */
+export async function signUpWoman(
+  page: Page,
+  request: APIRequestContext,
+  firstName = "Priya",
+): Promise<string> {
+  const phone = freshNumber();
+  const username = `${firstName.toLowerCase()}_${phone.slice(-6)}`;
+  await signIn(page, request, phone);
+  await asFarAsLocation(page, {
+    gender: /^Woman/,
+    seeking: "Men",
+    firstName,
+  });
+  await page.getByRole("button", { name: "Share my location" }).click();
+  await usernameAndAbout(page, username);
+
+  const chooser = page.waitForEvent("filechooser");
+  await page
+    .getByRole("button", { name: "Add your face photo", exact: true })
+    .click();
+  await (await chooser).setFiles(join(FACES, "chari_2021.jpg"));
+  await expect(
+    page.getByRole("region", { name: "Your face photo" }),
+  ).toContainText("Face photo approved", { timeout: 30_000 });
+  await page.getByRole("button", { name: "Continue" }).click();
+  await expect(page).toHaveURL(/\/onboarding\/interests$/);
+  await pickInterests(page);
+  await page.getByRole("button", { name: "Skip, I'll set it later" }).click();
+
+  await expect(page).toHaveURL(/\/onboarding\/selfie$/);
+  await page.getByRole("button", { name: "Open camera" }).click();
+  await expect(
+    page
+      .getByRole("status")
+      .filter({ hasText: "Face the camera in good light" }),
+  ).toBeVisible();
+  // A frame on screen before the shutter, as J2 waits for one.
+  await page.evaluate(
+    () =>
+      new Promise<void>((presented) => {
+        document
+          .querySelector("video")
+          ?.requestVideoFrameCallback(() => presented());
+      }),
+  );
+  await page.getByRole("button", { name: "Take selfie" }).click();
+  await page.getByRole("button", { name: "Use this selfie" }).click();
+  await expect(
+    page
+      .getByRole("status")
+      .filter({ hasText: "Your selfie matched your face photo." }),
+  ).toBeVisible({ timeout: 30_000 });
+  await page.getByRole("button", { name: "Continue" }).click();
   await expect(page).toHaveURL(/\/discover$/);
   return username;
 }

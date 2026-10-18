@@ -6118,6 +6118,36 @@ number alone.
 the one where moderation needs what the account held; `/privacy` already says a hashed number is
 kept so deletion can't escape a ban (D-051).
 
+### D-930 · The E2E runs a Thread's hour out by its row, never by a clock — Locked
+**The decision (T-7.13; the founder, 16 October 2026, on the advisor's recommendation, Claude in
+a separate chat, relayed by the founder; T-7.13's plan, Q1):** J7's expiry is a local-only
+route, `POST /v1/test/threads/{id}/expire`, that sets one active Thread's `expires_at` to the
+moment it is asked, its row locked, and moves nothing else: no status, no event, no clock. The
+worker's sweep catches the status up and tells him, as when an hour passes. A Thread with no hour
+to run out (a Knot, a private message, one already expired, or none) is `NOT_FOUND` and
+unchanged. It is served behind T-3.13's gate, `E2E_SERVED_IN` and `E2E_SERVED_FOR` (ENV local
+and the fake SMS), beside `/test/sms/last-code`, never in OpenAPI; CI's E2E runs ENV local, so it
+is served there.
+
+**Why the row and not a clock:** whether a Thread has run out is read by three clocks: the API's
+`clock.now()`, the worker's in its own process, and the browser's, which marks his Thread expired
+once its own time passes `expires_at` (`ConversationScreen.tsx`, D-560). A test clock moves only
+the API's: his screen would still say "59m left" while the API refused him, the sweep would never
+see it, and every later journey in the run, which shares the one API process, would run on the
+moved time. `expires_at` is the one column the hour lives in (D-560), so moving it is the expiry
+each of the three already reads.
+
+**Why the moment of the call, not a second before (found building it, 18 October 2026):** the
+first version set it a second early, as a margin for the browser's clock. The journey sent her
+voice note 0.85 s before the call, so the hour ended before it, and his screen read it, rightly,
+as her writing after the hour ran out ("She wrote back"). Expired is `expires_at <= now` for the
+API, the sweep and the browser alike, so the call's own instant is already past for each of them
+from then on.
+
+**Rejected:** a test clock endpoint, the plan's wording (above); a gate of its own, `ENV` local
+alone (the founder's Q1: T-3.13's, not a new gate); writing the status too (the sweep's, as in
+production).
+
 ### D-950 · /login shows at once, but sends a code only once the restore has settled — Locked
 **The decision (the founder, approving P-850's plan, 14 October 2026, on the advisor's
 recommendation, relayed):** amends T-3.10's "/login doesn't wait for the restore". The sign-in

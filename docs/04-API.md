@@ -333,6 +333,7 @@ Five tries a minute per client IP, invalid ones included → `RATE_LIMITED` (D-0
 | Method | Path | Auth | Body → Response | Task |
 |---|---|---|---|---|
 | POST | /test/sms/last-code | 🔓 | `{phone}` → `{code}`, the code the fake SMS last sent the number, or `null` | T-3.13 |
+| POST | /test/threads/{id}/expire | 🔓 | — → `{expires_at}`: the Thread's hour ended now, its `expires_at` set to this instant and nothing else moved; a Thread with no hour to run out (a Knot, a private message, one expired) or none is `NOT_FOUND` (D-930) | T-7.13 |
 | POST | /test/payments/webhook | 🔓 | `{payment_id, outcome: captured\|failed, amount_paise?}` → `{delivered_status}`: the fake gateway's signed webhook for that payment, delivered in process to `POST /v1/payments/webhook`, and the status it answered (200 since T-8.2 built the route). `amount_paise` fakes a mismatch | T-8.1 |
 
 Each is kept out of the OpenAPI schema, so `make types` is the same everywhere and the web can't
@@ -342,6 +343,12 @@ call it, and each is a 404 everywhere but where its allowlists say (rule 16).
 number is in the body, never the path or query, which the request logger and uvicorn's access log
 record (rule 15). It reads the fake's outbox, not the stored code: a number the
 API sent nothing to (D-073) gets `null`, as its phone would. The E2E is its only caller (06-TESTING).
+
+`/test/threads/{id}/expire` is served behind the same gate as `/test/sms/last-code` (`ENV`
+`local` and the fake SMS, D-930): anywhere else it would let anyone end anyone's hour. It is
+J7's expiry (06-TESTING): it moves `expires_at` alone, the one column the hour lives in (D-560),
+so the API, the worker's sweep and the browser each see the Thread run out by their own clock;
+no clock is moved, and the status is the sweep's to catch up, as when an hour passes.
 
 `/test/payments/webhook` is served only where `ENV` is `local` and `PAYMENTS_PROVIDER` is `fake`:
 anywhere else it would pay for Velas with nothing. It builds the webhook from the `payments` row,

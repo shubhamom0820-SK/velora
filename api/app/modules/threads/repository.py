@@ -363,6 +363,19 @@ async def my_thread(
     return found
 
 
+async def lock(session: AsyncSession, thread_id: UUID) -> Thread | None:
+    """The Thread by its id alone, whoever holds it, held until the transaction
+    ends. For the E2E's local-only expiry (D-930), never a person's request:
+    those go through `my_thread`, which asks whose it is."""
+    found: Thread | None = await session.scalar(
+        select(Thread)
+        .where(Thread.id == thread_id)
+        .with_for_update(of=Thread)
+        .execution_options(populate_existing=True)
+    )
+    return found
+
+
 # --- Clearing (T-7.8) ---------------------------------------------------------------
 
 

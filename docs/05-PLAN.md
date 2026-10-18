@@ -3247,9 +3247,27 @@ prices don't depend on the web photos step, and the hold is lifted.
 - [x] **Commit:** `feat(web): realtime client [T-7.12]`
 
 ### T-7.13 · E2E chat
-- [ ] **Needs:** T-7.12
-- [ ] Two browser contexts: man + woman. Match → open thread (balance −5) → messages both ways live → woman voice note → man unlocks (−5) → both tie → Knots tab. Expiry via test clock endpoint (local only).
-- [ ] **Commit:** `test(e2e): threads and knots [T-7.13]`
+- [x] **Needs:** T-7.12
+- [x] Two browser contexts: man + woman. Match → open thread (balance −5) → messages both ways live → woman voice note → man unlocks (−5) → both tie → Knots tab. Expiry via test clock endpoint (local only).
+  **Built 18 October 2026, with the founder's answers to its plan (16 October 2026, on the
+  advisor's recommendation, relayed):** `web/e2e/threads.spec.ts`, one journey, a `test.step`
+  for each of J4 to J7 (Q3), J7 before J6 since a Knot never expires; 06-TESTING has each as
+  built. **The expiry is no clock (Q1, D-930):** `POST /v1/test/threads/{id}/expire` sets the
+  Thread's `expires_at` to that moment, behind T-3.13's gate (ENV local and the fake SMS), so the
+  API, the worker's sweep and the browser each see it by their own clock; a test clock would have
+  moved the API's alone. Its first version ended the hour a second early, and the journey's voice
+  note, sent 0.85 s before the call, read as hers after the hour ("She wrote back"), so it ends at
+  the call. **His Velas:** the 5 he signs up with open the Thread, so his first Unlock opens the
+  store and he buys 30 as J8 does: 5, 0, 36, 31, 29. **The deck** is shared by every journey's
+  people, so each has a first name of their project's own and passes cards until the other's is
+  on top, 25 at most. `signUpWoman` moved to `e2e/fixtures.ts` (Q2, P-663's woman half), with
+  the steps J13 shares; `signUpMan` takes a first name. **Broken once each:** the route's five
+  cases (`uv run python -m tests.break_guards t713-`, 5 of 5 red, every file restored,
+  `out/t713-break-guards-api.log`); and in the browser, with T-7.12's `message.new` handler
+  taken out (`addMessage`), J4 went red on both projects at the first message's arrival, then
+  restored from its copy, SHA-256 checked (`out/t713-e2e-break-no-live-message.log`). `make e2e`
+  passed 42 of 42 (`out/t713-e2e.log`).
+- [x] **Commit:** `test(e2e): threads and knots [T-7.13]`
 
 ---
 
@@ -6741,6 +6759,10 @@ The number comes from the session's own block, given in its brief, from P-100 up
   The move takes it too.
   **In part, T-9.1 (9 October 2026):** `signUpMan` moved from `store.spec.ts` to `e2e/fixtures.ts`,
   used by J8, J9 and J10; J1's helpers in `signup.spec.ts` are still their own.
+  **And the woman's, T-7.13 (18 October 2026):** `signUpWoman`, with `asFarAsLocation`,
+  `usernameAndAbout` and `pickInterests`, moved from `gifts.spec.ts` to `e2e/fixtures.ts`, used
+  by J13 and J4 to J7. Left: J1's and J2's own steps in `signup.spec.ts`, and J13's man, who
+  still signs up by steps of his own in `gifts.spec.ts`.
 - [x] P-680 · Give the E2E room for another sign-in, then land T-8.10's gifts journey.
   **Before the next journey that signs anyone in.** Worst case: every new sign-in journey turns
   CI's E2E red at someone else's sign-in, as T-8.10's did (run 37859041045: J3, J8 and J9 on
@@ -7247,3 +7269,19 @@ The number comes from the session's own block, given in its brief, from P-100 up
   worker idle) would show first as new photos stuck at `pending`. The founder's photo attempts on 18
   October never reached staging's servers (P-49's record). Filed by Claude building P-49, 18 October
   2026.
+- [ ] P-830 · Two parts of a Thread's expiry that no browser journey has seen. **Before beta.**
+  Worst case: a man watching his open Thread when the hour runs out keeps his composer and its
+  countdown at "Ran out" until he reloads, with nothing telling him why his send fails; or he
+  sends into it and is shown nothing at all. T-7.13's J7 reloads his screen after
+  `POST /v1/test/threads/{id}/expire` (D-930), because waiting on the worker's sweep could take a
+  minute, so two paths stay unseen in a browser: (a) the sweep's `thread.expired` event reaching
+  an open conversation and replacing his composer with the expired panel (T-7.12's handler, tested
+  only in vitest); and (b) his send into a Thread that ran out while his screen still showed it
+  live, refused `THREAD_EXPIRED`: the composer shows "The hour ran out before that was sent." and
+  asks the Thread again (`ConversationScreen.tsx`), which then replaces the composer with the
+  panel, so the note may be gone as soon as it appears, and his draft's fate is unchecked. The API
+  half of (b) is tested (`test_expire_thread.py`). Fix: a journey (or a step in J7) that expires
+  the Thread while both screens are open and waits for the sweep (up to a minute, the worker's
+  loop), then one where he sends before it; decide with the founder whether the note should
+  survive the panel. Filed by Claude building T-7.13, 18 October 2026, at the founder's direction;
+  its session's block, P-830 to P-839.

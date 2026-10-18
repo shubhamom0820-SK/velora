@@ -12939,6 +12939,80 @@ T95_SEED: list[Case] = [
     ),
 ]
 
+# --- T-7.13: the E2E's local-only expiry (D-930) ------------------------------
+
+T713_SELECTION = ["tests/modules/e2e/test_expire_thread.py"]
+E2E_SERVICE = "app/modules/e2e/service.py"
+NOT_RUN_OUT = "test_a_thread_with_no_hour_to_run_out_is_not_found_and_unchanged"
+NOT_SERVED = "test_isnt_served_anywhere_else"
+
+T713: list[Case] = [
+    Case(
+        id="t713-1-served-everywhere",
+        what="the test routes mounted whatever ENV and the SMS provider are",
+        edits=[
+            (
+                "app/main.py",
+                "    if settings.ENV in E2E_SERVED_IN and settings.SMS_PROVIDER in E2E_SERVED_FOR:\n",
+                "    if True:\n",
+            )
+        ],
+        expect=[
+            f"{NOT_SERVED}[ENV=staging]",
+            f"{NOT_SERVED}[ENV=production]",
+            f"{NOT_SERVED}[ENV=preview]",
+            f"{NOT_SERVED}[ENV=env-nobody-has-named-2031]",
+            f"{NOT_SERVED}[SMS_PROVIDER=msg91]",
+        ],
+    ),
+    Case(
+        id="t713-2-runs-out-an-expired-one",
+        what="any status given a past hour, an expired Thread's moved again",
+        edits=[
+            (
+                E2E_SERVICE,
+                "            or thread.status is not ThreadStatus.ACTIVE\n",
+                "",
+            )
+        ],
+        expect=[f"{NOT_RUN_OUT}[already-expired]"],
+    ),
+    Case(
+        id="t713-3-runs-out-a-private-message",
+        what="a Thread with no expires_at given one, a private message's",
+        edits=[(E2E_SERVICE, "            or thread.expires_at is None\n", "")],
+        expect=[f"{NOT_RUN_OUT}[private-message]"],
+    ),
+    Case(
+        id="t713-4-hour-left-as-it-was",
+        what="the hour left where it was, the call answering as if it had ended",
+        edits=[
+            (
+                E2E_SERVICE,
+                "        thread.expires_at = clock.now()\n",
+                "        thread.expires_at = thread.expires_at\n",
+            )
+        ],
+        expect=[
+            "test_its_hour_ends_at_the_call_and_nothing_else_moves",
+            "test_it_is_the_clocks_expiry_his_send_refused_and_hers_delivered",
+            "test_his_reopen_after_it_charges_exactly_two",
+        ],
+    ),
+    Case(
+        id="t713-5-in-the-schema",
+        what="the test routes in OpenAPI, so in `make types` and the web's reach",
+        edits=[
+            (
+                "app/modules/e2e/router.py",
+                '\nrouter = APIRouter(prefix="/test", tags=["test"], include_in_schema=False)\n',
+                '\nrouter = APIRouter(prefix="/test", tags=["test"])\n',
+            )
+        ],
+        expect=["test_is_never_in_the_schema"],
+    ),
+]
+
 CASES: list[tuple[Case, list[str]]] = (
     [(c, T51_SELECTION) for c in T51]
     + [(c, T54_SELECTION) for c in T54]
@@ -13002,6 +13076,7 @@ CASES: list[tuple[Case, list[str]]] = (
     + [(c, P80_SELECTION) for c in P80]
     + [(c, T95_SELECTION) for c in T95]
     + [(c, T95_SEED_SELECTION) for c in T95_SEED]
+    + [(c, T713_SELECTION) for c in T713]
 )
 
 # The fifty-connection fixture's own message when Postgres refuses a connection.

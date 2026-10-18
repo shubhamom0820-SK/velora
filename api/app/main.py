@@ -73,7 +73,8 @@ SIGN_IN_PATHS: tuple[tuple[APIRouter, frozenset[str]], ...] = (
     (firebase_router, FIREBASE_SERVED_FOR),
 )
 # The E2E's test-only routes (T-3.13): only where ENV is local and the SMS is the
-# fake's, whose outbox they read. Allowlists both (rule 16).
+# fake's, whose outbox they read; J7's expiry rides the same gate (T-7.13,
+# D-930). Allowlists both (rule 16).
 E2E_SERVED_IN: frozenset[str] = frozenset({"local"})
 E2E_SERVED_FOR: frozenset[str] = frozenset({"fake"})
 # The fake gateway's webhook simulator (T-8.1): only where ENV is local and the

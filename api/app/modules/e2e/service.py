@@ -1,20 +1,25 @@
 """Local-only stand-ins for the outside world, for the E2E and local
-development: what the fake SMS provider has 'sent' (T-3.13), and the webhook
-the fake gateway would send (T-8.1). No rules of their own."""
+development: what the fake SMS provider has 'sent' (T-3.13), the webhook the
+fake gateway would send (T-8.1), and an hour that has passed (T-7.13, D-930).
+No rules of their own."""
 
 from __future__ import annotations
 
+from datetime import datetime
 from uuid import UUID
 
 import httpx
 from fastapi import FastAPI
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core import clock
+from app.core.enums import ThreadStatus
 from app.core.errors import AppError
 from app.core.providers.payments import FakePayments, Outcome, PaymentsProvider
 from app.core.providers.sms import FakeSms, SmsProvider
 from app.core.security import normalize_phone
 from app.modules.payments import service as payments_service
+from app.modules.threads import repository as threads_repository
 
 # Where Razorpay delivers its webhooks, and the header it signs them in (T-8.2).
 WEBHOOK_PATH = "/v1/payments/webhook"
@@ -73,3 +78,29 @@ async def simulate_webhook(
             },
         )
     return response.status_code
+
+
+async def expire_thread(session: AsyncSession, thread_id: UUID) -> datetime:
+    """Let a Thread's hour run out now (D-930): its `expires_at`, the one column
+    the hour lives in (D-560), set to this instant, its row held as everything
+    that moves the hour holds it. Expired is `expires_at <= now` for the API,
+    the sweep and the browser alike, so each sees it run out by its own clock
+    from here on. Never earlier: a message sent a moment before would then
+    read as written after the hour ran out (the E2E's voice note did, 0.85 s
+    before a one-second-early hour). The status is left to the worker's
+    sweep, as when an hour passes, and nothing else moves.
+
+    Only a Thread with an hour: an active one with `expires_at`. A Knot or a
+    private message has none to run out (D-003, D-550), and an expired one has
+    already run out; each is `NOT_FOUND`, as no Thread is, and nothing changes.
+    """
+    async with session.begin():
+        thread = await threads_repository.lock(session, thread_id)
+        if (
+            thread is None
+            or thread.status is not ThreadStatus.ACTIVE
+            or thread.expires_at is None
+        ):
+            raise AppError("NOT_FOUND", "No such Thread with an hour.", status=404)
+        thread.expires_at = clock.now()
+        return thread.expires_at

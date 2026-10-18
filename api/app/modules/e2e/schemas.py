@@ -3,7 +3,7 @@ from __future__ import annotations
 from typing import Annotated
 from uuid import UUID
 
-from pydantic import BaseModel, ConfigDict, Field, StringConstraints
+from pydantic import AwareDatetime, BaseModel, ConfigDict, Field, StringConstraints
 
 from app.core.providers.payments import Outcome
 from app.modules.auth.schemas import PHONE_INPUT_MAX
@@ -36,3 +36,9 @@ class SimulatedWebhook(BaseModel):
     """The HTTP status the API's own webhook route answered the delivery with."""
 
     delivered_status: int
+
+
+class ExpiredThread(BaseModel):
+    """When the Thread's hour ended: the moment it was asked (D-930)."""
+
+    expires_at: AwareDatetime
