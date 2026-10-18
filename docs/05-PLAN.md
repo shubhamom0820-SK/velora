@@ -7329,3 +7329,18 @@ The number comes from the session's own block, given in its brief, from P-100 up
   every mismatch, as its approved plan says (D-940). Decide with T-9.12's Sentry plan in hand: a
   cap of lines per run with a count in a summary, or Sentry grouping and a rate limit on that
   event. Filed by Claude building T-9.9, 18 October 2026.
+- [ ] P-842 · `scripts/ci-gate` (or `/done`) tries once more on exit 4, after a short wait, and
+  records that it did. **Before more sessions land at once; small.** Worst case: a gate that exits
+  4 on a moment's trouble reading GitHub sends a session down `/done`'s manual path, so a commit
+  lands on `main` with only the local half of the landing guard (`VELORA_PUSH_GATE_MANUAL_PATH=1`)
+  when CI could have vouched for it a minute later; at best it stops a landing that was fine.
+  Three gates hit it on 18 October 2026 while several sessions polled GitHub together (the
+  founder's count). T-9.9's was one: run 39132083066, CI for `afb2be2` on `t-9.9-ledger-audit`;
+  `gh auth status` was fine, `gh api rate_limit` read 4,978 of 5,000 moments later, and the gate
+  run again for the same commit went green on the same run, as both occurrences `/done` records
+  did (4 and 14 October). Fix: on exit 4, wait (30 s or so) and read the same run once more, never
+  a new run and never on exits 1, 2, 3, 5 or 6; print a line saying it retried, with the run id
+  and time, so each occurrence is on the record; a second exit 4 is final. `scripts/ci-gate-test`
+  covers both: a flake that clears on the retry, and one that doesn't. `/done`'s exit-4 paragraph
+  then says the gate retries itself. Filed by Claude after T-9.9 landed, at the founder's
+  direction, 18 October 2026.
