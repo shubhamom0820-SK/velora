@@ -2034,6 +2034,112 @@ export const CASES: BreakCase[] = [
     run: ["src/components/conversation/ConversationScreen.test.tsx"],
     expect: ["shows a Knot as permanent"],
   },
+  {
+    // T-9.11, D-961: the tint's red set back to the brand red, under 4.5:1.
+    id: "t911-web-01-red-text-on-a-tint-under-aa",
+    file: "src/styles/tokens.css",
+    old: "  --accent-text: #bf2438;\n",
+    new: "  --accent-text: #cf2a40;\n",
+    run: ["src/styles/contrast.test.ts"],
+    expect: [
+      "--accent-text text on --accent-soft/bg is at least 4.5:1",
+      "--accent-text text on --surface-2 is at least 4.5:1",
+    ],
+  },
+  {
+    // D-962: the chrome's ring the content's, under 3:1 on --chrome-line.
+    id: "t911-web-02-one-ring-colour-in-the-chrome",
+    file: "src/app/globals.css",
+    old: "    --focus-ring: var(--chrome-accent);\n",
+    new: "    --focus-ring: var(--accent);\n",
+    run: ["src/styles/contrast.test.ts"],
+    expect: ["is at least 3:1 on --chrome-line"],
+  },
+  {
+    id: "t911-web-03-no-skip-link",
+    file: "src/components/shell/AppShell.tsx",
+    old: '        {t("shell.skip")}\n      </a>\n',
+    new: "      </a>\n",
+    run: ["src/components/shell/AppShell.test.tsx"],
+    expect: [
+      "starts the Tab order with a skip link to the main landmark",
+      "links to exactly Discover, Chats, Wallet and You",
+    ],
+  },
+  {
+    id: "t911-web-04-main-not-a-target",
+    file: "src/components/shell/AppShell.tsx",
+    old: "        id={MAIN_ID}\n        tabIndex={-1}\n",
+    new: "        id={MAIN_ID}\n",
+    run: ["src/components/shell/AppShell.test.tsx"],
+    expect: ["starts the Tab order with a skip link to the main landmark"],
+  },
+  {
+    // WCAG 2.2.1: Undo gone before a keyboard reaches it.
+    id: "t911-web-05-toast-runs-out-under-focus",
+    file: "src/components/ui/ToastProvider.tsx",
+    old: "    if (!toast || held) return;\n",
+    new: "    if (!toast) return;\n",
+    run: ["src/components/ui/Toast.test.tsx"],
+    expect: [
+      "waits while its action has focus",
+      "waits while the pointer is on it",
+    ],
+  },
+  {
+    id: "t911-web-06-gallery-no-tab-stop",
+    file: "src/components/profile/ProfileGallery.tsx",
+    old: "          tabIndex: 0,\n",
+    new: "",
+    run: ["src/components/profile/ProfileGallery.test.tsx"],
+    expect: ["makes more than one photo a named Tab stop"],
+  },
+  {
+    id: "t911-web-07-buttons-name-nobody",
+    file: "src/components/discover/DiscoverScreen.tsx",
+    old: "        name={cards[0]?.first_name ?? null}\n",
+    new: "        name={null}\n",
+    run: ["src/components/discover/DiscoverScreen.test.tsx"],
+    expect: ["names whoever is on top in each button"],
+  },
+  {
+    id: "t911-web-08-a-swipe-said-nothing",
+    file: "src/components/discover/DiscoverScreen.tsx",
+    old: "      setSwiped(t(`discover.swiped.${dir}`, { name: card.first_name }));\n",
+    new: "",
+    run: ["src/components/discover/DiscoverScreen.test.tsx"],
+    expect: [
+      "says what a pass did, once it is made",
+      "says what a like did, once it is made",
+      "says what a super did, once it is made",
+    ],
+  },
+  {
+    // The Super Like's price typed in, not /prices' (the founder, T-9.11).
+    id: "t911-web-09-super-price-typed-in",
+    file: "src/components/discover/ActionRow.tsx",
+    old: "    ? { velas: creditsText(superPrice) }\n",
+    new: "    ? { velas: creditsText(5) }\n",
+    run: ["src/components/discover/DiscoverScreen.test.tsx"],
+    expect: ["names whoever is on top in each button"],
+  },
+  {
+    // A walked list missing a screen that exists.
+    id: "t911-web-10-a-screen-left-unwalked",
+    file: "e2e/a11y-routes.ts",
+    old: '  { page: "(app)/wallet/page.tsx", walkers: PEOPLE, path: () => "/wallet" },\n',
+    new: "",
+    run: ["src/lib/a11y-routes.test.ts"],
+    expect: ["are exactly the (app) and admin pages"],
+  },
+  {
+    id: "t911-web-11-the-app-names-a-test-route",
+    file: "src/lib/api.ts",
+    old: 'import type { paths } from "@/types/api";\n',
+    new: 'import type { paths } from "@/types/api";\n\nexport const NOT_FOR_THE_APP = "/v1/test/users";\n',
+    run: ["src/lib/no-test-routes.test.ts"],
+    expect: ["names no test route anywhere under src/"],
+  },
 ];
 
 const WEB = join(import.meta.dirname, "..");

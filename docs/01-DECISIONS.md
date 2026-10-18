@@ -6461,3 +6461,89 @@ and a Knot is permanent and untouched.
 
 **Rejected:** refusing his sends to someone not `done` (a new error and changes across threads and
 messages, for a state a real woman leaves within minutes).
+
+### D-960 · axe through Playwright, pinned, for the accessibility walk — Locked
+**The decision (T-9.11; the founder, 16 October 2026, on the advisor's recommendation, Claude in
+a separate chat, relayed by the founder):** `@axe-core/playwright` **4.13.0**, a devDependency
+pinned exactly, with the `axe-core` it allows (`~4.13.0`) resolved to **4.13.0** in the lockfile.
+Released 11 August and 5 August 2026, both more than two weeks old when added (18 October 2026),
+as the founder asked. It runs WCAG 2.0 and 2.1's A and AA rules (`wcag2a`, `wcag2aa`, `wcag21a`,
+`wcag21aa`) on every signed-in and admin screen in `web/e2e/a11y.spec.ts`, in the production
+build the E2E serves, where colour contrast is read as the browser renders it.
+
+**Licence:** `axe-core` is MPL-2.0. Test-only, in `devDependencies`, so nothing of it ships in the
+bundle; the E2E injects it into the page under test and nowhere else.
+
+**Rejected:** `vitest-axe` or `jest-axe` in jsdom, which can't compute layout, so can't check
+contrast or what is visible; and axe alone, which can't tell whether a keyboard reaches every
+control or sees where focus is. That is the walk's own half (D-962).
+
+### D-961 · Red text on a tint is --accent-text; the brand red stays — Locked
+**The decision (T-9.11; the founder, 16 October 2026, on the advisor's recommendation, Claude in
+a separate chat, relayed by the founder; T-9.11's plan, Q2 (a)):** a token of its own,
+`--accent-text: #bf2438`, for red text drawn on a tint: on `--accent-soft` (active chips, soft
+badges, the countdown, the card's and the profile's intent pills, the store's bonus line, the
+waitlist's thanks, the admin nav's current item) and on `--surface-2` (a photo slot's "Choose
+another" and "Try again"). D-014's `--accent`, `#cf2a40`, is unchanged, for fills and for red text
+on `--bg` and `--surface`, where it passes.
+
+**Why:** `--accent` on `--accent-soft` over `--bg` is 4.13:1 and on `--surface-2` 4.25:1, under
+AA's 4.5:1 for text (WCAG 1.4.3); all of that text is `micro`, `small` or `ui`, none large.
+`#bf2438` is at least 4.76:1 on every tint. `src/styles/contrast.test.ts` reads the values from
+`tokens.css` and holds every text pair the screens draw at 4.5:1, and holds `--accent` on its own
+tint under it, so the token can't quietly become redundant or the tint quietly fail.
+
+**Rejected:** darkening `--accent` itself (`#c42639` passes), which moves D-014's brand red on
+every button; and making the text `--ink`, which loses the prototype's red on red.
+
+### D-962 · One focus ring everywhere, and the walk that proves it — Locked
+**The decision (T-9.11):** `globals.css` draws `:focus-visible` as a 2 px solid outline 2 px
+beside the control, in `--focus-ring`: `--accent` in the content, `--chrome-accent` inside
+`bg-chrome` and `bg-chrome-line`, since `--accent` on `--chrome-line` is under 3:1 (2.9) and the
+push prompt's buttons sit there. Each ring is at least 3:1 on its ground (WCAG 1.4.11,
+`contrast.test.ts`). A component may draw its own ring, never none: an `outline-none` needs a ring
+on its wrapper (`focus-within`), as the search fields, the phone field and the chats search now
+have. A field's border turning `--accent` on focus is no ring: it is also the error state.
+
+**The rest of "keyboard reachable everything", as built:**
+- **A skip link** is the shell's first Tab stop, "Skip to content", to `<main>` (WCAG 2.4.1).
+- **A toast holds** while focus or the pointer is on it, and runs its full time again after
+  (WCAG 2.2.1): Undo's 5 s were too short to Tab to.
+- **The profile's photos**, more than one, are a named region and a Tab stop, so the arrow keys
+  scroll it: only Chromium makes a scroller focusable by itself.
+- **The swipe buttons name whoever is on top** ("Pass on Priya", "Like Priya", "Super Like Priya,
+  5 Velas", the price from `/prices`), and each swipe is said once made ("Liked Priya."), in a
+  polite status: a card leaving says nothing by itself.
+
+**The walk (`web/e2e/a11y.spec.ts`):** on every screen, Tab from the top until focus comes
+round. Every control a pointer can reach on screen (not disabled, not `inert`, not under
+`aria-hidden`) must be reached, a radio group by any of its radios, and each stop must show a
+ring, its own or a `focus-within` wrapper's (computed, 2 px at least). The list of screens is held
+to the page files by `src/lib/a11y-routes.test.ts`, so a new screen fails until it is walked.
+The deck under reduced motion is proved by its effect: dragged 80 px, the card moves and its
+rotation is 0; without it, the same drag tilts it.
+
+### D-963 · A local-only route makes a person staff, for the admin walk — Locked
+**The decision (T-9.11; the founder, 18 October 2026, on the advisor's recommendation, Claude in
+a separate chat, relayed by the founder):** `POST /v1/test/users/{id}/role`, `{role}` →
+`{role}`, where `role` is `moderator` or `admin` and nothing else, never `user`, so it can make
+staff but never strip one. The account's row is locked, as everything that changes a user locks
+it, and the change is an `audit_log` row in the same transaction, `user.role`, its actor the
+system user (D-905), its meta `{from, to, by: "e2e"}`. An account that doesn't exist or was
+erased is `NOT_FOUND` and unchanged.
+
+**Gated exactly as the other test routes:** behind T-3.13's `E2E_SERVED_IN` and `E2E_SERVED_FOR`
+(ENV `local` and the fake SMS), in the `e2e` module's `router`, never in OpenAPI.
+`test_make_staff.py` proves it served there and a 404 everywhere else: ENV `staging`,
+`production`, `preview`, `ci`, a name nobody has listed, and the SMS provider `msg91`. The API has
+no ENV `ci`: CI's E2E runs the API as `local` with the fake SMS, so the route is served there, by
+design, as D-930's is. Nothing in the web bundle names a test route (`src/lib/no-test-routes.test.ts`
+reads every source file under `src/`); the E2E asks it from Node.
+
+**Why:** T-9.5's admin screens render only for a moderator or an admin (`AdminGate`, and the
+API's `require_role` behind it), and the E2E had no way to make one; T-9.11 walks them as the
+founder asked. Anywhere but local it would let anyone make themselves an admin, so T-9.13's
+security review reads it (its note in 05-PLAN).
+
+**Rejected:** walking only the 404 a non-staff person gets (the screens a moderator uses
+unchecked), and checking admin components in jsdom alone (no contrast, no real focus).

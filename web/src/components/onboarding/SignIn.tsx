@@ -211,7 +211,7 @@ function PhoneStage({
         <label className="text-small text-mute" htmlFor="phone">
           {t("onboarding.phone.label")}
         </label>
-        <div className="rounded-input border-line bg-surface focus-within:border-accent mt-1.5 flex items-center gap-2 border px-4 py-3.5">
+        <div className="rounded-input border-line bg-surface focus-within:border-accent focus-within:outline-accent mt-1.5 flex items-center gap-2 border px-4 py-3.5 focus-within:outline-2 focus-within:outline-offset-2">
           <Icon icon={Phone} size={16} className="text-mute" />
           <span className="text-input text-ink">
             {t("onboarding.phone.prefix")}

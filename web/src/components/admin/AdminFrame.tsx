@@ -52,7 +52,7 @@ export function AdminFrame({ children }: { children: ReactNode }) {
                         "rounded-pill text-ui inline-flex border px-3.5 py-2",
                         "focus-visible:outline-accent focus-visible:outline-2 focus-visible:outline-offset-2",
                         here
-                          ? "border-accent bg-accent-soft text-accent font-semibold"
+                          ? "border-accent bg-accent-soft text-accent-text font-semibold"
                           : "border-line text-mute",
                       )}
                     >

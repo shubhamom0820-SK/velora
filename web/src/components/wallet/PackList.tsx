@@ -38,7 +38,7 @@ export function PackList({
   return (
     <div className="flex flex-col gap-3">
       {firstPurchase && (
-        <p className="border-accent bg-accent-soft text-small text-accent rounded-card flex items-center gap-2 border px-4 py-2.5 font-semibold">
+        <p className="border-accent bg-accent-soft text-small text-accent-text rounded-card flex items-center gap-2 border px-4 py-2.5 font-semibold">
           <Icon icon={Sparkles} size={16} />
           {t("wallet.store.firstPurchase")}
         </p>

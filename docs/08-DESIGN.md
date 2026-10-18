@@ -70,6 +70,7 @@ One theme: the black · white · red blend (D-014, Locked). These values match t
   --line-strong:#D3CDCC; /* toggle track when off */
   --ink:#1A1517; --mute:#6E6668;
   --accent:#CF2A40; --accent-soft:rgba(207,42,64,.09); --on-accent:#FFFFFF;
+  --accent-text:#BF2438; /* red text on a tint, T-9.11 (D-961) */
   /* chrome (black): header, bottom nav, hero, match sheet, wallet card, lock screen */
   --chrome:#141113; --chrome-ink:#F3EFEE; --chrome-mute:#A29A9C; --chrome-line:#2B2528;
   --chrome-accent:#E8475A; --chrome-accent-soft:rgba(232,71,90,.16);
@@ -87,7 +88,15 @@ Rules:
 - Anything inside a chrome area uses the `--chrome-*` set, except filled buttons, which stay
   `--accent` with `--on-accent` text, as in the prototype. White on `--chrome-accent` is about
   3.8:1, under the 4.5:1 button text needs; on `--accent` it is about 5.2:1.
-- Contrast: body text ≥ 4.5:1, large text ≥ 3:1 (checked in T-9.11).
+- Contrast: body text ≥ 4.5:1, large text ≥ 3:1. **Checked in T-9.11:** every text pair the
+  screens draw passes 4.5:1 from the tokens (`src/styles/contrast.test.ts`), and axe reads the
+  rendered pages (`e2e/a11y.spec.ts`). Red text on a tint (`--accent-soft`, `--surface-2`) is
+  `--accent-text`, since `--accent` there is 4.13:1; `--accent` stays for fills and for red text on
+  `--bg` and `--surface` (D-961). Field borders (`--line`, 1.35:1) are under WCAG 1.4.11's 3:1:
+  P-864, before launch.
+- Focus: one ring, `:focus-visible` in `globals.css`, 2 px solid 2 px beside the control,
+  `--accent` in the content and `--chrome-accent` in the chrome, each ≥ 3:1 on its ground. Never
+  none: an `outline-none` puts the ring on its wrapper by `focus-within` (D-962).
 - `<meta name="theme-color">` = `--chrome`. A meta tag can't read a CSS variable, so this is the
   one colour literal outside `tokens.css`: `web/src/styles/theme-color.ts`, which must equal
   `--chrome` (`theme-color.test.ts` fails if it doesn't — P-28). The pre-commit hook exempts only
@@ -131,7 +140,8 @@ Checked value by value against the prototype in T-1.19, and corrected where the 
 - Content max-width: 520 px for app screens (centred on desktop) · 720 legal pages · 760 admin ·
   900 landing.
 - Motion: 150 ms for press/hover, 250–300 ms for sheets, spring for the deck. Respect
-  `prefers-reduced-motion` (no rotation, fade instead).
+  `prefers-reduced-motion` (no rotation, fade instead). The deck's is proved in the browser by
+  T-9.11: dragged under reduced motion a card moves and its rotation is 0 (D-962).
 - Tap targets ≥ 44 × 44 px. That is the tap area, which may reach past the visible control: chips
   and small buttons are drawn 38–42 px tall, as in the prototype, and stretch their tap area with
   an invisible `::before`.
@@ -148,7 +158,7 @@ Checked value by value against the prototype in T-1.19, and corrected where the 
 | PinPad | 4 dots, 3 × 4 keys, delete; the lock screen (T-3.10) and the PIN step (T-3.12) |
 | Toggle | on · off · disabled |
 | Sheet | bottom (mobile) / centred (desktop); title; scroll body; sticky footer |
-| Toast | info (ink) · error (accent) · with action (Undo) |
+| Toast | info (ink) · error (accent) · with action (Undo); held while focus or the pointer is on it (T-9.11) |
 | Avatar | photo · initial fallback · online dot · selfie-matched badge (a face, never a shield or "Verified": D-262; from T-4.12 a tick in `--accent`, the founder's choice, the words unchanged: D-393) |
 | Badge | count · status pill (Online, New, Knotted, intents) |
 | Skeleton | line · card · avatar |
@@ -374,6 +384,10 @@ Super, 46 px, `--accent`, with its price badge, "5", for a man; Like, 56 px, fil
 `--mute` (the cap is `swipe_daily_limit_men`, T-6.4). The feed row: For you, New and Online as
 pills, the active one filled `--ink` with `--chrome-ink` text; Search and Filters as 40 px icon
 buttons at the row's end, Filters carrying the count of active filters as an `--accent` badge.
+
+**The action row read out (T-9.11).** Each button names whoever is on top: "Pass on Priya",
+"Like Priya", and for a man "Super Like Priya, 5 Velas", the number from `/prices`. Once a swipe
+is made a polite status says it, "Liked Priya.", since a card leaving says nothing by itself.
 
 **The deck as T-6.5 built it** (8 October 2026). The card is the design's 560 px where the screen
 has room, and shorter on a short phone (`min(35rem, 100dvh − 17rem)`, never under 384 px), its

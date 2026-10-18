@@ -228,7 +228,7 @@ export function PhotoSlot({
               type="button"
               disabled={locked}
               onClick={view.kind === "rejected" ? onChoose : onRetry}
-              className="text-micro text-accent focus-visible:outline-accent underline underline-offset-2 focus-visible:outline-2 disabled:opacity-40"
+              className="text-micro text-accent-text focus-visible:outline-accent underline underline-offset-2 focus-visible:outline-2 disabled:opacity-40"
             >
               {view.kind === "rejected"
                 ? t("onboarding.photos.chooseAnother")

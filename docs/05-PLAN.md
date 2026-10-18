@@ -3861,9 +3861,30 @@ number** per account gets its 5 each, one Thread's worth, and is **accepted**, k
 - [ ] **Commit:** `perf(web): mobile performance pass [T-9.10]`
 
 ### T-9.11 · Accessibility pass
-- [ ] **Needs:** T-9.8
-- [ ] Keyboard reachable everything, visible focus, labels on icon buttons, colour contrast AA from tokens, reduced-motion respected by the deck, screen-reader names for swipe actions.
-- [ ] **Commit:** `a11y(web): accessibility pass [T-9.11]`
+- [x] **Needs:** T-9.8
+- **The plan, approved by the founder, 16 October 2026,** on the advisor's recommendation
+  (Claude, in a separate chat), relayed: axe through Playwright (D-960), `--accent-text` for red
+  on a tint (D-961), field borders filed as P-864; and on 18 October, a local-only staff role for
+  the admin walk (D-963), on conditions: the test routes' gate, staff roles only, audited,
+  nothing in the bundle, and T-9.13's review.
+- [x] Keyboard reachable everything, visible focus, labels on icon buttons, colour contrast AA from tokens, reduced-motion respected by the deck, screen-reader names for swipe actions.
+  **Built (D-960 to D-963):** `web/e2e/a11y.spec.ts` walks every `(app)` screen as a man and as a
+  woman and every admin screen as staff, on both projects: axe's WCAG 2.0 and 2.1 A and AA rules
+  find nothing (13 to 25 rules passing a screen), and a Tab walk from the top reaches every
+  control a pointer can, each with a ring (5 to 45 stops a screen), the skip link first. Its list
+  is held to the page files (`a11y-routes.test.ts`). One ring, `:focus-visible` in `globals.css`;
+  a skip link; toasts held while focused; the profile's photos a Tab stop; the swipe buttons
+  naming who is on top, the price from `/prices`, and each swipe said. Contrast from the tokens in
+  `contrast.test.ts`; the deck under reduced motion by its effect, dragged: it moves, never tilts.
+  `make e2e` 44 of 44, the walk 3.6 min a project (`out/t911-make-e2e.log`).
+  **Broken once each:** the API's five (`uv run python -m tests.break_guards t911-`,
+  `out/t911-break-guards-api.log`), 5 of 5 red; the web's eleven (`node scripts/break-guards.mts
+  t911-web`, `out/t911-web-breaks.log`), 11 of 11 red; and three in the browser, rebuilt each
+  time, each red at its own check and the file restored by SHA-256: the ring gone (no ring on the
+  shell's links), `--accent-text` back to `--accent` (axe's `color-contrast` on his chats), and
+  the tilt under reduced motion (3.85° where 0 was expected)
+  (`out/t911-e2e-break-*.log`). Not proved: what a real screen reader says (P-860).
+- [x] **Commit:** `a11y(web): accessibility pass [T-9.11]`
 
 ### T-9.12 · Observability
 - [ ] **Needs:** T-1.22, and a **Sentry account** — not created yet: P-0.6 was ticked with it left to this task
@@ -3877,6 +3898,11 @@ number** per account gets its 5 each, one Thread's worth, and is **accepted**, k
 - [ ] **Needs:** T-9.9
 - [ ] **Pillow's pinned version against its CVEs** (D-092): an image parser reading hostile input;
   update it if any has landed since it was pinned.
+- [ ] **The local-only test routes, D-963's role route first** (T-9.11, at the founder's
+  direction, 18 October 2026): `POST /v1/test/users/{id}/role` makes anyone an admin, so confirm
+  every `/v1/test` route is still a 404 in the deployed image, from outside, on staging and
+  production (not only `test_make_staff.py`'s settings), that none is in OpenAPI, and that nothing
+  in the web bundle names one (`no-test-routes.test.ts` reads the source, not the build).
 - [ ] Walk the security checklist in `07-CHECKLISTS.md` line by line; fix findings; run Claude Code `/security-review` on the branch; commission the external review of auth + wallet + payments (budget line in cost doc).
 - [ ] **Commit:** `fix(security): review findings [T-9.13]`
 
@@ -7366,3 +7392,46 @@ The number comes from the session's own block, given in its brief, from P-100 up
   Google consent line is (D-081), with a test. `/privacy` names reCAPTCHA already (P-71). Found
   planning P-71; filed by Claude at the founder's direction, 18 October 2026, from this session's
   block (P-880 to P-889).
+- [ ] P-860 · A hand check with real screen readers: VoiceOver on an iPhone and TalkBack on an
+  Android phone, sign-up to a Thread. **Before launch.** Worst case: a screen that passes axe and
+  T-9.11's keyboard walk still reads out wrongly or traps a screen-reader user (a gesture that
+  never reaches the page, an announcement said twice or never), and nobody would know until a
+  person who relies on one complains. Automation checks names, roles and focus, not what a reader
+  says. Record what each one said per screen in `out/`. Filed by Claude building T-9.11, 18
+  October 2026; its block, P-860 to P-869.
+- [ ] P-861 · Say new messages, the hour running out and "Not sent" in the conversation.
+  **Before launch.** Worst case: a screen-reader user in a Thread never hears her reply arrive,
+  or that his hour ran out, and goes on typing into a read-only Thread; the message list is a
+  plain `<ol>` and `Countdown`, `ExpiredPanel` and a failed bubble announce nothing
+  (`MessageList.tsx`, `ExpiredPanel.tsx`). Outside T-9.11's list ("screen-reader names for swipe
+  actions"), so filed, not built. Fix: a polite live region for an arrival while the screen is
+  open, one for the panel appearing, and the failed bubble's words in its name; vitest for each.
+  Filed by Claude building T-9.11, 18 October 2026.
+- [ ] P-862 · The voice note's record button starts on press-and-hold only, with Enter and
+  Space beside it, and has no click. **Before launch; small.** Worst case: a screen-reader user
+  can't record at all, if their reader's double-tap sends a click and no pointer down
+  (`MicButton.tsx`, `onPointerDown`). Unconfirmed: settle it in P-860's hand check, then add a
+  click that toggles recording if it fails. Filed by Claude building T-9.11, 18 October 2026.
+- [ ] P-863 · The public page's photo has `alt=""` (`SharedProfileView.tsx`). **Before launch;
+  small.** Worst case: a screen-reader visitor to `/@username` is told nothing of the one photo
+  the page exists to show. `(share)` is outside T-9.11's `(app)` and admin walk. Fix: `alt` as the
+  profile's gallery says it ("Photo of Priya"), and the page added to an axe run. Filed by Claude
+  building T-9.11, 18 October 2026.
+- [ ] P-864 · Field borders below WCAG 1.4.11's 3:1. **Before launch** (the founder, 18 October
+  2026). Worst case: a person with low vision can't see where to type: a field's only edge is
+  `--line`, 1.35:1 on `--surface` (`--line-strong` 1.57:1), and nothing else marks it until it
+  has focus. T-9.11 left it, at the founder's direction, since it changes the prototype's look on
+  every field. Fix: a border token at 3:1 or more for inputs (and the toggle's off track), checked
+  in `contrast.test.ts` as a non-text pair, D-014's palette otherwise unchanged. Filed by Claude
+  building T-9.11, 18 October 2026.
+- [ ] P-865 · The API's access log records the socket's ticket. **Before REL-1** (the founder,
+  18 October 2026). Worst case: anyone who can read the API's logs (Fly's log stream, a support
+  export, a log drain) holds a ticket that opens a person's socket, their messages and events
+  arriving live, for as long as it is still unused (single use, 30 s, T-7.4). Seen in T-9.11's
+  E2E runs: uvicorn's access log prints the path and query, `"WebSocket /ws?ticket=…" [accepted]`,
+  against rule 15 (no tokens in logs). Fix: the access log strips or redacts the query string,
+  for `/ws` at least or for every path (the ticket is the one secret a URL carries by design;
+  D-080 keeps numbers out of URLs),
+  with a test that a socket's ticket, and a query on any other path, never reach the log line.
+  Filed by Claude building T-9.11, 18 October 2026, at the founder's direction; its block, P-860
+  to P-869.

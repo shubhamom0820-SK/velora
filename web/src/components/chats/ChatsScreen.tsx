@@ -322,7 +322,7 @@ export function ChatsScreen() {
               ))}
             </div>
           )}
-          <label className="rounded-pill border-line bg-surface flex items-center gap-2 border px-4 py-2">
+          <label className="rounded-pill border-line bg-surface focus-within:outline-accent flex items-center gap-2 border px-4 py-2 focus-within:outline-2 focus-within:outline-offset-2">
             <Icon icon={Search} size={16} className="text-mute" />
             <input
               type="search"

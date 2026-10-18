@@ -71,6 +71,45 @@ describe("Toast", () => {
     expect(screen.getByRole("status")).toBeEmptyDOMElement();
   });
 
+  it("waits while its action has focus, and runs its full time again after (T-9.11)", () => {
+    vi.useFakeTimers();
+    renderWith({
+      message: "Cleared from your chats",
+      action: { label: "Undo", onClick: () => {} },
+      durationMs: 3000,
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Show" }));
+    const undo = screen.getByRole("button", { name: "Undo" });
+
+    act(() => undo.focus());
+    act(() => vi.advanceTimersByTime(60_000));
+    expect(screen.getByRole("status")).toHaveTextContent(
+      "Cleared from your chats",
+    );
+
+    act(() => undo.blur());
+    act(() => vi.advanceTimersByTime(2999));
+    expect(screen.getByRole("status")).toHaveTextContent(
+      "Cleared from your chats",
+    );
+    act(() => vi.advanceTimersByTime(1));
+    expect(screen.getByRole("status")).toBeEmptyDOMElement();
+  });
+
+  it("waits while the pointer is on it", () => {
+    vi.useFakeTimers();
+    renderWith({ message: "Link copied", durationMs: 3000 });
+    fireEvent.click(screen.getByRole("button", { name: "Show" }));
+
+    fireEvent.pointerOver(screen.getByText("Link copied"));
+    act(() => vi.advanceTimersByTime(60_000));
+    expect(screen.getByRole("status")).toHaveTextContent("Link copied");
+
+    fireEvent.pointerOut(screen.getByText("Link copied"));
+    act(() => vi.advanceTimersByTime(3000));
+    expect(screen.getByRole("status")).toBeEmptyDOMElement();
+  });
+
   it("refuses to work outside a provider", () => {
     vi.spyOn(console, "error").mockImplementation(() => {});
 

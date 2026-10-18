@@ -49,8 +49,11 @@ describe("the app shell (T-5.6)", () => {
 
     const menu = screen.getByRole("navigation", { name: t("shell.nav") });
     expect(screen.getAllByRole("navigation")).toEqual([menu]);
-    // Every link in the whole shell, not only the nav's: a fifth anywhere fails.
-    const links = screen.getAllByRole("link");
+    // Every link in the whole shell, not only the nav's: a fifth anywhere
+    // fails. The one outside the nav is the skip link (T-9.11).
+    const [skip, ...links] = screen.getAllByRole("link");
+    expect(skip).toHaveAccessibleName(t("shell.skip"));
+    expect(menu.contains(skip ?? null)).toBe(false);
     expect(links.map((a) => [a.textContent, a.getAttribute("href")])).toEqual([
       ["Discover", "/discover"],
       ["Chats", "/chats"],
@@ -75,6 +78,19 @@ describe("the app shell (T-5.6)", () => {
     expect(screen.getAllByRole("main")).toHaveLength(1);
     expect(screen.getByRole("main")).toHaveTextContent("A screen");
     expect(screen.getByRole("banner")).not.toHaveTextContent("A screen");
+  });
+
+  it("starts the Tab order with a skip link to the main landmark (T-9.11)", async () => {
+    renderShell("male");
+
+    await userEvent.tab();
+    const skip = screen.getByRole("link", { name: t("shell.skip") });
+    expect(skip).toHaveFocus();
+    const main = screen.getByRole("main");
+    expect(skip).toHaveAttribute("href", `#${main.id}`);
+    expect(main.id).not.toBe("");
+    // Reachable by the link alone, never a Tab stop of its own.
+    expect(main).toHaveAttribute("tabindex", "-1");
   });
 
   it.each([
@@ -163,13 +179,19 @@ describe("the header's balance (T-5.5)", () => {
     await waitFor(() => expect(api.sent()).toEqual([]));
   });
 
-  it("adds no link: the nav's four stay the shell's only ones", async () => {
+  it("adds no link: the nav's four and the skip link stay the shell's only ones", async () => {
     fakeApi({ "GET /v1/wallet": () => json(200, { balance: 3 }) });
     renderShell("male");
 
     await screen.findByRole("button", {
       name: t("wallet.pill", { velas: "3 Velas" }),
     });
-    expect(screen.getAllByRole("link")).toHaveLength(4);
+    expect(screen.getAllByRole("link").map((a) => a.textContent)).toEqual([
+      t("shell.skip"),
+      "Discover",
+      "Chats",
+      "Wallet",
+      "You",
+    ]);
   });
 });

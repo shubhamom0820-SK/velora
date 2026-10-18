@@ -35,6 +35,13 @@ import { useStoreSheet } from "@/store/store-sheet";
 
 import { DiscoverScreen } from "./DiscoverScreen";
 
+// The action row names whoever is on top (T-9.11): "Like Priya".
+const LIKE = /^Like \S+$/;
+const PASS = /^Pass on \S+$/;
+const SUPER = /^Super Like \S+$/;
+const superPriced = (velas: string) =>
+  new RegExp(`^Super Like \\S+, ${velas}$`);
+
 const nav = vi.hoisted(() => ({
   push: vi.fn(),
   replace: vi.fn(),
@@ -237,7 +244,7 @@ describe("the price a man is shown is the price he sends (P-56, D-600)", () => {
     renderAs("male");
 
     const superLike = await screen.findByRole("button", {
-      name: t("discover.actions.superPriced", { velas: "7 Velas" }),
+      name: superPriced("7 Velas"),
     });
     await waitFor(() => expect(superLike).toBeEnabled());
     expect(superLike).toHaveTextContent(/^7$/);
@@ -260,14 +267,12 @@ describe("the price a man is shown is the price he sends (P-56, D-600)", () => {
     renderAs("male");
 
     await screen.findByTestId("top-card");
-    expect(
-      screen.getByRole("button", { name: t("discover.actions.super") }),
-    ).toBeDisabled();
+    expect(screen.getByRole("button", { name: SUPER })).toBeDisabled();
     await act(async () => answer(json(200, PRICES)));
     await waitFor(() =>
       expect(
         screen.getByRole("button", {
-          name: t("discover.actions.superPriced", { velas: "7 Velas" }),
+          name: superPriced("7 Velas"),
         }),
       ).toBeEnabled(),
     );
@@ -295,12 +300,8 @@ describe("the price a man is shown is the price he sends (P-56, D-600)", () => {
     renderAs("male");
     await screen.findByTestId("top-card");
 
-    await userEvent.click(
-      screen.getByRole("button", { name: t("discover.actions.like") }),
-    );
-    await userEvent.click(
-      screen.getByRole("button", { name: t("discover.actions.pass") }),
-    );
+    await userEvent.click(screen.getByRole("button", { name: LIKE }));
+    await userEvent.click(screen.getByRole("button", { name: PASS }));
 
     await waitFor(() => expect(swipes(api.calls)).toHaveLength(2));
     expect(swipes(api.calls).map((c) => c.body)).toEqual([
@@ -317,14 +318,12 @@ describe("the price a man is shown is the price he sends (P-56, D-600)", () => {
     });
     renderAs("male");
     const superLike = await screen.findByRole("button", {
-      name: t("discover.actions.superPriced", { velas: "7 Velas" }),
+      name: superPriced("7 Velas"),
     });
     await waitFor(() => expect(superLike).toBeEnabled());
 
     await userEvent.click(superLike);
-    await userEvent.click(
-      screen.getByRole("button", { name: t("discover.actions.like") }),
-    );
+    await userEvent.click(screen.getByRole("button", { name: LIKE }));
 
     await waitFor(() =>
       expect(client.getMutationCache().getAll()).toHaveLength(2),
@@ -349,7 +348,7 @@ describe("a woman's deck: no price, no count (D-002)", () => {
     await screen.findByTestId("top-card");
 
     const superLike = screen.getByRole("button", {
-      name: t("discover.actions.super"),
+      name: SUPER,
     });
     expect(superLike).toBeEnabled();
     expect(superLike).toHaveTextContent("");
@@ -376,9 +375,7 @@ describe("the optimistic swipe (T-6.5)", () => {
     renderAs("male");
     await screen.findByRole("article", { name: "First" });
 
-    await userEvent.click(
-      screen.getByRole("button", { name: t("discover.actions.like") }),
-    );
+    await userEvent.click(screen.getByRole("button", { name: LIKE }));
 
     expect(topName()).toBe("Second");
     await act(async () =>
@@ -404,9 +401,7 @@ describe("the optimistic swipe (T-6.5)", () => {
     renderAs("male");
     await screen.findByRole("article", { name: "First" });
 
-    await userEvent.click(
-      screen.getByRole("button", { name: t("discover.actions.like") }),
-    );
+    await userEvent.click(screen.getByRole("button", { name: LIKE }));
 
     expect(await screen.findByRole("alert")).toHaveTextContent(words);
     await waitFor(() => expect(topName()).toBe("First"));
@@ -422,7 +417,7 @@ describe("the optimistic swipe (T-6.5)", () => {
     });
     renderAs("male");
     const superLike = await screen.findByRole("button", {
-      name: t("discover.actions.superPriced", { velas: "7 Velas" }),
+      name: superPriced("7 Velas"),
     });
     await waitFor(() => expect(superLike).toBeEnabled());
 
@@ -446,7 +441,7 @@ describe("the optimistic swipe (T-6.5)", () => {
     });
     renderAs("male");
     const superLike = await screen.findByRole("button", {
-      name: t("discover.actions.superPriced", { velas: "7 Velas" }),
+      name: superPriced("7 Velas"),
     });
     await waitFor(() => expect(superLike).toBeEnabled());
 
@@ -459,7 +454,7 @@ describe("the optimistic swipe (T-6.5)", () => {
     await waitFor(() => expect(reads(api.calls, "/v1/prices")).toHaveLength(2));
     expect(
       await screen.findByRole("button", {
-        name: t("discover.actions.superPriced", { velas: "8 Velas" }),
+        name: superPriced("8 Velas"),
       }),
     ).toHaveTextContent(/^8$/);
   });
@@ -477,15 +472,64 @@ describe("the optimistic swipe (T-6.5)", () => {
       renderAs("male");
       await screen.findByRole("article", { name: "First" });
 
-      await userEvent.click(
-        screen.getByRole("button", { name: t("discover.actions.pass") }),
-      );
+      await userEvent.click(screen.getByRole("button", { name: PASS }));
 
       await act(() => new Promise((r) => setTimeout(r, 30)));
       expect(topName()).toBe("Second");
       expect(noToast()).toBe(true);
     },
   );
+});
+
+describe("a screen reader's deck (T-9.11)", () => {
+  it("names whoever is on top in each button, Super's price from /prices", async () => {
+    fakeApi({
+      "GET /v1/discover": () =>
+        page([card({ first_name: "First" }), card({ first_name: "Second" })]),
+      "GET /v1/prices": () => json(200, PRICES),
+      "POST /v1/swipes": swipeOk(),
+    });
+    renderAs("male");
+    await screen.findByRole("article", { name: "First" });
+
+    const row = screen.getByRole("group", {
+      name: t("discover.actions.label"),
+    });
+    expect(
+      within(row)
+        .getAllByRole("button")
+        .map((button) => button.getAttribute("aria-label")),
+    ).toEqual(["Pass on First", "Super Like First, 7 Velas", "Like First"]);
+
+    await userEvent.click(
+      screen.getByRole("button", { name: "Pass on First" }),
+    );
+    expect(
+      await screen.findByRole("button", { name: "Pass on Second" }),
+    ).toBeInTheDocument();
+  });
+
+  it.each([
+    ["pass", "Pass on First", "Passed on First."],
+    ["like", "Like First", "Liked First."],
+    ["super", "Super Like First, 7 Velas", "Super liked First."],
+  ])("says what a %s did, once it is made", async (_, button, said) => {
+    fakeApi({
+      "GET /v1/discover": () =>
+        page([card({ first_name: "First" }), card({ first_name: "Second" })]),
+      "GET /v1/prices": () => json(200, PRICES),
+      "POST /v1/swipes": swipeOk(),
+    });
+    renderAs("male");
+    await screen.findByRole("article", { name: "First" });
+    const statuses = () =>
+      screen.getAllByRole("status").map((status) => status.textContent);
+    expect(statuses()).not.toContain(said);
+
+    await userEvent.click(screen.getByRole("button", { name: button }));
+
+    expect(statuses()).toContain(said);
+  });
 });
 
 describe("a man's swipes left today", () => {
@@ -500,9 +544,7 @@ describe("a man's swipes left today", () => {
     expect(
       await screen.findByText(t("discover.swipesLeft.other", { count: 50 })),
     ).toBeInTheDocument();
-    await userEvent.click(
-      screen.getByRole("button", { name: t("discover.actions.like") }),
-    );
+    await userEvent.click(screen.getByRole("button", { name: LIKE }));
     expect(
       await screen.findByText(t("discover.swipesLeft.other", { count: 49 })),
     ).toBeInTheDocument();
@@ -522,7 +564,7 @@ describe("a man's swipes left today", () => {
     renderAs("male");
     await screen.findByRole("article", { name: "First" });
     const like = screen.getByRole("button", {
-      name: t("discover.actions.like"),
+      name: LIKE,
     });
 
     await userEvent.click(like);
@@ -557,7 +599,7 @@ describe("pages: the next asked for at 5 left", () => {
     renderAs("male");
     await screen.findByTestId("top-card");
     const pass = screen.getByRole("button", {
-      name: t("discover.actions.pass"),
+      name: PASS,
     });
 
     await userEvent.click(pass);
@@ -588,7 +630,7 @@ describe("the keyboard on desktop: ← pass, → like, ↑ Super Like", () => {
     await waitFor(() =>
       expect(
         screen.getByRole("button", {
-          name: t("discover.actions.superPriced", { velas: "7 Velas" }),
+          name: superPriced("7 Velas"),
         }),
       ).toBeEnabled(),
     );
@@ -667,7 +709,7 @@ describe("dragging the card", () => {
     await waitFor(() =>
       expect(
         screen.getByRole("button", {
-          name: t("discover.actions.superPriced", { velas: "7 Velas" }),
+          name: superPriced("7 Velas"),
         }),
       ).toBeEnabled(),
     );
@@ -733,9 +775,7 @@ describe("the match sheet ✦", () => {
     });
     renderAs(gender);
     await screen.findByRole("article", { name: "Priya" });
-    await userEvent.click(
-      screen.getByRole("button", { name: t("discover.actions.like") }),
-    );
+    await userEvent.click(screen.getByRole("button", { name: LIKE }));
     const sheet = await screen.findByRole("dialog", {
       name: t("discover.match.title", { name: "Priya" }),
     });

@@ -19,6 +19,9 @@
   --mute: #6e6668;
   --accent: #cf2a40;
   --accent-soft: rgba(207, 42, 64, 0.09);
+  /* red text on a tint (--accent-soft, --surface-2), where --accent is under
+     AA's 4.5:1 (4.13 on --accent-soft over --bg); fills stay --accent (D-961) */
+  --accent-text: #bf2438;
   --on-accent: #ffffff;
   /* chrome (black): header, bottom nav, hero, match sheet, wallet card, lock screen */
   --chrome: #141113;

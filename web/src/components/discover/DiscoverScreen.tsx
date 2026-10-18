@@ -123,6 +123,9 @@ export function DiscoverScreen() {
 
   const [match, setMatch] = useState<Match | null>(null);
   const deck = useRef<DeckHandle>(null);
+  // What the last swipe did, for a screen reader (T-9.11): the card leaving
+  // says nothing by itself.
+  const [swiped, setSwiped] = useState("");
 
   const putBack = useCallback((id: string) => {
     setGone((now) => {
@@ -183,6 +186,7 @@ export function DiscoverScreen() {
         return false;
       }
       setGone((now) => new Set(now).add(card.id));
+      setSwiped(t(`discover.swiped.${dir}`, { name: card.first_name }));
       void send(card, dir, dir === "super" ? (superPrice ?? 0) : 0);
       return true;
     },
@@ -265,7 +269,11 @@ export function DiscoverScreen() {
         superPrice={superPrice}
         superAvailable={superAvailable}
         swipesLeft={swipesLeft}
+        name={cards[0]?.first_name ?? null}
       />
+      <p role="status" className="sr-only">
+        {swiped}
+      </p>
       <MatchSheet
         match={match}
         myName={me?.profile.first_name ?? ""}

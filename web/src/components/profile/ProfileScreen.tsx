@@ -106,7 +106,7 @@ function Profile({ person, own }: { person: PublicProfile; own: boolean }) {
               </span>
             )}
             {person.is_online && (
-              <span className="bg-accent-soft text-accent text-micro rounded-pill px-2 py-0.5">
+              <span className="bg-accent-soft text-accent-text text-micro rounded-pill px-2 py-0.5">
                 {t("profile.online")}
               </span>
             )}

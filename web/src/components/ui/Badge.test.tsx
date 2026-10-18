@@ -21,7 +21,7 @@ describe("Badge", () => {
 
     expect(screen.getByText("Exact")).toHaveClass(
       "bg-accent-soft",
-      "text-accent",
+      "text-accent-text",
     );
     expect(screen.getByText("7")).toHaveClass("bg-chrome-accent");
   });

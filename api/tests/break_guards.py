@@ -13186,6 +13186,97 @@ T99: list[Case] = [
 ]
 
 
+# --- T-9.11: the E2E's local-only staff role (D-963) ---------------------------
+
+T911_SELECTION = ["tests/modules/e2e/test_make_staff.py"]
+STAFF_TEST = "test_makes_a_person_staff_and_audits_it"
+STAFF_ONLY = "test_gives_only_a_staff_role_and_changes_nothing_else"
+STAFF_NOT_SERVED = "test_isnt_served_anywhere_else"
+
+T911: list[Case] = [
+    Case(
+        id="t911-1-role-served-everywhere",
+        what="the test routes mounted whatever ENV and the SMS provider are",
+        edits=[
+            (
+                "app/main.py",
+                "    if settings.ENV in E2E_SERVED_IN and settings.SMS_PROVIDER in E2E_SERVED_FOR:\n",
+                "    if True:\n",
+            )
+        ],
+        expect=[
+            f"{STAFF_NOT_SERVED}[ENV=ci]",
+            f"{STAFF_NOT_SERVED}[ENV=staging]",
+            f"{STAFF_NOT_SERVED}[ENV=production]",
+            f"{STAFF_NOT_SERVED}[ENV=preview]",
+            f"{STAFF_NOT_SERVED}[ENV=env-nobody-has-named-2031]",
+            f"{STAFF_NOT_SERVED}[SMS_PROVIDER=msg91]",
+            f"{STAFF_NOT_SERVED}[ENV=production,SMS_PROVIDER=fake]",
+        ],
+    ),
+    Case(
+        id="t911-2-role-gives-user",
+        what="any role taken, `user` among them, so it could strip a moderator",
+        edits=[
+            (
+                "app/modules/e2e/schemas.py",
+                "    role: Literal[Role.MODERATOR, Role.ADMIN]\n",
+                "    role: Role\n",
+            )
+        ],
+        expect=[f"{STAFF_ONLY}[user]"],
+    ),
+    Case(
+        id="t911-3-role-unaudited",
+        what="the role changed with no audit_log row beside it",
+        edits=[
+            (
+                E2E_SERVICE,
+                (
+                    "        await admin_service.audit(\n"
+                    "            session,\n"
+                    "            admin_service.SYSTEM_USER_ID,\n"
+                    '            "user.role",\n'
+                    '            {"from": str(was), "to": str(role), "by": "e2e"},\n'
+                    '            target=("user", user_id),\n'
+                    "        )\n"
+                ),
+                "",
+            )
+        ],
+        expect=[f"{STAFF_TEST}[moderator]", f"{STAFF_TEST}[admin]"],
+    ),
+    Case(
+        id="t911-4-role-for-the-erased",
+        what="an erased account made staff",
+        edits=[
+            (
+                E2E_SERVICE,
+                "        if user is None or user.anonymised_at is not None:\n",
+                "        if user is None:\n",
+            )
+        ],
+        expect=["test_an_erased_account_is_not_found_and_unchanged"],
+    ),
+    Case(
+        id="t911-5-role-takes-extra-fields",
+        what="fields beside the role accepted and ignored",
+        edits=[
+            (
+                "app/modules/e2e/schemas.py",
+                (
+                    '    """The staff role to give (D-963): moderator or admin, never user."""\n'
+                    "\n"
+                    '    model_config = ConfigDict(extra="forbid")\n'
+                ),
+                '    """The staff role to give (D-963): moderator or admin, never user."""\n',
+            )
+        ],
+        expect=["test_refuses_anything_beside_the_role"],
+    ),
+]
+
+
 CASES: list[tuple[Case, list[str]]] = (
     [(c, T51_SELECTION) for c in T51]
     + [(c, T54_SELECTION) for c in T54]
@@ -13251,6 +13342,7 @@ CASES: list[tuple[Case, list[str]]] = (
     + [(c, T95_SEED_SELECTION) for c in T95_SEED]
     + [(c, T713_SELECTION) for c in T713]
     + [(c, T99_SELECTION) for c in T99]
+    + [(c, T911_SELECTION) for c in T911]
 )
 
 # The fifty-connection fixture's own message when Postgres refuses a connection.

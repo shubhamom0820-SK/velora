@@ -35,6 +35,7 @@
   --color-mute: var(--mute);
   --color-accent: var(--accent);
   --color-accent-soft: var(--accent-soft);
+  --color-accent-text: var(--accent-text);
   --color-on-accent: var(--on-accent);
   --color-chrome: var(--chrome);
   --color-chrome-ink: var(--chrome-ink);
@@ -91,6 +92,24 @@
     background: var(--page);
     color: var(--ink);
     font-family: var(--font-system);
+  }
+
+  /* Visible focus everywhere (T-9.11, D-962): one ring, 2 px beside the
+     control, at least 3:1 on the ground it is drawn on (contrast.test.ts):
+     --accent on the content's grounds, --chrome-accent inside the chrome,
+     where --accent on --chrome-line is under 3:1. A component may draw its
+     own ring, never none: an `outline-none` needs a ring on its wrapper
+     (`focus-within`) instead. */
+  :root {
+    --focus-ring: var(--accent);
+  }
+  .bg-chrome,
+  .bg-chrome-line {
+    --focus-ring: var(--chrome-accent);
+  }
+  :focus-visible {
+    outline: 2px solid var(--focus-ring);
+    outline-offset: 2px;
   }
 
   /* A printed page is ink on paper: no page background (T-2.2's legal pages). */

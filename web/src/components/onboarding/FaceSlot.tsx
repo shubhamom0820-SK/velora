@@ -133,7 +133,7 @@ export function FaceSlot({ slot, optional, locked }: FaceSlotProps) {
                       ? () => picker.current?.click()
                       : slot.retry
                   }
-                  className="text-micro text-accent focus-visible:outline-accent underline underline-offset-2 focus-visible:outline-2"
+                  className="text-micro text-accent-text focus-visible:outline-accent underline underline-offset-2 focus-visible:outline-2"
                 >
                   {view.kind === "rejected"
                     ? t("onboarding.photos.chooseAnother")

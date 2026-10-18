@@ -14,7 +14,7 @@ type BadgeProps = {
 
 const TONES = {
   ink: "bg-ink text-chrome-ink",
-  soft: "bg-accent-soft text-accent",
+  soft: "bg-accent-soft text-accent-text",
   count: "bg-chrome-accent text-on-accent min-w-5 justify-center",
 } as const;
 

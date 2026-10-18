@@ -94,7 +94,10 @@ on demand by a Firebase build's `/login`;
 so local and ci builds can't reach Firebase (D-085). `src/components/ui/` holds the shared primitives (T-1.19),
 each with a vitest test beside it; `/dev/ui` shows them all under `next dev` and 404s everywhere
 else. Feature components go in `src/components/<feature>/`. A person's profile has one route,
-`/people/[id]` (the deck's tap, T-6.5; T-6.8's screen). `/admin` is the moderation panel (T-9.5,
+`/people/[id]` (the deck's tap, T-6.5; T-6.8's screen). **A new `(app)` or admin page joins
+`e2e/a11y-routes.ts`**, T-9.11's axe and keyboard walk, or `src/lib/a11y-routes.test.ts` fails;
+focus is one ring, `:focus-visible` in `globals.css`, never `outline-none` without a ring on the
+wrapper, and red text on a tint is `--accent-text` (D-961, D-962). `/admin` is the moderation panel (T-9.5,
 D-920): `src/app/admin/` and `src/components/admin/`, shown only to `moderator` and `admin` by
 `AdminGate`, which is UX: every `/v1/admin/*` route declares its own `require_role` (D-024, P-30),
 and every call to one writes `audit_log`. One conversation is `/chats/[id]`

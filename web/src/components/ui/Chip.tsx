@@ -20,7 +20,7 @@ type ChipProps = {
 
 const BASE =
   "rounded-pill text-ui inline-flex items-center gap-1.5 border px-3.5 py-2";
-const ON = "border-accent bg-accent-soft text-accent font-semibold";
+const ON = "border-accent bg-accent-soft text-accent-text font-semibold";
 const OFF = "border-line text-mute font-normal";
 // Drawn 38 px tall, as in the prototype; ::before stretches the tap area past 44 px.
 const TAP = "relative before:absolute before:inset-x-0 before:-inset-y-1";

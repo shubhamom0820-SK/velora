@@ -37,18 +37,23 @@ export function ToastProvider({ children }: { children: ReactNode }) {
     null,
   );
   const lastId = useRef(0);
+  // Held while focus or the pointer is on it (T-9.11): a keyboard user tabbing
+  // to Undo gets as long as they need, and its time starts again on leaving.
+  const [held, setHeld] = useState(false);
 
   const dismiss = useCallback(() => setToast(null), []);
   const show = useCallback((options: ToastOptions) => {
     lastId.current += 1;
+    // A toast removed under the focus never blurs: a new one starts unheld.
+    setHeld(false);
     setToast({ ...options, id: lastId.current });
   }, []);
 
   useEffect(() => {
-    if (!toast) return;
+    if (!toast || held) return;
     const timer = setTimeout(dismiss, toast.durationMs ?? TOAST_MS);
     return () => clearTimeout(timer);
-  }, [toast, dismiss]);
+  }, [toast, held, dismiss]);
 
   const api = useMemo(() => ({ show, dismiss }), [show, dismiss]);
   const tone = toast?.tone ?? "info";
@@ -66,7 +71,21 @@ export function ToastProvider({ children }: { children: ReactNode }) {
     <ToastContext value={api}>
       {children}
       {/* Both regions stay mounted so screen readers announce what appears in them. */}
-      <div className="pointer-events-none fixed inset-x-0 top-18 z-50 flex justify-center px-6">
+      <div
+        className="pointer-events-none fixed inset-x-0 top-18 z-50 flex justify-center px-6"
+        onFocus={() => setHeld(true)}
+        onBlur={(event) => {
+          if (!event.currentTarget.contains(event.relatedTarget)) {
+            setHeld(false);
+          }
+        }}
+        onPointerOver={() => setHeld(true)}
+        onPointerOut={(event) => {
+          if (!event.currentTarget.contains(event.relatedTarget as Node)) {
+            setHeld(false);
+          }
+        }}
+      >
         <div role="status">{tone === "info" && shown}</div>
         <div role="alert">{tone === "error" && shown}</div>
       </div>

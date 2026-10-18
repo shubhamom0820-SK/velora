@@ -13,7 +13,7 @@ type Phase = "extended" | "running" | "urgent" | "out";
 
 const TONES: Record<Phase, string> = {
   extended: "bg-surface-2 text-ink",
-  running: "bg-accent-soft text-accent",
+  running: "bg-accent-soft text-accent-text",
   urgent: "bg-accent text-on-accent",
   out: "bg-surface-2 text-mute",
 };

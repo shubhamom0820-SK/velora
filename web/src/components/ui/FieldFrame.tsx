@@ -2,7 +2,7 @@ import type { ReactNode } from "react";
 
 /** The box every text control shares: Field and TextArea. */
 export const CONTROL =
-  "w-full rounded-input border border-line bg-surface px-4 text-input text-ink placeholder:text-mute focus:border-accent focus:outline-none aria-invalid:border-accent disabled:bg-surface-2 disabled:text-mute";
+  "w-full rounded-input border border-line bg-surface px-4 text-input text-ink placeholder:text-mute focus:border-accent aria-invalid:border-accent disabled:bg-surface-2 disabled:text-mute";
 
 type Messages = { helper?: string; error?: string; counter?: string };
 

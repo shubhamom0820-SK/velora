@@ -74,7 +74,7 @@ export function WaitlistForm() {
       {/* Always in the page, so screen readers announce the success when it appears. */}
       <div role="status">
         {join.isSuccess && (
-          <p className="bg-accent-soft rounded-input text-ui text-accent flex items-center gap-2 px-4 py-3">
+          <p className="bg-accent-soft rounded-input text-ui text-accent-text flex items-center gap-2 px-4 py-3">
             <Icon icon={Check} size={16} />
             {t("landing.waitlist.joined")}
           </p>

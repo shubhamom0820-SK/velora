@@ -110,7 +110,7 @@ export function Composer({
               onKeyDown={onKeyDown}
               placeholder={t("conversation.placeholder")}
               aria-label={t("conversation.placeholder")}
-              className="rounded-input border-line bg-surface text-input text-ink placeholder:text-mute focus-visible:border-accent max-h-32 min-h-11 min-w-0 flex-1 resize-none border px-3.5 py-2.5 outline-none [field-sizing:content]"
+              className="rounded-input border-line bg-surface text-input text-ink placeholder:text-mute focus-visible:border-accent max-h-32 min-h-11 min-w-0 flex-1 resize-none border px-3.5 py-2.5 [field-sizing:content]"
             />
             <button
               type="button"

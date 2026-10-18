@@ -335,6 +335,7 @@ Five tries a minute per client IP, invalid ones included → `RATE_LIMITED` (D-0
 | POST | /test/sms/last-code | 🔓 | `{phone}` → `{code}`, the code the fake SMS last sent the number, or `null` | T-3.13 |
 | POST | /test/threads/{id}/expire | 🔓 | — → `{expires_at}`: the Thread's hour ended now, its `expires_at` set to this instant and nothing else moved; a Thread with no hour to run out (a Knot, a private message, one expired) or none is `NOT_FOUND` (D-930) | T-7.13 |
 | POST | /test/payments/webhook | 🔓 | `{payment_id, outcome: captured\|failed, amount_paise?}` → `{delivered_status}`: the fake gateway's signed webhook for that payment, delivered in process to `POST /v1/payments/webhook`, and the status it answered (200 since T-8.2 built the route). `amount_paise` fakes a mismatch | T-8.1 |
+| POST | /test/users/{id}/role | 🔓 | `{role: moderator\|admin}` → `{role}`: the account made staff, its row locked and an `audit_log` row (`user.role`, the system user its actor) written beside it; `user` or anything else is `VALIDATION_ERROR`, an account that doesn't exist or was erased `NOT_FOUND` (D-963) | T-9.11 |
 
 Each is kept out of the OpenAPI schema, so `make types` is the same everywhere and the web can't
 call it, and each is a 404 everywhere but where its allowlists say (rule 16).
@@ -349,6 +350,11 @@ API sent nothing to (D-073) gets `null`, as its phone would. The E2E is its only
 J7's expiry (06-TESTING): it moves `expires_at` alone, the one column the hour lives in (D-560),
 so the API, the worker's sweep and the browser each see the Thread run out by their own clock;
 no clock is moved, and the status is the sweep's to catch up, as when an hour passes.
+
+`/test/users/{id}/role` is served behind the same gate (`ENV` `local` and the fake SMS, D-963):
+anywhere else it would let anyone make themselves an admin. It gives staff roles only, never
+`user`, so it can't strip a real moderator either. T-9.11's walk of the admin screens is its only
+caller, from Node; nothing under `web/src` names a test route (`no-test-routes.test.ts`).
 
 `/test/payments/webhook` is served only where `ENV` is `local` and `PAYMENTS_PROVIDER` is `fake`:
 anywhere else it would pay for Velas with nothing. It builds the webhook from the `payments` row,

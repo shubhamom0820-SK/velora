@@ -60,10 +60,15 @@ async function likeInDeck(page: Page, name: string) {
     await expect(top).toHaveCount(1);
     const onTop = await top.getAttribute("aria-label");
     if (onTop === name) {
-      await page.getByRole("button", { name: "Like", exact: true }).click();
+      // The buttons name who is on top (T-9.11).
+      await page
+        .getByRole("button", { name: `Like ${name}`, exact: true })
+        .click();
       return;
     }
-    await page.getByRole("button", { name: "Pass", exact: true }).click();
+    await page
+      .getByRole("button", { name: `Pass on ${onTop}`, exact: true })
+      .click();
     await expect(top).not.toHaveAttribute("aria-label", onTop ?? "");
   }
   throw new Error(`${name} wasn't on top after ${DECK_LIMIT} cards`);

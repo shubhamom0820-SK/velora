@@ -1,6 +1,7 @@
 """Local-only stand-ins for the outside world, for the E2E and local
 development: what the fake SMS provider has 'sent' (T-3.13), the webhook the
-fake gateway would send (T-8.1), and an hour that has passed (T-7.13, D-930).
+fake gateway would send (T-8.1), an hour that has passed (T-7.13, D-930), and
+a staff role for the E2E's walk of the admin screens (T-9.11, D-963).
 No rules of their own."""
 
 from __future__ import annotations
@@ -13,13 +14,15 @@ from fastapi import FastAPI
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core import clock
-from app.core.enums import ThreadStatus
+from app.core.enums import Role, ThreadStatus
 from app.core.errors import AppError
 from app.core.providers.payments import FakePayments, Outcome, PaymentsProvider
 from app.core.providers.sms import FakeSms, SmsProvider
 from app.core.security import normalize_phone
+from app.modules.admin import service as admin_service
 from app.modules.payments import service as payments_service
 from app.modules.threads import repository as threads_repository
+from app.modules.users import repository as users_repository
 
 # Where Razorpay delivers its webhooks, and the header it signs them in (T-8.2).
 WEBHOOK_PATH = "/v1/payments/webhook"
@@ -104,3 +107,29 @@ async def expire_thread(session: AsyncSession, thread_id: UUID) -> datetime:
             raise AppError("NOT_FOUND", "No such Thread with an hour.", status=404)
         thread.expires_at = clock.now()
         return thread.expires_at
+
+
+async def make_staff(session: AsyncSession, user_id: UUID, role: Role) -> Role:
+    """Make a person staff (D-963): T-9.11's walk of the admin screens, which
+    render only for a moderator or an admin, and the E2E has no other way to
+    make one. `role` is moderator or admin, never user (the schema refuses
+    it). The row is locked, as everything that changes a user locks it, and
+    the change is an `audit_log` row in the same transaction, as any role
+    change must be: the system user its actor (D-905), nobody having made it.
+
+    An account that doesn't exist, or was erased, is `NOT_FOUND`.
+    """
+    async with session.begin():
+        user = await users_repository.user_for_update(session, user_id)
+        if user is None or user.anonymised_at is not None:
+            raise AppError("NOT_FOUND", "No such account.", status=404)
+        was = user.role
+        user.role = role
+        await admin_service.audit(
+            session,
+            admin_service.SYSTEM_USER_ID,
+            "user.role",
+            {"from": str(was), "to": str(role), "by": "e2e"},
+            target=("user", user_id),
+        )
+        return user.role

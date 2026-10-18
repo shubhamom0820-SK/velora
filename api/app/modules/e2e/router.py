@@ -6,7 +6,8 @@ under "Local only".
 - `router`: the code the fake SMS provider last sent a number (T-3.13), where
   `SMS_PROVIDER` is fake. Playwright reads sign-in codes here (06-TESTING).
   Beside it, behind the same gate, a Thread's hour run out now (T-7.13,
-  D-930): J7's expiry, without moving any clock.
+  D-930): J7's expiry, without moving any clock; and a person made staff
+  (T-9.11, D-963), for the walk of the admin screens.
 - `payments_router`: the fake gateway's webhook for a payment, delivered to the
   API's own webhook route (T-8.1), where `PAYMENTS_PROVIDER` is fake. It stands
   in for Razorpay locally: a fake order is paid by calling it.
@@ -26,8 +27,10 @@ from app.modules.e2e.schemas import (
     ExpiredThread,
     LastCode,
     LastCodeQuery,
+    MakeStaff,
     SimulatedWebhook,
     SimulateWebhook,
+    Staff,
 )
 
 router = APIRouter(prefix="/test", tags=["test"], include_in_schema=False)
@@ -45,6 +48,15 @@ async def expire_thread(
     session: Annotated[AsyncSession, Depends(get_session)],
 ) -> ExpiredThread:
     return ExpiredThread(expires_at=await service.expire_thread(session, thread_id))
+
+
+@router.post("/users/{user_id}/role")
+async def make_staff(
+    user_id: UUID,
+    body: MakeStaff,
+    session: Annotated[AsyncSession, Depends(get_session)],
+) -> Staff:
+    return Staff(role=await service.make_staff(session, user_id, body.role))
 
 
 @payments_router.post("/payments/webhook")

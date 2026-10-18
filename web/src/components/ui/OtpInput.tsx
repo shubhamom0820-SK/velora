@@ -19,7 +19,7 @@ type OtpInputProps = {
 };
 
 const BOX =
-  "rounded-input text-title-1 border-line bg-surface text-ink h-14 w-full min-w-0 border text-center font-semibold focus-visible:border-accent focus-visible:outline-none disabled:opacity-50";
+  "rounded-input text-title-1 border-line bg-surface text-ink h-14 w-full min-w-0 border text-center font-semibold focus-visible:border-accent disabled:opacity-50";
 
 /**
  * The code boxes (08-DESIGN §4): 6 of them (D-066; the prototype's 4 are

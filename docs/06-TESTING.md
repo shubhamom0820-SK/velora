@@ -244,6 +244,17 @@ the API's one process.
   response and no `'unsafe-inline'` on `/login`, and an injected inline handler that runs on `/`
   and is refused on `/login`. It uses plain `@playwright/test`, since it causes a violation on
   purpose.
+- **The accessibility walk** (`web/e2e/a11y.spec.ts`, T-9.11, D-960, D-962): a man and a woman
+  match in the deck by keyboard alone; then every `(app)` screen as each of them, and every admin
+  screen as staff (D-963's local-only role, given him from Node), passes axe's WCAG 2.0 and 2.1 A
+  and AA rules, and a Tab walk from the top until focus comes round reaches every control a
+  pointer can and shows a ring on each; an `(app)` screen's first stop is the skip link. Also the
+  match sheet (and its focus trap), the store, Filters and the profile's ⋯ sheets, opened by
+  keyboard and closed by Escape back to their opener; the PIN lock; and the deck under reduced
+  motion, dragged, by its effect: it moves and doesn't tilt, and without it the same drag tilts.
+  Its screens are `web/e2e/a11y-routes.ts`, held to the page files by `src/lib/a11y-routes.test.ts`.
+  Chromium only (her selfie). axe and the walk are no screen reader: a hand check with VoiceOver
+  and TalkBack is P-860.
 - **`/@username`** (`web/e2e/share.spec.ts`, D-544): served through the rewrite, with a nonce,
   never indexed, its canonical address the `@` one; and what follows an `@` but isn't a username
   is a 404.

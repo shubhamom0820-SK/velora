@@ -60,6 +60,9 @@ function isCurrent(pathname: string, href: string): boolean {
  * woman's screen never asks for it. Its look is the `--shell-pill-*` tokens,
  * which `look.test.ts` holds like every other class here.
  */
+/** Where the skip link lands: the screen, focusable by it alone. */
+const MAIN_ID = "main";
+
 export function AppShell({ children }: { children: ReactNode }) {
   const pathname = usePathname();
   const gender = useMe().data?.gender;
@@ -68,6 +71,14 @@ export function AppShell({ children }: { children: ReactNode }) {
   const balance = wallet.data?.balance;
   return (
     <div className="bg-bg mx-auto flex min-h-dvh max-w-(--shell-width) flex-col">
+      {/* The first Tab stop (T-9.11): past the header and the nav, to the
+          screen. Hidden until focused. */}
+      <a
+        href={`#${MAIN_ID}`}
+        className="bg-accent text-on-accent text-ui rounded-button sr-only z-20 focus:not-sr-only focus:fixed focus:top-0 focus:left-0 focus:p-(--shell-gutter)"
+      >
+        {t("shell.skip")}
+      </a>
       <header className="bg-chrome border-chrome-line sticky top-0 z-10 flex h-(--shell-header-height) items-center gap-(--shell-gutter) border-b-(length:--shell-line) px-(--shell-gutter)">
         <span className="text-title-1 text-chrome-ink">{APP_NAME}</span>
         <nav
@@ -127,7 +138,11 @@ export function AppShell({ children }: { children: ReactNode }) {
           </span>
         )}
       </header>
-      <main className="flex flex-1 flex-col pb-(--shell-nav-height) md:pb-0">
+      <main
+        id={MAIN_ID}
+        tabIndex={-1}
+        className="flex flex-1 flex-col pb-(--shell-nav-height) md:pb-0"
+      >
         {children}
       </main>
     </div>

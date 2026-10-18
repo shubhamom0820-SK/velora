@@ -68,6 +68,7 @@ export const en = {
   // The app's header and bottom nav (T-5.6). No Vibe: after beta (D-010).
   shell: {
     nav: "Main",
+    skip: "Skip to content",
     discover: "Discover",
     chats: "Chats",
     wallet: "Wallet",
@@ -154,6 +155,20 @@ export const en = {
       super: "Super Like",
       // A man's Super Like, read out with its price: "Super Like, 5 Velas".
       superPriced: "Super Like, {velas}",
+      // The same, naming who is on top (T-9.11): a screen reader hears whom
+      // a button decides, "Like Priya", the price from /prices.
+      named: {
+        pass: "Pass on {name}",
+        like: "Like {name}",
+        super: "Super Like {name}",
+        superPriced: "Super Like {name}, {velas}",
+      },
+    },
+    // Said once a swipe is made, so a screen reader hears it happened.
+    swiped: {
+      pass: "Passed on {name}.",
+      like: "Liked {name}.",
+      super: "Super liked {name}.",
     },
     swipesLeft: {
       one: "1 swipe left today",
@@ -193,6 +208,8 @@ export const en = {
   profile: {
     title: "Profile",
     photo: "Photo {n} of {total}",
+    // The gallery, a Tab stop when it scrolls: arrow keys move through it (T-9.11).
+    photos: "Photos",
     noPhoto: "Prefers not to show photos yet",
     nameAge: "{name}, {age}",
     online: "Online now",

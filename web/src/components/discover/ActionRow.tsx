@@ -20,11 +20,13 @@ type ActionRowProps = {
   superAvailable: boolean;
   /** A man's swipes left today; null for a woman or before it is known. */
   swipesLeft: number | null;
+  /** The first name on the top card, which each button names; null with none. */
+  name: string | null;
 };
 
 /**
- * Pass, Super and Like (08-DESIGN §8), and under them a man's swipes left
- * today. His Super carries its price as a number, "5", from `/prices`, never
+ * Pass, Super and Like (08-DESIGN §8), each naming who is on top ("Like
+ * Priya", T-9.11), and under them a man's swipes left today. His Super carries its price as a number, "5", from `/prices`, never
  * a literal; hers carries none.
  */
 export function ActionRow({
@@ -33,8 +35,25 @@ export function ActionRow({
   superPrice,
   superAvailable,
   swipesLeft,
+  name,
 }: ActionRowProps) {
   const superWaits = superPrice === undefined;
+  const priced = typeof superPrice === "number";
+  const velas: Record<string, string> = priced
+    ? { velas: creditsText(superPrice) }
+    : {};
+  const superLabel =
+    name === null
+      ? t(
+          priced ? "discover.actions.superPriced" : "discover.actions.super",
+          velas,
+        )
+      : t(
+          priced
+            ? "discover.actions.named.superPriced"
+            : "discover.actions.named.super",
+          { name, ...velas },
+        );
   return (
     <div className="flex flex-col items-center gap-2">
       <div
@@ -44,7 +63,11 @@ export function ActionRow({
       >
         <IconButton
           icon={X}
-          label={t("discover.actions.pass")}
+          label={
+            name === null
+              ? t("discover.actions.pass")
+              : t("discover.actions.named.pass", { name })
+          }
           size={46}
           tone="ink"
           disabled={disabled}
@@ -53,13 +76,7 @@ export function ActionRow({
         {superAvailable && (
           <IconButton
             icon={Star}
-            label={
-              typeof superPrice === "number"
-                ? t("discover.actions.superPriced", {
-                    velas: creditsText(superPrice),
-                  })
-                : t("discover.actions.super")
-            }
+            label={superLabel}
             size={46}
             tone="accent"
             disabled={disabled || superWaits}
@@ -73,7 +90,11 @@ export function ActionRow({
         )}
         <IconButton
           icon={Heart}
-          label={t("discover.actions.like")}
+          label={
+            name === null
+              ? t("discover.actions.like")
+              : t("discover.actions.named.like", { name })
+          }
           size={56}
           tone="filled"
           disabled={disabled}

@@ -118,7 +118,7 @@ export function SwipeCard({ card, stamps, onNameClick }: SwipeCardProps) {
           <div className="flex flex-wrap items-center gap-2">
             {place && <p className="text-small text-mute">{place}</p>}
             {card.is_online && (
-              <span className="rounded-pill bg-accent-soft text-micro text-accent px-2 py-0.5">
+              <span className="rounded-pill bg-accent-soft text-micro text-accent-text px-2 py-0.5">
                 {t("discover.card.online")}
               </span>
             )}
