@@ -6249,6 +6249,19 @@ relayed):**
   matching GitHub environment (`staging` or `production`, whose deployment branches are `main` and
   `v*` tags). That job may act as the project's deploy account and nothing else. No JSON key
   exists; creating one is never part of any runbook.
+  **Amended 18 October 2026 (P-925's docs, the founder's approval of the fix):** two conditions
+  do this, and the second was wrong at first. The provider's condition matches the repository by
+  its numeric id and the job's environment; the deploy account's `workloadIdentityUser` binding
+  names the job's exact subject. This repository sends GitHub's immutable subject
+  (`use_immutable_subject`), so the subject is
+  `repo:shubhamom0820-SK@248297344/velora@1384017905:environment:<staging|production>`, not
+  `repo:shubhamom0820-SK/velora:environment:<…>`, which block 3 bound first. With that binding the
+  exchange passed and impersonation was refused (403 `iam.serviceAccounts.getAccessToken`, deploy
+  run 39117752045); Docker then pushed with no credentials. Rebound per environment, so staging's
+  job can't act as production's account. Reading a policy back couldn't catch it; a real run did.
+  The first use of a newly created OS Login key was refused once (`Permission denied
+  (publickey)`, run 39118222247 attempt 1) and accepted on the re-run: propagation, nothing
+  changed.
 - **Images by digest, in Mumbai.** Each project has an Artifact Registry `velora` in
   `asia-south1`, keeping the 10 newest images and deleting the rest after 30 days. The deploy
   names an image by the digest the registry reports, never by its tag; production's deploy account

@@ -4656,6 +4656,21 @@ The number comes from the session's own block, given in its brief, from P-100 up
     `api.staging`'s DNS; the phone test; then P-920 removes Fly. Production: P-921.
   **Ticks when** staging serves from Mumbai, measured, with Fly's worker at 0; P-920 and P-921
   carry the rest.
+  **The VM serves, 18 October 2026** (`main`'s `a761c9e`, deployed by CI: run 39118222247, attempt
+  2, after the WIF subject was rebound, D-1022's amendment). Read from outside: Let's Encrypt's
+  certificate for `api-mumbai.staging`, `/readyz` with Postgres and Redis ok, `Via: 1.1 Caddy`,
+  the schema hidden, CORS for the staging web, HTTP redirected; ports 8000, 22, 5432, 6379 and
+  2019 refused, only 80 and 443 answering. On the VM, by the founder's OS Login through IAP:
+  Docker 29.9.1, the API healthy with no host port, the secret files root's and mode 600, the
+  worker off, and Supabase's host resolving to IPv6 only. Memory 787 of 1,976 MB with the worker
+  off (the API 246 MB, Caddy 16 MB). **Round trips, measured by `roundtrip_probe` inside the API's
+  container, 3 runs:** Postgres `SELECT 1` on a warm connection, medians 2.3 to 3.1 ms (p95 at most
+  3.4); Redis `PING` 3.2 to 3.7 ms (p95 at most 3.9); opening a connection 97 to 109 ms. **Against
+  this entry's estimate of about 1 ms a round trip, 2 to 3 times higher**, unmeasured cause, likely
+  the hop between Google's Mumbai and Amazon's, where Supabase and Upstash run; against Fly's 165.6
+  ms and 2,865 ms to connect, 55 to 70 times lower. From the founder's Mac, 10 requests each, a new
+  connection every time: `/readyz` minus `/healthz` is 0 ms on the VM (medians 199 and 199 ms)
+  against 502 ms on Fly (824 and 322 ms; P-53 had 535). `/me` itself not timed: it needs a session.
 - [ ] P-50 · Cut the round trips every request pays. **Before Sprint 6 adds routes on
   `current_user`; worth doing wherever the API runs.** Worst case without it: the fixed cost in P-49
   multiplies with every route that inherits it. Measured on 3 October 2026 (P-49's method):
@@ -7105,7 +7120,7 @@ The number comes from the session's own block, given in its brief, from P-100 up
   Fly's empty `velora-api`, or to a VM whose secrets are half set, and fails on release day.
   `deploy-production.yml` deploys the exact image staging ran (its digest, copied from staging's
   registry, which production's deploy account may read, D-1022) to `velora-api-prod` on a `v*` tag
-  only (D-075), and its smoke checks `api.veloraapp.co.in` with `EXPECT_API_SERVER=Caddy`.
+  only (D-075), and its smoke checks `api.veloraapp.co.in` with `EXPECT_API_VIA=Caddy`.
   Before it: production's `DATABASE_URL` (the `velora_api` role on `velora-prod` first), `REDIS_URL`,
   Razorpay's three and Sightengine's two into Secret Manager by `scripts/gcp-secrets production`,
   and the Apple Passwords copies; the `production` environment's three GCP variables; the
@@ -7145,3 +7160,20 @@ The number comes from the session's own block, given in its brief, from P-100 up
   `scripts/staging-smoke` should check what P-30 meant now that the panel exists: the page shows
   nothing but its gate to a visitor without a moderator's session. Found by Claude building P-49,
   18 October 2026; outside P-49, so not changed there.
+  **Built, 18 October 2026 (the founder's approval of the plan):** `/admin` must answer 200 with
+  none of the panel's own words outside its scripts, `noindex, nofollow` and `no-store`;
+  `robots.txt` must not name it; and the real protection, `GET /v1/admin/metrics` without a token,
+  must be a 401 `AUTH_REQUIRED` with no data (D-024). With it, P-49's own fix: the VM's check
+  reads `Via: 1.1 Caddy` (`EXPECT_API_VIA`), since Caddy passes the API's `Server: uvicorn` through,
+  and a literal carriage return P-49 left in the script is the text `'\r'` again.
+  `scripts/staging-smoke-test` runs it against a stub broken one way at a time; CI runs it. Both
+  paths passed against live staging before landing. **Ticks when** `main`'s staging deploy is
+  green, both smoke jobs included.
+- [ ] P-926 · Switch LLMNR off on the VMs. **Before real users; not urgent.** Worst case: if the
+  firewall ever opened UDP or TCP 5355 by mistake, the VM would answer link-local name queries
+  from the internet. Read on the staging VM, 18 October 2026: `systemd-resolved` listens on
+  `0.0.0.0:5355` and `[::]:5355`; the firewall blocks it (only 80 and 443 answered from outside).
+  `infra/gce/startup.sh` writes `LLMNR=no` (and `MulticastDNS=no`) into
+  `/etc/systemd/resolved.conf.d/`, restarts `systemd-resolved`, and a check from the VM shows
+  nothing on 5355; the metadata set again and the VMs rebooted, on the founder's word. Filed by
+  Claude building P-49, at the founder's direction.

@@ -443,7 +443,8 @@ Fly's): `image` builds the commit's image, pushes it, and reads its digest back 
 (names and counts printed, never a value), checks the worker's settings in a one-off container,
 replaces the API and waits for its healthcheck (`/readyz`), putting the previous release back if it
 fails, then restarts Caddy only if its hosts or config changed. `vm-smoke` runs
-`scripts/staging-smoke` against `STAGING_VM_API_URL` with `EXPECT_API_SERVER=Caddy`, the web still
+`scripts/staging-smoke` against `STAGING_VM_API_URL` with `EXPECT_API_VIA=Caddy` (Caddy adds `Via:
+1.1 Caddy` and passes the API's own `Server` header through), the web still
 calling `api.staging`. The jobs sign in by Workload Identity Federation: no key exists (D-1022).
 GitHub's `staging` environment holds four variables, none secret: `GCP_PROJECT_ID`,
 `GCP_WIF_PROVIDER`, `GCP_DEPLOY_SA` and `STAGING_VM_API_URL`.
@@ -457,7 +458,8 @@ VM and the next deploy (or `sudo docker compose -p velora --project-directory /o
 and remove the file first, then scale Fly's back to 1.
 
 **Getting in** (the founder, or Claude with his yes; your account needs no key of your own, OS
-Login makes one):
+Login makes one; the founder's worked at the first try on 18 October 2026, and a newly made key
+can be refused once while it propagates):
 
 ```
 gcloud compute ssh velora-api-staging --project=velora-ic-staging --zone=asia-south1-a --tunnel-through-iap
