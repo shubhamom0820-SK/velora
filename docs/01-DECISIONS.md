@@ -6324,6 +6324,17 @@ recommendation, relayed):** completes D-093's "repeated flags escalate to a huma
 real minor gets two more tries); an SSH tool now and the push later (a list nobody runs is no
 escalation); email (a new provider). Built by P-72.
 
+**The founder's answers to P-72's plan (18 October 2026, on the advisor's recommendation,
+relayed):**
+- **An underage ban is permanent.** `banned_identities`' trigger lifts only a plain `ban` row, so
+  an `underage` row is never lifted; where a plain `ban` already stands for the number, it keeps
+  its reason (`ban_phone_hash` adds nothing over a standing row). Admin only, a reason required,
+  and its confirm step says plainly that it can't be undone.
+- **Ban, and keep the account:** status `banned`, signed out everywhere, the row kept, as D-093's
+  "the record stays". Not D-072's deletion, which is sign-up's rule for a birth date under 18.
+- **Until P-755 turns push on,** the in-app row in each admin's `/notifications` and the
+  `/admin` list are the escalation; the same notification is pushed once push is on (D-994).
+
 ### D-992 · The badge vouches for the main photo only; P-162 closed by D-910 — Locked
 **The decision (the founder, choosing P-162's option A, 18 October 2026, on the advisor's
 recommendation, relayed):** P-162 is answered by D-910: the badge shows when `is_verified` is true
@@ -6348,3 +6359,38 @@ What happens to her open Threads while she is back in onboarding is checked in P
 
 **Rejected:** staying live without the badge (someone else's face photo stays in discovery); a
 freeze (she couldn't retake the selfie until an admin lifts it). Built by P-163.
+
+**The founder's answers to P-163's plan (18 October 2026, on the advisor's recommendation,
+relayed):**
+- **Her Threads are left as they are** (D-995).
+- **A man sent back may skip straight to `done`:** his selfie is optional (D-008), so for him the
+  undo removes the badge and nothing more. His welcome Velas are once per number and aren't paid
+  again.
+- **The referral reward for the selfie stays paid.** The ledger is append-only (rule 5); a
+  clawback would be a decision of its own.
+
+### D-994 · Admins are told by a notification kind no setting governs — Locked
+**The decision (P-72's plan, approved by the founder, 18 October 2026, on the advisor's
+recommendation, relayed):** a notification for the admins goes to every user whose role is
+`admin` and whose status is `active`, through `notifications.service` like any other, under a kind
+of its own that no user-facing switch in `/you/notifications` governs: an admin can't turn off
+being told. P-72's `minor_flags` is the first such kind, opening `/admin/users/{id}`; P-820's
+freeze notice is to be the second, on the same path. Its push, once P-755 turns push on, carries
+the kind and the person's id only (`PUSHED_FIELDS`): no name, score or image, since D-857's
+services sit outside India. Until then it is the in-app row.
+
+**Rejected:** governing it by an existing switch (an admin who turned off messages would miss a
+minor's flags); an admin-only table beside `notifications` (a second list to read, and a second
+sender).
+
+### D-995 · Threads stay as they are while a person is back at the selfie step — Locked
+**The decision (P-163's plan, the founder, 18 October 2026, on the advisor's recommendation,
+relayed):** when D-993's undo sends a person back to the `selfie` step, nothing about their Threads
+changes. While back, every thread, message, socket and notification route refuses them
+(`ONBOARDING_INCOMPLETE`); the undo closes their open sockets so none keeps delivering. The other
+person still sees the Thread and may still send, and the badge leaves its card. The hour runs on,
+so a Thread can expire; once `done` again a woman replies on an expired Thread as D-097 lets her,
+and a Knot is permanent and untouched.
+
+**Rejected:** refusing his sends to someone not `done` (a new error and changes across threads and
+messages, for a state a real woman leaves within minutes).

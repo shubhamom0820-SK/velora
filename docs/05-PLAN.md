@@ -5262,7 +5262,9 @@ The number comes from the session's own block, given in its brief, from P-100 up
   Found planning T-4.4.
   **Decided (18 October 2026, D-991):** two flags in 30 days; a push to every active admin, and
   the flagged list in `/admin` if the panel carries it cheaply, no SSH tool; leave, freeze or ban
-  as underage, each in `audit_log`, none automatic. Not built yet.
+  as underage, each in `audit_log`, none automatic. Not built yet. The plan's answers (18 October:
+  a permanent underage ban that keeps the account, the in-app row until P-755) are in D-991 and
+  D-994; built next, before P-163.
 - [x] P-73 · Find out what the two unidentified accounts on staging hold. **Before real users** (on
   T-9.15's Needs line, and REL-1's if its tag includes T-3.14). Two accounts, from phone numbers the
   founder hasn't identified, signed in to staging at 21:05 and 21:11 UTC on 3 October 2026 and were
@@ -5820,7 +5822,9 @@ The number comes from the session's own block, given in its brief, from P-100 up
   panel; what happens to a woman's live profile then is the founder's call (T-4.8). Found in
   T-4.5's plan.
   **Decided (18 October 2026, D-993):** the undo sends the person back to the `selfie` step;
-  open Threads while she is back are checked in the plan. Not built yet.
+  open Threads while she is back are checked in the plan. Not built yet. The plan's answers (18
+  October: Threads as they are, D-995; a man may skip back to `done`; the referral reward stays
+  paid) are in D-993; built after P-72.
 - [ ] P-164 · Widen `verifications.similarity` to hold a cosine exactly (`numeric(6,5)`), if
   anything ever wants it there. **No deadline.** Worst case if never done: none; the exact numbers
   live in the selfie's `moderation` record (D-263), and the column stays empty. A migration, so P-65
