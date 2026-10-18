@@ -40,7 +40,10 @@ any commit whose CI passed):
    here doesn't undo it, it says the database isn't where the repo thinks.
 3. **api** runs `flyctl deploy`. Fly builds `api/Dockerfile` with `api/` as the context, and only
    routes to the new machine once `/readyz` passes.
-4. **worker** (T-4.4) runs `flyctl deploy` with `infra/fly.worker.toml`, after the API, with a
+4. **worker**: **no longer deployed from here (P-49's cutover, 18 October 2026).** The worker
+   runs on the Mumbai VM ("The Mumbai VM", below); Fly's app is scaled to 0 and kept until P-920,
+   and a deploy of it could launch a machine again, a second worker (D-091). What follows is how
+   it ran until then: `flyctl deploy` with `infra/fly.worker.toml`, after the API, with a
    token for the worker's app only (`FLY_WORKER_API_TOKEN`). Its release command,
    `python -m app.workers --check`, runs on a one-off machine with the app's settings and secrets
    first: a missing key stops the deploy with the setting's name. It runs beside **web**; a red
@@ -65,7 +68,7 @@ The pool is per process, and the image runs **2 uvicorn workers**, each with its
 |---|---|---|---|
 | API | `velora_api` | direct connection, IPv6 (Fly has it) | 2 workers × (`DB_POOL_SIZE` 5 + `DB_MAX_OVERFLOW` 2) = **14** |
 | Migrations | the owner (`postgres`) | session pooler, IPv4 (GitHub's runners have no IPv6) | 1, during a deploy |
-| Worker | `velora_api` | direct, IPv6 | 1 process × (`DB_POOL_SIZE` 2 + `DB_MAX_OVERFLOW` 1) = **3** (T-4.4, `infra/fly.worker.toml`) |
+| Worker | `velora_api` | direct, IPv6 | 1 process × (`DB_POOL_SIZE` 2 + `DB_MAX_OVERFLOW` 1) = **3** (T-4.4; on the VM since P-49's cutover, `infra/gce/compose.yml`; never Fly's and the VM's at once) |
 
 **17 at most, under the role's 20.** Each app is **one machine**: `deploy.yml` passes `--ha=false`
 to both, because Fly's default of two would double each sum (and run the worker's poll twice,
@@ -430,7 +433,7 @@ for each photo, by the photo's id, never a key.
 | On it | Docker Compose (`infra/gce/compose.yml`): `api`, `worker` (off until the swap), `caddy` | Caddy serves the hosts in `infra/gce/staging.edge.env` |
 | Images | Artifact Registry, `asia-south1` | `asia-south1-docker.pkg.dev/velora-ic-staging/velora/api`, by digest |
 | Secrets | Secret Manager, stored in `asia-south1` only | one per setting, the names in `infra/gce/secrets.api` and `secrets.worker` |
-| Provisional host | Cloudflare, DNS only | `A api-mumbai.staging → 34.47.244.114` |
+| Hosts | Cloudflare, DNS only | `A api-mumbai.staging → 34.47.244.114`; and `api.staging`, an `A` to the same address once the founder switches it (the cutover, `out/p-49-cutover.md`); until then Fly's CNAME |
 
 **What is open on it:** TCP 80 and 443 from anywhere (Caddy), and 22 only from Google's IAP range
 (`35.235.240.0/20`). The API publishes no port: only Caddy, on the Compose network, reaches it.
@@ -466,6 +469,8 @@ gcloud compute ssh velora-api-staging --project=velora-ic-staging --zone=asia-so
 sudo docker compose -p velora ps                       # what runs, and its health
 sudo docker compose -p velora logs --tail 100 api      # the API's log (worker, caddy likewise)
 sudo docker compose -p velora exec -T api python -m app.tools.roundtrip_probe
+sudo docker compose -p velora exec -T api python -m app.tools.socket_probe \
+  --user <a test account's id> --url wss://api.staging.veloraapp.co.in   # a real socket, through Caddy
 ```
 
 The tools that run inside the API's machine on Fly (`selfie_review`, `unfreeze`, `storage_probe`,

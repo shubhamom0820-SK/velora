@@ -2,12 +2,14 @@
 # second check after /done's gate (D-044) — and then checks staging itself.
 #
 #   gate → migrate (as the owner, from here) → api (Fly) → web (Vercel) → smoke
-#                                                       ↘ worker (Fly, T-4.4)
 #        ↘ image (Mumbai registry) → vm (Mumbai VM, after migrate) → vm-smoke (after web)
 #
-# The Mumbai VM (P-49, D-1020, D-1022) runs beside Fly until the founder retires
-# Fly (P-920): it serves api-mumbai.staging only, with its worker off, so Fly's
-# API and worker still serve staging. Its jobs sign in to Google Cloud without a
+# The Mumbai VM (P-49, D-1020, D-1022) takes staging over at the cutover
+# (out/p-49-cutover.md): its Caddy serves api.staging as well as api-mumbai.staging,
+# and its worker runs once /etc/velora/worker-on exists there. Fly's worker is no
+# longer deployed: scaled to 0 at the swap, a deploy here could launch it again,
+# a second worker (D-091). Fly's API stays deployed, the warm rollback, until P-920
+# retires Fly. The VM's jobs sign in to Google Cloud without a
 # key, by Workload Identity Federation: GitHub's token for this repo's `staging`
 # environment, exchanged for the deploy account (infra/STAGING.md).
 #
@@ -133,33 +135,6 @@ jobs:
           FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
         run: flyctl deploy api --config "$GITHUB_WORKSPACE/infra/fly.api.toml" --remote-only --ha=false
 
-  # The ARQ worker (T-4.4, D-095): the API's image, run as the worker, its own
-  # Fly app. After the API, so a job the new API queues meets a worker that
-  # knows it. Its token deploys this app only, as the API's deploys only the
-  # API's. The release command checks its settings before any machine changes.
-  worker:
-    name: worker — Fly
-    needs: [gate, api]
-    runs-on: ubuntu-24.04
-    timeout-minutes: 20
-    environment: staging
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          ref: ${{ needs.gate.outputs.sha }}
-          persist-credentials: false
-
-      - uses: superfly/flyctl-actions/setup-flyctl@fc53c09e1bc3be6f54706524e3b82c4f462f77be # v1.5
-        with:
-          version: ${{ env.FLYCTL_VERSION }}
-
-      # --ha=false: one machine, which the connection budget assumes
-      # (infra/STAGING.md); two would also run every job's poll twice (D-091).
-      - name: flyctl deploy
-        env:
-          FLY_API_TOKEN: ${{ secrets.FLY_WORKER_API_TOKEN }}
-        run: flyctl deploy api --config "$GITHUB_WORKSPACE/infra/fly.worker.toml" --remote-only --ha=false
-
   # The image the Mumbai VM runs (P-49): built here, pushed to staging's registry
   # in Mumbai, and named onward by its digest, read back from the registry
   # itself, never by its tag.
@@ -214,11 +189,12 @@ jobs:
 
   # The Mumbai VM (P-49): the release (infra/gce at this commit) copied over IAP,
   # then infra/gce/deploy as root: secrets from Secret Manager, the worker's
-  # settings checked, the API replaced and healthy or put back, Caddy for
-  # api-mumbai.staging. The VM's worker stays off (no /etc/velora/worker-on),
-  # so Fly's worker is still the only one (D-091). After migrate, as Fly's is.
+  # settings checked, the API replaced and healthy or put back, Caddy for the
+  # hosts in staging.edge.env. The VM's worker runs only where
+  # /etc/velora/worker-on exists (the swap writes it), never beside Fly's
+  # (D-091). After migrate, as Fly's API is.
   vm:
-    name: vm — staging's Mumbai VM (api-mumbai, worker off)
+    name: vm — staging's Mumbai VM
     needs: [gate, migrate, image]
     runs-on: ubuntu-24.04
     timeout-minutes: 20

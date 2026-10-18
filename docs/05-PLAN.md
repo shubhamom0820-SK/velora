@@ -4671,6 +4671,13 @@ The number comes from the session's own block, given in its brief, from P-100 up
   ms and 2,865 ms to connect, 55 to 70 times lower. From the founder's Mac, 10 requests each, a new
   connection every time: `/readyz` minus `/healthz` is 0 ms on the VM (medians 199 and 199 ms)
   against 502 ms on Fly (824 and 322 ms; P-53 had 535). `/me` itself not timed: it needs a session.
+  **The cutover, as the founder approved it (`out/p-49-cutover.md`, read by the advisor first):**
+  a commit that makes Caddy serve `api.staging` too, stops deploying Fly's worker (once scaled to
+  0, a deploy could launch it again), and adds `socket_probe` (a real WebSocket through the
+  public host, its ticket never leaving the API's container); then the worker swap, Fly's to 0
+  and the VM's started in one chain, memory read before anything else is tested (stop above 85%
+  of 1,976 MB); then `api.staging`'s record, by the founder's hand, and the checks: Caddy's
+  certificate, the smoke, a socket's `pong`, then the founder's phone test.
 - [ ] P-50 · Cut the round trips every request pays. **Before Sprint 6 adds routes on
   `current_user`; worth doing wherever the API runs.** Worst case without it: the fixed cost in P-49
   multiplies with every route that inherits it. Measured on 3 October 2026 (P-49's method):
@@ -7152,7 +7159,7 @@ The number comes from the session's own block, given in its brief, from P-100 up
   settings would stop every session's shared Postgres, Redis and S3 (`restart=no`), so it wasn't
   done. If a hand push is ever needed, from somewhere other than Docker Desktop. Filed by Claude
   building P-49, 18 October 2026.
-- [ ] P-925 · Staging's smoke check expects `/admin` to be a 404, and T-9.5 made it a page.
+- [x] P-925 · Staging's smoke check expects `/admin` to be a 404, and T-9.5 made it a page.
   **Now: every staging deploy since `cc04268` is red.** Worst case: production's release gate
   refuses every release, since it needs a green staging deploy of the commit (D-075), and a real
   failure in the smoke check hides behind the known one. Run 38904036696 (16 October 2026): every
@@ -7169,6 +7176,8 @@ The number comes from the session's own block, given in its brief, from P-100 up
   `scripts/staging-smoke-test` runs it against a stub broken one way at a time; CI runs it. Both
   paths passed against live staging before landing. **Ticks when** `main`'s staging deploy is
   green, both smoke jobs included.
+  **Done, 18 October 2026:** landed as `cfc8419`; `main`'s staging deploy, run 39121926134, green
+  in every job, `smoke` and `vm-smoke` included: the first green staging deploy since `cc04268`.
 - [ ] P-926 · Switch LLMNR off on the VMs. **Before real users; not urgent.** Worst case: if the
   firewall ever opened UDP or TCP 5355 by mistake, the VM would answer link-local name queries
   from the internet. Read on the staging VM, 18 October 2026: `systemd-resolved` listens on

@@ -54,7 +54,8 @@ velora/
     app/tools/          checks run by hand inside a deployed machine (storage_probe, T-4.1;
                         sightengine_shape, T-4.4; selfie_review, the founder's, T-4.5, D-264;
                         unfreeze, the founder's, lifting any freeze, T-9.2, D-906; roundtrip_probe,
-                        Postgres and Redis round trips from where the API runs, P-49)
+                        Postgres and Redis round trips from where the API runs, and
+                        socket_probe, a real WebSocket through the public host, P-49)
     alembic/            migrations
     seed/               make seed: dev data, local stack only, never in the image (D-064)
     bench/              benchmarks run by hand, never in the image nor `make test`: liveness/,
