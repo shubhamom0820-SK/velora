@@ -5260,7 +5260,10 @@ The number comes from the session's own block, given in its brief, from P-100 up
   2026.
 
   Found planning T-4.4.
-- [ ] P-73 · Find out what the two unidentified accounts on staging hold. **Before real users** (on
+  **Decided (18 October 2026, D-991):** two flags in 30 days; a push to every active admin, and
+  the flagged list in `/admin` if the panel carries it cheaply, no SSH tool; leave, freeze or ban
+  as underage, each in `audit_log`, none automatic. Not built yet.
+- [x] P-73 · Find out what the two unidentified accounts on staging hold. **Before real users** (on
   T-9.15's Needs line, and REL-1's if its tag includes T-3.14). Two accounts, from phone numbers the
   founder hasn't identified, signed in to staging at 21:05 and 21:11 UTC on 3 October 2026 and were
   still signed in a day later (the founder's reading). Staging shares Firebase's user pool with
@@ -5279,6 +5282,17 @@ The number comes from the session's own block, given in its brief, from P-100 up
   direction, 4 October 2026.
 
   Found preparing T-4.6.
+  **Answered (18 October 2026): the founder's own test accounts.** The query ran by way (a), the
+  founder approving it (16 October, relayed), on the Mumbai VM's API container over IAP SSH, the
+  script fed on stdin (`out/p73_query.py`, SHA-256 `3a3109…8e33`): `transaction_read_only = on`,
+  rolled back, labels, times, states, set or empty and counts only. Two accounts in 21:00 to 21:15
+  UTC: A, made 21:05:48, stopped at `selfie`, profile fields set, one approved public photo, last
+  seen 5 October; B, made 21:11:52, stopped at `seeking`, nothing beyond gender and birth date. Both
+  `active`, unverified, signed in. Neither is shown to anyone: every way to find a person needs
+  `done` (`discovery.repository.visible_to` for the feed, the profile, both searches, likes and
+  swipes; the share page also `public_link`, off for A). The founder: "A and B are my own test
+  accounts from my staging sign-in test on the night of 3 October (02:35 and 02:41 IST)", relayed
+  18 October 2026; both stay as they are on staging. P-66 still owns the shared user pool.
 - [ ] P-74 · Tell a person whose photo was rejected after they left the photos step. **Before the
   first real user.** Worst case: a woman whose only public photo is rejected while she is on the
   next screen is past the photos step with no live photo, so nobody sees her profile, and nothing
@@ -5782,7 +5796,7 @@ The number comes from the session's own block, given in its brief, from P-100 up
   selfie, when it is approved or when the selfie is decided, and the badge shows only while at
   least one matched; a photo that doesn't match isn't rejected and doesn't count. A cleared
   `is_verified` is rejected; undoing a decision stays P-163's.
-- [ ] P-162 · Decide whether one matching photo may carry a whole profile. **Before real users**
+- [x] P-162 · Decide whether one matching photo may carry a whole profile. **Before real users**
   (on T-9.15's Needs line, and REL-1's if its tag includes T-4.5). Worst
   case: a man verifies with a selfie of himself against one photo of himself among five of a
   woman's; the profile shows her, and the badge says the selfie matches. T-4.5 counts the best
@@ -5795,6 +5809,9 @@ The number comes from the session's own block, given in its brief, from P-100 up
   badge's side: a profile of someone else's photos with one of the man's own among them shows the
   badge on that one match, since D-393 counts at least one. D-264's `mixed` flag keeps marking
   such profiles; the founder decides as before.
+  **Closed (18 October 2026, D-992): answered by D-910.** Since 9 October the badge follows the
+  main photo alone, this item's first option; the other photos stay unchecked, and
+  `selfie_review` keeps marking `mixed` profiles for the founder to look at. Nothing to build.
 - [ ] P-163 · Let the founder undo a decision his review finds wrong. **Before real users** (on
   T-9.15's Needs line, and REL-1's if its tag includes T-4.5). Worst case: he records "different" for a woman's approved
   selfie, and she stays live with the badge until someone edits production's database by hand.
@@ -5802,6 +5819,8 @@ The number comes from the session's own block, given in its brief, from P-100 up
   verification, clears `is_verified` and writes `audit_log`, through `selfie_review` or T-9.5's
   panel; what happens to a woman's live profile then is the founder's call (T-4.8). Found in
   T-4.5's plan.
+  **Decided (18 October 2026, D-993):** the undo sends the person back to the `selfie` step;
+  open Threads while she is back are checked in the plan. Not built yet.
 - [ ] P-164 · Widen `verifications.similarity` to hold a cosine exactly (`numeric(6,5)`), if
   anything ever wants it there. **No deadline.** Worst case if never done: none; the exact numbers
   live in the selfie's `moderation` record (D-263), and the column stays empty. A migration, so P-65

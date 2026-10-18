@@ -6306,3 +6306,45 @@ October 2026). Outside it, our projects' audit logs aren't copied there. Its cle
 **The billing account holds at most 5 linked projects** (Google's quota, met on 17 October 2026:
 "Cloud billing quota exceeded"). To link these two, the founder unlinked two of the wizard's
 projects. Any new project needs a free slot first, or a quota increase from Google.
+
+### D-991 · Two possible-minor flags in 30 days go to the admins, who decide — Locked
+**The decision (the founder, choosing among P-72's options, 18 October 2026, on the advisor's
+recommendation, relayed):** completes D-093's "repeated flags escalate to a human".
+- **Repeated means two** `possible_minor_photo_score` events on one person within 30 days. One is
+  a photo (sunglasses, a young face); two from different photos is a pattern worth a look.
+- **Every active admin gets a web push** when a person reaches it, and the flagged people are
+  listed in `/admin` (T-9.5) if the panel carries it cheaply. No SSH tool. The push and the list
+  carry no image (D-093 deleted it): who, how many flags, when, and the scores.
+- **Three actions, each an `audit_log` row naming the admin and a reason, none automatic:** leave
+  (judged an adult); freeze (reversible by D-906's unfreeze); ban as underage (D-072's
+  `banned_identities`, reason `underage`). A model's score never takes any of them by itself;
+  D-093's "a signal, not proof" stands, and T-9.2's scoring of a flag is unchanged.
+
+**Rejected:** every flag to the admins (each young-looking adult a review); three flags ever (a
+real minor gets two more tries); an SSH tool now and the push later (a list nobody runs is no
+escalation); email (a new provider). Built by P-72.
+
+### D-992 · The badge vouches for the main photo only; P-162 closed by D-910 — Locked
+**The decision (the founder, choosing P-162's option A, 18 October 2026, on the advisor's
+recommendation, relayed):** P-162 is answered by D-910: the badge shows when `is_verified` is true
+and the main photo's face matched the selfie. The other photos are not required to match, and a
+profile whose other faces scored below the threshold keeps its badge; `selfie_review` keeps marking
+it `mixed` (D-264) for the founder to look at.
+
+**Rejected:** no badge while `mixed` (a real woman's sunglasses or side-on photo would cost her the
+tick, at a false-reject rate nobody has measured, P-160); hiding the photos that don't match (her
+photos lost at that same unknown rate).
+
+### D-993 · A selfie match the founder undoes sends the person back to the selfie step — Locked
+**The decision (the founder, choosing P-163's option b, 18 October 2026, on the advisor's
+recommendation, relayed):** when his review finds a selfie match wrong, an admin action undoes it:
+the verification is rejected, `is_verified` cleared, the old selfie's `selfie_match` on the
+person's photos cleared (`badge_of` doesn't check which verification a match came from, so a new
+one could briefly show the badge on the old match), one `audit_log` row naming the admin and a
+reason. The person goes back to the `selfie` onboarding step and is asked to take it again: a real
+woman fixes it in a minute, and someone who isn't the face photo's person goes no further. Men get
+the same undo; a man's selfie is optional (D-008), so how he leaves the step is his plan's to say.
+What happens to her open Threads while she is back in onboarding is checked in P-163's plan.
+
+**Rejected:** staying live without the badge (someone else's face photo stays in discovery); a
+freeze (she couldn't retake the selfie until an admin lifts it). Built by P-163.
