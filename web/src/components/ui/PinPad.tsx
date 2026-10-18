@@ -89,9 +89,10 @@ export function PinPad({
         ))}
       </div>
       <div className="grid grid-cols-3 gap-3.5">
-        {KEYS.map((key, index) =>
+        {KEYS.map((key) =>
           key === "" ? (
-            <span key={index} />
+            // Its own key: by its index it was 9, the digit 9's (P-222).
+            <span key="blank" />
           ) : key === "delete" ? (
             <button
               key={key}

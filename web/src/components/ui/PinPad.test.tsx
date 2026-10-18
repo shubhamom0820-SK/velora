@@ -75,4 +75,25 @@ describe("PinPad", () => {
 
     expect(onChange).not.toHaveBeenCalled();
   });
+
+  // P-222: the blank cell was keyed by its index, 9, the digit 9's key, and
+  // React's words for that are children "may be duplicated and/or omitted".
+  it("keys every cell apart, so each digit stays once through a PIN check's re-render", () => {
+    const errors = vi.spyOn(console, "error").mockImplementation(() => {});
+    const props = { value: "", onChange: () => {}, onComplete: () => {} };
+    const { rerender } = render(<PinPad {...props} />);
+
+    // The keys disable while a PIN is checked, and come back.
+    rerender(<PinPad {...props} disabled />);
+    rerender(<PinPad {...props} />);
+
+    const keyWarnings = errors.mock.calls.filter((args) =>
+      args.some((arg) => String(arg).includes("same key")),
+    );
+    errors.mockRestore();
+    expect(keyWarnings).toEqual([]);
+    for (const digit of "0123456789") {
+      expect(screen.getAllByRole("button", { name: digit })).toHaveLength(1);
+    }
+  });
 });

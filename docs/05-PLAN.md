@@ -5983,7 +5983,7 @@ The number comes from the session's own block, given in its brief, from P-100 up
   reading it fails `tsc`. P-170 is the API's side of the same field. Filed from T-5.5's block, at
   the direction of the advisor directing T-5.5 (Claude, in a separate chat), relayed by the
   founder, 5 October 2026, with this trigger rather than no deadline.
-- [ ] P-222 · Give `PinPad`'s blank cell a key of its own. **Before REL-1**, where real people
+- [x] P-222 · Give `PinPad`'s blank cell a key of its own. **Before REL-1**, where real people
   type PINs. Worst case: React reconciles the pad wrongly on a re-render (the keys disable while
   a PIN is checked) and the 9 goes missing, or shows twice, on the lock screen or the PIN step,
   so someone whose PIN has a 9 can't type it, at the lock or while choosing it. React's own words
@@ -5994,6 +5994,8 @@ The number comes from the session's own block, given in its brief, from P-100 up
   on the lock screen. Not seen: any misdrawn pad; all ten digits showed and the PIN unlocked.
   Fix: a key no digit can have (`"blank"`), and a test that the pad renders with no React key
   warning. Found in T-5.5's session; filed from its block (P-220 to P-229).
+  **Done 18 October 2026:** `key="blank"`; `PinPad.test.tsx` re-renders the pad disabled and back,
+  as a PIN check does, and fails on any "same key" warning (three with the index key, seen red).
 - [x] P-210 · Keep `profiles.completeness` current after onboarding finishes. **Before T-6.2 ranks
   by it** (on T-6.2's Needs line). Worst case: discovery ranks people by a number that no longer
   describes their profile, and the ranking D-030 promises to explain in plain words doesn't do what
