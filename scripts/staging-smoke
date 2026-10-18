@@ -5,14 +5,14 @@
 #
 #   scripts/staging-smoke API_URL WEB_URL
 #
-# Two optional settings, both unset for production and for staging's Fly path,
-# which then run exactly as before (P-49):
+# Two optional settings, both unset for production, which then runs exactly as
+# before (P-49):
 #   EXPECT_API_VIA     the API's answers must carry a Via header naming this, so the
 #                      check proves which machine answered: Caddy on the VMs adds
 #                      "Via: 1.1 Caddy" and passes the API's own Server header through.
 #   CALLED_API         the API the web must call, when the API checked here isn't
-#                      it: the Mumbai VM is checked at api-mumbai.staging while
-#                      the staging web still calls api.staging (Fly).
+#                      it: the Mumbai VM is checked at api-mumbai.staging as well,
+#                      while the staging web calls api.staging (the same VM).
 #
 # Bodies are checked as well as status codes: a 404 that still carries the page
 # or the schema is a leak (T-1.19's lesson). Exits 1 if any check fails, after

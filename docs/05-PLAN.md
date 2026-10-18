@@ -7198,6 +7198,24 @@ The number comes from the session's own block, given in its brief, from P-100 up
   `FLY_API_TOKEN` and `FLY_WORKER_API_TOKEN` from GitHub's `staging` environment and destroys
   `velora-api-staging`, `velora-worker-staging` and the empty `velora-api` on Fly. Filed by Claude
   building P-49, 18 October 2026.
+  **Two commits, not one** (the founder, 18 October 2026, on the advisor's recommendation, relayed;
+  built by Claude in P-49's block):
+  1. **Now** (T-9.12 waits on it): `deploy.yml` deploys nothing to Fly. Its `api — Fly` job goes;
+     `web` waits for `vm`, and `smoke` for `vm` and `web`, with `EXPECT_API_VIA=Caddy`, so
+     `api.staging` is proved to be the VM's Caddy and a record pointed back at Fly fails it.
+     `infra/STAGING.md`, `CLAUDE.md`'s hosting line and `scripts/staging-smoke`'s comment say so.
+     Fly's three apps stay up, untouched, the rollback: degraded, since Fly's API keeps the last
+     image Fly built (`infra/STAGING.md`, "Rollback before P-920"). **Done when** `main`'s staging
+     deploy of it is green with no Fly job, `web` started after `vm`, and `smoke` logging `API
+     answered through Caddy` at `api.staging`; and Fly's apps, read without changing them, as they
+     were (`velora-api-staging` with its machine, `velora-worker-staging` at 0).
+  2. **On the founder's word, after a day of staging on Mumbai, and only once P-921's production
+     path exists** (asked before it starts): the rest of the list above, `deploy-production.yml`'s
+     Fly path and `Fly-Client-IP` among them. `Fly-Client-IP` waits for it, though D-1021 ties it
+     to Fly's staging deploy, because `deploy-production.yml`'s Fly config still reads it. The Fly
+     apps are destroyed and `FLY_API_TOKEN` removed with Fly's worker app and the token last.
+  **Not counted until commit 2:** Fly's idle API may still hold `velora_api` connections from before
+  the cutover, beside the VM's 17 under the role's 20 (`infra/STAGING.md`'s budget; unmeasured).
 - [ ] P-921 · Production on its Mumbai VM. **Before REL-1.** Worst case: a release tag deploys to
   Fly's empty `velora-api`, or to a VM whose secrets are half set, and fails on release day.
   `deploy-production.yml` deploys the exact image staging ran (its digest, copied from staging's
@@ -7211,6 +7229,8 @@ The number comes from the session's own block, given in its brief, from P-100 up
   servers in Singapore" changed to Mumbai **in the same change** that moves production's path (the
   founder, 17 October 2026), with `infra/PRODUCTION.md` rewritten. Filed by Claude building P-49,
   18 October 2026.
+  **Production's Fly path must be replaced before P-920's second commit removes it** (the founder,
+  18 October 2026); the release gate also refuses today without Vercel Pro and Supabase Pro.
 - [ ] P-922 · Nobody is told when a VM is down. **Before real users.** Worst case: production's
   only VM stops, or Caddy can't renew its certificate, and the first to notice is a user. Fly
   didn't alert either. An uptime check on `/readyz` from outside (Google Cloud Monitoring's, or

@@ -1,17 +1,17 @@
 # Staging deploy (T-1.22, D-046). Deploys only a commit whose CI passed — a
 # second check after /done's gate (D-044) — and then checks staging itself.
 #
-#   gate → migrate (as the owner, from here) → api (Fly) → web (Vercel) → smoke
-#        ↘ image (Mumbai registry) → vm (Mumbai VM, after migrate) → vm-smoke (after web)
+#   gate → migrate (as the owner, from here) ─┐
+#        ↘ image (Mumbai registry) ───────────┴→ vm (Mumbai VM) → web (Vercel) → smoke, vm-smoke
 #
-# The Mumbai VM (P-49, D-1020, D-1022) takes staging over at the cutover
-# (out/p-49-cutover.md): its Caddy serves api.staging as well as api-mumbai.staging,
-# and its worker runs once /etc/velora/worker-on exists there. Fly's worker is no
-# longer deployed: scaled to 0 at the swap, a deploy here could launch it again,
-# a second worker (D-091). Fly's API stays deployed, the warm rollback, until P-920
-# retires Fly. The VM's jobs sign in to Google Cloud without a
-# key, by Workload Identity Federation: GitHub's token for this repo's `staging`
-# environment, exchanged for the deploy account (infra/STAGING.md).
+# Staging runs on the Mumbai VM (P-49, D-1020, D-1022): its Caddy serves
+# api.staging and api-mumbai.staging, and its worker runs where
+# /etc/velora/worker-on exists. Nothing deploys to Fly from here any more (P-920):
+# Fly's staging apps stay up, untouched, as the rollback until P-920 destroys
+# them, and a deploy of Fly's worker could launch a second worker (D-091). The
+# VM's jobs sign in to Google Cloud without a key, by Workload Identity
+# Federation: GitHub's token for this repo's `staging` environment, exchanged
+# for the deploy account (infra/STAGING.md).
 #
 # Runs after CI completes on main, for the exact commit CI tested; or by hand
 # for any commit whose CI passed (Actions → Deploy staging → Run workflow).
@@ -53,7 +53,6 @@ env:
   STAGING_VM: velora-api-staging
   UV_VERSION: "0.12.13"
   NODE_VERSION: "24"
-  FLYCTL_VERSION: "0.4.110"
   VERCEL_CLI_VERSION: "61.1.0"
 
 jobs:
@@ -104,36 +103,11 @@ jobs:
           cache-dependency-glob: api/uv.lock
 
       # Supabase's session pooler: IPv4, which GitHub's runners need. The owner's
-      # credentials exist only here, never on Fly beside the app (D-046).
+      # credentials exist only here, never on the VM beside the app (D-046).
       - name: alembic upgrade head
         env:
           MIGRATION_DATABASE_URL: ${{ secrets.STAGING_MIGRATION_DATABASE_URL }}
         run: scripts/migrate-with-url
-
-  api:
-    name: api — Fly
-    needs: [gate, migrate]
-    runs-on: ubuntu-24.04
-    timeout-minutes: 20
-    environment: staging
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          ref: ${{ needs.gate.outputs.sha }}
-          persist-credentials: false
-
-      - uses: superfly/flyctl-actions/setup-flyctl@fc53c09e1bc3be6f54706524e3b82c4f462f77be # v1.5
-        with:
-          version: ${{ env.FLYCTL_VERSION }}
-
-      # api/ is the build context; the config's path is absolute because the
-      # working directory moves to api/. --ha=false: one machine, which is what
-      # the connection budget assumes (infra/STAGING.md). Fly's default of two
-      # would double it past velora_api's limit of 20.
-      - name: flyctl deploy
-        env:
-          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
-        run: flyctl deploy api --config "$GITHUB_WORKSPACE/infra/fly.api.toml" --remote-only --ha=false
 
   # The image the Mumbai VM runs (P-49): built here, pushed to staging's registry
   # in Mumbai, and named onward by its digest, read back from the registry
@@ -191,8 +165,8 @@ jobs:
   # then infra/gce/deploy as root: secrets from Secret Manager, the worker's
   # settings checked, the API replaced and healthy or put back, Caddy for the
   # hosts in staging.edge.env. The VM's worker runs only where
-  # /etc/velora/worker-on exists (the swap writes it), never beside Fly's
-  # (D-091). After migrate, as Fly's API is.
+  # /etc/velora/worker-on exists (the swap wrote it), never beside another
+  # (D-091). After migrate, so the code never runs ahead of its schema.
   vm:
     name: vm — staging's Mumbai VM
     needs: [gate, migrate, image]
@@ -231,7 +205,7 @@ jobs:
             --command "sudo bash /tmp/velora-release-$SHA/deploy staging '$IMAGE' $SHA"
 
   # The VM from the outside, at api-mumbai.staging: Caddy must be what answers,
-  # and the staging web, which still calls api.staging (Fly), must be ours.
+  # and the staging web, which calls api.staging (the same VM), must be ours.
   vm-smoke:
     name: smoke — the Mumbai VM, from the outside
     needs: [gate, vm, web]
@@ -252,9 +226,10 @@ jobs:
           EXPECT_API_VIA: Caddy
         run: scripts/staging-smoke "$VM_API_URL" "$WEB_URL"
 
+  # After the VM, so the web goes live only once the API it calls is current.
   web:
     name: web — Vercel
-    needs: [gate, api]
+    needs: [gate, vm]
     runs-on: ubuntu-24.04
     timeout-minutes: 20
     environment: staging
@@ -298,9 +273,11 @@ jobs:
         # workflows, so staging proves what production runs (D-075).
         run: pnpm dlx "vercel@$VERCEL_CLI_VERSION" deploy --prebuilt --prod --archive=tgz
 
+  # api.staging, the host the web calls: Caddy must be what answers, so a record
+  # pointed back at Fly fails here instead of passing (P-920).
   smoke:
     name: smoke — staging, from the outside
-    needs: [gate, web]
+    needs: [gate, vm, web]
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     environment: staging
@@ -314,4 +291,5 @@ jobs:
         env:
           API_URL: ${{ vars.STAGING_API_URL }}
           WEB_URL: ${{ vars.STAGING_WEB_URL }}
+          EXPECT_API_VIA: Caddy
         run: scripts/staging-smoke "$API_URL" "$WEB_URL"

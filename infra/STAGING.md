@@ -1,10 +1,9 @@
 # Staging
 
-> **Region (D-048, moving: D-1020):** the API runs on Fly in **Singapore**, because Fly retired
-> Mumbai. Postgres and Redis stay in **Mumbai**, so Indian users' data stays in India — and every
-> query crosses Singapore to Mumbai and back, the latency D-048 accepted. **P-49 is moving the API
-> and the worker to a VM in Mumbai** ("The Mumbai VM", below): it runs beside Fly, at
-> `api-mumbai.staging`, until the founder switches `api.staging` to it and Fly is removed (P-920).
+> **Region (D-1020, superseding D-048's):** the API and the worker run on a VM in **Mumbai**, beside
+> Postgres and Redis ("The Mumbai VM", below), since P-49's cutover on 18 October 2026. Fly's
+> Singapore apps are no longer deployed (P-920's first commit): they stay up, untouched, as the
+> rollback, until P-920 destroys them. The Fly sections below describe them until then.
 
 How staging is built, deployed and checked (T-1.22, D-046). Production follows the same shape, on
 a page of its own that names its pieces and says what differs: `infra/PRODUCTION.md` (T-2.6).
@@ -13,8 +12,9 @@ a page of its own that names its pieces and says what differs: `infra/PRODUCTION
 
 | Piece | Where | Name |
 |---|---|---|
-| API | Fly.io, `sin` (Singapore; D-048) | app `velora-api-staging` → `https://api.staging.veloraapp.co.in` |
-| Worker | Fly.io, `sin`, its own app (T-4.4, D-095) | app `velora-worker-staging`: the API's image as the ARQ worker, no HTTP |
+| API | Compute Engine, Mumbai (D-1020; "The Mumbai VM", below) | VM `velora-api-staging`, behind Caddy → `https://api.staging.veloraapp.co.in` (and `api-mumbai.staging`) |
+| Worker | the same VM, its own container (P-49) | `worker`: the API's image as the ARQ worker, no HTTP |
+| Rollback, until P-920 | Fly.io, `sin`, not deployed since P-920's first commit | apps `velora-api-staging` (the last image Fly built) and `velora-worker-staging` (0 machines) |
 | Moderation | Sightengine, plain image API (T-4.4) | the worker's `check.json` calls; files deleted after processing, by default |
 | Web | Vercel, its own project | `velora-staging` → `https://staging.veloraapp.co.in` |
 | DNS | Cloudflare | zone `veloraapp.co.in`, records DNS-only (§6) |
@@ -30,31 +30,30 @@ any commit whose CI passed):
 
 1. **gate** runs `scripts/ci-gate` on the exact commit. Anything but a passed CI run stops here.
 2. **migrate** runs `alembic upgrade head` from CI **as the database owner**
-   (`scripts/migrate-with-url`). The owner's credentials live only in GitHub, never on Fly: the app
+   (`scripts/migrate-with-url`). The owner's credentials live only in GitHub, never on the VM: the app
    runs as `velora_api`, which can't disable the ledger's triggers, and a code-execution bug in the
    app mustn't be one step from doing so (P-18). Then it asks the database where it is, not
    Alembic (P-65): after the commit, `alembic_version` must hold the repo's single head, D-076's
    two triggers must be present and enabled, and D-077's index present, unique and valid. The log
    says what it read (`migrate: alembic_version holds …`). Anything else fails the job, naming
-   what it found, so **api** never deploys onto it. The migration is committed by then: a red
+   what it found, so **vm** never deploys onto it. The migration is committed by then: a red
    here doesn't undo it, it says the database isn't where the repo thinks.
-3. **api** runs `flyctl deploy`. Fly builds `api/Dockerfile` with `api/` as the context, and only
-   routes to the new machine once `/readyz` passes.
-4. **worker**: **no longer deployed from here (P-49's cutover, 18 October 2026).** The worker
-   runs on the Mumbai VM ("The Mumbai VM", below); Fly's app is scaled to 0 and kept until P-920,
-   and a deploy of it could launch a machine again, a second worker (D-091). What follows is how
-   it ran until then: `flyctl deploy` with `infra/fly.worker.toml`, after the API, with a
-   token for the worker's app only (`FLY_WORKER_API_TOKEN`). Its release command,
-   `python -m app.workers --check`, runs on a one-off machine with the app's settings and secrets
-   first: a missing key stops the deploy with the setting's name. It runs beside **web**; a red
-   worker job fails the run, so a release waits for it (D-075).
-5. **web** builds and deploys with the Vercel CLI. The project has no Git connection
+3. **image** and **vm** build the commit's image and deploy it to the Mumbai VM: the API, the
+   worker's settings checked, Caddy ("The Mumbai VM", below, says how). `vm` waits for **migrate**.
+4. **Fly: no longer deployed from here** (P-920's first commit, after P-49's cutover). Fly's
+   worker stopped being deployed at the cutover, since a deploy of it could launch a second worker
+   (D-091); Fly's API, until P-920's first commit, as the warm rollback. Both apps stay up,
+   untouched, until P-920 destroys them.
+5. **web** builds and deploys with the Vercel CLI, after **vm**, so the web goes live only once the
+   API it calls is current. The project has no Git connection
    (`web/vercel.json` also turns Git deploys off), so the web can't go live around the gate.
    **A red `web — Vercel` job on green code** is most likely Vercel's Hobby upload cap: look for
    `api-upload-free` in its log (P-0.15). The web stays on the last build that uploaded.
 6. **smoke** runs `scripts/staging-smoke` against staging from the outside, bodies included:
    `/readyz`, the hidden schema and docs, the web (it must be our build, calling this API), the
-   hidden `/admin` and `/dev/*`, and CORS.
+   hidden `/admin` and `/dev/*`, and CORS; and with `EXPECT_API_VIA=Caddy`, that the VM's Caddy is
+   what answers at `api.staging`, so a record pointed back at Fly fails it (P-920). **vm-smoke**
+   runs the same at `api-mumbai.staging`.
 
 **The first deploy happens after T-1.22 merges.** GitHub only triggers a workflow that exists on
 the default branch — `workflow_run`, `workflow_dispatch`, and `gh run list --workflow <file>` all
@@ -66,15 +65,17 @@ The pool is per process, and the image runs **2 uvicorn workers**, each with its
 
 | Who | Connects as | How | At most |
 |---|---|---|---|
-| API | `velora_api` | direct connection, IPv6 (Fly has it) | 2 workers × (`DB_POOL_SIZE` 5 + `DB_MAX_OVERFLOW` 2) = **14** |
+| API | `velora_api` | direct connection, IPv6 (the VM has it) | 2 workers × (`DB_POOL_SIZE` 5 + `DB_MAX_OVERFLOW` 2) = **14** |
 | Migrations | the owner (`postgres`) | session pooler, IPv4 (GitHub's runners have no IPv6) | 1, during a deploy |
 | Worker | `velora_api` | direct, IPv6 | 1 process × (`DB_POOL_SIZE` 2 + `DB_MAX_OVERFLOW` 1) = **3** (T-4.4; on the VM since P-49's cutover, `infra/gce/compose.yml`; never Fly's and the VM's at once) |
 
-**17 at most, under the role's 20.** Each app is **one machine**: `deploy.yml` passes `--ha=false`
-to both, because Fly's default of two would double each sum (and run the worker's poll twice,
-D-091). Supabase's smallest compute allows 60 direct connections, and its own services use some.
-Change
-`DB_POOL_SIZE` / `DB_MAX_OVERFLOW` in `infra/fly.api.toml`, never the image, and redo this sum
+**17 at most, under the role's 20.** Each is **one container on one VM**: a second would double
+its sum (and a second worker would run the worker's poll twice, D-091). Supabase's smallest
+compute allows 60 direct connections, and its own services use some. **Until P-920 destroys it,
+Fly's API app is still up, idle, beside the VM's,** and may hold connections of its own from
+before the cutover: not counted here. Change
+`DB_POOL_SIZE` / `DB_MAX_OVERFLOW` in `infra/gce/staging.env` (the worker's in
+`infra/gce/compose.yml`), never the image, and redo this sum
 whenever workers, machines or pools change — two machines doubles it. Production starts from this
 table, not from a guess.
 
@@ -392,8 +393,8 @@ Settings → Environments → **new environment `staging`**.
 | Kind | Name | Value |
 |---|---|---|
 | Secret | `STAGING_MIGRATION_DATABASE_URL` | the **session pooler** connection, as the owner |
-| Secret | `FLY_API_TOKEN` | Fly's deploy token for `velora-api-staging` |
-| Secret | `FLY_WORKER_API_TOKEN` | Fly's deploy token for `velora-worker-staging` only (T-4.4) |
+| Secret | `FLY_API_TOKEN` | Fly's deploy token for `velora-api-staging`; unused since P-920's first commit, removed by P-920 |
+| Secret | `FLY_WORKER_API_TOKEN` | Fly's deploy token for `velora-worker-staging` only (T-4.4); unused since P-49's cutover, removed by P-920 |
 | Secret | `VERCEL_TOKEN` | a Vercel access token **scoped to the `velora-staging` project, with no expiry** |
 | Secret | `VERCEL_ORG_ID`, `VERCEL_PROJECT_ID` | from the Vercel project |
 | Variable | `STAGING_API_URL` | `https://api.staging.veloraapp.co.in` |
@@ -417,14 +418,15 @@ scripts/staging-smoke https://api.staging.veloraapp.co.in https://staging.velora
 
 A configuration error (a missing secret, a fake provider) stops the container with the message
 instead of crash-looping: the image checks settings once before uvicorn starts its workers. Read
-it in Fly's logs. The worker's is stopped earlier, by its release command, before any machine is
-replaced: read it in the deploy job's log.
+it in the `vm` job's log, or on the VM (`sudo docker compose -p velora logs api`). The worker's
+settings are checked earlier, in a one-off container, before the API is replaced: read it in the
+`vm` job's log.
 
 **The worker is working** when a photo uploaded on staging reaches `approved` within a poll and a
 Sightengine call (T-4.4): its machine's log says `worker.started` once, then `moderation.decided`
 for each photo, by the photo's id, never a key.
 
-## The Mumbai VM (P-49, D-1020 to D-1023: in proof, beside Fly)
+## The Mumbai VM (P-49, D-1020 to D-1023)
 
 | Piece | Where | Name |
 |---|---|---|
@@ -433,22 +435,21 @@ for each photo, by the photo's id, never a key.
 | On it | Docker Compose (`infra/gce/compose.yml`): `api`, `worker` (off until the swap), `caddy` | Caddy serves the hosts in `infra/gce/staging.edge.env` |
 | Images | Artifact Registry, `asia-south1` | `asia-south1-docker.pkg.dev/velora-ic-staging/velora/api`, by digest |
 | Secrets | Secret Manager, stored in `asia-south1` only | one per setting, the names in `infra/gce/secrets.api` and `secrets.worker` |
-| Hosts | Cloudflare, DNS only | `A api-mumbai.staging → 34.47.244.114`; and `api.staging`, an `A` to the same address once the founder switches it (the cutover, `out/p-49-cutover.md`); until then Fly's CNAME |
+| Hosts | Cloudflare, DNS only | `A api-mumbai.staging → 34.47.244.114` and `A api.staging → 34.47.244.114` (the founder switched it from Fly's CNAME at the cutover, 18 October 2026, `out/p-49-cutover.md`) |
 
 **What is open on it:** TCP 80 and 443 from anywhere (Caddy), and 22 only from Google's IAP range
 (`35.235.240.0/20`). The API publishes no port: only Caddy, on the Compose network, reaches it.
 Nothing comes in over IPv6; the VM's IPv6 address is for the way out, to Supabase's direct host.
 
-**How it deploys** (`.github/workflows/deploy.yml`, the `image`, `vm` and `vm-smoke` jobs, beside
-Fly's): `image` builds the commit's image, pushes it, and reads its digest back from the registry;
+**How it deploys** (`.github/workflows/deploy.yml`, the `image`, `vm` and both smoke jobs): `image` builds the commit's image, pushes it, and reads its digest back from the registry;
 `vm` copies `infra/gce` at that commit to the VM over IAP and runs `infra/gce/deploy staging
 <image@digest> <sha>` as root, which writes the secrets from Secret Manager to root-only files
 (names and counts printed, never a value), checks the worker's settings in a one-off container,
 replaces the API and waits for its healthcheck (`/readyz`), putting the previous release back if it
 fails, then restarts Caddy only if its hosts or config changed. `vm-smoke` runs
 `scripts/staging-smoke` against `STAGING_VM_API_URL` with `EXPECT_API_VIA=Caddy` (Caddy adds `Via:
-1.1 Caddy` and passes the API's own `Server` header through), the web still
-calling `api.staging`. The jobs sign in by Workload Identity Federation: no key exists (D-1022).
+1.1 Caddy` and passes the API's own `Server` header through), the web calling `api.staging`;
+`smoke` runs it against `api.staging` itself, with the same `EXPECT_API_VIA`. The jobs sign in by Workload Identity Federation: no key exists (D-1022).
 GitHub's `staging` environment holds four variables, none secret: `GCP_PROJECT_ID`,
 `GCP_WIF_PROVIDER`, `GCP_DEPLOY_SA` and `STAGING_VM_API_URL`.
 
@@ -490,9 +491,12 @@ changes the VM only once its metadata is set again, by the founder:
 `gcloud compute instances add-metadata velora-api-staging --project=velora-ic-staging
 --zone=asia-south1-a --metadata-from-file=startup-script=infra/gce/startup.sh`, then a reboot.
 
-**Rollback before P-920:** Fly's API and worker still deploy from `main`. If the VM misbehaves
-after `api.staging` moves: put the `api.staging` CNAME back to `rkq9qd8.velora-api-staging.fly.dev`
-(DNS only; Fly's certificate is still issued), and swap the worker back as above.
+**Rollback before P-920, degraded:** nothing deploys to Fly from `main` any more (P-920's first
+commit). If the VM misbehaves: put the `api.staging` CNAME back to `rkq9qd8.velora-api-staging.fly.dev`
+(DNS only; check `fly certs check api.staging.veloraapp.co.in -a velora-api-staging` still says
+`Issued`), and swap the worker back as above. Fly's apps then run the last image Fly built, from
+the commit before P-920's first, so any migration landed since may break them: a rollback for a day,
+not longer. Every later staging deploy's `smoke` fails while `api.staging` points at Fly, by design.
 
 ## Looking at selfies (D-264)
 
