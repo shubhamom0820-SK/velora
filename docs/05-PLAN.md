@@ -3833,10 +3833,25 @@ number** per account gets its 5 each, one Thread's worth, and is **accepted**, k
 - [x] **Commit:** `feat(web): you tab [T-9.8]`
 
 ### T-9.9 · Ledger audit
-- [ ] **Needs:** everything above
-- [ ] One test per paid action (thread open, dm, re-open, voice unlock, album, super like, liked-you reveal, and D-098's Extend and each private message after the first): man → exactly one ledger entry with the right reason and amount; woman → zero entries; insufficient → nothing created.
-- [ ] Reconciliation test: for every user, `wallets.balance == sum(ledger.delta)`. Also as a daily cron that alerts on mismatch.
-- [ ] **Commit:** `test(wallet): paid action audit and reconciliation [T-9.9]`
+- [x] **Needs:** everything above
+  **Read 14 October 2026:** of the tasks above, only T-9.5 blocked a paid action's test (its
+  `admin_correction`, which the brief added); it landed first (`59ab5e0`), so its row is here and
+  P-840 wasn't needed. REL-1, T-3.14's staging check, T-4.11, T-6.5's 60 fps, T-7.13, T-9.4's push
+  box and T-9.7 are open and block none of these tests.
+- [x] One test per paid action (thread open, dm, re-open, voice unlock, album, super like, liked-you reveal, and D-098's Extend and each private message after the first): man → exactly one ledger entry with the right reason and amount; woman → zero entries; insufficient → nothing created.
+  **Built (D-940):** `tests/modules/wallet/test_paid_actions.py`, every debit of Velas: the nine
+  above, his first message where she opened the Thread (the open's and the re-open's price, by
+  `POST /threads/{id}/messages`), `gift` and `admin_correction` (the founder, 14 and 18 October
+  2026), 13 rows × 3 tests, prices as the plan's literals. A guard holds the table to
+  `wallet/rules.py`'s debits exactly, `purchase_reversal` exempt by name (D-520).
+- [x] Reconciliation test: for every user, `wallets.balance == sum(ledger.delta)`. Also as a daily cron that alerts on mismatch.
+  **Built (D-940):** `tests/modules/wallet/test_reconcile.py` (the global check `critical`, and a
+  mismatch each way, a balance with no rows, rows with no wallet, inside the rolled-back
+  transaction); `reconcile_ledger` at 03:00 UTC (08:30 IST), each mismatch a
+  `wallet.ledger_mismatch` line at error level, which T-9.12 forwards to Sentry.
+  **Broken once each** (`uv run python -m tests.break_guards t99-`, `out/t99-break-guards.log`):
+  nine cases, 9 of 9 red, no file differing by SHA-256 after.
+- [x] **Commit:** `test(wallet): paid action audit and reconciliation [T-9.9]`
 
 ### T-9.10 · Performance pass
 - [ ] **Needs:** T-9.8
@@ -7305,3 +7320,10 @@ The number comes from the session's own block, given in its brief, from P-100 up
   loop), then one where he sends before it; decide with the founder whether the note should
   survive the panel. Filed by Claude building T-7.13, 18 October 2026, at the founder's direction;
   its session's block, P-830 to P-839.
+- [ ] P-841 · Cap the reconciliation's alert lines. **Before real users; not urgent.** Worst case:
+  one bug that moves many balances (a migration, a bad backfill) makes `reconcile_ledger` log one
+  `wallet.ledger_mismatch` error per wallet, and T-9.12 forwards each to Sentry, so a single
+  morning could spend the month's error quota and hide every other alert after it. T-9.9 logs
+  every mismatch, as its approved plan says (D-940). Decide with T-9.12's Sentry plan in hand: a
+  cap of lines per run with a count in a summary, or Sentry grouping and a rate limit on that
+  event. Filed by Claude building T-9.9, 18 October 2026.

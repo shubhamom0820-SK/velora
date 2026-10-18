@@ -13013,6 +13013,179 @@ T713: list[Case] = [
     ),
 ]
 
+# --- T-9.9: the ledger audit and the daily reconciliation ----------------------------
+
+PRICING99 = "app/modules/pricing/service.py"
+LIKES_SERVICE99 = "app/modules/likes/service.py"
+SWIPES_SERVICE99 = "app/modules/swipes/service.py"
+WALLET_REPO99 = "app/modules/wallet/repository.py"
+WALLET_SERVICE99 = "app/modules/wallet/service.py"
+WORKER99 = "app/workers/main.py"
+AUDIT99 = "tests/modules/wallet/test_paid_actions.py"
+T99_SELECTION = [
+    "tests/modules/wallet/test_paid_actions.py",
+    "tests/modules/wallet/test_reconcile.py",
+    "tests/workers/test_reconcile_ledger.py",
+    "tests/workers/test_log_turnover.py",
+]
+WOMAN99 = "test_a_woman_pays_nothing"
+MAN99 = "test_a_man_pays_once_at_the_price"
+SHORT99 = "test_too_few_velas_buys_nothing"
+FOUND99 = [
+    "test_a_balance_written_outside_the_wallet_is_found_and_logged_as_an_error",
+    "test_a_ledger_row_the_balance_never_took_is_found_the_other_way",
+    "test_balances_that_agree_are_never_reported",
+    "test_a_balance_with_no_ledger_rows_at_all_is_found",
+    "test_ledger_rows_with_no_wallet_are_found",
+    "test_the_job_logs_a_mismatch_at_error_level",
+]
+
+T99: list[Case] = [
+    Case(
+        id="t99-01-a-woman-priced-like-a-man",
+        what="D-098 gone: a woman priced at the row's value for every action",
+        edits=[
+            (
+                PRICING99,
+                "    return credits if user.gender is Gender.MALE else 0\n",
+                "    return credits\n",
+            )
+        ],
+        expect=[
+            f"{WOMAN99}[{action}]"
+            for action in (
+                "thread_open",
+                "thread_open-answering",
+                "dm_open",
+                "thread_reopen-answering",
+                "dm_message",
+                "album_request",
+                "super_like",
+                "liked_you_reveal",
+            )
+        ],
+    ),
+    Case(
+        id="t99-02-a-one-vela-charge-goes-free",
+        what="a careless floor: prices of 1 Vela debited as if 0",
+        edits=[(PRICING99, "    if price == 0:\n", "    if price <= 1:\n")],
+        expect=[
+            f"{MAN99}[album_request]",
+            f"{MAN99}[liked_you_reveal]",
+            f"{SHORT99}[album_request]",
+            f"{SHORT99}[liked_you_reveal]",
+        ],
+    ),
+    Case(
+        id="t99-03-a-reveal-charged-as-a-super-like",
+        what="the wrong reason, and so the wrong price, for a reveal",
+        edits=[
+            (
+                LIKES_SERVICE99,
+                "                LedgerReason.LIKED_YOU_REVEAL,\n",
+                "                LedgerReason.SUPER_LIKE,\n",
+            )
+        ],
+        expect=[f"{MAN99}[liked_you_reveal]"],
+    ),
+    Case(
+        id="t99-04-a-refused-super-like-kept",
+        what="the 402 swallowed: the super like written, nothing paid",
+        edits=[
+            (
+                SWIPES_SERVICE99,
+                (
+                    "    if direction is SwipeDirection.SUPER:\n"
+                    "        await pricing_service.charge(\n"
+                ),
+                (
+                    "    if direction is SwipeDirection.SUPER:\n"
+                    '        with __import__("contextlib").suppress(AppError):\n'
+                    "          await pricing_service.charge(\n"
+                ),
+            )
+        ],
+        expect=[f"{SHORT99}[super_like]"],
+    ),
+    Case(
+        id="t99-05-a-debit-with-no-row",
+        what="the gift's row dropped from the audit table: a debit with no tests",
+        edits=[
+            (
+                AUDIT99,
+                '    Spend("gift", LedgerReason.GIFT, 5, _gift, REFUSED),\n',
+                "",
+            )
+        ],
+        expect=["test_every_debit_of_velas_has_its_three_tests"],
+    ),
+    Case(
+        id="t99-06-the-check-compares-nothing",
+        what="the balance compared with itself: no mismatch ever found",
+        edits=[
+            (
+                WALLET_REPO99,
+                "        .where(Wallet.balance.is_distinct_from(ledger_sum))\n",
+                "        .where(Wallet.balance.is_distinct_from(Wallet.balance))\n",
+            )
+        ],
+        expect=FOUND99,
+    ),
+    Case(
+        id="t99-07-an-inner-join",
+        what="a plain join: a wallet with no ledger rows, or rows with no wallet, hidden",
+        edits=[
+            (
+                WALLET_REPO99,
+                "        .join(sums, sums.c.user_id == Wallet.user_id, full=True)\n",
+                "        .join(sums, sums.c.user_id == Wallet.user_id)\n",
+            )
+        ],
+        expect=[
+            "test_a_balance_with_no_ledger_rows_at_all_is_found",
+            "test_ledger_rows_with_no_wallet_are_found",
+        ],
+    ),
+    Case(
+        id="t99-08-a-mismatch-as-a-warning",
+        what="the mismatch logged below error, where T-9.12 forwards nothing",
+        edits=[
+            (
+                WALLET_SERVICE99,
+                '        log.error(\n            "wallet.ledger_mismatch",\n',
+                '        log.warning(\n            "wallet.ledger_mismatch",\n',
+            )
+        ],
+        expect=[
+            "test_a_balance_written_outside_the_wallet_is_found_and_logged_as_an_error",
+            "test_the_job_logs_a_mismatch_at_error_level",
+        ],
+    ),
+    Case(
+        id="t99-09-the-cron-dropped",
+        what="the daily check never scheduled",
+        edits=[
+            (
+                WORKER99,
+                (
+                    "    cron(\n"
+                    "        reconcile_ledger_job.reconcile_ledger,\n"
+                    "        name=RECONCILE_LEDGER,\n"
+                    "        hour=reconcile_ledger_job.RUN_AT_UTC[0],\n"
+                    "        minute=reconcile_ledger_job.RUN_AT_UTC[1],\n"
+                    "    ),\n"
+                ),
+                "",
+            )
+        ],
+        expect=[
+            "test_it_runs_once_a_day_at_0830_ist",
+            "test_it_runs_once_a_day_at_0900_ist",
+        ],
+    ),
+]
+
+
 CASES: list[tuple[Case, list[str]]] = (
     [(c, T51_SELECTION) for c in T51]
     + [(c, T54_SELECTION) for c in T54]
@@ -13077,6 +13250,7 @@ CASES: list[tuple[Case, list[str]]] = (
     + [(c, T95_SELECTION) for c in T95]
     + [(c, T95_SEED_SELECTION) for c in T95_SEED]
     + [(c, T713_SELECTION) for c in T713]
+    + [(c, T99_SELECTION) for c in T99]
 )
 
 # The fifty-connection fixture's own message when Postgres refuses a connection.

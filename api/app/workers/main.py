@@ -10,10 +10,11 @@ themselves).
   Free plan that is 260,640 commands a month idle; ARQ's default 0.5 seconds
   would be over five million. The health key is written once an hour, the sum
   D-091 counted; abort is off.
-- **Two crons, each once a day:** `log_turnover` (D-483) and `erase_accounts`
-  (T-9.6, D-500). ARQ checks their schedules in the heartbeat each poll already
-  makes, so each adds a job's few commands a day, nothing per poll. Schedules
-  are in UTC, whatever the machine's clock says.
+- **Three crons, each once a day:** `reconcile_ledger` (T-9.9, D-940),
+  `log_turnover` (D-483) and `erase_accounts` (T-9.6, D-500). ARQ checks their
+  schedules in the heartbeat each poll already makes, so each adds a job's few
+  commands a day, nothing per poll. Schedules are in UTC, whatever the
+  machine's clock says.
 - **The Thread's clock runs once a minute in the worker's own loop**
   (`app/workers/minutely.py`, D-640, T-7.6): `expire_threads` and
   `warn_expiring`, coordinated in Postgres, so they cost Redis nothing but the
@@ -74,6 +75,7 @@ from app.core.queue import (
     LOG_TURNOVER,
     MATCH_PHOTO,
     MODERATE_PHOTO,
+    RECONCILE_LEDGER,
     SEND_PUSH,
     VERIFY_SELFIE,
     WATERMARK_ALBUM,
@@ -83,6 +85,7 @@ from app.core.queue import (
 from app.workers.minutely import Minutely
 from app.workers.tasks import log_turnover as log_turnover_job
 from app.workers.tasks import recompute_fraud, send_push, thread_clock
+from app.workers.tasks import reconcile_ledger as reconcile_ledger_job
 from app.workers.tasks import verify_selfie as verify_selfie_job
 from app.workers.tasks.blur_photo import BLUR_TRIES, blur_photo
 from app.workers.tasks.delete_files import delete_files
@@ -121,6 +124,12 @@ ERASE_AT_UTC: Final = (22, 0)
 ERASE_TIMEOUT_S: Final = 1800
 # Once a day each, in UTC (`WorkerSettings.timezone`).
 CRON_JOBS: Final[Sequence[CronJob]] = (
+    cron(
+        reconcile_ledger_job.reconcile_ledger,
+        name=RECONCILE_LEDGER,
+        hour=reconcile_ledger_job.RUN_AT_UTC[0],
+        minute=reconcile_ledger_job.RUN_AT_UTC[1],
+    ),
     cron(
         log_turnover_job.log_turnover,
         name=LOG_TURNOVER,

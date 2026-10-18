@@ -42,7 +42,9 @@ reaching it by a name built at run time included, which the source scan in
 `tests/modules/pricing/test_debit_callers.py` can't see. The scan stays, as the
 second layer, and a test holds the two lists equal.
 
-The owner's two reads, `balance()` and `ledger()`, are at the end (T-5.3).
+The owner's two reads, `balance()` and `ledger()`, are at the end (T-5.3),
+and after them `reconcile()`, the worker's daily check that every balance is
+the sum of its ledger (T-9.9, D-940).
 """
 
 from __future__ import annotations
@@ -403,3 +405,46 @@ async def ledger(
         params,
         lambda entry: LEDGER_CURSOR.encode((entry.created_at, entry.id)),
     )
+
+
+# --- Reconciliation (T-9.9, D-940) -----------------------------------------------
+
+
+@dataclass(frozen=True)
+class Mismatch:
+    user_id: UUID
+    # None for ledger rows with no wallet: signup creates both, so a bug too.
+    balance: int | None
+    ledger_sum: int
+
+
+async def reconcile(session: AsyncSession) -> list[Mismatch]:
+    """Every balance that isn't the sum of its ledger, each logged at error
+    level as `wallet.ledger_mismatch` (D-940); none is one `wallet.reconciled`
+    line at info, so a quiet day still shows the check ran.
+
+    Read-only: a mismatch is repaired by hand, from the ledger, which is
+    append-only and complete (D-077's "detected, not prevented"). A line names
+    the user by id, with their balance and ledger sum, and nothing else
+    (rule 15).
+    """
+    async with session.begin():
+        rows = await repository.mismatched_wallets(session)
+    found = [
+        Mismatch(
+            user_id=row.user_id,
+            balance=None if row.balance is None else int(row.balance),
+            ledger_sum=int(row.ledger_sum),
+        )
+        for row in rows
+    ]
+    for mismatch in found:
+        log.error(
+            "wallet.ledger_mismatch",
+            user_id=str(mismatch.user_id),
+            balance=mismatch.balance,
+            ledger_sum=mismatch.ledger_sum,
+        )
+    if not found:
+        log.info("wallet.reconciled", mismatches=0)
+    return found

@@ -134,8 +134,10 @@ make infra-reset # stop the stack and DROP all data volumes (clean database)
 make dev         # infra + api + worker + web on 127.0.0.1
 make worker      # ARQ worker only: moderate_photo, delete_files, verify_selfie, match_photo,
                  # blur_photo (D-543), watermark_album (D-730), export_data, expire_export (polls every 10 s, D-091; a selfie's wake runs it at
-                 # once, D-261); two daily crons: log_turnover at 09:00 IST, the year's turnover at
-                 # warning from ₹15 lakh (D-483), and erase_accounts at 03:30 IST (D-500); and
+                 # once, D-261); three daily crons: reconcile_ledger at 08:30 IST, each balance
+                 # against its ledger's sum, a mismatch an error line (D-940); log_turnover at
+                 # 09:00 IST, the year's turnover at warning from ₹15 lakh (D-483); and
+                 # erase_accounts at 03:30 IST (D-500); and
                  # once a minute in its own loop, not ARQ's, the Thread's clock: expire_threads and
                  # warn_expiring (T-7.6, D-640); and every 10 minutes in another, recompute_fraud,
                  # which scores and may freeze (T-9.2, D-900); and pushes, never ARQ jobs: push_outbox sent on a

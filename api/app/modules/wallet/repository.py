@@ -153,3 +153,42 @@ async def ledger_page(
         # A plain tuple, so each bind takes its column's type: timestamptz, uuid.
         query = query.where(tuple_(LedgerEntry.created_at, LedgerEntry.id) < after)
     return (await session.execute(query)).all()
+
+
+# --- Reconciliation (T-9.9, D-940) ----------------------------------------------
+
+
+async def mismatched_wallets(
+    session: AsyncSession,
+) -> Sequence[Row[tuple[UUID, int | None, int]]]:
+    """Every user whose balance isn't the sum of their ledger: `(user_id,
+    balance, ledger_sum)`, the balance None for ledger rows with no wallet.
+
+    One statement, so one snapshot under READ COMMITTED: a debit that commits
+    while it runs is either wholly in it, balance and entry, or wholly out, and
+    can't read as a mismatch (D-940). A full join, so neither side can hide.
+    """
+    sums = (
+        select(
+            LedgerEntry.user_id.label("user_id"),
+            func.sum(LedgerEntry.delta).label("total"),
+        )
+        .group_by(LedgerEntry.user_id)
+        .subquery()
+    )
+    ledger_sum = func.coalesce(sums.c.total, 0)
+    query = (
+        select(
+            func.coalesce(Wallet.user_id, sums.c.user_id).label("user_id"),
+            Wallet.balance.label("balance"),
+            ledger_sum.label("ledger_sum"),
+        )
+        .select_from(Wallet)
+        .join(sums, sums.c.user_id == Wallet.user_id, full=True)
+        .where(Wallet.balance.is_distinct_from(ledger_sum))
+        .order_by(func.coalesce(Wallet.user_id, sums.c.user_id))
+    )
+    rows: Sequence[Row[tuple[UUID, int | None, int]]] = (
+        await session.execute(query)
+    ).all()
+    return rows

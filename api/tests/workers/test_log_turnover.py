@@ -14,7 +14,7 @@ from arq.worker import create_worker
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.enums import PaymentStatus
-from app.core.queue import ERASE_ACCOUNTS, LOG_TURNOVER
+from app.core.queue import ERASE_ACCOUNTS, LOG_TURNOVER, RECONCILE_LEDGER
 from app.workers import main as worker
 from app.workers.tasks.log_turnover import log_turnover
 from tests.conftest import CapturedLogs, MakeUser, make_test_settings
@@ -122,8 +122,12 @@ def test_it_runs_once_a_day_at_0900_ist() -> None:
     assert (job.hour, job.minute, job.second) == (3, 30, 0)
     assert job.run_at_startup is False
     assert built.timezone is UTC
-    # T-9.6's erasure is the other (D-500).
-    assert [cron.name for cron in built.cron_jobs] == [LOG_TURNOVER, ERASE_ACCOUNTS]
+    # T-9.9's reconciliation (D-940) and T-9.6's erasure (D-500) are the others.
+    assert [cron.name for cron in built.cron_jobs] == [
+        RECONCILE_LEDGER,
+        LOG_TURNOVER,
+        ERASE_ACCOUNTS,
+    ]
     scheduled = copy.copy(job)  # never the module's own: ARQ keeps its next run
     scheduled.calculate_next(datetime(2026, 10, 8, 4, tzinfo=UTC))
     assert scheduled.next_run is not None

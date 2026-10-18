@@ -117,8 +117,13 @@ If any of these fails, nothing ships.
    alike; one event under two different keys → refused by the per-event index (D-077).
 3. **Webhook idempotency** (T-8.2): same capture 5× concurrently → credited once.
 4. **Webhook signature** (T-8.2): bad signature → no credit.
-5. **Ledger reconciliation** (T-9.9): `balance == sum(delta)` for every wallet.
-6. **Women never pay** (T-9.9): every paid action by a woman → zero ledger entries.
+5. **Ledger reconciliation** (T-9.9, D-940): `balance == sum(delta)` for every wallet.
+   `tests/modules/wallet/test_reconcile.py`, marked `critical`; the daily job's in
+   `tests/workers/test_reconcile_ledger.py`.
+6. **Women never pay** (T-9.9, D-940): every paid action by a woman → zero ledger entries.
+   `tests/modules/wallet/test_paid_actions.py`, marked `critical`, beside each debit's other two
+   (a man pays once; too few Velas buys nothing), and a guard holding its table to every debit
+   reason in `wallet/rules.py`.
 6b. **Free sends stay free** (T-8.9, D-231): each of a week's fifteen free sends creates a
     `gift_sends` row and **zero** ledger entries; the sixteenth creates exactly one, with the price
     from the `gifts` table. `tests/modules/gifts/test_send.py`, marked `critical`; the week is

@@ -6148,6 +6148,43 @@ from then on.
 alone (the founder's Q1: T-3.13's, not a new gate); writing the status too (the sweep's, as in
 production).
 
+### D-940 · The ledger audit, and a daily check that every balance is its ledger's sum — Locked
+**The decision (T-9.9; the founder's answers on the advisor's recommendation, relayed, 14 and 16
+October 2026):**
+- **Every debit of Velas has three tests** (`tests/modules/wallet/test_paid_actions.py`): a man
+  pays once (exactly one new entry among everyone the action touches, with its reason, the
+  plan's literal price and its ref); a woman pays nothing (free or refused as the rules say, no
+  entry for anyone); too few Velas buys nothing (refused, no entry, no balance moved, nothing the
+  action writes, no notification, nothing published). His first message where she opened the
+  Thread is charged the open's or the re-open's price by `POST /threads/{id}/messages`, so it has
+  rows of its own. `admin_correction` (D-923) has its three too, its "too few" the panel's
+  `NOT_ALLOWED` `why: balance`.
+- **A guard holds the table to `wallet/rules.py`'s debits exactly, both ways:** a debit with no row
+  is red until it has one, and a row for anything else is red. One debit is exempt by name:
+  `purchase_reversal`, a refund or chargeback taking a payment's Velas back (D-520), never a
+  purchase and never refused; its tests are `tests/modules/payments/test_reversals.py`.
+- **`reconcile_ledger`, an ARQ cron at 03:00 UTC (08:30 IST),** half an hour before
+  `log_turnover`, runs `wallet.service.reconcile()`: every wallet against the sum of its ledger,
+  **in one statement**, so one snapshot under READ COMMITTED (a debit committing meanwhile is
+  wholly in it or wholly out, never a false mismatch), and a full join, so a balance with no rows
+  and rows with no wallet are both found.
+- **Each mismatch is one `wallet.ledger_mismatch` line at error level,** exactly `user_id`,
+  `balance` and `ledger_sum` (rule 15); a clean run is one `wallet.reconciled` line at info.
+  **T-9.12 forwards every error-level line to Sentry**, so this reaches the alert channel with no
+  routing of its own and no box on T-9.12. Until T-9.12 lands, it reaches Fly's logs only.
+- **Read-only: it detects and never repairs.** A mismatch is repaired by hand, from the ledger,
+  which is append-only and complete (D-077's "detected, not prevented").
+
+**Why:** rule 5 makes the wallet the only writer of a balance, but the app role can still write
+`wallets` (D-077), so a balance moved by anything else has to be found, not assumed away; and a
+woman paying is a regulatory position (D-076), so it is proved per action, not by one action's
+test. A table the rules are held to means the next debit can't land without its proof, as T-9.5's
+`admin_correction` couldn't.
+
+**Rejected:** two reads, the balances then the sums (a debit between them reads as a mismatch);
+repairing a balance automatically (it would overwrite the evidence of whatever wrote it); a line
+per run at error level whatever it found (an alert every morning is an alert nobody reads).
+
 ### D-950 · /login shows at once, but sends a code only once the restore has settled — Locked
 **The decision (the founder, approving P-850's plan, 14 October 2026, on the advisor's
 recommendation, relayed):** amends T-3.10's "/login doesn't wait for the restore". The sign-in

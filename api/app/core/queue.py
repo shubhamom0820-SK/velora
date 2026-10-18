@@ -37,6 +37,7 @@ MODERATE_PHOTO = "moderate_photo"
 DELETE_FILES = "delete_files"
 VERIFY_SELFIE = "verify_selfie"
 LOG_TURNOVER = "log_turnover"  # a cron, never queued by the API (T-8.1)
+RECONCILE_LEDGER = "reconcile_ledger"  # a cron, never queued (T-9.9, D-940)
 # T-4.12, D-393: an approved public photo with a face compared with the kept
 # selfie, for the badge. Nobody waits on it, so it has no wake.
 MATCH_PHOTO = "match_photo"
