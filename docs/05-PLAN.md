@@ -4454,7 +4454,7 @@ The number comes from the session's own block, given in its brief, from P-100 up
   "proved by shuffling" above, and "survives a shuffled order" in every report since, can't be
   re-checked from the repo. The fix itself, `configure_logging()`'s one processor list, is in. T-3.13
   commits the plugin, or T-5.1 if it gets there first.
-- [ ] P-49 · Colocate the API and the database, and decide which city. **Before Sprint 6**, whose
+- [x] P-49 · Colocate the API and the database, and decide which city. **Before Sprint 6**, whose
   discovery pays the split below several times per request. Worst case if it stays: every
   authenticated request costs seconds before any work, in an app whose complaint driver is lag
   (09-RESEARCH C7). The user's own hop is one round trip; the API's to the database are a dozen or
@@ -4678,6 +4678,35 @@ The number comes from the session's own block, given in its brief, from P-100 up
   and the VM's started in one chain, memory read before anything else is tested (stop above 85%
   of 1,976 MB); then `api.staging`'s record, by the founder's hand, and the checks: Caddy's
   certificate, the smoke, a socket's `pong`, then the founder's phone test.
+  **Done, 18 October 2026: staging serves from Mumbai, measured, with Fly's worker at 0.**
+  - **Step 1:** the cutover commit `5ee3547`, `main`'s staging deploy run 39123650005 green in every
+    job (no Fly worker job any more); Fly's worker still 1 machine; the VM's worker off.
+  - **Step 2, the worker swap:** the queue empty (0 jobs) at the swap; Fly's process group `worker`
+    scaled to 0 at 11:38:52 UTC (the machine destroyed, the app kept), the VM's worker started at
+    11:38:59 UTC, so never two and none for 7 seconds. `worker.started` logged once, with
+    `thread_clock` and `send_push`; no `Traceback` and no `minutely.failed`. Memory 1,013 MB used of
+    1,976 (worker 174 MB, API 246 MB, Caddy 19 MB), under the founder's 85% stop (1,680 MB). The
+    first try was refused (`scale count 0` names the default group, `app`; the app's group is
+    `worker`), a pipe hid the refusal (CLAUDE.md shell trap 1), and the chain's started-machine count
+    stopped it before the VM's worker could start: nothing changed until the corrected command.
+  - **Step 3, `api.staging`'s DNS** (the founder, by hand: the CNAME to Fly replaced by `A
+    34.47.244.114`, DNS only, TTL 1 min): 1.1.1.1 and 8.8.8.8 answered `34.47.244.114`; Caddy had
+    Let's Encrypt's certificate for `api.staging` about 3 minutes later, with no restart; the full
+    smoke check with `EXPECT_API_VIA=Caddy` passed every check; `/readyz` from the founder's Mac,
+    median 201 ms (`/healthz` 193 ms) against 824 ms on Fly before the switch, 10 requests each.
+  - **The founder's phone test, read from the VM's access log and the database, not taken from the
+    report:** through `api.staging` in Mumbai, every request the phone made succeeded: discovery,
+    threads, the wallet and ledger, a session refresh (the reload), the PIN, two socket tickets (the
+    web's own socket, through Caddy) and a Razorpay order (`payments.order_created`). The account was
+    `812a6748-97f1-4c56-8970-9d83c27c737b`, its session refreshed, its sign-in from 9 October.
+    **`socket_probe` as that account through `api.staging`:** opened in 88 ms, `pong` in 2 ms.
+  - **Not proved: a photo through the VM's worker, and a message.** The founder reported a photo
+    uploaded and a message sent; neither reached either API (no photo or message request in the VM's
+    access log or Fly's, no photo row since 9 October, staging's messages table empty), and after
+    12:01:40 UTC no request from the phone reached either API at all (checked again at 12:10:25
+    UTC, after the founder reported a photo shown as uploaded), so the later photo attempts never
+    reached staging's servers. Not a web bug on this evidence: opening the photo screen makes
+    requests of its own, and none came. Proving moderation on the VM is P-927.
 - [ ] P-50 · Cut the round trips every request pays. **Before Sprint 6 adds routes on
   `current_user`; worth doing wherever the API runs.** Worst case without it: the fixed cost in P-49
   multiplies with every route that inherits it. Measured on 3 October 2026 (P-49's method):
@@ -7186,3 +7215,12 @@ The number comes from the session's own block, given in its brief, from P-100 up
   `/etc/systemd/resolved.conf.d/`, restarts `systemd-resolved`, and a check from the VM shows
   nothing on 5355; the metadata set again and the VMs rebooted, on the founder's word. Filed by
   Claude building P-49, at the founder's direction.
+- [ ] P-927 · Prove photo moderation through the Mumbai VM's worker, end to end. **Before P-920
+  destroys Fly's worker app** (its rollback). Worst case if left: the worker's main job, moderation
+  with Sightengine and R2, has run on the VM only in tests and its settings check, and a fault there
+  (an egress rule, a key, a memory peak on a 12-megapixel photo, P-49's 1,013 MB with the worker
+  idle) shows first as every new photo stuck at `pending`. A real photo uploaded on staging, signed
+  in on a phone: its upload-link request and its photo row seen, the row reaching `approved` (or a
+  decided `rejected`), the VM worker's `moderation.decided` naming it, and `docker stats` read during
+  it. On 18 October 2026 the founder's photo attempts never reached staging's servers (P-49's record).
+  Filed by Claude building P-49, 18 October 2026.
