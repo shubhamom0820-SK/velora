@@ -64,6 +64,7 @@ export default function PrivacyPage() {
     >
       <LegalSection title={t("legal.privacy.google.title")}>
         <p>{t("legal.privacy.google.body")}</p>
+        <p>{t("legal.privacy.google.recaptcha")}</p>
       </LegalSection>
       <LegalSection title={t("legal.privacy.collect.title")}>
         <ul className="flex list-disc flex-col gap-2 pl-5">

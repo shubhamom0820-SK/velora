@@ -684,6 +684,8 @@ waits on the founder's decisions, so it is a task of its own, outside the sprint
     fixed +91, send a code to a stranger in India, every time its owner tries.
   - **P-71:** `/privacy` names reCAPTCHA, which `/login` loads as it opens. The page is published,
     and inaccurate from the moment `/login` ships.
+  - **P-880:** `/login` shows reCAPTCHA's badge, or, where it is hidden, Google's required notice
+    near "Send code". Filed 18 October 2026, at the founder's direction.
   - **P-69:** `velora-ic`'s browser API key restricted to our two sites and the APIs the web calls,
     after T-3.14's staging check.
   **And P-130, with no condition** (D-230, 4 October 2026): `/refunds` rewritten to say there is no
@@ -5265,7 +5267,7 @@ The number comes from the session's own block, given in its brief, from P-100 up
   before anything is typed, "{app} takes Indian mobile numbers only. We're starting in Phagwara."
   (the founder's copy), the field's description; +91 stays outside it. `onboarding.test.tsx` and
   `SignIn.firebase.test.tsx` hold it (both red without it).
-- [ ] P-71 · Name reCAPTCHA on `/privacy`. **Before REL-1** (on its Needs line). Worst case:
+- [x] P-71 · Name reCAPTCHA on `/privacy`. **Before REL-1** (on its Needs line). Worst case:
   `/privacy` is published, and is inaccurate from the moment `/login` ships on a Firebase build:
   `/login` loads Google's reCAPTCHA as it opens (T-3.14 renders it then, so the first tap is quick),
   and reCAPTCHA reads browser and device signals for Google before a number is typed, while
@@ -5276,7 +5278,12 @@ The number comes from the session's own block, given in its brief, from P-100 up
   of the advisor directing T-3.14 (Claude, in a separate chat), relayed by the founder, 4 October
   2026.
 
-  Found building T-3.14.
+  Found building T-3.14. **Done 18 October 2026:** a second paragraph in "Your phone number and
+  Google": "When you open the sign-in page, Google's reCAPTCHA checks that you're not a bot, before
+  you type anything. To do that it reads information about your browser and device and sends it to
+  Google." Drafted by Claude, approved by the founder; `legal-pages.test.tsx` pins it, in that
+  section. Still for P-0.7's review, and a lawyer's when there is one. Google's own notice on
+  `/login` is P-880.
   **And the constraint that keeps `/privacy`'s Sightengine line true** (4 October 2026). `/privacy`
   says photos are checked by Sightengine "and deleted there after the check". That holds only while
   T-4.4 uses Sightengine's plain image moderation API, on its default retention, which deletes
@@ -7347,3 +7354,15 @@ The number comes from the session's own block, given in its brief, from P-100 up
   covers both: a flake that clears on the retry, and one that doesn't. `/done`'s exit-4 paragraph
   then says the gate retries itself. Filed by Claude after T-9.9 landed, at the founder's
   direction, 18 October 2026.
+- [ ] P-880 · `/login` tells people it is protected by reCAPTCHA, as Google requires. **Before
+  REL-1** (on its Needs line). Worst case: a Firebase build's `/login` runs Google's invisible
+  reCAPTCHA (T-3.14) with its badge hidden and no notice in its place, which breaks reCAPTCHA's
+  terms, and someone signing in is never told on that screen that Google checks them. Google's
+  terms allow hiding the badge only if the page says instead that the site "is protected by
+  reCAPTCHA and the Google Privacy Policy and Terms of Service apply", with both linked. Not
+  checked: whether our build shows the badge or hides it. Check it on staging, in the browser, the
+  way a person sees it; if it shows, record that and close this; if it is hidden (by our CSS or by
+  Firebase's settings), show Google's notice near "Send code", on Firebase builds only, as the
+  Google consent line is (D-081), with a test. `/privacy` names reCAPTCHA already (P-71). Found
+  planning P-71; filed by Claude at the founder's direction, 18 October 2026, from this session's
+  block (P-880 to P-889).

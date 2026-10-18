@@ -1570,6 +1570,12 @@ export const en = {
         // on the page is the one a reader must not discover later.
         title: "Your phone number and Google",
         body: "To send your sign-in code we use Google's Firebase. Google processes your phone number in the United States and keeps it to prevent spam and abuse across its services. We can't delete Google's copy, even if you delete your account.",
+        // T-3.14 (P-71): a Firebase build's /login starts reCAPTCHA as it
+        // opens, so the first tap is quick, and reCAPTCHA reads the browser
+        // and device for Google before a number is typed. Drafted by Claude;
+        // approved by the founder, 18 October 2026; P-0.7's review too.
+        recaptcha:
+          "When you open the sign-in page, Google's reCAPTCHA checks that you're not a bot, before you type anything. To do that it reads information about your browser and device and sends it to Google.",
       },
       collect: {
         title: "What we collect, and why",

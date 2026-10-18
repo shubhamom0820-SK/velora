@@ -115,6 +115,18 @@ describe("/privacy", () => {
     );
   });
 
+  // P-71: /login loads reCAPTCHA as it opens, on Firebase builds (T-3.14).
+  it("says, in Google's section, that reCAPTCHA reads the browser and device before anything is typed", () => {
+    render(<PrivacyPage />);
+
+    const recaptcha = screen.getByText(
+      "When you open the sign-in page, Google's reCAPTCHA checks that you're not a bot, before you type anything. To do that it reads information about your browser and device and sends it to Google.",
+    );
+    expect(recaptcha.closest("section")).toHaveTextContent(
+      t("legal.privacy.google.title"),
+    );
+  });
+
   it("never names a region for what Cloudflare stores (D-048)", () => {
     render(<PrivacyPage />);
 
