@@ -20,7 +20,6 @@ READY = rules.Facts(
     city="Phagwara",
     located=True,
     username="ready",
-    about="A profile ready to finish, with an about long enough to pass.",
     approved_photos=1,
     interests=5,
 )
@@ -61,7 +60,6 @@ def test_nothing_at_all_misses_everything_in_onboardings_order() -> None:
         city=None,
         located=False,
         username=None,
-        about=None,
         approved_photos=0,
         interests=0,
     )
@@ -69,14 +67,8 @@ def test_nothing_at_all_misses_everything_in_onboardings_order() -> None:
 
 
 def test_an_empty_string_is_missing_too() -> None:
-    blank = replace(READY, first_name="", hometown="", city="", username="", about="")
-    assert rules.missing(blank) == [
-        "first_name",
-        "hometown",
-        "city",
-        "username",
-        "about",
-    ]
+    blank = replace(READY, first_name="", hometown="", city="", username="")
+    assert rules.missing(blank) == ["first_name", "hometown", "city", "username"]
 
 
 @pytest.mark.parametrize(

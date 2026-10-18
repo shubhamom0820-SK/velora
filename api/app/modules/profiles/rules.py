@@ -18,7 +18,8 @@ from app.core.config import APP_NAME
 
 FIRST_NAME_MAX = 30
 PLACE_MAX = 40
-ABOUT_MIN, ABOUT_MAX = 40, 300
+# A bio is optional (D-951): empty means none, which is stored as NULL.
+ABOUT_MAX = 300
 
 
 def clean_text(value: str) -> str:
@@ -124,8 +125,8 @@ def has_phone_number(text: str) -> bool:
 
 
 def about_problem(about: str) -> str | None:
-    if not ABOUT_MIN <= len(about) <= ABOUT_MAX:
-        return f"must be {ABOUT_MIN} to {ABOUT_MAX} characters"
+    if len(about) > ABOUT_MAX:
+        return f"must be at most {ABOUT_MAX} characters"
     if _has_control(about, allow_newline=True):
         return "can't hold control characters"
     if _URL.search(about):

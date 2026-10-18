@@ -130,7 +130,7 @@ describe("edit profile (T-9.8)", () => {
     expect(api.sent()).not.toContain("PATCH /v1/me/profile");
   });
 
-  it("can't save with fewer than five interests or too short an about", async () => {
+  it("can't save with fewer than five interests", async () => {
     routes();
     renderEdit();
 
@@ -140,14 +140,26 @@ describe("edit profile (T-9.8)", () => {
     expect(
       screen.getByRole("button", { name: t("you.editSave") }),
     ).toBeDisabled();
-    await userEvent.click(screen.getByRole("button", { name: interest("5") }));
+  });
+
+  it.each([
+    ["", "an emptied bio as none"],
+    ["Chai.", "a short bio as written"],
+  ])("saves %j: %s (D-951)", async (written) => {
+    const api = routes({ "PATCH /v1/me/profile": () => json(200, me()) });
+    renderEdit();
+
     const about = screen.getByLabelText(t("onboarding.about.label"));
     await userEvent.clear(about);
-    await userEvent.type(about, "Too short");
-
-    expect(
+    if (written) await userEvent.type(about, written);
+    await userEvent.click(
       screen.getByRole("button", { name: t("you.editSave") }),
-    ).toBeDisabled();
+    );
+
+    await waitFor(() => expect(push).toHaveBeenCalledWith("/you"));
+    expect(api.calls.find((c) => c.method === "PATCH")?.body).toEqual({
+      about: written,
+    });
   });
 
   it("shows the server's refusal beside its field (VALIDATION_ERROR), and stays", async () => {

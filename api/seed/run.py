@@ -272,7 +272,8 @@ def _person_problems(person: Person, today: date) -> list[str]:
             )
         return problems
 
-    for name in ("gender", "dob", "first_name", "username", "about", "hometown"):
+    # Not the bio: it is optional (D-951).
+    for name in ("gender", "dob", "first_name", "username", "hometown"):
         if getattr(person, name) is None:
             problems.append(f"past onboarding's first steps, so needs {name}")
     if person.area is None or person.seeking is None:
@@ -285,6 +286,8 @@ def _person_problems(person: Person, today: date) -> list[str]:
         "about": (person.about, rules.about_problem),
         "hometown": (person.hometown, rules.place_problem),
     }
+    if person.about == "":
+        problems.append("about is None when there is none, never empty (D-951)")
     for name, (value, rule) in texts.items():
         if value is None:
             continue

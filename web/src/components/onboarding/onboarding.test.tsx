@@ -665,26 +665,67 @@ describe("the username (T-3.7)", () => {
 describe("about (T-3.12, T-3.7)", () => {
   const LONG = "  Weekend trekker, filter coffee loyalist, and slow reader.  ";
 
-  it("counts down to 40 characters, then sends the text trimmed", async () => {
+  it("sends the text trimmed, however short (D-951)", async () => {
     const api_ = fakeApi({
       "PATCH /v1/me/profile": () =>
         json(200, me({ onboarding_step: "photos" })),
     });
     renderUi(<AboutStep me={me({ onboarding_step: "about" })} />);
 
-    await userEvent.type(screen.getByLabelText("About you"), "Short one.");
-    expect(
-      screen.getByRole("button", { name: "30 more characters" }),
-    ).toBeDisabled();
-
-    await userEvent.clear(screen.getByLabelText("About you"));
-    await userEvent.type(screen.getByLabelText("About you"), LONG);
+    await userEvent.type(screen.getByLabelText("About you"), "  Chai.  ");
     await userEvent.click(screen.getByRole("button", { name: "Continue" }));
 
     await waitFor(() =>
       expect(nav.push).toHaveBeenCalledWith("/onboarding/photos"),
     );
+    expect(api_.calls[0]?.body).toEqual({ about: "Chai." });
+  });
+
+  it("sends a long one trimmed too", async () => {
+    const api_ = fakeApi({
+      "PATCH /v1/me/profile": () =>
+        json(200, me({ onboarding_step: "photos" })),
+    });
+    renderUi(<AboutStep me={me({ onboarding_step: "about" })} />);
+
+    await userEvent.type(screen.getByLabelText("About you"), LONG);
+    await userEvent.click(screen.getByRole("button", { name: "Continue" }));
+
+    await waitFor(() => expect(api_.calls).toHaveLength(1));
     expect(api_.calls[0]?.body).toEqual({ about: LONG.trim() });
+  });
+
+  it("skips with none, and moves on (D-951)", async () => {
+    const api_ = fakeApi({
+      "PATCH /v1/me/profile": () =>
+        json(200, me({ onboarding_step: "photos" })),
+    });
+    renderUi(<AboutStep me={me({ onboarding_step: "about" })} />);
+
+    expect(screen.getByRole("button", { name: "Continue" })).toBeDisabled();
+    await userEvent.click(screen.getByRole("button", { name: "Skip for now" }));
+
+    await waitFor(() =>
+      expect(nav.push).toHaveBeenCalledWith("/onboarding/photos"),
+    );
+    expect(api_.calls[0]?.body).toEqual({ about: "" });
+  });
+
+  it("offers the skip only while the box is empty, so it never throws away what was written", async () => {
+    fakeApi({});
+    renderUi(<AboutStep me={me({ onboarding_step: "about" })} />);
+    const box = screen.getByLabelText("About you");
+
+    await userEvent.type(box, "x");
+    expect(
+      screen.queryByRole("button", { name: "Skip for now" }),
+    ).not.toBeInTheDocument();
+
+    await userEvent.clear(box);
+    await userEvent.type(box, "   ");
+    expect(
+      screen.getByRole("button", { name: "Skip for now" }),
+    ).toBeInTheDocument();
   });
 
   it("leaves links and phone numbers to the server, and shows its refusal (D-082)", async () => {

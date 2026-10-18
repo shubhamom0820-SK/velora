@@ -8,6 +8,8 @@ from typing import Any
 
 import pytest
 from httpx import AsyncClient, Response
+from sqlalchemy import text
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.enums import OnboardingStep
@@ -179,6 +181,35 @@ async def test_about_at_its_step_is_set_and_moves_on_to_photos(
     assert profile.about == ABOUT
 
 
+@pytest.mark.parametrize("about", ["", "   \n  "], ids=["empty", "spaces"])
+async def test_an_empty_about_at_its_step_skips_it_storing_none(
+    db: AsyncSession, client: AsyncClient, make_user: MakeUser, about: str
+) -> None:
+    """The bio is optional (D-951): empty once trimmed is the skip, stored as
+    NULL, never ''."""
+    _, token, profile = await _at(db, make_user, OnboardingStep.ABOUT)
+
+    response = await _patch(client, token, about=about)
+
+    assert response.status_code == 200, response.text
+    assert response.json()["onboarding_step"] == "photos"
+    assert response.json()["profile"]["about"] is None
+    await db.refresh(profile)
+    assert profile.about is None
+
+
+async def test_a_short_about_is_kept_as_written(
+    db: AsyncSession, client: AsyncClient, make_user: MakeUser
+) -> None:
+    _, token, profile = await _at(db, make_user, OnboardingStep.ABOUT)
+
+    response = await _patch(client, token, about="Chai.")
+
+    assert response.status_code == 200, response.text
+    await db.refresh(profile)
+    assert profile.about == "Chai."
+
+
 @pytest.mark.parametrize(
     "about",
     [
@@ -264,6 +295,69 @@ async def test_after_the_about_step_about_is_an_edit(
     await db.refresh(profile)
     await db.refresh(user)
     assert profile.about == ABOUT and user.onboarding_step is step
+
+
+async def test_after_the_about_step_an_empty_about_clears_it(
+    db: AsyncSession, client: AsyncClient, make_user: MakeUser
+) -> None:
+    user, token, profile = await _at(db, make_user, OnboardingStep.DONE, empty=False)
+    assert profile.about
+
+    response = await _patch(client, token, about="")
+
+    assert response.status_code == 200, response.text
+    assert response.json()["profile"]["about"] is None
+    await db.refresh(profile)
+    await db.refresh(user)
+    assert profile.about is None and user.onboarding_step is OnboardingStep.DONE
+
+
+async def test_a_null_about_is_not_sent_and_changes_nothing(
+    db: AsyncSession, client: AsyncClient, make_user: MakeUser
+) -> None:
+    _, token, profile = await _at(db, make_user, OnboardingStep.DONE, empty=False)
+    before = profile.about
+
+    response = await _patch(client, token, about=None)
+
+    assert response.status_code == 200, response.text
+    await db.refresh(profile)
+    assert profile.about == before and before
+
+
+@pytest.mark.parametrize("about", ["", "x" * 301], ids=["empty", "301"])
+async def test_the_database_refuses_an_empty_or_too_long_about(
+    db: AsyncSession, make_user: MakeUser, about: str
+) -> None:
+    """Below the service (D-951): none is NULL, never '', so a profile says
+    "no bio" one way only."""
+    user, _ = await make_user()
+    write = text("UPDATE profiles SET about = :about WHERE user_id = :id")
+
+    with pytest.raises(IntegrityError) as refused:
+        async with db.begin_nested():
+            await db.execute(write, {"about": about, "id": user.id})
+
+    assert getattr(refused.value.orig, "sqlstate", None) == "23514"
+    assert "ck_profiles_about_length" in str(refused.value)
+
+
+@pytest.mark.parametrize("about", [None, "x", "x" * 300], ids=["none", "1", "300"])
+async def test_the_database_takes_none_or_1_to_300_characters(
+    db: AsyncSession, make_user: MakeUser, about: str | None
+) -> None:
+    user, _ = await make_user()
+
+    async with db.begin_nested():
+        await db.execute(
+            text("UPDATE profiles SET about = :about WHERE user_id = :id"),
+            {"about": about, "id": user.id},
+        )
+
+    stored = await db.scalar(
+        text("SELECT about FROM profiles WHERE user_id = :id"), {"id": user.id}
+    )
+    assert stored == about
 
 
 async def test_about_at_the_username_step_is_onboarding_incomplete(

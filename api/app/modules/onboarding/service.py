@@ -148,7 +148,6 @@ async def facts_of(session: AsyncSession, profile: Profile) -> rules.Facts:
         city=profile.city,
         located=profile.location is not None,
         username=profile.username,
-        about=profile.about,
         approved_photos=await repository.approved_public_photo_count(session, user_id),
         interests=await repository.interest_count(session, user_id),
     )

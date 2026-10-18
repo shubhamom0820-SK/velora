@@ -14,29 +14,31 @@ import { FormError } from "./FormError";
 import { StepFrame } from "./StepFrame";
 import { useAdvance } from "./useAdvance";
 
-/** 40 to 300 characters, trimmed (T-3.7): the length is the schema's (D-082). */
-const ABOUT_MIN = 40;
+/** Up to 300 characters, trimmed (T-3.7): the length is the schema's (D-082). */
 const ABOUT_MAX = 300;
 
+const SKIP =
+  "text-small text-mute mt-3 w-full py-2 underline underline-offset-2";
+
 /**
- * About (T-3.7's `about` step). No links or phone numbers is the server's rule,
- * and its refusal comes back beside the field (D-082).
+ * About (T-3.7's `about` step). Optional (D-951): "Skip for now" saves none,
+ * and shows only while the box is empty, so it never throws away what someone
+ * wrote. No links or phone numbers is the server's rule, and its refusal comes
+ * back beside the field (D-082).
  */
 export function AboutStep({ me }: { me: Me }) {
   const advance = useAdvance();
   const [about, setAbout] = useState(me.profile.about ?? "");
   const save = useUpdateProfile();
   const copy = save.isError ? errorCopy(save.error) : null;
-  const length = about.trim().length;
-  const short = ABOUT_MIN - length;
+  const written = about.trim();
 
   return (
     <form
       noValidate
       onSubmit={(event) => {
         event.preventDefault();
-        if (short <= 0)
-          save.mutate({ about: about.trim() }, { onSuccess: advance });
+        if (written) save.mutate({ about: written }, { onSuccess: advance });
       }}
     >
       <StepFrame
@@ -46,16 +48,28 @@ export function AboutStep({ me }: { me: Me }) {
         back={stepPath("username")}
         signedIn
         footer={
-          <Button
-            type="submit"
-            fullWidth
-            loading={save.isPending}
-            disabled={short > 0}
-          >
-            {short > 0
-              ? t("onboarding.about.moreNeeded", { count: short })
-              : t("onboarding.continue")}
-          </Button>
+          <>
+            <Button
+              type="submit"
+              fullWidth
+              loading={save.isPending}
+              disabled={!written}
+            >
+              {t("onboarding.continue")}
+            </Button>
+            {!written && (
+              <button
+                type="button"
+                className={SKIP}
+                disabled={save.isPending}
+                onClick={() =>
+                  save.mutate({ about: "" }, { onSuccess: advance })
+                }
+              >
+                {t("onboarding.about.skip")}
+              </button>
+            )}
+          </>
         }
       >
         <TextArea

@@ -176,6 +176,31 @@ async def test_a_woman_whose_selfie_matched_finishes(
     [(Gender.MALE, False), (Gender.FEMALE, True)],
     ids=["a man", "a matched woman"],
 )
+async def test_no_bio_finishes_and_costs_no_completeness(
+    db: AsyncSession,
+    client: AsyncClient,
+    make_user: MakeUser,
+    gender: Gender,
+    verified: bool,
+) -> None:
+    """D-951: the bio is optional, and completeness counts photos alone (D-310),
+    so a profile with none finishes at the same 50."""
+    _, token, user_id = await _at_selfie(db, make_user, gender, verified=verified)
+    await _clear("about")(db, user_id, user_id)
+
+    response = await _complete(client, token)
+
+    assert response.status_code == 200, response.text
+    assert response.json()["onboarding_step"] == "done"
+    assert response.json()["profile"]["about"] is None
+    assert await _stored(db, user_id) == ("done", 50)
+
+
+@pytest.mark.parametrize(
+    ("gender", "verified"),
+    [(Gender.MALE, False), (Gender.FEMALE, True)],
+    ids=["a man", "a matched woman"],
+)
 async def test_zero_photos_finishes_at_completeness_50(
     db: AsyncSession,
     client: AsyncClient,
@@ -260,13 +285,17 @@ BREAKS: dict[str, tuple[Missing, Break]] = {
     "no city": ("city", _clear("city")),
     "no location": ("location", _clear("location")),
     "no username": ("username", _clear("username")),
-    "no about": ("about", _clear("about")),
     "four interests": ("interests", _four_interests),
 }
 
 
 def test_every_requirement_has_a_case() -> None:
     assert {missing for missing, _ in BREAKS.values()} == set(get_args(Missing))
+
+
+def test_a_bio_is_no_longer_a_requirement() -> None:
+    """D-951, P-851: the bio is optional, so `about` left the list."""
+    assert "about" not in get_args(Missing)
 
 
 def test_a_photo_is_no_longer_a_requirement() -> None:

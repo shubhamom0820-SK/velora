@@ -30,7 +30,7 @@ named `<T>Page` (`LedgerEntryPage`). `limit` is 1 to 50, 20 when absent; outside
 | POST | /me/dob | 🔐 | `{dob}` → `Me`, or `UNDERAGE`: the account is deleted and only the number's hash kept (D-072) | T-3.6 |
 | POST | /me/gender | 🔐 | `{gender}` → `Me` (once) | T-3.6 |
 | POST | /me/seeking | 🔐 | `{seeking, intent_ids[1–3]}` → `Me` | T-3.6 |
-| PATCH | /me/profile | 🔐 | `{first_name?, hometown?, city?, about?}` → `Me` | T-3.7 |
+| PATCH | /me/profile | 🔐 | `{first_name?, hometown?, city?, about?}` → `Me`. A null is not sent. An `about` empty once trimmed is none, stored as null: at the about step it skips the bio and moves on, after it clears it (D-951) | T-3.7, P-851 |
 | GET | /usernames/{u}/available | 🔐 | → `{available, suggestion?}` | T-3.7 |
 | PUT | /me/username | 🔐 | `{username}` → `Me` or `USERNAME_TAKEN` | T-3.7 |
 | PUT | /me/interests | 🔐 | `{interest_ids[5]}` → `Me` | T-3.8 |
@@ -381,7 +381,7 @@ fake order is paid by calling it, for T-8.2's tests and T-8.7's local checkout.
 | `ACCOUNT_FROZEN` / `ACCOUNT_BANNED` | 403 | |
 | `BLOCKED` | 403 | never sent: across a block everything is `NOT_FOUND` (D-862) |
 | `ONBOARDING_INCOMPLETE` | 403 | `details.step`, the user's current step (D-068) |
-| `PROFILE_INCOMPLETE` | 403 | finishing onboarding with something missing; `details.missing`, every one, in onboarding's order: `seeking`, `intents`, `first_name`, `hometown`, `city`, `location`, `username`, `about`, `interests` (D-310; no photo since T-4.12, D-392) |
+| `PROFILE_INCOMPLETE` | 403 | finishing onboarding with something missing; `details.missing`, every one, in onboarding's order: `seeking`, `intents`, `first_name`, `hometown`, `city`, `location`, `username`, `interests` (D-310; no photo since T-4.12, D-392; no bio since P-851, D-951) |
 | `FACE_PHOTO_REQUIRED` | 403 | leaving the `photos` step with no face photo, pending or approved, by anyone but a man (D-391, T-4.12) |
 | `VERIFICATION_REQUIRED` | 403 | anyone but a man without a matched selfie: a woman, or someone with no gender (D-310) |
 | `NOT_FOUND` | 404 | also used when a blocked user is looked up |

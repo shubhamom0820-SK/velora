@@ -103,14 +103,16 @@ def test_a_place_breaking_a_rule_is_refused(place: str, problem: str) -> None:
 LONG_ENOUGH = "I love long walks around the canal and good chai. "
 
 
-@pytest.mark.parametrize("length", [40, 300])
-def test_an_about_of_40_to_300_characters_is_accepted(length: int) -> None:
+@pytest.mark.parametrize("length", [0, 1, 39, 300])
+def test_an_about_of_up_to_300_characters_is_accepted_none_included(
+    length: int,
+) -> None:
+    """Optional (D-951): none, a word, or anything up to 300."""
     assert rules.about_problem("x" * length) is None
 
 
-@pytest.mark.parametrize("length", [39, 301])
-def test_an_about_outside_40_to_300_characters_is_refused(length: int) -> None:
-    assert rules.about_problem("x" * length) == "must be 40 to 300 characters"
+def test_an_about_of_301_characters_is_refused() -> None:
+    assert rules.about_problem("x" * 301) == "must be at most 300 characters"
 
 
 def test_an_about_may_have_lines_but_no_other_control_character() -> None:

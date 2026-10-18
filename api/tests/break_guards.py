@@ -2532,7 +2532,7 @@ T48: list[tuple[Case, list[str]]] = [
         requirement_dropped("username", "bool(facts.username)", "no username"),
         [ONBOARDING],
     ),
-    (requirement_dropped("about", "bool(facts.about)", "no about"), [ONBOARDING]),
+    # The about requirement's case left with the requirement (D-951, P-851).
     # The photo requirement's case left with the requirement (D-392, T-4.12).
     (
         requirement_dropped(
@@ -12089,6 +12089,95 @@ P49: list[Case] = [
     ),
 ]
 
+# --- P-851: the bio is optional (D-951) ---------------------------------------------
+
+P851_SELECTION = [
+    "tests/modules/profiles/test_rules.py",
+    "tests/modules/profiles/test_profile.py",
+    "tests/modules/onboarding/test_complete.py",
+]
+ABOUT_RULE51 = "app/modules/profiles/rules.py"
+ABOUT_SERVICE51 = "app/modules/profiles/service.py"
+ONBOARDING_RULES51 = "app/modules/onboarding/rules.py"
+ONBOARDING_SERVICE51 = "app/modules/onboarding/service.py"
+ABOUT_MIGRATION51 = "alembic/versions/20261019_ac292d16611f_about_is_optional.py"
+NO_BIO_FINISHES = "test_no_bio_finishes_and_costs_no_completeness"
+
+P851: list[Case] = [
+    Case(
+        id="p851-1-the-40-minimum-back",
+        what="a bio held to 40 characters again",
+        edits=[
+            (
+                ABOUT_RULE51,
+                "    if len(about) > ABOUT_MAX:\n",
+                "    if not 40 <= len(about) <= ABOUT_MAX:\n",
+            )
+        ],
+        expect=[
+            "test_an_about_of_up_to_300_characters_is_accepted_none_included[1]",
+            "test_an_about_of_up_to_300_characters_is_accepted_none_included[39]",
+            "test_a_short_about_is_kept_as_written",
+            "test_an_empty_about_at_its_step_skips_it_storing_none[empty]",
+        ],
+    ),
+    Case(
+        id="p851-2-no-bio-stored-as-empty",
+        what="an empty bio written as '' instead of none",
+        edits=[
+            (
+                ABOUT_SERVICE51,
+                """        if cleaned.get("about") == "":
+            # No bio (D-951): at the about step it is the skip, after it a clear.
+            profile.about = None
+""",
+                "",
+            )
+        ],
+        expect=[
+            "test_an_empty_about_at_its_step_skips_it_storing_none[empty]",
+            "test_after_the_about_step_an_empty_about_clears_it",
+        ],
+    ),
+    Case(
+        id="p851-3-a-bio-required-again",
+        what="the bio a requirement for finishing again, as before P-851",
+        edits=[
+            (
+                ONBOARDING_RULES51,
+                "    username: str | None\n",
+                "    username: str | None\n    about: str | None\n",
+            ),
+            (
+                ONBOARDING_RULES51,
+                '        "interests": facts.interests == INTERESTS_PER_PROFILE,\n',
+                (
+                    '        "about": bool(facts.about),\n'
+                    '        "interests": facts.interests == INTERESTS_PER_PROFILE,\n'
+                ),
+            ),
+            (
+                ONBOARDING_SERVICE51,
+                "        username=profile.username,\n",
+                "        username=profile.username,\n        about=profile.about,\n",
+            ),
+        ],
+        expect=[f"{NO_BIO_FINISHES}[a man]", f"{NO_BIO_FINISHES}[a matched woman]"],
+    ),
+    Case(
+        id="p851-4-the-database-takes-an-empty-bio",
+        what="the CHECK widened to let '' in",
+        edits=[
+            (
+                ABOUT_MIGRATION51,
+                '    op.create_check_constraint(NAME, "profiles", "char_length(about) BETWEEN 1 AND 300")\n',
+                '    op.create_check_constraint(NAME, "profiles", "char_length(about) BETWEEN 0 AND 300")\n',
+            )
+        ],
+        expect=["test_the_database_refuses_an_empty_or_too_long_about[empty]"],
+    ),
+]
+
 # --- T-9.2: fraud scoring and auto-freeze -----------------------------------------
 
 FRAUD = "app/modules/safety/fraud.py"
@@ -13367,6 +13456,7 @@ CASES: list[tuple[Case, list[str]]] = (
     + [(c, T99_SELECTION) for c in T99]
     + [(c, T911_SELECTION) for c in T911]
     + [(c, T910_SELECTION) for c in T910]
+    + [(c, P851_SELECTION) for c in P851]
 )
 
 # The fifty-connection fixture's own message when Postgres refuses a connection.

@@ -6204,6 +6204,31 @@ restore lands".
 for a form they need at once); a greyed-out button (it reads as a wrong number); a second check in
 the submit handler (the busy button already refuses a tap and Enter, so no test could prove it).
 
+### D-951 · The bio is optional, and none is stored as null — Locked
+**The decision (the founder, 14 October 2026, relayed by the advisor; the plan approved 19 October
+2026 by the founder on the advisor's recommendation, Claude in a separate chat, relayed):** "bio mei
+40 character likhna needed nahi hona chaiye they can skip" (writing 40 characters in the bio
+shouldn't be needed; they can skip). Built as P-851:
+- **A bio is none, or 1 to 300 characters** after trimming, still with no links and no phone
+  numbers. `ABOUT_MIN` is gone from `profiles/rules.py`, `AboutStep.tsx` and `EditProfile.tsx`.
+- **None is null, never `''`:** the column was already nullable and every profile before the
+  about step already null; `Me.about` is `string | null` and every reader treats null as none.
+  `ck_profiles_about_length` is `char_length(about) BETWEEN 1 AND 300` (migration `ac292d16611f`),
+  which null passes and `''` doesn't, so a profile says "no bio" one way only. Its downgrade
+  refuses while any bio is shorter than 40.
+- **The skip is no new endpoint:** `PATCH /me/profile` with an `about` empty once trimmed stores
+  null; at the about step it moves on, after it clears the bio. A null is still "not sent".
+- **The about step** has "Continue" and, while the box is empty, a quiet "Skip for now" under it,
+  as the selfie step has, so it can never throw away what someone wrote. **Edit profile** saves an
+  emptied bio as none.
+- **Finishing onboarding doesn't need one:** `about` left `PROFILE_INCOMPLETE`'s `missing`.
+- **Ranking and completeness are unchanged:** completeness counts approved public photos alone
+  (D-310) and the score reads no bio (D-491). A profile with none shows no bio line on its card
+  and no About section on its page, as an empty one already did.
+
+**Rejected:** `''` for none (two ways to say it, and every reader handling both); a skip endpoint
+(the patch already carries it); a Skip shown beside a written bio (one tap would discard it).
+
 ### D-980 · Every 404 is ours, and renders per request — Locked
 **The decision (the founder, approving P-445's plan and then its second option, 14 and 16 October
 2026, on the advisor's recommendation, relayed):** `web/src/app/not-found.tsx` replaces Next's

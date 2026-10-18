@@ -941,7 +941,7 @@ describe("finishing sign-up: the server says what's still needed (T-4.8, D-310)"
   it.each([
     [["location"], "Add your location first.", "/onboarding/location"],
     [
-      ["seeking", "about"],
+      ["seeking", "username"],
       "Say who you're looking for first.",
       "/onboarding/looking-for",
     ],
@@ -962,7 +962,6 @@ describe("finishing sign-up: the server says what's still needed (T-4.8, D-310)"
     ],
     [["city"], "Add your name, hometown and city first.", "/onboarding/name"],
     [["username"], "Choose a username first.", "/onboarding/username"],
-    [["about"], "Write a few lines about yourself first.", "/onboarding/about"],
     [["interests"], "Pick your 5 interests first.", "/onboarding/interests"],
   ])(
     "names the first of %j, with the way back, and stays",

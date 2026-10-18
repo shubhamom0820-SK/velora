@@ -16,7 +16,7 @@ from app.modules.profiles.service import INTERESTS_PER_PROFILE
 # Each thing a finished profile needs that this one lacks: `PROFILE_INCOMPLETE`'s
 # `details.missing`, in the order onboarding asks for them, so the first is the
 # earliest screen to go back to. No photo is among them (D-392, T-4.12): nobody
-# needs a public photo, men included.
+# needs a public photo, men included. Nor a bio, since P-851 (D-951).
 Missing = Literal[
     "seeking",
     "intents",
@@ -25,7 +25,6 @@ Missing = Literal[
     "city",
     "location",
     "username",
-    "about",
     "interests",
 ]
 
@@ -74,7 +73,6 @@ class Facts:
     city: str | None
     located: bool
     username: str | None
-    about: str | None
     # Approved public photos only: discovery shows nothing else (D-310).
     approved_photos: int
     interests: int
@@ -91,7 +89,6 @@ def missing(facts: Facts) -> list[Missing]:
         "city": bool(facts.city),
         "location": facts.located,
         "username": bool(facts.username),
-        "about": bool(facts.about),
         "interests": facts.interests == INTERESTS_PER_PROFILE,
     }
     return [requirement for requirement, ok in met.items() if not ok]

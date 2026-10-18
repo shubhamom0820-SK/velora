@@ -1002,7 +1002,7 @@ export const en = {
       sub: "A few honest lines beat a clever one-liner.",
       label: "About you",
       placeholder: "What you do, what you're into, who you'd like to meet…",
-      moreNeeded: "{count} more characters",
+      skip: "Skip for now",
     },
     // The photos step (T-4.6), from the prototype's; the per-photo states and
     // reasons are Claude's, for the founder's review. No reason accuses the
@@ -1146,7 +1146,6 @@ export const en = {
           profile: "Add your name, hometown and city first.",
           location: "Add your location first.",
           username: "Choose a username first.",
-          about: "Write a few lines about yourself first.",
           interests: "Pick your 5 interests first.",
         },
         incomplete: "Something on your profile isn't finished yet.",

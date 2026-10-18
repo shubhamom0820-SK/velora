@@ -7129,7 +7129,7 @@ The number comes from the session's own block, given in its brief, from P-100 up
   restore lands"; broken once each (`node scripts/break-guards.mts p850`, two cases, both red).
   The submit handler's own check, in the plan, was left out: with it removed every test stayed
   green, since the busy button already refuses a tap and Enter.
-- [ ] P-851 · The bio becomes optional. **Before beta.** Worst case: people who'd finish
+- [x] P-851 · The bio becomes optional. **Before beta.** Worst case: people who'd finish
   sign-up stop at the about screen, which asks for 40 characters before it lets anyone on. The
   founder's words (14 October 2026, relayed by the advisor): "bio mei 40 character likhna needed
   nahi hona chaiye they can skip". Today: `ABOUT_MIN, ABOUT_MAX = 40, 300` (`profiles/rules.py:21`),
@@ -7145,6 +7145,15 @@ The number comes from the session's own block, given in its brief, from P-100 up
   numbers." (`errorCopy.ts:51` ignores the server's `problem`), and the browser counts UTF-16
   units where the server counts code points, so an emoji bio can pass the counter and be
   refused. Filed by Claude, 14 October 2026; its session's block.
+  **Built, 19 October 2026 (D-951):** none, or 1 to 300 characters; none is null, never `''`
+  (`ck_profiles_about_length`, migration `ac292d16611f`, its downgrade refused while a bio is under
+  40); `PATCH /me/profile` with an empty `about` skips the step or clears the bio; finishing no
+  longer needs one. The step's "Skip for now" shows only while the box is empty; Edit profile
+  saves an emptied bio as none. The seed has Tanvi and Kabir with none and Nandini's under 40.
+  Broken once each: `uv run python -m tests.break_guards p851-`, four cases, all red
+  (`out/p-851-break-guards.log`), and `node scripts/break-guards.mts p851`, three, all red. T-4.8's
+  `t48-about-not-required` left with the requirement. The emoji-counting mismatch went with the
+  minimum: at 300 the browser's limit is the stricter, so `errorCopy.ts` is unchanged.
 - [ ] P-852 · Onboarding: back visible, and forward to where you'd reached. **Before beta.**
   Worst case: someone who goes back to fix their name can't get forward again without saving
   the screen they went back to. The founder's words (14 October 2026, relayed by the advisor):

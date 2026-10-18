@@ -273,9 +273,14 @@ TODAY = date(2026, 10, 3)
             "dev: about can't hold a phone number (T-3.7)",
         ),
         (
-            _with("dev", about="Too short to say anything about me at all"[:39]),
+            _with("dev", about="x" * 301),
             SWIPES,
-            "dev: about must be 40 to 300 characters (T-3.7)",
+            "dev: about must be at most 300 characters (T-3.7)",
+        ),
+        (
+            _with("dev", about=""),
+            SWIPES,
+            "dev: about is None when there is none, never empty (D-951)",
         ),
         (
             _with("dev", first_name="Dev2"),

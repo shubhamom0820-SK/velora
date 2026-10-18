@@ -53,6 +53,11 @@ machine.
 - **Rewriting Ishita's, which P-38's entry didn't list, was the advisor's call**
   (Claude, in a separate chat), 5 October 2026.
 
+**The bio optional from P-851 (D-951, 19 October 2026), Claude's choice:**
+Tanvi and Kabir have none, and Nandini's is cut to "Yoga, dogs, chaos.", under
+40 characters, so the dev data has a profile with no bio, a woman's and a man's,
+and a bio the old minimum refused.
+
 **On the 1 km grid from 8 October 2026 (D-490, P-120):** each profile is stored
 at its scatter's grid point, so several share one and the 100 m spacing above
 no longer holds; the scatter still decides each one's area.
@@ -326,10 +331,7 @@ PROTOTYPE: tuple[Person, ...] = (
         first_name="Nandini",
         username="nandini.m",
         gradient=("#D9663F", "#6E1028"),
-        about=(
-            "Yoga instructor and part-time graphic designer. I foster dogs, which "
-            "means my flat is chaos roughly half the year."
-        ),
+        about="Yoga, dogs, chaos.",
         hometown="Nagpur",
         area="Bhagatpura",
         seeking=MEN,
@@ -366,10 +368,6 @@ PROTOTYPE: tuple[Person, ...] = (
         first_name="Tanvi",
         username="tanvi_clicks",
         gradient=("#B8496A", "#450A1A"),
-        about=(
-            "Photography student from Jaipur. I spend weekends shooting heritage "
-            "buildings and evenings rewatching Guru Dutt films."
-        ),
         hometown="Jaipur",
         area="LPU",
         seeking=MEN,
@@ -426,10 +424,6 @@ PROTOTYPE: tuple[Person, ...] = (
         first_name="Kabir",
         username="kabir_lko",
         gradient=("#CC6440", "#661020"),
-        about=(
-            "Lawyer. Lucknowi, which means I'm annoyingly polite. I read a lot and "
-            "argue for a living, so I've learned when not to."
-        ),
         hometown="Lucknow",
         area="Sarai Road",
         seeking=WOMEN,

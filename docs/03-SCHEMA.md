@@ -154,7 +154,7 @@ under-18 refusal (D-078) and the erasure (D-503) delete its rows, files first.
 | user_id | uuid pk fk users | |
 | first_name | text | 1–30 chars |
 | username | citext unique | `^[a-z0-9._]{4,20}$`. ASCII only, and load-bearing: first names take every script, so look-alike letters can copy a display name, but never an @username (P-59) |
-| about | text | 40–300 chars |
+| about | text | null when there is none, else 1–300 chars; never `''` (D-951, P-851) |
 | hometown | text | ≤ 40 |
 | city | text | ≤ 40 |
 | area_id | uuid null fk areas | manual fallback |

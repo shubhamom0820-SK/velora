@@ -26,11 +26,11 @@ import {
 /**
  * The lengths and counts the onboarding steps hold to (T-3.7, T-3.8, D-041,
  * D-082): the schema's own, so the browser may; every other rule is the
- * server's, and comes back beside its field.
+ * server's, and comes back beside its field. The bio is optional (D-951):
+ * emptied, it saves as none.
  */
 const NAME_MAX = 30;
 const PLACE_MAX = 40;
-const ABOUT_MIN = 40;
 const ABOUT_MAX = 300;
 const MAX_INTENTS = 3;
 const INTERESTS = 5;
@@ -109,7 +109,6 @@ function Form({ me }: { me: Me }) {
     text.first_name.length >= 1 &&
     text.hometown.length >= 1 &&
     text.city.length >= 1 &&
-    text.about.length >= ABOUT_MIN &&
     intentIds.length >= 1 &&
     interestIds.length === INTERESTS;
 
@@ -183,13 +182,6 @@ function Form({ me }: { me: Me }) {
           value={about}
           onChange={(event) => setAbout(event.target.value)}
           error={copy?.fields.about}
-          helper={
-            text.about.length < ABOUT_MIN
-              ? t("onboarding.about.moreNeeded", {
-                  count: ABOUT_MIN - text.about.length,
-                })
-              : undefined
-          }
         />
       </div>
       <fieldset className="flex flex-col gap-2.5">

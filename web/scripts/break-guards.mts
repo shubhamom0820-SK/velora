@@ -2290,6 +2290,33 @@ export const CASES: BreakCase[] = [
     run: ["src/lib/bundle-budget.test.ts"],
     expect: ["leaves a group's name out of the route"],
   },
+  {
+    id: "p851-web-01-no-skip",
+    file: "src/components/onboarding/AboutStep.tsx",
+    old: "            {!written && (\n",
+    new: "            {false && (\n",
+    run: ["src/components/onboarding/onboarding.test.tsx"],
+    expect: [
+      "skips with none, and moves on",
+      "offers the skip only while the box is empty",
+    ],
+  },
+  {
+    id: "p851-web-02-the-step-wants-40-again",
+    file: "src/components/onboarding/AboutStep.tsx",
+    old: "              disabled={!written}\n",
+    new: "              disabled={written.length < 40}\n",
+    run: ["src/components/onboarding/onboarding.test.tsx"],
+    expect: ["sends the text trimmed, however short"],
+  },
+  {
+    id: "p851-web-03-edit-profile-wants-40-again",
+    file: "src/components/you/EditProfile.tsx",
+    old: "    text.city.length >= 1 &&\n",
+    new: "    text.city.length >= 1 &&\n    text.about.length >= 40 &&\n",
+    run: ["src/components/you/EditProfile.test.tsx"],
+    expect: ["an emptied bio as none", "a short bio as written"],
+  },
 ];
 
 const WEB = join(import.meta.dirname, "..");

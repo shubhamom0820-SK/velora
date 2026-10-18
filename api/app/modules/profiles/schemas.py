@@ -49,7 +49,9 @@ class InterestsSet(BaseModel):
 class ProfilePatch(BaseModel):
     """Any of the four, each only if sent (a null is not sent). First name,
     hometown and city are the `profile` step's; about is the `about` step's
-    (D-068). The rules are `profiles.rules`, checked by the service."""
+    (D-068). An about that is empty once trimmed means none: at the about step
+    it skips the bio, after it clears it (D-951). The rules are
+    `profiles.rules`, checked by the service."""
 
     # The rules measure the text trimmed; these caps only stop a body far past
     # any rule before it is read.

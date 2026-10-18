@@ -99,7 +99,8 @@ class Profile(Timestamps, Base):
         CheckConstraint(
             "char_length(first_name) BETWEEN 1 AND 30", name="first_name_length"
         ),
-        CheckConstraint("char_length(about) BETWEEN 40 AND 300", name="about_length"),
+        # D-951 (P-851): a bio is optional, NULL when there is none, never ''.
+        CheckConstraint("char_length(about) BETWEEN 1 AND 300", name="about_length"),
         CheckConstraint("char_length(hometown) <= 40", name="hometown_length"),
         CheckConstraint("char_length(city) <= 40", name="city_length"),
         CheckConstraint("completeness BETWEEN 0 AND 100", name="completeness_range"),

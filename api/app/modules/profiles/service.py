@@ -198,6 +198,9 @@ async def update_profile(
         profile = await repository.profile_of(session, user.id)
         for field, value in cleaned.items():
             setattr(profile, field, value)
+        if cleaned.get("about") == "":
+            # No bio (D-951): at the about step it is the skip, after it a clear.
+            profile.about = None
         if at_profile and all(getattr(profile, f) for f in PROFILE_FIELDS):
             users_service.advance_past(user, OnboardingStep.PROFILE)
         if at_about:

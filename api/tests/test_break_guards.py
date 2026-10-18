@@ -106,6 +106,7 @@ def test_case_ids_are_unique_and_name_their_task() -> None:
         "t99",
         "t911",
         "t910",
+        "p851",
     }
     assert len([i for i in ids if i.startswith("t51-")]) == 35
     assert len([i for i in ids if i.startswith("t54-")]) == 6
@@ -115,7 +116,7 @@ def test_case_ids_are_unique_and_name_their_task() -> None:
     assert len([i for i in ids if i.startswith("p142-")]) == 1
     assert len([i for i in ids if i.startswith("p143-")]) == 2
     assert len([i for i in ids if i.startswith("p38-")]) == 10
-    assert len([i for i in ids if i.startswith("t48-")]) == 26
+    assert len([i for i in ids if i.startswith("t48-")]) == 25
     assert len([i for i in ids if i.startswith("t45-")]) == 31
     assert len([i for i in ids if i.startswith("t411-")]) == 8
     assert len([i for i in ids if i.startswith("t412-")]) == 22
@@ -153,6 +154,7 @@ def test_case_ids_are_unique_and_name_their_task() -> None:
     assert len([i for i in ids if i.startswith("t99-")]) == 9
     assert len([i for i in ids if i.startswith("t911-")]) == 5
     assert len([i for i in ids if i.startswith("t910-")]) == 1
+    assert len([i for i in ids if i.startswith("p851-")]) == 4
     assert len([i for i in ids if i.startswith("t94-")]) == 37
     assert len([i for i in ids if i.startswith("p680-")]) == 3
     assert len([i for i in ids if i.startswith("p80-")]) == 5
