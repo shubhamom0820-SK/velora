@@ -97,6 +97,7 @@ def test_case_ids_are_unique_and_name_their_task() -> None:
         "t712",
         "t98",
         "p680",
+        "p49",
         "t92",
         "p61",
         "p80",
