@@ -68,6 +68,42 @@ def test_behind_caddy_a_garbled_header_shares_one_bucket() -> None:
     assert client_bucket(request) == UNKNOWN_CLIENT
 
 
+# Both proxies' headers are allowed while Fly and the VMs both run (D-1021), but
+# each deployment reads only the one its CLIENT_IP_HEADER names: a client behind
+# Caddy can't pick its bucket by sending Fly's header, nor the reverse.
+_BOTH = [("Caddy-Client-IP", "Fly-Client-IP"), ("Fly-Client-IP", "Caddy-Client-IP")]
+
+
+@pytest.mark.parametrize(("configured", "other"), _BOTH)
+def test_a_deployment_reads_only_the_header_it_names(
+    configured: str, other: str
+) -> None:
+    staging = _settings(CLIENT_IP_HEADER=configured).model_copy(
+        update={"ENV": "staging"}
+    )
+    request = _request(
+        staging,
+        {configured: "203.0.113.7", other: "198.51.100.1", **_FORGED},
+    )
+
+    assert client_bucket(request) == "203.0.113.7"
+
+
+@pytest.mark.parametrize(("configured", "other"), _BOTH)
+def test_the_other_proxys_header_alone_escapes_nothing(
+    configured: str, other: str
+) -> None:
+    """Forged on its own, the other proxy's header (and X-Forwarded-For) lands
+    in the shared bucket, as a request with no header at all does."""
+    staging = _settings(CLIENT_IP_HEADER=configured).model_copy(
+        update={"ENV": "staging"}
+    )
+    for i in range(3):
+        request = _request(staging, {other: f"198.51.100.{i + 1}", **_FORGED})
+        assert client_bucket(request) == UNKNOWN_CLIENT
+        assert client_ipv6_48(_request(staging, {other: f"2001:db8:{i}::1"})) is None
+
+
 def test_locally_without_a_header_the_socket_decides() -> None:
     request = _request(_settings(), _FORGED, socket="127.0.0.1")
 

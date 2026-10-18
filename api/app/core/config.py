@@ -51,11 +51,15 @@ PLAIN_REDIS_ALLOWED_IN: frozenset[str] = frozenset({"local"})
 # from the header the proxy sets, CLIENT_IP_HEADER.
 SOCKET_CLIENT_IP_ALLOWED_IN: frozenset[str] = frozenset({"local"})
 # The headers a deployed build may read the client's IP from: an allowlist of
-# names our proxy sets (Caddy on the VMs, overwriting any value sent; D-1021), so a header the client writes can't be
+# names a proxy of ours sets, overwriting any value the client sent: Caddy's on
+# the VMs (D-1021), and Fly's until P-920 retires Fly. Each deployment reads the
+# one its CLIENT_IP_HEADER names and no other (tests/core/test_deps.py), so a header the client writes can't be
 # configured there by mistake (D-890): not X-Forwarded-For, and not the E2E
 # server's per-context address (`api/tests/e2e_server.py`), which only ENV
 # local may read. Compared ignoring case, as HTTP compares header names.
-PROXY_CLIENT_IP_HEADERS: frozenset[str] = frozenset({"caddy-client-ip"})
+PROXY_CLIENT_IP_HEADERS: frozenset[str] = frozenset(
+    {"caddy-client-ip", "fly-client-ip"}
+)
 # The keys this repo publishes for the tests and CI: tests/conftest.py and
 # .github/workflows/ci.yml use exactly these. Anyone who can read the repo can
 # sign access tokens, test phone hashes and decrypt phone numbers with them, and
@@ -140,7 +144,8 @@ class Settings(BaseSettings):
     CORS_ORIGINS: Annotated[list[str], NoDecode] = Field(default_factory=list)
     COOKIE_DOMAIN: str = ""
     # The header our proxy puts the client's IP in, for per-IP rate limits:
-    # `Caddy-Client-IP`, which Caddy sets (D-1021). Empty only where ENV is local (D-056).
+    # `Caddy-Client-IP` on the VMs (D-1021), `Fly-Client-IP` on Fly until P-920.
+    # Empty only where ENV is local (D-056).
     CLIENT_IP_HEADER: str = ""
 
     # --- Auth provider selection (D-035) ---
@@ -397,7 +402,8 @@ class Settings(BaseSettings):
         """
         if self.ENV not in SOCKET_CLIENT_IP_ALLOWED_IN and not self.CLIENT_IP_HEADER:
             raise ValueError(
-                f"ENV={self.ENV} needs CLIENT_IP_HEADER (Caddy-Client-IP behind Caddy): the "
+                f"ENV={self.ENV} needs CLIENT_IP_HEADER (Caddy-Client-IP behind Caddy, "
+                "Fly-Client-IP on Fly): the "
                 "socket's address is the proxy's, and X-Forwarded-For is written by "
                 "the client, so per-IP rate limits would key on an address anyone can "
                 f"choose (D-056). Only ENV {', '.join(sorted(SOCKET_CLIENT_IP_ALLOWED_IN))} "
@@ -408,8 +414,8 @@ class Settings(BaseSettings):
             and self.CLIENT_IP_HEADER.lower() not in PROXY_CLIENT_IP_HEADERS
         ):
             raise ValueError(
-                f"ENV={self.ENV} reads the client's IP only from Caddy-Client-IP, "
-                f"not {self.CLIENT_IP_HEADER}: any other header, X-Forwarded-For "
+                f"ENV={self.ENV} reads the client's IP only from Caddy-Client-IP or "
+                f"Fly-Client-IP, not {self.CLIENT_IP_HEADER}: any other header, X-Forwarded-For "
                 "or the E2E server's own among them, is one the client can write, "
                 "so per-IP rate limits would key on an address anyone can choose "
                 "(D-056, D-890)."

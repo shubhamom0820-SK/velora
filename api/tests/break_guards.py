@@ -12044,6 +12044,53 @@ P680: list[Case] = [
     ),
 ]
 
+# --- P-49: each deployment reads only the header its CLIENT_IP_HEADER names --------
+
+P49_SELECTION = ["tests/core/test_deps.py"]
+DEPS49 = "app/core/deps.py"
+NAMED_LINE = "        return request.headers.get(settings.CLIENT_IP_HEADER)\n"
+ONLY_NAMED = "test_a_deployment_reads_only_the_header_it_names"
+OTHER_ALONE = "test_the_other_proxys_header_alone_escapes_nothing"
+
+P49: list[Case] = [
+    Case(
+        id="p49-1-either-proxys-header-is-read",
+        what="a deployment reading the other proxy's header when its own is absent",
+        edits=[
+            (
+                DEPS49,
+                NAMED_LINE,
+                (
+                    "        return request.headers.get(settings.CLIENT_IP_HEADER) or "
+                    'request.headers.get("fly-client-ip") or request.headers.get("caddy-client-ip")\n'
+                ),
+            )
+        ],
+        expect=[
+            f"{OTHER_ALONE}[Caddy-Client-IP-Fly-Client-IP]",
+            f"{OTHER_ALONE}[Fly-Client-IP-Caddy-Client-IP]",
+        ],
+    ),
+    Case(
+        id="p49-2-the-other-proxys-header-wins",
+        what="a deployment preferring the other proxy's header over its own",
+        edits=[
+            (
+                DEPS49,
+                NAMED_LINE,
+                (
+                    '        return request.headers.get("fly-client-ip") or '
+                    'request.headers.get("caddy-client-ip")\n'
+                ),
+            )
+        ],
+        expect=[
+            f"{ONLY_NAMED}[Caddy-Client-IP-Fly-Client-IP]",
+            f"{ONLY_NAMED}[Fly-Client-IP-Caddy-Client-IP]",
+        ],
+    ),
+]
+
 # --- T-9.2: fraud scoring and auto-freeze -----------------------------------------
 
 FRAUD = "app/modules/safety/fraud.py"
@@ -12951,6 +12998,7 @@ CASES: list[tuple[Case, list[str]]] = (
     + [(c, T712_SELECTION) for c in T712]
     + [(c, T98_SELECTION) for c in T98]
     + [(c, P680_SELECTION) for c in P680]
+    + [(c, P49_SELECTION) for c in P49]
     + [(c, T92_SELECTION) for c in T92]
     + [(c, P61_SELECTION) for c in P61]
     + [(c, P80_SELECTION) for c in P80]

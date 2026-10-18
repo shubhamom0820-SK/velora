@@ -323,7 +323,7 @@ def test_outside_local_an_empty_list_is_fine(env: str) -> None:
 def test_no_client_ip_header_outside_local_refuses_to_start(env: str) -> None:
     message = _error(ENV=env, **{**_DEPLOYED, "CLIENT_IP_HEADER": ""})
 
-    assert f"ENV={env} needs CLIENT_IP_HEADER (Caddy-Client-IP behind Caddy)" in message
+    assert f"ENV={env} needs CLIENT_IP_HEADER (Caddy-Client-IP behind Caddy" in message
     assert "X-Forwarded-For is written by the client" in message
     assert "D-056" in message
 
@@ -344,8 +344,8 @@ def test_outside_local_only_caddys_header_is_read(env: str, header: str) -> None
     message = _error(ENV=env, **{**_DEPLOYED, "CLIENT_IP_HEADER": header})
 
     assert (
-        f"ENV={env} reads the client's IP only from Caddy-Client-IP, not {header}"
-        in message
+        f"ENV={env} reads the client's IP only from Caddy-Client-IP or "
+        f"Fly-Client-IP, not {header}" in message
     )
     assert "is one the client can write" in message
     assert "D-890" in message
@@ -353,7 +353,12 @@ def test_outside_local_only_caddys_header_is_read(env: str, header: str) -> None
 
 @pytest.mark.parametrize("env", ["staging", "production"])
 def test_outside_local_caddys_header_is_read_in_any_case(env: str) -> None:
-    for header in ("Caddy-Client-IP", "caddy-client-ip"):
+    for header in (
+        "Caddy-Client-IP",
+        "caddy-client-ip",
+        "Fly-Client-IP",
+        "FLY-CLIENT-IP",
+    ):
         assert _settings(ENV=env, **{**_DEPLOYED, "CLIENT_IP_HEADER": header})
 
 
