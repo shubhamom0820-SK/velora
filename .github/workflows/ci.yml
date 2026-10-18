@@ -568,3 +568,8 @@ jobs:
       # P-49: the secrets script's own loop, storage stubbed (no gcloud here).
       - name: The secrets script's own tests
         run: scripts/gcp-secrets-test
+
+      # P-925: the smoke check the release gate reads (D-075), against a stub
+      # broken one way at a time, so each check is seen to go red.
+      - name: The smoke check's own tests
+        run: scripts/staging-smoke-test

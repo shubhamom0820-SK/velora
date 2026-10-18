@@ -7,8 +7,9 @@
 #
 # Two optional settings, both unset for production and for staging's Fly path,
 # which then run exactly as before (P-49):
-#   EXPECT_API_SERVER  the API's answers must carry this Server header, so the
-#                      check proves which machine answered (Caddy on the VMs).
+#   EXPECT_API_VIA     the API's answers must carry a Via header naming this, so the
+#                      check proves which machine answered: Caddy on the VMs adds
+#                      "Via: 1.1 Caddy" and passes the API's own Server header through.
 #   CALLED_API         the API the web must call, when the API checked here isn't
 #                      it: the Mumbai VM is checked at api-mumbai.staging while
 #                      the staging web still calls api.staging (Fly).
@@ -62,14 +63,18 @@ for _ in $(seq 1 12); do
 done
 expect "API ready (Postgres and Redis)" "$api/readyz" 200 '"database":"ok"'
 expect "API alive" "$api/healthz" 200 '"status":"ok"'
-if [[ -n "${EXPECT_API_SERVER:-}" ]]; then
-  server="$(curl -s --max-time 20 -o /dev/null -D - "$api/healthz" | tr -d '' | grep -i '^server:' | cut -d' ' -f2- || true)"
-  if [[ "$server" == "$EXPECT_API_SERVER" ]]; then
-    say "ok   API answered by $EXPECT_API_SERVER"
+if [[ -n "${EXPECT_API_VIA:-}" ]]; then
+  via="$(curl -s --max-time 20 -o /dev/null -D - "$api/healthz" | tr -d '\r' | grep -i '^via:' | cut -d' ' -f2- || true)"
+  if [[ "$via" == *"$EXPECT_API_VIA"* ]]; then
+    say "ok   API answered through $EXPECT_API_VIA (Via: $via)"
   else
-    fail "API's Server header is '${server:-none}', want '$EXPECT_API_SERVER': another machine answered"
+    fail "API's Via header is '${via:-none}', want one naming '$EXPECT_API_VIA': another machine answered"
   fi
 fi
+# The admin API refuses a visitor (D-024): every /v1/admin route carries its own
+# require_role, the only thing guarding admin data. Proved by its effect, a 401
+# with no data, never by the web's gate below.
+expect "API /v1/admin refuses a visitor (D-024)" "$api/v1/admin/metrics" 401 '"code":"AUTH_REQUIRED"' '"signups_24h"'
 expect "API schema hidden (P-31)" "$api/openapi.json" 404 '"code":"NOT_FOUND"' '"paths"'
 expect "API docs hidden (P-31)" "$api/docs" 404 '"code":"NOT_FOUND"' 'swagger'
 
@@ -108,7 +113,45 @@ if [[ "${canonical%/}" == "$web" ]]; then
 else
   fail "web: the home page's canonical address is '${canonical:-missing}', not $web — built for another environment, or with APP_ENV unset"
 fi
-expect "web /admin hidden (P-30)" "$web/admin" 404 '' 'Coming soon.'
+# /admin (P-30, D-920, P-925): the panel exists, and a visitor without a staff
+# session gets only its gate. The server renders "Loading"; AdminGate decides in the
+# browser (UX, never protection, D-024). So what is served carries none of the
+# panel's own words (from en.ts's admin section: keep these in step with it), is
+# never indexed or cached, and robots.txt doesn't name the path (P-30: listing a
+# path advertises it).
+admin_headers="$(curl -s --max-time 20 -o /dev/null -D - "$web/admin" | tr -d '\r' || true)"
+fetch "$web/admin"
+if [[ "$status" != 200 ]]; then
+  fail "web /admin: returned $status, want 200 (the panel's gate)"
+else
+  visible="$(perl -0pe 's/<script\b.*?<\/script>//gis; s/<[^>]+>/ /g' <<<"$body")"
+  leaked=""
+  for word in "Audit log" "Sign-ups, last 24 hours" "Open reports" "Accounts by status" "Money in"; do
+    if [[ "$visible" == *"$word"* ]]; then leaked="$leaked '$word'"; fi
+  done
+  if [[ -n "$leaked" ]]; then
+    fail "web /admin shows a visitor the panel's own words:$leaked"
+  else
+    say "ok   web /admin shows a visitor only its gate"
+  fi
+  if [[ "$body" == *'<meta name="robots" content="noindex, nofollow"'* ]]; then
+    say "ok   web /admin is never indexed (noindex, nofollow)"
+  else
+    fail "web /admin lacks <meta name=\"robots\" content=\"noindex, nofollow\">"
+  fi
+  cache="$(grep -i '^cache-control:' <<<"$admin_headers" | cut -d' ' -f2- || true)"
+  if [[ "$cache" == *no-store* ]]; then
+    say "ok   web /admin is never cached ($cache)"
+  else
+    fail "web /admin's Cache-Control is '${cache:-none}', want no-store"
+  fi
+fi
+fetch "$web/robots.txt"
+if [[ "$status" == 200 && "$body" != *"/admin"* ]]; then
+  say "ok   robots.txt doesn't name /admin (P-30)"
+else
+  fail "robots.txt: returned $status, or names /admin, which advertises it (P-30)"
+fi
 expect "web /dev/ui hidden" "$web/dev/ui" 404 '' 'UI primitives'
 expect "web /dev/health hidden" "$web/dev/health" 404 '' 'API health'
 

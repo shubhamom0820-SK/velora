@@ -1,0 +1,137 @@
+#!/usr/bin/env bash
+# Tests scripts/staging-smoke (P-925, P-49) against a local stub that plays both the
+# API and the web, built to pass every check, then broken one way at a time: the
+# panel's words served to a visitor, no noindex, a cacheable /admin, robots.txt
+# naming /admin, the admin API answering a visitor, and no Via from Caddy. Every
+# case checks the exit code and the message. The release gate reads this script's
+# verdict (D-075), so a check that can't go red would wave a release through.
+# Needs python3 and curl; runs locally and in CI.
+set -euo pipefail
+
+here="$(cd "$(dirname "$0")" && pwd)"
+smoke="$here/staging-smoke"
+work="$(mktemp -d)"
+stub_pid=""
+cleanup() {
+  if [[ -n "$stub_pid" ]]; then
+    kill "$stub_pid" 2>/dev/null || true
+    wait "$stub_pid" 2>/dev/null || true
+  fi
+  rm -rf "$work"
+}
+trap cleanup EXIT
+failures=0
+fail() {
+  echo "staging-smoke-test: FAIL $*"
+  failures=$((failures + 1))
+}
+
+# The stub: one server for the API and the web. MODE (a file it rereads on each
+# request) names the one thing it gets wrong; "good" gets nothing wrong.
+cat > "$work/stub.py" <<'PY'
+import http.server, json, os, sys
+
+MODE_FILE = sys.argv[1]
+BASE = os.environ["BASE"]
+
+
+class Stub(http.server.BaseHTTPRequestHandler):
+    def log_message(self, *args):
+        pass
+
+    def send(self, code, body, kind="text/html", headers=()):
+        data = body.encode()
+        self.send_response(code)
+        self.send_header("Content-Type", kind)
+        self.send_header("Content-Length", str(len(data)))
+        for name, value in headers:
+            self.send_header(name, value)
+        self.end_headers()
+        self.wfile.write(data)
+
+    def do_GET(self):
+        mode = open(MODE_FILE).read().strip()
+        path = self.path.split("?")[0]
+        api = []
+        if mode != "no-via":
+            api.append(("Via", "1.1 Caddy"))
+        if self.headers.get("Origin") == BASE:
+            api.append(("Access-Control-Allow-Origin", BASE))
+        if path == "/readyz":
+            return self.send(200, json.dumps({"status": "ok", "checks": {"database": "ok", "redis": "ok"}}, separators=(",", ":")), "application/json", api)
+        if path == "/healthz":
+            return self.send(200, '{"status":"ok"}', "application/json", api)
+        if path in ("/openapi.json", "/docs"):
+            return self.send(404, '{"error":{"code":"NOT_FOUND","message":"Not found."}}', "application/json", api)
+        if path == "/v1/admin/metrics":
+            if mode == "admin-api-open":
+                return self.send(200, '{"signups_24h":3,"signups_7d":9}', "application/json", api)
+            return self.send(401, '{"error":{"code":"AUTH_REQUIRED","message":"Sign in to continue."}}', "application/json", api)
+        if path == "/":
+            return self.send(200, f'<html><head><link rel="canonical" href="{BASE}"/></head><body>Velora<script src="/_next/static/chunks/app.js"></script></body></html>')
+        if path == "/_next/static/chunks/app.js":
+            # The bundle carries the API's URL and, like every real one, the panel's words.
+            return self.send(200, f'const api="{BASE}";const t="Audit log";', "application/javascript")
+        if path == "/admin":
+            robots = "" if mode == "no-noindex" else '<meta name="robots" content="noindex, nofollow"/>'
+            cache = "private, max-age=600" if mode == "cacheable" else "private, no-cache, no-store, max-age=0, must-revalidate"
+            shown = "<nav>Dashboard Audit log</nav>" if mode == "leak" else "Loading"
+            payload = '<script>self.__next_f.push([1,"Audit log Money in"])</script>'
+            return self.send(200, f"<html><head><title>Admin · Velora</title>{robots}</head><body>{shown}{payload}</body></html>", headers=[("Cache-Control", cache)])
+        if path == "/robots.txt":
+            extra = "Disallow: /admin\n" if mode == "robots-names-admin" else ""
+            return self.send(200, f"User-agent: *\nAllow: /\n{extra}", "text/plain")
+        pages = {"/terms": "Terms and conditions", "/privacy": "Privacy policy", "/refunds": "Refund policy", "/contact": "Contact and grievances"}
+        if path in pages:
+            return self.send(200, f"<html><body><h1>{pages[path]}</h1></body></html>")
+        return self.send(404, "<html><body>Not found</body></html>")
+
+
+server = http.server.ThreadingHTTPServer(("127.0.0.1", int(os.environ["PORT"])), Stub)
+server.serve_forever()
+PY
+
+port="$(python3 -c 'import socket; s = socket.socket(); s.bind(("127.0.0.1", 0)); print(s.getsockname()[1])')"
+base="http://127.0.0.1:$port"
+echo good > "$work/mode"
+BASE="$base" PORT="$port" python3 "$work/stub.py" "$work/mode" &
+stub_pid=$!
+for _ in $(seq 1 50); do curl -s -o /dev/null "$base/healthz" && break; sleep 0.1; done
+
+# expect NAME MODE EXPECT_API_VIA CODE MUST_CONTAIN
+expect() {
+  local name="$1" mode="$2" via="$3" want="$4" contains="$5" out code
+  echo "$mode" > "$work/mode"
+  set +e
+  out="$(EXPECT_API_VIA="$via" "$smoke" "$base" "$base" 2>&1)"
+  code=$?
+  set -e
+  if [[ "$code" != "$want" ]]; then
+    fail "$name: exit $code, want $want"
+    printf '%s\n' "$out" | grep -v ': ok ' | sed 's/^/    /'
+  elif [[ "$out" != *"$contains"* ]]; then
+    fail "$name: output lacks '$contains'"
+    printf '%s\n' "$out" | grep -v ': ok ' | sed 's/^/    /'
+  else
+    echo "staging-smoke-test: ok   $name"
+  fi
+}
+
+expect "a good deployment passes, the panel's words in its scripts only" good Caddy 0 "every check passed."
+expect "a good deployment passes without EXPECT_API_VIA (production's call)" no-via "" 0 "every check passed."
+expect "the panel's words served to a visitor fail" leak "" 1 \
+  "FAIL web /admin shows a visitor the panel's own words: 'Audit log'"
+expect "an /admin without noindex fails" no-noindex "" 1 "FAIL web /admin lacks <meta name=\"robots\""
+expect "a cacheable /admin fails" cacheable "" 1 \
+  "FAIL web /admin's Cache-Control is 'private, max-age=600', want no-store"
+expect "robots.txt naming /admin fails" robots-names-admin "" 1 "FAIL robots.txt: returned 200, or names /admin"
+expect "the admin API answering a visitor fails" admin-api-open "" 1 \
+  "FAIL API /v1/admin refuses a visitor (D-024): $base/v1/admin/metrics returned 200, want 401"
+expect "no Via from Caddy fails when it is expected" no-via Caddy 1 \
+  "FAIL API's Via header is 'none', want one naming 'Caddy'"
+
+if ((failures > 0)); then
+  echo "staging-smoke-test: $failures case(s) failed."
+  exit 1
+fi
+echo "staging-smoke-test: every case passed."

@@ -273,7 +273,7 @@ jobs:
           VM_API_URL: ${{ vars.STAGING_VM_API_URL }}
           WEB_URL: ${{ vars.STAGING_WEB_URL }}
           CALLED_API: ${{ vars.STAGING_API_URL }}
-          EXPECT_API_SERVER: Caddy
+          EXPECT_API_VIA: Caddy
         run: scripts/staging-smoke "$VM_API_URL" "$WEB_URL"
 
   web:
