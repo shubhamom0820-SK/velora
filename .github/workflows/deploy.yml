@@ -3,6 +3,13 @@
 #
 #   gate → migrate (as the owner, from here) → api (Fly) → web (Vercel) → smoke
 #                                                       ↘ worker (Fly, T-4.4)
+#        ↘ image (Mumbai registry) → vm (Mumbai VM, after migrate) → vm-smoke (after web)
+#
+# The Mumbai VM (P-49, D-1020, D-1022) runs beside Fly until the founder retires
+# Fly (P-920): it serves api-mumbai.staging only, with its worker off, so Fly's
+# API and worker still serve staging. Its jobs sign in to Google Cloud without a
+# key, by Workload Identity Federation: GitHub's token for this repo's `staging`
+# environment, exchanged for the deploy account (infra/STAGING.md).
 #
 # Runs after CI completes on main, for the exact commit CI tested; or by hand
 # for any commit whose CI passed (Actions → Deploy staging → Run workflow).
@@ -39,6 +46,9 @@ permissions:
   actions: read # scripts/ci-gate reads CI runs
 
 env:
+  GCP_REGION: asia-south1
+  GCP_ZONE: asia-south1-a
+  STAGING_VM: velora-api-staging
   UV_VERSION: "0.12.13"
   NODE_VERSION: "24"
   FLYCTL_VERSION: "0.4.110"
@@ -149,6 +159,122 @@ jobs:
         env:
           FLY_API_TOKEN: ${{ secrets.FLY_WORKER_API_TOKEN }}
         run: flyctl deploy api --config "$GITHUB_WORKSPACE/infra/fly.worker.toml" --remote-only --ha=false
+
+  # The image the Mumbai VM runs (P-49): built here, pushed to staging's registry
+  # in Mumbai, and named onward by its digest, read back from the registry
+  # itself, never by its tag.
+  image:
+    name: image — staging's registry, Mumbai
+    needs: gate
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    environment: staging
+    permissions:
+      contents: read
+      id-token: write # GitHub's token, exchanged for the deploy account's (WIF)
+    outputs:
+      image: ${{ steps.digest.outputs.image }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ needs.gate.outputs.sha }}
+          persist-credentials: false
+
+      - uses: google-github-actions/auth@7c6bc770dae815cd3e89ee6cdf493a5fab2cc093 # v3.0.0
+        with:
+          workload_identity_provider: ${{ vars.GCP_WIF_PROVIDER }}
+          service_account: ${{ vars.GCP_DEPLOY_SA }}
+
+      - uses: google-github-actions/setup-gcloud@aa5489c8933f4cc7a4f7d45035b3b1440c9c10db # v3.0.1
+
+      - name: docker build and push
+        env:
+          SHA: ${{ needs.gate.outputs.sha }}
+          PROJECT: ${{ vars.GCP_PROJECT_ID }}
+        run: |
+          repo="$GCP_REGION-docker.pkg.dev/$PROJECT/velora/api"
+          gcloud auth configure-docker "$GCP_REGION-docker.pkg.dev" --quiet
+          docker build --platform linux/amd64 -t "$repo:$SHA" api
+          docker push "$repo:$SHA"
+
+      - name: The image's digest, from the registry
+        id: digest
+        env:
+          SHA: ${{ needs.gate.outputs.sha }}
+          PROJECT: ${{ vars.GCP_PROJECT_ID }}
+        run: |
+          repo="$GCP_REGION-docker.pkg.dev/$PROJECT/velora/api"
+          digest="$(gcloud artifacts docker images describe "$repo:$SHA" --format='value(image_summary.digest)')"
+          if [[ ! "$digest" =~ ^sha256:[0-9a-f]{64}$ ]]; then
+            echo "::error::The registry has no digest for $repo:$SHA (read '$digest')."
+            exit 1
+          fi
+          echo "image: $repo@$digest"
+          echo "image=$repo@$digest" >> "$GITHUB_OUTPUT"
+
+  # The Mumbai VM (P-49): the release (infra/gce at this commit) copied over IAP,
+  # then infra/gce/deploy as root: secrets from Secret Manager, the worker's
+  # settings checked, the API replaced and healthy or put back, Caddy for
+  # api-mumbai.staging. The VM's worker stays off (no /etc/velora/worker-on),
+  # so Fly's worker is still the only one (D-091). After migrate, as Fly's is.
+  vm:
+    name: vm — staging's Mumbai VM (api-mumbai, worker off)
+    needs: [gate, migrate, image]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    environment: staging
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ needs.gate.outputs.sha }}
+          persist-credentials: false
+
+      - uses: google-github-actions/auth@7c6bc770dae815cd3e89ee6cdf493a5fab2cc093 # v3.0.0
+        with:
+          workload_identity_provider: ${{ vars.GCP_WIF_PROVIDER }}
+          service_account: ${{ vars.GCP_DEPLOY_SA }}
+
+      - uses: google-github-actions/setup-gcloud@aa5489c8933f4cc7a4f7d45035b3b1440c9c10db # v3.0.1
+
+      - name: Deploy to the VM, over IAP
+        env:
+          SHA: ${{ needs.gate.outputs.sha }}
+          IMAGE: ${{ needs.image.outputs.image }}
+          PROJECT: ${{ vars.GCP_PROJECT_ID }}
+        run: |
+          rel="$RUNNER_TEMP/velora-release-$SHA"
+          mkdir -p "$rel"
+          git archive "$SHA" infra/gce | tar -x -C "$rel" --strip-components=2
+          gcloud compute scp --project="$PROJECT" --zone="$GCP_ZONE" --tunnel-through-iap \
+            --recurse --quiet "$rel" "$STAGING_VM:/tmp/"
+          gcloud compute ssh "$STAGING_VM" --project="$PROJECT" --zone="$GCP_ZONE" \
+            --tunnel-through-iap --quiet --ssh-key-expire-after=30m \
+            --command "sudo bash /tmp/velora-release-$SHA/deploy staging '$IMAGE' $SHA"
+
+  # The VM from the outside, at api-mumbai.staging: Caddy must be what answers,
+  # and the staging web, which still calls api.staging (Fly), must be ours.
+  vm-smoke:
+    name: smoke — the Mumbai VM, from the outside
+    needs: [gate, vm, web]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    environment: staging
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ needs.gate.outputs.sha }}
+          persist-credentials: false
+
+      - name: The VM answers through Caddy, bodies included
+        env:
+          VM_API_URL: ${{ vars.STAGING_VM_API_URL }}
+          WEB_URL: ${{ vars.STAGING_WEB_URL }}
+          CALLED_API: ${{ vars.STAGING_API_URL }}
+          EXPECT_API_SERVER: Caddy
+        run: scripts/staging-smoke "$VM_API_URL" "$WEB_URL"
 
   web:
     name: web — Vercel

@@ -558,3 +558,13 @@ jobs:
         run: |
           scripts/ci-vouch-test
           scripts/ci-e2e-needed-test
+
+      # P-49, D-1021: our Caddyfile, in the pinned Caddy image, never hands the
+      # API a client-written Caddy-Client-IP; the test runs the check on it and
+      # shows it fails on two weakened copies. Needs Docker, which runners have.
+      - name: Caddy sets the client's address itself (D-1021)
+        run: scripts/check-caddy-client-ip-test
+
+      # P-49: the secrets script's own loop, storage stubbed (no gcloud here).
+      - name: The secrets script's own tests
+        run: scripts/gcp-secrets-test

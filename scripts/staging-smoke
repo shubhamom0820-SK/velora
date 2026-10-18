@@ -5,6 +5,14 @@
 #
 #   scripts/staging-smoke API_URL WEB_URL
 #
+# Two optional settings, both unset for production and for staging's Fly path,
+# which then run exactly as before (P-49):
+#   EXPECT_API_SERVER  the API's answers must carry this Server header, so the
+#                      check proves which machine answered (Caddy on the VMs).
+#   CALLED_API         the API the web must call, when the API checked here isn't
+#                      it: the Mumbai VM is checked at api-mumbai.staging while
+#                      the staging web still calls api.staging (Fly).
+#
 # Bodies are checked as well as status codes: a 404 that still carries the page
 # or the schema is a leak (T-1.19's lesson). Exits 1 if any check fails, after
 # running them all.
@@ -12,6 +20,8 @@ set -euo pipefail
 
 api="${1%/}"
 web="${2%/}"
+called="${CALLED_API:-$api}"
+called="${called%/}"
 failures=0
 
 say() { printf 'staging-smoke: %s\n' "$*"; }
@@ -52,6 +62,14 @@ for _ in $(seq 1 12); do
 done
 expect "API ready (Postgres and Redis)" "$api/readyz" 200 '"database":"ok"'
 expect "API alive" "$api/healthz" 200 '"status":"ok"'
+if [[ -n "${EXPECT_API_SERVER:-}" ]]; then
+  server="$(curl -s --max-time 20 -o /dev/null -D - "$api/healthz" | tr -d '' | grep -i '^server:' | cut -d' ' -f2- || true)"
+  if [[ "$server" == "$EXPECT_API_SERVER" ]]; then
+    say "ok   API answered by $EXPECT_API_SERVER"
+  else
+    fail "API's Server header is '${server:-none}', want '$EXPECT_API_SERVER': another machine answered"
+  fi
+fi
 expect "API schema hidden (P-31)" "$api/openapi.json" 404 '"code":"NOT_FOUND"' '"paths"'
 expect "API docs hidden (P-31)" "$api/docs" 404 '"code":"NOT_FOUND"' 'swagger'
 
@@ -68,15 +86,15 @@ if [[ "$status" == 200 ]]; then
   calls_api=no
   for chunk in $(grep -o '/_next/static/chunks/[^"]*\.js' <<<"$body" | sort -u || true); do
     fetch "$web$chunk"
-    if [[ "$status" == 200 && "$body" == *"$api"* ]]; then
+    if [[ "$status" == 200 && "$body" == *"$called"* ]]; then
       calls_api=yes
       break
     fi
   done
   if [[ "$calls_api" == yes ]]; then
-    say "ok   web is our build, calling $api"
+    say "ok   web is our build, calling $called"
   else
-    fail "web: no script on $web calls $api — another site at that URL, or NEXT_PUBLIC_API_URL unset"
+    fail "web: no script on $web calls $called — another site at that URL, or NEXT_PUBLIC_API_URL unset"
   fi
 fi
 # ...and it must be built for this environment (T-2.6). APP_ENV decides the site's own address,
