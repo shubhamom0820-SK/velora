@@ -100,3 +100,175 @@ def test_ordinary_sentences_are_not_refused(text: str) -> None:
 
 def test_abuse_is_named_before_money() -> None:
     assert filters.refusal("bitch, send money") == "abuse"
+
+
+# P-450 (D-981): the founder's Hindi and Hinglish list. Every entry caught, and
+# beside it the ordinary sentence it must not catch.
+@pytest.mark.parametrize(
+    "text",
+    [
+        # Romanised, as prefixes.
+        "bhenchod",
+        "bhen chod",
+        "behen ke laude",
+        "maa ke lode",
+        "maderchod",
+        "bhosdike",
+        "bhosadi wala",
+        "haramzada",
+        "haramkhor",
+        "chinal",
+        "chhinal",
+        "chinaal",
+        # Romanised, as whole words.
+        "gandu",
+        "gaandu",
+        "teri gaand",
+        "lauda",
+        "lawda",
+        "lavda",
+        "laude",
+        "lodu",
+        "lund",
+        "harami",
+        "jhaantu",
+        "jhantu",
+        "bsdk",
+        "BKL",
+        "mkc",
+        # Devanagari.
+        "मादरचोद",
+        "बहनचोद",
+        "बहेनचोद",
+        "भेनचोद",
+        "तू चूतिया है",
+        "चुतिया",
+        "भोसड़ी के",
+        "भोसडी",
+        "हरामज़ादा",
+        "हरामजादा",
+        "हरामखोर",
+        "छिनाल",
+        "रंडी",
+        "गांडू",
+        "गाँडू",
+        "गाण्डू",
+        "तेरी गांड",
+        "लौड़ा",
+        "लौडा",
+        "लंड",
+        "हरामी",
+        "झांटू",
+    ],
+)
+def test_the_founders_abuse_words_are_refused(text: str) -> None:
+    assert filters.refusal(text) == "abuse"
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        # Apps.
+        "google pay kar do",
+        "amazon pay pe bhejo",
+        "mobikwik number",
+        "freecharge se",
+        "bhim upi pe",
+        "पेटीएम कर दो",
+        "गूगल पे",
+        "फोनपे पे भेजो",
+        "यूपीआई दो",
+        # The money, then the ask.
+        "paise bhejo",
+        "paise bhej do",
+        "paisa de do",
+        "paise dedo",
+        "paise do na",
+        "paise chahiye",
+        "rupaye bhejo",
+        "500 rupees bhejna",
+        "पैसे भेजो",
+        "पैसे भेज दो",
+        "पैसे चाहिए",
+        "रुपये भेजो",
+        # An amount, then "send".
+        "500 bhejo",
+        "₹2000 bhej do",
+        "५०० भेजो",
+        # A recharge.
+        "recharge kar do",
+        "recharge kara do",
+        "recharge karwa do",
+        "mera recharge kar dena",
+        "recharge kar doge?",
+        "रिचार्ज कर दो",
+        # A loan.
+        "udhaar de do",
+        "udhaar chahiye",
+        "उधार दे दो",
+        "उधार चाहिए",
+        # A QR code or a gift card (the founder's addition).
+        "qr code bhejo",
+        "QR bhej do",
+        "qr scan karo",
+        "qr code scan kar do",
+        "क्यूआर कोड भेजो",
+        "gift card bhejo",
+        "gift card do",
+        "gift card de do",
+        "amazon gift card chahiye",
+        "गिफ्ट कार्ड भेजो",
+        "गिफ्ट कार्ड चाहिए",
+    ],
+)
+def test_the_founders_money_asks_are_refused(text: str) -> None:
+    assert filters.refusal(text) == "solicitation"
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        # Abuse words' neighbours.
+        "behen ki shaadi hai",
+        "maa ke saath hoon",
+        "maa ke log aaye",
+        "chutti pe hoon",
+        "gandi aadat hai",
+        "gaana sun",
+        "sharab haram hai",
+        "लंडन जा रहा हूँ",
+        # Left out on purpose (D-981): ordinary words, names, sentences.
+        "mera kutta bahut cute hai",
+        "kutti, Malayalam for child",
+        "Kamini se milo",
+        "mera sala aaya hai",
+        "train chhoot gayi",
+        "teri maa ki tabiyat kaisi hai",
+        "300 BC",
+        "the MC was great",
+        "number do",
+        # Money's neighbours.
+        "paise ki tension mat lo",
+        "maine bill ke paise bhar diye",
+        "paise do baar kat gaye",  # the founder's: money cut twice
+        "udhaar do baar liya",
+        "udhaar dena accha nahi",
+        "500 photos bheje",
+        "recharge karna bhool gaya",
+        "Bhim mera dost hai",
+        "QR code se menu dekha",
+        "usne mujhe birthday pe gift card diya",
+        "पैसे की चिंता मत करो",
+    ],
+)
+def test_the_founders_list_leaves_ordinary_sentences_alone(text: str) -> None:
+    assert filters.refusal(text) is None
+
+
+def test_a_nukta_matches_typed_either_way() -> None:
+    """ "ड़" is one code point (U+095C) or "ड" and a nukta (U+0921 U+093C), as
+    the keyboard sends it."""
+    one = "भोस\u095cी"
+    two = "भोस\u0921\u093cी"
+    assert one != two
+    assert filters.refusal(one) == filters.refusal(two) == "abuse"

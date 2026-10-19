@@ -5668,7 +5668,7 @@ T71: list[Case] = [
     Case(
         id="t71-13-abuse-word-dropped",
         what="a word gone from the abuse list",
-        edits=[(FILTERS, r'r"\b(bitch|slut', r'r"\b(slut')],
+        edits=[(FILTERS, r'r"bitch|slut', r'r"slut')],
         expect=["test_abuse_and_asking_for_money_are_refused"],
     ),
     Case(
@@ -14147,6 +14147,44 @@ P163: list[Case] = [
 ]
 
 
+# --- P-450: Hindi and Hinglish in the message filters (D-981) -----------------------
+
+P450_SELECTION = ["tests/modules/messages/test_filters.py"]
+
+P450: list[Case] = [
+    Case(
+        id="p450-01-bare-do",
+        what='P-450: a bare "do" after money, so "paise do baar kat gaye" is refused',
+        edits=[(FILTERS, '_ASK = r"(bhejo|', '_ASK = r"(do|bhejo|')],
+        expect=["test_the_founders_list_leaves_ordinary_sentences_alone"],
+    ),
+    Case(
+        id="p450-02-no-nfc",
+        what="P-450: text not normalised, so a nukta typed as two code points slips by",
+        edits=[(FILTERS, '    text = unicodedata.normalize("NFC", text)\n', "")],
+        expect=["test_a_nukta_matches_typed_either_way"],
+    ),
+    Case(
+        id="p450-03-word-edge-for-devanagari",
+        what="P-450: \\b for a Devanagari word's end, which never sees one in a vowel sign",
+        edits=[(FILTERS, 'rf"(?![{_DEV}])"', 'r"\\b"')],
+        expect=["test_the_founders_abuse_words_are_refused"],
+    ),
+    Case(
+        id="p450-04-qr-code-alone",
+        what="P-450: a QR code refused when only named, not asked for",
+        edits=[
+            (
+                FILTERS,
+                r'r"|\bqr(\s*code)?\s+(bhejo|bhej\s*do|scan\s*karo|scan\s*kar\s*do)\b"',
+                r'r"|\bqr(\s*code)?\b"',
+            )
+        ],
+        expect=["test_the_founders_list_leaves_ordinary_sentences_alone"],
+    ),
+]
+
+
 CASES: list[tuple[Case, list[str]]] = (
     [(c, T51_SELECTION) for c in T51]
     + [(c, T54_SELECTION) for c in T54]
@@ -14220,6 +14258,7 @@ CASES: list[tuple[Case, list[str]]] = (
     + [(c, P904_SELECTION) for c in P904]
     + [(c, P163_SELECTION) for c in P163]
     + [(c, T913_SELECTION) for c in T913]
+    + [(c, P450_SELECTION) for c in P450]
 )
 
 # The fifty-connection fixture's own message when Postgres refuses a connection.

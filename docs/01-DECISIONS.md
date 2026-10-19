@@ -4258,6 +4258,7 @@ and are reported to him with the task.
 
 **Not yet:** Hindi and Hinglish words, payment-app asks and "number do": P-450, the founder's
 list, before REL-1.
+**Done, 19 October 2026, by D-981:** the founder's list, with "number do" left out on purpose.
 
 ### D-553 · A woman's daily limits: settings, by the IST day, `RATE_LIMITED` — Locked (values tunable)
 **The decision (T-7.1, T-7.3; the founder, 8 October 2026, building D-098's limits):**
@@ -6959,3 +6960,46 @@ project's release notes too, not only OSV and GHSA.
   CI step carries them as an allowlist with their reasons.
 
 **Rejected:** a CI step for both audits now (filed as P-871, the founder's answer: a Proposed task).
+
+### D-981 · The message filters' Hindi and Hinglish list, and every word left out — Locked
+**The decision (the founder, approving P-450's list with changes, 19 October 2026, on the advisor's
+recommendation, relayed):** `messages/filters.py` refuses, on every message, these words and asks
+beside D-552's, romanised and in Devanagari, each with a caught test and an ordinary sentence it
+must not catch (`tests/modules/messages/test_filters.py`).
+- **Abuse:** bhench, bhen chod, maderch, bhosd, bhosad, haramzad, haramkhor,
+  chinal, chhinal, chinaal, and "behen ke" or "maa ke" with lode, laude, lawde or lund, as prefixes;
+  gandu, gaandu, gaand, lauda, lawda, lavda, laude, lodu, lund, harami, jhaantu, jhantu, and the
+  founder's bsdk, bkl and mkc, as whole words; मादरचोद, बहनचोद, बहेनचोद, भेनचोद, भैनचोद, चूतिया,
+  चुतिया, भोसड़, हरामज़ाद, हरामजाद, हरामखोर, छिनाल, रंडी as prefixes, and गांडू, गाँडू, गाण्डू,
+  गांड, गाँड, लौड़ा, लौडा, लंड, हरामी, झांटू, झाँटू as whole words.
+- **Asking for money:** Google Pay, Amazon Pay, MobiKwik, Freecharge and "bhim upi", and पेटीएम,
+  गूगल पे, फोनपे, यूपीआई; the money word (paise, paisa, rupaye, rupees, ₹; पैसे, पैसा, रुपये)
+  followed by bhejo, bhej do, bhejna, de do, dedo, do na or chahiye (भेजो, भेज दो, दे दो, दो ना,
+  चाहिए); an amount followed by bhejo or bhej do; "recharge kar/kara/karwa" followed by do, de,
+  dena, doge or dogi; "udhaar" followed by de do, dedo, do na or chahiye; and, the founder's
+  addition, "qr" or "qr code" followed by bhejo, bhej do, scan karo or scan kar do, and "gift card"
+  followed by bhejo, bhej do, do, de do or chahiye, each in Devanagari too.
+
+**Rules that came with it:** never a bare "do" after money or a loan: the founder's "paise do baar
+kat gaye" (money cut twice) must pass, and it was caught with it (a break run, 19 October 2026), so
+"udhaar do baar liya" is held the same way; a gift card's bare "do" is the founder's, kept.
+Devanagari words end where no Devanagari letter or sign is beside them, since Python's `\b`
+doesn't count vowel signs as part of a word; and text is NFC before matching, so "ड़" matches
+typed as one code point or two.
+
+**Left out, each with its reason:**
+- "number do" (give me your number): not money, and `/terms` promises refusal only for abuse and
+  money asks; asking for a number is ordinary once two people get on, and the number itself is
+  masked in a Thread's first 20 messages. The founder: no new rule.
+- kutta: dog. kutti: child in Tamil and Malayalam. kamini: a common name. sala, saala: a
+  brother-in-law. suar: pig.
+- chut, choot: they would refuse "train chhoot gayi" (the train left) and "chutti" (a holiday).
+- bc, mc: BC, and the MC of an event.
+- "teri maa ki" alone: it would refuse "teri maa ki tabiyat kaisi hai" (how is your mother).
+- a bare "bhim": a name ("Bhim mera dost hai").
+- "udhaar dena": lending in general ("udhaar dena accha nahi"), not an ask; never in the list.
+- haram alone: "forbidden" ("sharab haram hai"); harami and its compounds are in.
+- **Kept knowingly:** lund, which also refuses Lund, the Swedish town (the founder: keep it).
+
+**Rejected:** refusing in a Thread's first messages only (`/terms` promises it for every
+message); a bare "do" after money (it refuses money cut twice).

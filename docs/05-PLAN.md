@@ -6663,7 +6663,7 @@ The number comes from the session's own block, given in its brief, from P-100 up
   cache, an expiry least of all; the Thread is asked of the API again, which sends her null. The
   hour's two events are read by a man alone, an allowlist (`realtime.test.ts`: her client handed
   `thread.expired` with an `expires_at` changes and asks nothing; `t712-web-01` red when broken).
-- [ ] P-450 · Add Hindi and Hinglish words to the message filters. **Before REL-1,** the first
+- [x] P-450 · Add Hindi and Hinglish words to the message filters. **Before REL-1,** the first
   time strangers message each other. Worst case: a man writes "paytm kar do", "number do" or a
   Hindi slur, in the language most of our users write in, and it reaches her unmasked and
   unrefused, while `/terms` promises "We refuse messages that are abusive or that ask for money".
@@ -6674,6 +6674,12 @@ The number comes from the session's own block, given in its brief, from P-100 up
   (8 October 2026): a word list is a product judgment, and a wrong one refuses ordinary sentences.
   Each word goes in with a test, and each with an ordinary sentence it must not catch. Filed by
   Claude in T-7.1 at the founder's direction; its session's block, P-450 to P-459.
+  **Done 19 October 2026 (D-981):** the founder's list, romanised and in Devanagari, with QR codes
+  and gift cards asked for, bsdk, bkl and mkc, and never a bare "do" after money; every word left
+  out is in D-981 with its reason ("number do" among them: no new rule). `test_filters.py` holds
+  each entry caught and its ordinary neighbour passing (165 cases); `tests/break_guards.py`'s
+  `p450-01` to `p450-04` (a bare "do", no NFC, `\b` at a Devanagari word's end, a QR code merely
+  named) each went red, and so did the filter before P-450.
 - [ ] P-470 · Stop `test_a_fifty_waits_while_another_run_holds_the_turn` failing when other
   sessions test at once. **Before the next session's `make test` meets it** (no deadline beyond
   that: it blocks a landing, it hides no bug). Worst case: a `make test` goes red on a branch that
@@ -7929,3 +7935,15 @@ The number comes from the session's own block, given in its brief, from P-100 up
   enqueue only after the transaction commits, at both; a test that forces the job to
   run first, before the commit, and proves the blur and the match still happen; and a break case.
   Filed by Claude building T-9.13, 20 October 2026, at the founder's direction; its block.
+- [ ] P-884 · `scripts/ci-gate` gives each GitHub call its own one retry, not one per run. **Not
+  before REL-1; when convenient.** Worst case: two moments' trouble in one gate run, one while it
+  lists runs and one while it reads the run, use P-842's single retry between them, so the gate
+  exits 4 on a commit whose CI went green, the landing gives up its lock, and a session waits for
+  the founder to approve another read. Seen 19 October 2026 on P-450's landing: "TLS handshake
+  timeout" listing runs for `79b8ef3` at 19:40:54Z (retried, found run 39312953691), then again
+  reading that run, final; `gh auth status` and `rate_limit` were fine a minute later. Fix: the
+  retry belongs to each call (the listing, each read of the run), so a fresh failure after a
+  success gets its own one more try, while a call that fails twice in a row is still exit 4; the
+  retry line keeps naming what and when. `ci-gate-test`: a listing flake then a reading flake
+  passes, and a read that fails twice in a row exits 4. Filed by Claude at the founder's
+  direction, 19 October 2026, from this session's block (P-880 to P-889).
