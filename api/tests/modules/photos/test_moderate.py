@@ -15,7 +15,7 @@ from PIL import Image
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.enums import OnboardingStep, PhotoKind, ReviewStatus
+from app.core.enums import OnboardingStep, PhotoKind, ReviewStatus, Role
 from app.core.providers.moderation import MINOR_MODEL, FakeModeration
 from app.core.providers.storage import FakeStorage, ObjectNotFound
 from app.core.queue import MATCH_PHOTO, FakeQueue
@@ -26,6 +26,7 @@ from app.modules.users import service as users_service
 from app.modules.users.models import User
 from tests.conftest import CapturedLogs, MakeUser, make_test_settings
 from tests.fixtures.located import make as located
+from tests.modules.notifications.support import in_app
 
 PUBLIC, PRIVATE = "velora-public", "velora-private"
 LOCATED_JPEG = (
@@ -428,6 +429,33 @@ async def test_a_possible_minor_is_rejected_recorded_as_a_score_and_every_copy_d
         "score": 0.93,
     }
     assert str(photo.id) not in str(signal.meta)
+
+
+async def test_a_second_possible_minor_photo_tells_the_admins(
+    db: AsyncSession, make_user: MakeUser
+) -> None:
+    """P-72 (D-991): two flags in 30 days go to a human, from moderation's own
+    transaction; the first alone tells nobody."""
+    storage, moderation = FakeStorage(), FakeModeration()
+    admin, _ = await make_user(gender="female")
+    admin.role = Role.ADMIN
+    admin_id = admin.id
+    user, _ = await make_user(gender="female")
+    user_id = user.id
+
+    moderation.next = "reject:minor_suspected"
+    first = await _pending(db, storage, user)
+    assert await _moderate(db, first, storage, moderation) == "minor_suspected"
+    assert await in_app(db, admin_id) == []
+
+    moderation.next = "reject:minor_suspected"
+    second = await _pending(db, storage, user, position=1)
+    assert await _moderate(db, second, storage, moderation) == "minor_suspected"
+
+    [(kind, payload)] = await in_app(db, admin_id)
+    assert kind == "minor_flags"
+    assert (payload["subject_id"], payload["flags"]) == (str(user_id), 2)
+    assert payload["scores"] == [0.93, 0.93]
 
 
 async def test_a_minor_score_wins_over_nudity(

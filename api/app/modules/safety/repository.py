@@ -8,12 +8,13 @@ from typing import Any
 from uuid import UUID
 
 from sqlalchemy import Row, Uuid, and_, cast, exists, func, or_, select, tuple_, update
-from sqlalchemy.dialects.postgresql import insert
+from sqlalchemy.dialects.postgresql import aggregate_order_by, insert
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import aliased
-from sqlalchemy.sql import Select
+from sqlalchemy.sql import Select, Subquery
 
 from app.core.enums import FraudBand
+from app.modules.admin.models import AuditLogEntry
 from app.modules.discovery.repository import blocked_either_way, main_photo_key
 from app.modules.messages.models import Message
 from app.modules.profiles.models import Profile
@@ -142,6 +143,74 @@ async def due_for_scoring(
     if after is not None:
         query = query.where(ids.c.user_id > after)
     return (await session.scalars(query)).all()
+
+
+# --- Possible-minor flags awaiting a human (P-72) -------------------------------------
+
+
+def minor_flags_awaiting(
+    signal: str,
+    reviewed: str,
+    *,
+    since: datetime,
+    at_least: int,
+    user_id: UUID | None = None,
+) -> Subquery:
+    """Per person (or `user_id` alone), their `signal` events from `since` and
+    after their newest `reviewed` audit row, when there are `at_least` of them:
+    `user_id`, `flags`, `scores` and `times` oldest first, `first_at`,
+    `last_at`."""
+    decided = (
+        select(func.max(AuditLogEntry.created_at))
+        .where(
+            AuditLogEntry.target_type == "user",
+            AuditLogEntry.target_id == FraudEvent.user_id,
+            AuditLogEntry.action == reviewed,
+        )
+        .correlate(FraudEvent)
+        .scalar_subquery()
+    )
+    oldest_first = (FraudEvent.created_at, FraudEvent.id)
+    query = (
+        select(
+            FraudEvent.user_id,
+            func.count().label("flags"),
+            func.array_agg(
+                aggregate_order_by(FraudEvent.meta["score"].as_float(), *oldest_first)
+            ).label("scores"),
+            func.array_agg(
+                aggregate_order_by(FraudEvent.created_at, *oldest_first)
+            ).label("times"),
+            func.min(FraudEvent.created_at).label("first_at"),
+            func.max(FraudEvent.created_at).label("last_at"),
+        )
+        .where(
+            FraudEvent.signal == signal,
+            since <= FraudEvent.created_at,
+            or_(decided.is_(None), FraudEvent.created_at > decided),
+        )
+        .group_by(FraudEvent.user_id)
+        .having(func.count() >= at_least)
+    )
+    if user_id is not None:
+        query = query.where(FraudEvent.user_id == user_id)
+    return query.subquery("minor_flags")
+
+
+async def minor_flags_of(
+    session: AsyncSession,
+    user_id: UUID,
+    signal: str,
+    reviewed: str,
+    *,
+    since: datetime,
+    at_least: int,
+) -> Row[Any] | None:
+    """`minor_flags_awaiting`'s row for one person, or None."""
+    tally = minor_flags_awaiting(
+        signal, reviewed, since=since, at_least=at_least, user_id=user_id
+    )
+    return (await session.execute(select(tally))).one_or_none()
 
 
 async def user_exists(session: AsyncSession, user_id: UUID) -> bool:

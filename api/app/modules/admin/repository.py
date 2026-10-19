@@ -11,6 +11,7 @@ from sqlalchemy import (
     Row,
     Select,
     case,
+    exists,
     func,
     insert,
     or_,
@@ -21,6 +22,7 @@ from sqlalchemy import (
 )
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import aliased
+from sqlalchemy.sql import Subquery
 
 from app.core.enums import BanKind, PhotoKind, ReportStatus, ReviewStatus, UserStatus
 from app.modules.admin.models import AppConfig, AuditLogEntry
@@ -398,6 +400,46 @@ async def freezes_page(
     if after is not None:
         query = query.where(tuple_(sort_at, User.id) < after)
     return (await session.execute(query)).all()
+
+
+async def minor_flags_page(
+    session: AsyncSession, tally: Subquery, *, after: _Key | None, limit: int
+) -> Sequence[Row[Any]]:
+    """The people `tally` holds (safety's possible-minor flags waiting for a
+    human), each with their tally's columns, the newest flag first."""
+    query = (
+        select(
+            User,
+            *_profile_columns(),
+            tally.c.flags,
+            tally.c.scores,
+            tally.c.times,
+            tally.c.first_at,
+            tally.c.last_at,
+        )
+        .join(tally, tally.c.user_id == User.id)
+        .outerjoin(Profile, Profile.user_id == User.id)
+        .where(User.id != SYSTEM_USER_ID)
+        .order_by(tally.c.last_at.desc(), User.id.desc())
+        .limit(limit)
+    )
+    if after is not None:
+        query = query.where(tuple_(tally.c.last_at, User.id) < after)
+    return (await session.execute(query)).all()
+
+
+async def audited(session: AsyncSession, action: str, user_id: UUID) -> bool:
+    """Whether `audit_log` holds any `action` on this account."""
+    found = await session.scalar(
+        select(
+            exists().where(
+                AuditLogEntry.action == action,
+                AuditLogEntry.target_type == "user",
+                AuditLogEntry.target_id == user_id,
+            )
+        )
+    )
+    return bool(found)
 
 
 # --- The dashboard's counts (D-926) ------------------------------------------------------

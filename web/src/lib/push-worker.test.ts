@@ -173,6 +173,7 @@ const CASES: [string, NotificationData][] = [
   ["knot_accepted", { thread_id: THREAD, user_id: ID }],
   ["thread_expiring", { thread_id: THREAD }],
   ["low_balance", {}],
+  ["minor_flags", { subject_id: ID }],
   ["something_new", {}],
 ];
 
@@ -221,6 +222,14 @@ describe("the service worker (T-9.4)", () => {
   ])("opens the conversation for %s (P-752)", async (kind) => {
     const shown = await boot().push({ kind, thread_id: THREAD, user_id: ID });
     expect(shown.options.data).toEqual({ url: `/chats/${THREAD}` });
+  });
+
+  it("opens the person's page in the panel for an admin's flags (P-72)", async () => {
+    const shown = await boot().push({ kind: "minor_flags", subject_id: ID });
+    expect(shown.options.data).toEqual({ url: `/admin/users/${ID}` });
+    expect(shown.options.body).toBe(
+      t("notifications.kinds.minorFlags.plain", { app: APP_NAME }),
+    );
   });
 
   it("opens the sender's profile for a gift (T-8.10)", async () => {

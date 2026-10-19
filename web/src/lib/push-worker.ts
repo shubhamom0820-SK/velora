@@ -43,6 +43,7 @@ function variantOf(kind, data) {
     gift: "gift", album_request: "albumRequest", album_decided: "albumDeclined",
     knot_requested: "knotRequested", knot_accepted: "knotAccepted",
     thread_expiring: "threadExpiring", low_balance: "lowBalance",
+    minor_flags: "minorFlags",
   };
   return Object.prototype.hasOwnProperty.call(variants, kind) ? variants[kind] : "other";
 }

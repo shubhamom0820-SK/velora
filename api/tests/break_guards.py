@@ -13625,6 +13625,222 @@ T910: list[Case] = [
 ]
 
 
+# --- P-72: repeated possible-minor flags go to a human (D-991, D-994, D-1050) --
+
+P72_SELECTION = [
+    "tests/modules/safety/test_minor_flags.py",
+    "tests/modules/admin/test_admin_minor_flags.py",
+    "tests/modules/notifications/test_notify.py",
+    "tests/modules/notifications/test_sender.py",
+    "tests/modules/photos/test_moderate.py",
+]
+SAFETY_SERVICE72 = "app/modules/safety/service.py"
+SAFETY_REPO72 = "app/modules/safety/repository.py"
+NOTES_RULES72 = "app/modules/notifications/rules.py"
+ADMIN_PANEL72 = "app/modules/admin/panel.py"
+
+P72: list[Case] = [
+    Case(
+        id="p72-1-moderation-never-escalates",
+        what="a second flag from moderation tells nobody",
+        edits=[
+            (
+                "app/modules/photos/service.py",
+                "            await safety_service.escalate_possible_minor(session, locked.user_id)\n",
+                "",
+            )
+        ],
+        expect=["test_a_second_possible_minor_photo_tells_the_admins"],
+    ),
+    Case(
+        id="p72-2-every-flag-pushes",
+        what="the founder's change undone: every later flag pushes again",
+        edits=[
+            (
+                SAFETY_SERVICE72,
+                "    if tally.flags == fraud.MINOR_FLAGS_TO_REVIEW:\n",
+                "    if True:\n",
+            )
+        ],
+        expect=["test_a_third_flag_before_review_sends_no_second_push"],
+    ),
+    Case(
+        id="p72-3-one-flag-is-repeated",
+        what="D-991's two lowered to one",
+        edits=[
+            (
+                "app/modules/safety/fraud.py",
+                "MINOR_FLAGS_TO_REVIEW: Final = 2\n",
+                "MINOR_FLAGS_TO_REVIEW: Final = 1\n",
+            )
+        ],
+        expect=[
+            "test_one_flag_tells_nobody",
+            "test_staff_see_who_has_two_flags_in_30_days_and_nobody_else",
+        ],
+    ),
+    Case(
+        id="p72-4-no-window",
+        what="flags counted however old",
+        edits=[(SAFETY_REPO72, "            since <= FraudEvent.created_at,\n", "")],
+        expect=[
+            "test_two_flags_more_than_30_days_apart_tell_nobody",
+            "test_staff_see_who_has_two_flags_in_30_days_and_nobody_else",
+        ],
+    ),
+    Case(
+        id="p72-5-a-decision-settles-nothing",
+        what="D-1050: flags before a decision still counted",
+        edits=[
+            (
+                SAFETY_REPO72,
+                "            or_(decided.is_(None), FraudEvent.created_at > decided),\n",
+                "",
+            )
+        ],
+        expect=[
+            "test_after_a_decision_only_two_new_flags_bring_them_back",
+            "test_an_admin_leaves_an_adult_and_she_leaves_the_list",
+            "test_someone_not_waiting_is_refused_and_nothing_is_written",
+        ],
+    ),
+    Case(
+        id="p72-6-the-admins-kind-for-anyone",
+        what="D-994: notify() writes the admins' kind for a non-admin",
+        edits=[
+            (
+                NOTES_RULES72,
+                "    if kind in ADMINS_ONLY and role is not Role.ADMIN:\n        return False\n",
+                "",
+            )
+        ],
+        expect=["test_the_admins_kind_is_never_written_for_anyone_else"],
+    ),
+    Case(
+        id="p72-7-the-role-not-asked-again-at-send",
+        what="a push to someone no longer an admin",
+        edits=[
+            (
+                "app/modules/notifications/sender.py",
+                "    if kind in rules.ADMINS_ONLY and role is not Role.ADMIN:\n",
+                "    if False:\n",
+            )
+        ],
+        expect=["test_an_admin_no_longer_one_is_pushed_nothing"],
+    ),
+    Case(
+        id="p72-8-a-setting-governs-it",
+        what="D-994: the messages switch turns the admins' push off",
+        edits=[
+            (
+                NOTES_RULES72,
+                "    Kind.MINOR_FLAGS: None,\n",
+                '    Kind.MINOR_FLAGS: "message",\n',
+            )
+        ],
+        expect=["test_no_setting_turns_the_admins_kind_off"],
+    ),
+    Case(
+        id="p72-9-the-push-carries-the-scores",
+        what="D-994: the push carries the count and scores",
+        edits=[
+            (
+                NOTES_RULES72,
+                '    Kind.MINOR_FLAGS: ("subject_id",),\n',
+                '    Kind.MINOR_FLAGS: ("subject_id", "flags", "scores"),\n',
+            )
+        ],
+        expect=["test_the_admins_push_carries_the_kind_and_the_person_alone"],
+    ),
+    Case(
+        id="p72-10-an-underage-ban-unbanned",
+        what="the unban guard gone: an underage-banned account back to active",
+        edits=[
+            (
+                ADMIN_PANEL72,
+                '    standing = await repository.standing_ban(session, user.phone_hash)\n    if await _underage_banned(session, user, standing):\n        raise _refused("underage", "An underage ban can\'t be lifted.")\n',
+                "",
+            )
+        ],
+        expect=[
+            "test_an_underage_ban_is_never_lifted",
+            "test_over_a_plain_ban_the_row_keeps_its_reason_and_still_never_lifts",
+        ],
+    ),
+    Case(
+        id="p72-11-the-record-not-read",
+        what="over a plain ban, only the row asked: the underage ban lifts",
+        edits=[
+            (
+                ADMIN_PANEL72,
+                "    return await repository.audited(session, BAN_UNDERAGE, user.id)\n",
+                "    return False\n",
+            )
+        ],
+        expect=["test_over_a_plain_ban_the_row_keeps_its_reason_and_still_never_lifts"],
+    ),
+    Case(
+        id="p72-12-a-moderator-decides-everything",
+        what="D-1050: a moderator leaves or bans as underage, both checks",
+        edits=[
+            (
+                "app/modules/admin/rules.py",
+                "MINOR_ADMIN_ONLY: Final = frozenset({MinorDecision.ADULT, MinorDecision.UNDERAGE})\n",
+                "MINOR_ADMIN_ONLY: Final = frozenset[MinorDecision]()\n",
+            ),
+            (
+                ADMIN_PANEL72,
+                '    if staff.role is not Role.ADMIN:\n        raise _forbidden()\n    standing = await repository.standing_ban(session, user.phone_hash)\n    if await _underage_banned(session, user, standing):\n        raise _refused("already_banned"',
+                '    standing = await repository.standing_ban(session, user.phone_hash)\n    if await _underage_banned(session, user, standing):\n        raise _refused("already_banned"',
+            ),
+        ],
+        expect=[
+            "test_a_moderator_never_leaves_nor_bans_as_underage[adult]",
+            "test_a_moderator_never_leaves_nor_bans_as_underage[underage]",
+        ],
+    ),
+    Case(
+        id="p72-13-anyone-decided",
+        what="a decision on someone not waiting for one",
+        edits=[
+            (
+                ADMIN_PANEL72,
+                '        if waiting is None:\n            raise _refused("not_waiting", "This account isn\'t waiting for a review.")\n',
+                '        if waiting is None:\n            waiting = type("W", (), {"flags": 0})()\n',
+            )
+        ],
+        expect=["test_someone_not_waiting_is_refused_and_nothing_is_written"],
+    ),
+    Case(
+        id="p72-14-underage-written-as-a-plain-ban",
+        what="the number's row a liftable `ban`",
+        edits=[
+            (
+                ADMIN_PANEL72,
+                "        session, user.phone_hash, users_service.UNDERAGE_REASON\n",
+                "        session, user.phone_hash, rules.BAN_REASON\n",
+            )
+        ],
+        expect=[
+            "test_an_underage_ban_keeps_the_account_banned_and_signed_out",
+            "test_an_erased_account_is_banned_as_underage_by_its_number_alone",
+        ],
+    ),
+    Case(
+        id="p72-15-underage-ban-keeps-sessions",
+        what="an underage ban that leaves her signed in",
+        edits=[
+            (
+                ADMIN_PANEL72,
+                "        await auth_service.sign_out_everywhere(session, user.id)\n        user.status = UserStatus.BANNED\n",
+                "        user.status = UserStatus.BANNED\n",
+            )
+        ],
+        expect=["test_an_underage_ban_keeps_the_account_banned_and_signed_out"],
+    ),
+]
+
+
 CASES: list[tuple[Case, list[str]]] = (
     [(c, T51_SELECTION) for c in T51]
     + [(c, T54_SELECTION) for c in T54]
@@ -13694,6 +13910,7 @@ CASES: list[tuple[Case, list[str]]] = (
     + [(c, T910_SELECTION) for c in T910]
     + [(c, P851_SELECTION) for c in P851]
     + [(c, T912_SELECTION) for c in T912]
+    + [(c, P72_SELECTION) for c in P72]
 )
 
 # The fifty-connection fixture's own message when Postgres refuses a connection.

@@ -8,17 +8,18 @@ a like to a man never names who (D-542); and a rollback tells nobody."""
 from __future__ import annotations
 
 import uuid
+from datetime import timedelta
 
 import pytest
 from sqlalchemy import update
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core import events
-from app.core.enums import Gender, UserStatus
+from app.core import clock, events
+from app.core.enums import Gender, Role, UserStatus
 from app.core.security import normalize_phone
-from app.modules.notifications.models import NotificationPrefs
+from app.modules.notifications.models import Notification, NotificationPrefs
 from app.modules.notifications.rules import Kind
-from app.modules.notifications.service import notify
+from app.modules.notifications.service import notify, notify_admins, update_admins
 from app.modules.users import service as users_service
 from app.modules.users.models import User
 from tests.conftest import MakeUser, make_test_settings
@@ -252,3 +253,111 @@ async def test_one_wake_is_published_however_many_were_queued() -> None:
         f"user:{first}",
     ]
     assert redis.sent[0][1] == str(first)
+
+
+# --- The admins' kind (P-72, D-994) -----------------------------------------------------
+
+FLAGGED = {"subject_id": "00000000-0000-0000-0000-0000000000aa", "flags": 2}
+
+
+async def _with_role(
+    make_user: MakeUser, role: Role, status: UserStatus = UserStatus.ACTIVE
+) -> User:
+    person, _ = await make_user(Gender.FEMALE)
+    person.role = role
+    person.status = status
+    return person
+
+
+async def test_every_active_admin_is_told_and_nobody_else(
+    db: AsyncSession, make_user: MakeUser
+) -> None:
+    first = await _with_role(make_user, Role.ADMIN)
+    second = await _with_role(make_user, Role.ADMIN)
+    frozen = await _with_role(make_user, Role.ADMIN, UserStatus.FROZEN)
+    moderator = await _with_role(make_user, Role.MODERATOR)
+    user = await _with_role(make_user, Role.USER)
+    await db.flush()
+
+    assert await notify_admins(db, Kind.MINOR_FLAGS, FLAGGED) >= 2
+
+    for admin in (first, second):
+        assert await in_app(db, admin.id) == [("minor_flags", FLAGGED)]
+    for other in (frozen, moderator, user):
+        assert await in_app(db, other.id) == []
+
+
+async def test_the_admins_kind_is_never_written_for_anyone_else(
+    db: AsyncSession, make_user: MakeUser
+) -> None:
+    """Called for a person directly, `notify` still asks their role."""
+    moderator = await _with_role(make_user, Role.MODERATOR)
+    await subscribed(db, moderator.id)
+
+    assert not await notify(db, moderator.id, Kind.MINOR_FLAGS, FLAGGED)
+
+    assert await in_app(db, moderator.id) == []
+    assert await outbox(db, moderator.id) == []
+
+
+async def test_no_setting_turns_the_admins_kind_off(
+    db: AsyncSession, make_user: MakeUser
+) -> None:
+    """D-994: every switch off, the push still waits for a subscribed admin."""
+    admin = await _with_role(make_user, Role.ADMIN)
+    await subscribed(db, admin.id)
+    await _pref(
+        db,
+        admin,
+        match=False,
+        message=False,
+        like=False,
+        knot=False,
+        expiry=False,
+        balance=False,
+        gift=False,
+        album=False,
+    )
+
+    assert await notify(db, admin.id, Kind.MINOR_FLAGS, FLAGGED)
+
+    assert await outbox(db, admin.id) == [("minor_flags", FLAGGED)]
+    assert len(_wakes(db)) == 1
+
+
+async def test_only_the_admins_kind_goes_to_the_admins() -> None:
+    with pytest.raises(ValueError, match="not a kind for the admins"):
+        await notify_admins(None, Kind.MATCH, {})  # type: ignore[arg-type]
+    with pytest.raises(ValueError, match="not a kind for the admins"):
+        await update_admins(None, Kind.MATCH, "user_id", {"user_id": "x"})  # type: ignore[arg-type]
+
+
+async def test_an_update_rewrites_each_admins_newest_row_and_pushes_nothing(
+    db: AsyncSession, make_user: MakeUser
+) -> None:
+    admin = await _with_role(make_user, Role.ADMIN)
+    await subscribed(db, admin.id)
+    other = {"subject_id": "00000000-0000-0000-0000-0000000000bb", "flags": 2}
+    # An older row about the same person, from a review before: kept as it was.
+    earlier = {**FLAGGED, "flags": 4}
+    db.add(
+        Notification(
+            user_id=admin.id,
+            kind="minor_flags",
+            payload=earlier,
+            created_at=clock.now() - timedelta(days=40),
+        )
+    )
+    await notify(db, admin.id, Kind.MINOR_FLAGS, FLAGGED)
+    await notify(db, admin.id, Kind.MINOR_FLAGS, other)
+    pushed = await outbox(db, admin.id)
+    later = {**FLAGGED, "flags": 3}
+
+    assert await update_admins(db, Kind.MINOR_FLAGS, "subject_id", later) == 1
+
+    rows = await in_app(db, admin.id)
+    assert rows[0] == ("minor_flags", earlier)
+    assert len(rows) == 3
+    assert ("minor_flags", later) in rows
+    assert ("minor_flags", other) in rows
+    assert await outbox(db, admin.id) == pushed

@@ -103,6 +103,11 @@ export const WALKED_ROUTES: readonly WalkedRoute[] = [
     walkers: STAFF,
     path: () => "/admin/freezes",
   },
+  {
+    page: "admin/minor-flags/page.tsx",
+    walkers: STAFF,
+    path: () => "/admin/minor-flags",
+  },
   { page: "admin/audit/page.tsx", walkers: STAFF, path: () => "/admin/audit" },
   { page: "admin/users/page.tsx", walkers: STAFF, path: () => "/admin/users" },
   {

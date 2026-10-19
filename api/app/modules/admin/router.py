@@ -135,6 +135,21 @@ async def set_status(
     return Response(status_code=204)
 
 
+@router.post("/users/{user_id}/minor-decision", status_code=204)
+async def decide_minor(
+    user_id: UUID, body: schemas.MinorDecisionRequest, staff: Staff, session: Session
+) -> Response:
+    await panel.decide_minor(session, staff, user_id, body.decision, body.reason)
+    return Response(status_code=204)
+
+
+@router.get("/minor-flags")
+async def minor_flags(
+    staff: Staff, session: Session, params: Params
+) -> schemas.AdminMinorFlagPage:
+    return await panel.minor_flags(session, staff, params)
+
+
 @router.post("/users/{user_id}/credits", status_code=204)
 async def change_credits(
     user_id: UUID,

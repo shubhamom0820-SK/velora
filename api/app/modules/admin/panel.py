@@ -32,6 +32,14 @@ them, so the two can't be one file without a cycle.
   included (T-7.8, D-006), each read audited with the reason given.
 - **What a moderator sees (D-926, D-927):** counts, never revenue; a number
   masked, never whole.
+- **Possible-minor flags (P-72, D-991, D-1050):** the people with two flags in
+  30 days, after any decision on them, listed for staff; an admin leaves them
+  (judged an adult) or bans them as underage, and staff may freeze. Each
+  decision is an audit row with its reason, and only flags after it count. An
+  underage ban keeps the account, banned and signed out, and is never lifted:
+  the number's `underage` row by the database's trigger, and an unban here by
+  the account's `user.ban_underage` record, which holds where a plain `ban`
+  row stood first and kept its reason.
 """
 
 from __future__ import annotations
@@ -65,7 +73,7 @@ from app.core.queue import Queue
 from app.core.security import decrypt_phone, hash_phone, normalize_phone
 from app.core.storage_keys import public_url
 from app.modules.admin import repository, rules, schemas
-from app.modules.admin.rules import ReportAction, StatusTarget
+from app.modules.admin.rules import MinorDecision, ReportAction, StatusTarget
 from app.modules.admin.service import SYSTEM_USER_ID, audit
 from app.modules.auth import service as auth_service
 from app.modules.discovery.rules import like_prefix
@@ -75,6 +83,8 @@ from app.modules.photos import moderation as moderation_rules
 from app.modules.photos import service as photos_service
 from app.modules.photos.models import Photo
 from app.modules.safety import scoring
+from app.modules.safety import service as safety_service
+from app.modules.safety.fraud import MINOR_REVIEWED
 from app.modules.safety.models import FraudEvent, FraudScore, Report
 from app.modules.users import repository as users_repository
 from app.modules.users import service as users_service
@@ -88,6 +98,7 @@ KEY: Final[Cursor[tuple[datetime, UUID]]] = Cursor(tuple[AwareDatetime, UUID])
 # The audit actions this module writes. The status changes name what they did.
 FREEZE: Final = "user.freeze"
 BAN: Final = "user.ban"
+BAN_UNDERAGE: Final = "user.ban_underage"
 UNBAN: Final = "user.unban"
 # What froze an account, for the freezes list: T-9.2's automatic one and staff's.
 FREEZE_ACTIONS: Final = (scoring.FREEZE, FREEZE)
@@ -337,6 +348,8 @@ async def user_detail(
             raise _not_found()
         user: User = row[0]
         ban = await repository.standing_ban(session, user.phone_hash)
+        permanent = ban is not None and await _underage_banned(session, user, ban)
+        minor = await safety_service.minor_flags_awaiting(session, user_id)
         photos = await repository.photos_of(
             session, user_id, rules.PANEL_PHOTO_KINDS, rules.DETAIL_LIMIT
         )
@@ -367,10 +380,13 @@ async def user_detail(
         is_verified=user.is_verified,
         balance=balance,
         ban=(
-            schemas.AdminBan(reason=ban.reason, created_at=ban.created_at)
+            schemas.AdminBan(
+                reason=ban.reason, created_at=ban.created_at, permanent=permanent
+            )
             if ban is not None
             else None
         ),
+        minor_flags=_minor_out(minor) if minor is not None else None,
         photos=[await _photo_out(photo, storage, settings) for photo in photos],
         fraud=_fraud_out(score, events),
         reports_about=[_report_out(report) for report in about],
@@ -489,6 +505,9 @@ async def _unban(session: AsyncSession, staff: User, user: User, reason: str) ->
     erased = user.anonymised_at is not None
     if not erased and user.status is not UserStatus.BANNED:
         raise _refused("not_banned", "This account isn't banned.")
+    standing = await repository.standing_ban(session, user.phone_hash)
+    if await _underage_banned(session, user, standing):
+        raise _refused("underage", "An underage ban can't be lifted.")
     lifted = await repository.lift_ban(
         session, user.phone_hash, by=staff.id, reason=reason, at=clock.now()
     )
@@ -507,6 +526,51 @@ async def _unban(session: AsyncSession, staff: User, user: User, reason: str) ->
         staff.id,
         UNBAN,
         {"reason": reason, "to": to.value, "lifted": lifted, "erased": erased},
+        target=("user", user.id),
+    )
+
+
+async def _underage_banned(
+    session: AsyncSession, user: User, standing: Any | None
+) -> bool:
+    """Whether `user` is banned as underage (D-991): the number's standing row
+    says so, or an admin's underage ban on the account does, over a plain `ban`
+    row that kept its reason."""
+    if standing is not None and standing.reason == users_service.UNDERAGE_REASON:
+        return True
+    return await repository.audited(session, BAN_UNDERAGE, user.id)
+
+
+async def _ban_underage(
+    session: AsyncSession, staff: User, user: User, reason: str
+) -> None:
+    """Ban `user` as underage (D-991): an admin's, permanent. The account is
+    kept, banned and signed out everywhere (not D-072's deletion); the number's
+    row is `underage`, or a standing `ban` row keeps its reason. An erased
+    account is banned by its number alone, as `_ban` does."""
+    if staff.role is not Role.ADMIN:
+        raise _forbidden()
+    standing = await repository.standing_ban(session, user.phone_hash)
+    if await _underage_banned(session, user, standing):
+        raise _refused("already_banned", "This account is banned as underage already.")
+    erased = user.anonymised_at is not None
+    before = user.status
+    if not erased and user.status is not UserStatus.BANNED:
+        await auth_service.sign_out_everywhere(session, user.id)
+        user.status = UserStatus.BANNED
+    await users_repository.ban_phone_hash(
+        session, user.phone_hash, users_service.UNDERAGE_REASON
+    )
+    await audit(
+        session,
+        staff.id,
+        BAN_UNDERAGE,
+        {
+            "reason": reason,
+            "from": before.value,
+            "erased": erased,
+            "kept_reason": standing.reason if standing is not None else None,
+        },
         target=("user", user.id),
     )
 
@@ -548,6 +612,70 @@ async def set_status(
             await _unfreeze(session, staff, user, reason)
         else:
             await _unban(session, staff, user, reason)
+
+
+# --- Possible-minor flags (P-72, D-991, D-1050) -------------------------------------------
+
+
+def _minor_out(row: Row[Any]) -> schemas.AdminMinorFlags:
+    return schemas.AdminMinorFlags(
+        flags=row.flags,
+        scores=list(row.scores),
+        times=list(row.times),
+        first_at=row.first_at,
+        last_at=row.last_at,
+    )
+
+
+async def minor_flags(
+    session: AsyncSession, staff: User, params: PageParams
+) -> schemas.AdminMinorFlagPage:
+    """`GET /admin/minor-flags`: who waits for a human, the newest flag first."""
+    after = _after(params)
+    async with session.begin():
+        rows = await repository.minor_flags_page(
+            session, safety_service.minor_flags_tally(), after=after, limit=params.fetch
+        )
+        await audit(session, staff.id, "minor_flags.list")
+    return schemas.AdminMinorFlagPage.of(
+        [
+            schemas.AdminMinorFlag(user=_user_out(row), **_minor_out(row).model_dump())
+            for row in rows
+        ],
+        params,
+        lambda item: KEY.encode((item.last_at, item.user.id)),
+    )
+
+
+async def decide_minor(
+    session: AsyncSession,
+    staff: User,
+    user_id: UUID,
+    decision: MinorDecision,
+    reason: str,
+) -> None:
+    """`POST /admin/users/{id}/minor-decision` (D-991, D-1050): leave, freeze or
+    ban as underage someone waiting for a human; anyone else is `NOT_ALLOWED`.
+    One audit row says what was decided and why, beside the freeze's or the
+    ban's own; only flags after it count."""
+    if not rules.may_decide(staff.role, decision):
+        raise _forbidden()
+    async with session.begin():
+        user = await _locked(session, user_id)
+        waiting = await safety_service.minor_flags_awaiting(session, user.id)
+        if waiting is None:
+            raise _refused("not_waiting", "This account isn't waiting for a review.")
+        if decision is MinorDecision.FREEZE:
+            await _freeze(session, staff, user, reason, report=None)
+        elif decision is MinorDecision.UNDERAGE:
+            await _ban_underage(session, staff, user, reason)
+        await audit(
+            session,
+            staff.id,
+            MINOR_REVIEWED,
+            {"decision": decision.value, "reason": reason, "flags": waiting.flags},
+            target=("user", user.id),
+        )
 
 
 # --- Velas (D-923) ----------------------------------------------------------------------

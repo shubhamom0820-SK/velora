@@ -25,7 +25,7 @@ from sqlalchemy.dialects.postgresql import UUID as PG_UUID
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.enums import Gender, UserStatus
+from app.core.enums import Gender, Role, UserStatus
 from app.modules.discovery.repository import blocked_either_way
 from app.modules.notifications.models import (
     Notification,
@@ -52,19 +52,56 @@ def add_push(
     session.add(PushOutbox(user_id=user_id, kind=kind, payload=payload))
 
 
+def _wanted(pref: str | None) -> Any:
+    """`pref`'s column, or always on for a kind no setting governs (D-994)."""
+    return literal(True) if pref is None else getattr(NotificationPrefs, pref)
+
+
 async def recipient(
-    session: AsyncSession, user_id: UUID, pref: str
-) -> Row[tuple[UserStatus, Gender | None, bool | None, bool]] | None:
-    """The user's status and gender, whether `pref` lets their push through,
-    and whether they have any push subscription."""
-    wanted = getattr(NotificationPrefs, pref)
+    session: AsyncSession, user_id: UUID, pref: str | None
+) -> Row[tuple[UserStatus, Gender | None, Role, bool | None, bool]] | None:
+    """The user's status, gender and role, whether `pref` lets their push
+    through, and whether they have any push subscription."""
     subscribed = exists().where(PushSubscription.user_id == User.id)
     query = (
-        select(User.status, User.gender, wanted, subscribed)
+        select(User.status, User.gender, User.role, _wanted(pref), subscribed)
         .outerjoin(NotificationPrefs, NotificationPrefs.user_id == User.id)
         .where(User.id == user_id)
     )
     return (await session.execute(query)).one_or_none()
+
+
+async def active_ids_with_role(session: AsyncSession, role: Role) -> Sequence[UUID]:
+    """Every account with `role` whose status is `active` (D-994)."""
+    return (
+        await session.scalars(
+            select(User.id)
+            .where(User.role == role, User.status == UserStatus.ACTIVE)
+            .order_by(User.id)
+        )
+    ).all()
+
+
+async def update_newest_about(
+    session: AsyncSession, kind: str, field: str, value: str, payload: dict[str, Any]
+) -> int:
+    """Each user's newest in-app `kind` row whose payload's `field` is `value`,
+    its payload replaced, read or not: how many."""
+    newest = (
+        select(Notification.id)
+        .where(Notification.kind == kind, Notification.payload[field].astext == value)
+        .distinct(Notification.user_id)
+        .order_by(
+            Notification.user_id, Notification.created_at.desc(), Notification.id.desc()
+        )
+    )
+    updated = await session.execute(
+        update(Notification)
+        .where(Notification.id.in_(newest.scalar_subquery()))
+        .values(payload=payload)
+        .execution_options(synchronize_session=False)
+    )
+    return int(updated.rowcount)  # type: ignore[attr-defined]
 
 
 # --- The in-app list -------------------------------------------------------------
@@ -253,11 +290,11 @@ async def release(session: AsyncSession, outbox_id: UUID) -> None:
 
 
 async def push_context(
-    session: AsyncSession, user_id: UUID, pref: str, named_id: UUID | None
-) -> Row[tuple[UserStatus, bool | None, bool | None, str | None, bool]] | None:
-    """For a push about to go: the recipient's status, whether `pref` still
-    lets it through, `generic_text`, the first name of `named_id`, and whether
-    either has blocked the other since it was written (P-760)."""
+    session: AsyncSession, user_id: UUID, pref: str | None, named_id: UUID | None
+) -> Row[tuple[UserStatus, Role, bool | None, bool | None, str | None, bool]] | None:
+    """For a push about to go: the recipient's status and role, whether `pref`
+    still lets it through, `generic_text`, the first name of `named_id`, and
+    whether either has blocked the other since it was written (P-760)."""
     name = (
         select(Profile.first_name).where(Profile.user_id == named_id).scalar_subquery()
         if named_id is not None
@@ -266,7 +303,8 @@ async def push_context(
     query = (
         select(
             User.status,
-            getattr(NotificationPrefs, pref),
+            User.role,
+            _wanted(pref),
             NotificationPrefs.generic_text,
             name,
             blocked_either_way(User.id, named_id)

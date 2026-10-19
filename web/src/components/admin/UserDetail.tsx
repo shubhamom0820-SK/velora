@@ -14,6 +14,7 @@ import { useAdminUser, type AdminUserDetail } from "@/lib/queries/admin";
 import { useMe } from "@/lib/queries/me";
 
 import { CreditsForm } from "./CreditsForm";
+import { MinorReview } from "./MinorReview";
 import { PhotoCard } from "./PhotoCard";
 import { StatusActions } from "./StatusActions";
 import { entryTime } from "./time";
@@ -55,7 +56,12 @@ function Summary({
         )}
         {detail.ban && (
           <Badge tone="ink">
-            {t("admin.user.banned", { reason: detail.ban.reason ?? "?" })}
+            {t(
+              detail.ban.permanent
+                ? "admin.user.bannedPermanent"
+                : "admin.user.banned",
+              { reason: detail.ban.reason ?? "?" },
+            )}
           </Badge>
         )}
       </div>
@@ -127,6 +133,7 @@ export function UserDetail({ id }: { id: string }) {
         </Button>
       </div>
       <Summary detail={data} isAdmin={isAdmin} />
+      <MinorReview detail={data} isAdmin={isAdmin} />
       <Section title={t("admin.user.photos")}>
         {data.photos.length === 0 ? (
           <NoneYet />

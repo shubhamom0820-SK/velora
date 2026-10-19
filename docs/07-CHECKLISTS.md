@@ -94,6 +94,7 @@
 
 - [ ] Report queue: zero items older than 24 h (`/admin/reports`, each report's timer, D-921)
 - [ ] Fraud: review every `freeze` (`/admin/freezes`, the automatic ones marked, D-928) and a sample of `shadow` (`audit_log`'s `fraud.band` rows, by the system user, D-905); lift a wrong freeze from the panel, an admin's, or with `python -m app.tools.unfreeze` (D-906): the same path
+- [ ] Possible minors: nobody waiting on `/admin/minor-flags` (P-72, D-991); until push is on (P-755) the in-app row and this list are the only alert
 - [ ] Ledger reconciliation cron: zero mismatches
 - [ ] Payments: dashboard totals match `payments` table
 - [ ] Metrics review (T-10.3) — write 3 lines in `docs/weekly.md`

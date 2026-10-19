@@ -14,7 +14,7 @@ from enum import StrEnum
 from typing import Any, Final
 from urllib.parse import urlsplit
 
-from app.core.enums import Gender, UserStatus
+from app.core.enums import Gender, Role, UserStatus
 
 
 class Kind(StrEnum):
@@ -29,6 +29,8 @@ class Kind(StrEnum):
     KNOT_ACCEPTED = "knot_accepted"
     THREAD_EXPIRING = "thread_expiring"
     LOW_BALANCE = "low_balance"
+    # P-72 (D-991, D-994): a person whose possible-minor flags wait for a human.
+    MINOR_FLAGS = "minor_flags"
 
 
 # Only an active account is told anything: a paused one is sent nothing (T-9.6),
@@ -36,8 +38,9 @@ class Kind(StrEnum):
 TOLD: Final = frozenset({UserStatus.ACTIVE})
 
 # The `notification_prefs` attribute that governs each kind's push. The in-app
-# row doesn't follow it: the list is where a turned-off push still shows.
-PREF_FOR: Final[Mapping[Kind, str]] = {
+# row doesn't follow it: the list is where a turned-off push still shows. None:
+# no setting governs it, so an admin can't turn off being told (D-994).
+PREF_FOR: Final[Mapping[Kind, str | None]] = {
     Kind.MATCH: "match",
     Kind.THREAD: "message",
     Kind.MESSAGE: "message",
@@ -49,6 +52,7 @@ PREF_FOR: Final[Mapping[Kind, str]] = {
     Kind.KNOT_ACCEPTED: "knot",
     Kind.THREAD_EXPIRING: "expiry",
     Kind.LOW_BALANCE: "balance",
+    Kind.MINOR_FLAGS: None,
 }
 
 # Kinds with no row in the in-app list (D-852): the chats list is where a
@@ -59,6 +63,10 @@ PUSH_ONLY: Final = frozenset({Kind.MESSAGE, Kind.LIKE})
 # balance, which only a man has. An allowlist of who may be told, as
 # `threads.rules.sees_the_expiry` is: someone with no gender is told neither.
 MEN_ONLY: Final = frozenset({Kind.THREAD_EXPIRING, Kind.LOW_BALANCE})
+
+# Kinds only an admin is told (D-994): written for nobody else, and checked
+# again when pushed, so a role taken away in between tells them nothing.
+ADMINS_ONLY: Final = frozenset({Kind.MINOR_FLAGS})
 
 # Pushed only while the person has no socket open anywhere (D-854): with one
 # open, the app has already shown it.
@@ -80,6 +88,9 @@ PUSHED_FIELDS: Final[Mapping[Kind, tuple[str, ...]]] = {
     Kind.KNOT_ACCEPTED: ("thread_id", "user_id"),
     Kind.THREAD_EXPIRING: ("thread_id",),
     Kind.LOW_BALANCE: (),
+    # The person's id only, never `user_id`, which the sender would name and
+    # the list would hide across a block: no name, score or image (D-994).
+    Kind.MINOR_FLAGS: ("subject_id",),
 }
 
 # A push older than this is dropped, not sent: "new message" an hour late is
@@ -106,8 +117,10 @@ def told(status: UserStatus | None) -> bool:
     return status in TOLD
 
 
-def reaches(kind: Kind, gender: Gender | None) -> bool:
-    """Whether `kind` may reach someone of `gender` at all."""
+def reaches(kind: Kind, gender: Gender | None, role: Role | None) -> bool:
+    """Whether `kind` may reach someone of `gender` and `role` at all."""
+    if kind in ADMINS_ONLY and role is not Role.ADMIN:
+        return False
     return kind not in MEN_ONLY or gender is Gender.MALE
 
 

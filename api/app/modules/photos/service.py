@@ -788,6 +788,7 @@ async def _record(
                 score=max(scores.minors),
                 model=MINOR_MODEL,
             )
+            await safety_service.escalate_possible_minor(session, locked.user_id)
             return None
         locked.width, locked.height = clean.width, clean.height
         if reason is not None:

@@ -26,7 +26,9 @@ from typing import Any, Final
 from uuid import UUID
 
 from pydantic import AwareDatetime
+from sqlalchemy import Row
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.sql import Subquery
 
 from app.core import clock
 from app.core.config import Settings
@@ -38,6 +40,8 @@ from app.core.storage_keys import public_url
 from app.modules.album import service as album_service
 from app.modules.discovery import rules as discovery_rules
 from app.modules.messages.models import Message
+from app.modules.notifications import service as notifications_service
+from app.modules.notifications.rules import Kind
 from app.modules.safety import fraud, repository, schemas, scoring, signals
 from app.modules.safety.models import FraudEvent, Report
 from app.modules.threads.schemas import CardLite
@@ -74,6 +78,55 @@ def record_possible_minor(
             meta={"what": POSSIBLE_MINOR_NOTE, "model": model, "score": score},
         ),
     )
+
+
+def minor_flags_tally() -> Subquery:
+    """Everyone's possible-minor flags waiting for a human, as a subquery
+    (`repository.minor_flags_awaiting`'s columns): T-9.5's list reads it."""
+    return repository.minor_flags_awaiting(
+        POSSIBLE_MINOR_SCORE,
+        fraud.MINOR_REVIEWED,
+        since=clock.now() - fraud.MINOR_FLAGS_WINDOW,
+        at_least=fraud.MINOR_FLAGS_TO_REVIEW,
+    )
+
+
+async def minor_flags_awaiting(session: AsyncSession, user_id: UUID) -> Row[Any] | None:
+    """`user_id`'s possible-minor flags waiting for a human, or None: two or
+    more in 30 days, after any decision on them (D-991, D-1050)."""
+    return await repository.minor_flags_of(
+        session,
+        user_id,
+        POSSIBLE_MINOR_SCORE,
+        fraud.MINOR_REVIEWED,
+        since=clock.now() - fraud.MINOR_FLAGS_WINDOW,
+        at_least=fraud.MINOR_FLAGS_TO_REVIEW,
+    )
+
+
+async def escalate_possible_minor(session: AsyncSession, user_id: UUID) -> None:
+    """After a flag is recorded, in its transaction (D-991): the flag that puts
+    the person on the admins' list tells every active admin; a later one, while
+    they still wait, brings each admin's in-app row up to date and pushes
+    nothing (P-72). Nothing here acts on the person."""
+    tally = await minor_flags_awaiting(session, user_id)
+    if tally is None:
+        return
+    payload = {
+        "subject_id": str(user_id),
+        "flags": tally.flags,
+        "scores": list(tally.scores),
+        "first_at": tally.first_at.isoformat(),
+        "last_at": tally.last_at.isoformat(),
+    }
+    # One fewer, a moment ago, was off the list: this flag is the one that put
+    # them on it.
+    if tally.flags == fraud.MINOR_FLAGS_TO_REVIEW:
+        await notifications_service.notify_admins(session, Kind.MINOR_FLAGS, payload)
+    else:
+        await notifications_service.update_admins(
+            session, Kind.MINOR_FLAGS, "subject_id", payload
+        )
 
 
 # D-520: a chargeback whose Velas were spent before they could be taken back.

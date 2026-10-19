@@ -30,6 +30,7 @@ export const VARIANTS = [
   "knotAccepted",
   "threadExpiring",
   "lowBalance",
+  "minorFlags",
   "other",
 ] as const;
 export type Variant = (typeof VARIANTS)[number];
@@ -46,6 +47,7 @@ const VARIANT_OF_KIND: Readonly<Record<string, Variant>> = {
   knot_accepted: "knotAccepted",
   thread_expiring: "threadExpiring",
   low_balance: "lowBalance",
+  minor_flags: "minorFlags",
 };
 
 /**
@@ -66,6 +68,8 @@ export const ROUTES: Readonly<Record<string, string>> = {
   knot_accepted: "/chats/{thread_id}",
   thread_expiring: "/chats/{thread_id}",
   low_balance: "/wallet",
+  // An admin's (P-72, D-994): the person's page in the panel, by the id alone.
+  minor_flags: "/admin/users/{subject_id}",
 };
 export const FALLBACK_ROUTE = "/notifications";
 
@@ -82,6 +86,7 @@ export const TAGS: Readonly<Record<string, string>> = {
   knot_requested: "thread:{thread_id}",
   knot_accepted: "thread:{thread_id}",
   thread_expiring: "thread:{thread_id}",
+  minor_flags: "minor_flags:{subject_id}",
 };
 
 export function variantOf(kind: string, data: NotificationData): Variant {

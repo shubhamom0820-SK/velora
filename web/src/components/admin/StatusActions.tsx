@@ -16,13 +16,15 @@ type Move = { to: StatusTarget; label: MessageKey; adminOnly: boolean };
 /**
  * What staff can do to an account's status from where it stands (D-922): a
  * moderator may freeze; banning, and lifting a ban or a freeze, is an admin's.
- * An erased account is banned and unbanned by its number alone. The API
- * decides; these are only the buttons worth showing.
+ * An erased account is banned and unbanned by its number alone. An underage
+ * ban is never lifted (D-991), so it offers no unban. The API decides; these
+ * are only the buttons worth showing.
  */
 function movesFor(detail: AdminUserDetail): Move[] {
   const { status, erased } = detail.user;
+  const permanent = detail.ban?.permanent === true;
   if (erased) {
-    return detail.ban?.reason === "ban"
+    return detail.ban?.reason === "ban" && !permanent
       ? [{ to: "active", label: "admin.user.unban", adminOnly: true }]
       : detail.ban
         ? []
@@ -36,7 +38,9 @@ function movesFor(detail: AdminUserDetail): Move[] {
     moves.push({ to: "active", label: "admin.user.unfreeze", adminOnly: true });
   }
   if (status === "banned") {
-    moves.push({ to: "active", label: "admin.user.unban", adminOnly: true });
+    if (!permanent) {
+      moves.push({ to: "active", label: "admin.user.unban", adminOnly: true });
+    }
   } else {
     moves.push({ to: "banned", label: "admin.user.ban", adminOnly: true });
   }

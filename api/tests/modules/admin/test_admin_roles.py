@@ -92,6 +92,7 @@ def test_the_panel_has_every_route_04_api_names() -> None:
             ("GET", "/v1/admin/audit"),
             ("GET", "/v1/admin/freezes"),
             ("GET", "/v1/admin/metrics"),
+            ("GET", "/v1/admin/minor-flags"),
             ("GET", "/v1/admin/moderation"),
             ("GET", "/v1/admin/refund-requests"),
             ("GET", "/v1/admin/reports"),
@@ -103,6 +104,7 @@ def test_the_panel_has_every_route_04_api_names() -> None:
             ("POST", "/v1/admin/refund-requests/{claim_id}/resolve"),
             ("POST", "/v1/admin/reports/{report_id}/resolve"),
             ("POST", "/v1/admin/users/{user_id}/credits"),
+            ("POST", "/v1/admin/users/{user_id}/minor-decision"),
             ("POST", "/v1/admin/users/{user_id}/status"),
         ]
     )

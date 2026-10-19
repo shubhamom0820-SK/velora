@@ -18,6 +18,9 @@ export type AdminPhoto = Schemas["AdminPhoto"];
 export type AdminMessage = Schemas["AdminMessage"];
 export type AuditEntry = Schemas["AuditEntry"];
 export type AdminFreeze = Schemas["AdminFreeze"];
+export type AdminMinorFlag = Schemas["AdminMinorFlag"];
+export type AdminMinorFlags = Schemas["AdminMinorFlags"];
+export type MinorDecision = Schemas["MinorDecision"];
 export type AdminClaim = Schemas["AdminRefundRequest"];
 export type AdminMetrics = Schemas["AdminMetrics"];
 export type ReportAction = Schemas["ReportAction"];
@@ -138,6 +141,24 @@ export function useAdminFreezes() {
   });
 }
 
+/**
+ * Who waits for a human with possible-minor flags (P-72, D-991): two in 30
+ * days, after any decision on them, the newest flag first.
+ */
+export function useAdminMinorFlags() {
+  return useInfiniteQuery({
+    ...ONCE,
+    queryKey: queryKeys.adminMinorFlags(),
+    queryFn: ({ pageParam, signal }) =>
+      api.get("/v1/admin/minor-flags", {
+        query: { cursor: pageParam },
+        signal,
+      }),
+    initialPageParam: null as string | null,
+    getNextPageParam: (page) => page.next_cursor,
+  });
+}
+
 /** The open claims (T-8.3, D-582), oldest first: an admin's alone (P-480). */
 export function useAdminClaims() {
   return useInfiniteQuery({
@@ -164,6 +185,19 @@ export function useSetStatus(userId: string) {
   return useMutation({
     mutationFn: (body: { status: StatusTarget; reason: string }) =>
       api.post("/v1/admin/users/{user_id}/status", {
+        params: { user_id: userId },
+        body,
+      }),
+    onSuccess: askAgain,
+  });
+}
+
+/** A decision on someone with possible-minor flags (D-991, D-1050). */
+export function useMinorDecision(userId: string) {
+  const askAgain = useAskAgain();
+  return useMutation({
+    mutationFn: (body: { decision: MinorDecision; reason: string }) =>
+      api.post("/v1/admin/users/{user_id}/minor-decision", {
         params: { user_id: userId },
         body,
       }),

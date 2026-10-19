@@ -88,6 +88,26 @@ def may(role: Role, target: StatusTarget) -> bool:
     return role is Role.ADMIN or target not in ADMIN_ONLY
 
 
+class MinorDecision(StrEnum):
+    """What an admin decides about a person on the possible-minor list (D-991):
+    an adult, left as they are; frozen, which D-906's unfreeze reverses; or
+    banned as underage, which nothing lifts."""
+
+    ADULT = "adult"
+    FREEZE = "freeze"
+    UNDERAGE = "underage"
+
+
+# D-1050: leaving them and the underage ban are an admin's; a freeze is
+# anyone's who may freeze (D-922).
+MINOR_ADMIN_ONLY: Final = frozenset({MinorDecision.ADULT, MinorDecision.UNDERAGE})
+
+
+def may_decide(role: Role, decision: MinorDecision) -> bool:
+    """Whether `role` may decide `decision` (D-1050)."""
+    return role is Role.ADMIN or decision not in MINOR_ADMIN_ONLY
+
+
 def masked(phone: str) -> str:
     """A moderator's view of a number (D-927): `+91******5678`, the fake SMS's
     own mask. Search still takes only the whole number (D-061)."""

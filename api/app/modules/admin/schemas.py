@@ -33,6 +33,7 @@ from app.modules.admin.rules import (
     MAX_DELTA,
     REASON_MAX,
     REASON_MIN,
+    MinorDecision,
     ReportAction,
     StatusTarget,
 )
@@ -164,10 +165,25 @@ class AdminThread(BaseModel):
 
 
 class AdminBan(BaseModel):
-    """The number's standing ban, if any: `ban` an admin's, `underage` D-072's."""
+    """The number's standing ban, if any: `ban` an admin's, `underage` D-072's
+    or an admin's underage ban (D-991). `permanent` when it is underage, by its
+    row or by the account's record: nothing lifts it."""
 
     reason: str | None
     created_at: datetime
+    permanent: bool
+
+
+class AdminMinorFlags(BaseModel):
+    """A person's possible-minor flags waiting for a human (D-991): two or more
+    in 30 days, after any decision on them (D-1050). Each a model's score for
+    one photo, oldest first, never the photo (D-093 deleted it)."""
+
+    flags: int
+    scores: list[float]
+    times: list[datetime]
+    first_at: datetime
+    last_at: datetime
 
 
 class AdminUserDetail(BaseModel):
@@ -181,6 +197,7 @@ class AdminUserDetail(BaseModel):
     is_verified: bool
     balance: int
     ban: AdminBan | None
+    minor_flags: AdminMinorFlags | None
     photos: list[AdminPhoto]
     fraud: AdminFraud | None
     reports_about: list[AdminReport]
@@ -198,6 +215,16 @@ class StatusChange(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     status: StatusTarget
+    reason: Reason
+
+
+class MinorDecisionRequest(BaseModel):
+    """`adult` and `underage` an admin's, `freeze` staff's (D-1050); the reason
+    kept in audit_log (D-991)."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    decision: MinorDecision
     reason: Reason
 
 
@@ -292,6 +319,16 @@ class AdminFreeze(BaseModel):
 
 class AdminFreezePage(Page[AdminFreeze]):
     """`Page<AdminFreeze>`: the newest freeze first."""
+
+
+class AdminMinorFlag(AdminMinorFlags):
+    """A person on the possible-minor list (P-72, D-991)."""
+
+    user: AdminUser
+
+
+class AdminMinorFlagPage(Page[AdminMinorFlag]):
+    """`Page<AdminMinorFlag>`: the newest flag first."""
 
 
 class AdminRevenue(BaseModel):

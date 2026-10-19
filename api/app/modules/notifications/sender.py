@@ -31,6 +31,7 @@ from redis.asyncio import Redis
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from app.core import clock, events
+from app.core.enums import Role
 from app.core.providers.push import PushOutcome, PushProvider, PushSubscription, Urgency
 from app.modules.notifications import repository, rules
 from app.modules.notifications.rules import Kind
@@ -116,8 +117,10 @@ async def _send_one(
         subscriptions = await repository.subscriptions(session, user_id)
     if context is None:
         return await _settle(sessionmaker, outbox_id, "skipped")
-    status, wanted, generic_text, name, blocked = context
+    status, role, wanted, generic_text, name, blocked = context
     if not rules.told(status) or not wanted or not subscriptions or blocked:
+        return await _settle(sessionmaker, outbox_id, "skipped")
+    if kind in rules.ADMINS_ONLY and role is not Role.ADMIN:
         return await _settle(sessionmaker, outbox_id, "skipped")
     if kind in rules.ONLY_IF_NOT_CONNECTED and await connected(redis, user_id):
         return await _settle(sessionmaker, outbox_id, "connected")

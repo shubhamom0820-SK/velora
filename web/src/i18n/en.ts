@@ -1273,6 +1273,13 @@ export const en = {
         named: "Your Velas are running low.",
         plain: "Your Velas are running low.",
       },
+      // An admin's only (P-72, D-994): never a name, a score or a photo.
+      minorFlags: {
+        named:
+          "Someone's photos were flagged as possibly under 18 more than once. Open to review.",
+        plain:
+          "Someone's photos were flagged as possibly under 18 more than once. Open to review.",
+      },
       other: {
         named: "Something new on {app}.",
         plain: "Something new on {app}.",
@@ -1789,6 +1796,7 @@ export const en = {
       moderation: "Photos",
       users: "People",
       freezes: "Freezes",
+      minorFlags: "Possible minors",
       claims: "Claims",
       audit: "Audit log",
     },
@@ -1866,6 +1874,7 @@ export const en = {
       phoneMasked: "Masked: only an admin sees the whole number.",
       balance: "Velas: {count}",
       banned: "Number banned ({reason})",
+      bannedPermanent: "Number banned ({reason}), permanently",
       photos: "Photos",
       fraud: "Fraud score {score}, {band}",
       reportsAbout: "Reports about them",
@@ -1910,6 +1919,22 @@ export const en = {
       automatic: "Automatic: {rule}, score {score}",
       manual: "Frozen by staff",
       unfreeze: "Lift the freeze",
+    },
+    // P-72 (D-991, D-1050): a model's scores, never a finding, and no photo.
+    minorFlags: {
+      title: "Possible minors",
+      intro:
+        "People whose photos a model scored as possibly under 18 twice in 30 days. A score is a signal, not proof, and the photos are deleted. Only flags after a decision count.",
+      empty: "Nobody is waiting for a review.",
+      flags: "{count} flags · scores {scores}",
+      between: "{first} to {last}",
+      review: "Review",
+      waiting: "Possible minor: waiting for a review",
+      adult: "Judged an adult: leave",
+      freeze: "Freeze for now",
+      underage: "Ban as under 18",
+      underageWarning:
+        "This ban is permanent. It can't be lifted, by anyone. The account stays, banned and signed out, and the number can never sign up again.",
     },
     claims: {
       title: "Claims",

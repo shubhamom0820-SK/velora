@@ -16,7 +16,7 @@ from redis.asyncio import Redis
 from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.enums import Gender, UserStatus
+from app.core.enums import Gender, Role, UserStatus
 from app.core.events import user_channel
 from app.core.providers.push import FakePush
 from app.modules.notifications import rules, sender
@@ -123,6 +123,46 @@ def test_no_kind_may_carry_an_expiry_a_price_or_a_text(kind: Kind) -> None:
     assert not {"expires_at", "price", "balance", "body"} & set(
         rules.PUSHED_FIELDS[kind]
     )
+
+
+async def test_the_admins_push_carries_the_kind_and_the_person_alone(
+    db: AsyncSession, test_redis: Redis, make_user: MakeUser
+) -> None:
+    """D-994: no name, no count, no score, whoever is named and however the
+    admin set `generic_text`."""
+    admin, _ = await make_user(Gender.FEMALE)
+    admin.role = Role.ADMIN
+    flagged, _ = await make_user(Gender.FEMALE)
+    await _named(db, flagged, "Priya")
+    await subscribed(db, admin.id)
+    payload = {
+        "subject_id": str(flagged.id),
+        "flags": 2,
+        "scores": [0.41, 0.93],
+        "first_at": NOON.isoformat(),
+        "last_at": NOON.isoformat(),
+    }
+    await notify(db, admin.id, Kind.MINOR_FLAGS, payload)
+    push = FakePush()
+
+    assert await _send(db, test_redis, push) == {"sent": 1}
+
+    [(_, data)] = push.sent
+    assert data == {"kind": "minor_flags", "subject_id": str(flagged.id)}
+
+
+async def test_an_admin_no_longer_one_is_pushed_nothing(
+    db: AsyncSession, test_redis: Redis, make_user: MakeUser
+) -> None:
+    admin, _ = await make_user(Gender.FEMALE)
+    admin.role = Role.ADMIN
+    await subscribed(db, admin.id)
+    await notify(db, admin.id, Kind.MINOR_FLAGS, {"subject_id": str(uuid.uuid4())})
+    await db.execute(update(User).where(User.id == admin.id).values(role=Role.USER))
+    push = FakePush()
+
+    assert await _send(db, test_redis, push) == {"skipped": 1}
+    assert push.sent == []
 
 
 async def test_a_setting_turned_off_since_sends_nothing(

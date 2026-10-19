@@ -3626,7 +3626,8 @@ number** per account gets its 5 each, one Thread's worth, and is **accepted**, k
 - [x] **A possible-minor photo's event is a signal, not proof** (D-093): it weighs in the score, and
   nothing here acts on it alone. Repeated ones go to a human (P-72), never to an automatic ban.
   **Built:** 10 each, capped at 20, under the monitor band, so it never acts alone
-  (`test_possible_minor_scores_never_act_on_anyone_alone`). P-72 stays open.
+  (`test_possible_minor_scores_never_act_on_anyone_alone`). P-72 stays open (built 19 October
+  2026: D-991, D-1050).
 - [x] `recompute_fraud` worker: weighted sum with 7-day decay → `fraud_scores` + band. Actions: `shadow` → shown only to other shadowed users; `freeze` → status `frozen`, sessions revoked, admin notified. 3 reports from different users in 24 h → freeze immediately.
   **Built:** `app/workers/tasks/recompute_fraud.py`, every 10 minutes in the worker's own loop,
   and the person reported scored in the report's transaction, their row locked first, so two
@@ -5399,7 +5400,7 @@ The number comes from the session's own block, given in its brief, from P-100 up
   that changes a published page, not a tuning knob someone enables for better accuracy.** Sightengine
   changes its retention on request, so "default" is a state we must not drift out of, not a
   guarantee. At the direction of the advisor (Claude, in a separate chat), relayed by the founder.
-- [ ] P-72 · Give repeated possible-minor flags a human to go to. **Before the first real user** (on
+- [x] P-72 · Give repeated possible-minor flags a human to go to. **Before the first real user** (on
   T-9.15's Needs line, and REL-1's if its tag includes T-4.4). Worst case without it: a model's
   probability, which catches young-looking adults, grows into an automatic action against a real
   woman, or into nothing at all. D-093: repeated `minor_suspected` flags on one person never
@@ -5414,6 +5415,23 @@ The number comes from the session's own block, given in its brief, from P-100 up
   as underage, each in `audit_log`, none automatic. Not built yet. The plan's answers (18 October:
   a permanent underage ban that keeps the account, the in-app row until P-755) are in D-991 and
   D-994; built next, before P-163.
+  **Built (19 October 2026, D-1050):** the flag that puts a person on the list (two
+  `possible_minor_photo_score` events in 30 days, counting only those after any decision on them)
+  tells every active admin, in moderation's own transaction (`safety.service.
+  escalate_possible_minor`): kind `minor_flags`, which no setting governs and only an admin is
+  told, written and pushed (`notifications.service.notify_admins`, the sender asking the role
+  again); a later flag while they wait rewrites each admin's newest row and pushes nothing (the
+  founder's change to the plan). The payload names the person `subject_id`, so the push carries no
+  name. `GET /admin/minor-flags` lists them for staff, `/admin/minor-flags` in the panel; the
+  person's page carries `minor_flags` and the three decisions, `POST /admin/users/{id}/
+  minor-decision`: `adult` and `underage` an admin's, `freeze` staff's, each with an audit row.
+  The underage ban keeps the account, banned and signed out, and an unban refuses it
+  (`why: underage`), which before this would have set it back to `active`; the unban button is
+  gone for it (`ban.permanent`). Held by `test_minor_flags.py`, `test_admin_minor_flags.py`, the
+  notifications tests and one through moderation, and break cases `p72-1` to `p72-15`, all red
+  (`out/p72-break-guards.log`; `t91-13`, `t95-04` and `t95-24`, whose anchors this kept unique,
+  still red, `out/p72-older-break-cases.log`). What happens to the account's photos and data is
+  P-951's; `/privacy`'s silence on the score, P-952's.
 - [x] P-73 · Find out what the two unidentified accounts on staging hold. **Before real users** (on
   T-9.15's Needs line, and REL-1's if its tag includes T-3.14). Two accounts, from phone numbers the
   founder hasn't identified, signed in to staging at 21:05 and 21:11 UTC on 3 October 2026 and were
@@ -7683,3 +7701,27 @@ The number comes from the session's own block, given in its brief, from P-100 up
   shows the same way); closing the banner keeps it closed after a reload. Record each phone, its
   OS and browser versions, and what it showed. Filed by Claude building T-9.7, 19 October 2026,
   at the founder's direction; its block, P-940 to P-949.
+- [ ] P-951 · Decide what happens to an underage-banned account's photos and other personal data.
+  **Before REL-1; the founder and the lawyer (with P-81) decide, Claude builds nothing until
+  then** (the founder, 19 October 2026, relayed). Worst case: an account an admin has judged to be
+  a minor's keeps its photos, profile, messages and number in our storage indefinitely, with
+  nothing on record about why or for how long, while the same person refused at sign-up for a
+  birth date under 18 has everything deleted at once (D-072). Today, from P-72 (D-991): the
+  underage ban keeps the account, status `banned`, signed out everywhere; its photos stay in the
+  buckets, its profile, Threads and messages stay, and `banned_identities` holds the number's hash
+  for good. Nothing schedules an erasure: a banned account is outside `erase_accounts`' reach
+  (P-401, D-929). To decide: delete as D-072 does (and what moderation keeps, rule 12), keep it
+  all as evidence and for how long, or a mix (photos deleted at once, the record kept). Whatever is
+  chosen changes `/privacy`'s "Under-18s" section, which today describes only sign-up's path.
+  Filed by Claude building P-72, at the founder's direction; its session's block, P-950 to P-959.
+- [ ] P-952 · Say on `/privacy` that a photo's possible-minor score is kept and that people review
+  repeated ones. **Before REL-1; the founder's wording.** Worst case: a person's data notice says
+  nothing of a model's estimate, from their photos, that they may be under 18, kept as a
+  moderation record and shown to staff with a count and the scores, nor that repeated ones go to a
+  person who may ban the account for good; a privacy notice missing a processing purpose this
+  serious is the kind of gap a complaint finds first. Today `privacy.collect.safety` lists reports,
+  refused or masked messages, new chats, sign-ins and location jumps as scored signals, and the
+  photo-check line names Sightengine; neither says that a minor score is kept (D-093's minimal
+  record) or that P-72 now puts two in 30 days in front of an admin. A published page's words are
+  the founder's to choose, so this files the gap rather than editing the page. Found by Claude
+  building P-72, 19 October 2026; its session's block.

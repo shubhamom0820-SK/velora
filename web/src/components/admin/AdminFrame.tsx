@@ -18,6 +18,7 @@ const SECTIONS: readonly Section[] = [
   { href: "/admin/moderation", label: "admin.nav.moderation" },
   { href: "/admin/users", label: "admin.nav.users" },
   { href: "/admin/freezes", label: "admin.nav.freezes" },
+  { href: "/admin/minor-flags", label: "admin.nav.minorFlags" },
   { href: "/admin/claims", label: "admin.nav.claims", adminOnly: true },
   { href: "/admin/audit", label: "admin.nav.audit" },
 ];

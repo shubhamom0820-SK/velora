@@ -34,6 +34,7 @@ function detail(overrides: Partial<AdminUserDetail> = {}): AdminUserDetail {
     is_verified: false,
     balance: 12,
     ban: null,
+    minor_flags: null,
     photos: [],
     fraud: null,
     reports_about: [],
@@ -128,6 +129,53 @@ describe("one account for staff (T-9.5)", () => {
     expect(
       screen.queryByRole("button", { name: t("admin.user.creditsSubmit") }),
     ).not.toBeInTheDocument();
+  });
+
+  it("offers no unban for a permanent, underage ban (D-991)", async () => {
+    const ban = {
+      reason: "ban",
+      created_at: new Date().toISOString(),
+      permanent: true,
+    };
+    fakeApi({
+      "GET /v1/admin/users/m1": () =>
+        json(
+          200,
+          detail({ ban, user: { ...detail().user, status: "banned" } }),
+        ),
+    });
+
+    renderDetail("admin");
+
+    expect(
+      await screen.findByText(
+        t("admin.user.bannedPermanent", { reason: "ban" }),
+      ),
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: t("admin.user.unban") }),
+    ).not.toBeInTheDocument();
+  });
+
+  it("offers an unban for a plain ban", async () => {
+    const ban = {
+      reason: "ban",
+      created_at: new Date().toISOString(),
+      permanent: false,
+    };
+    fakeApi({
+      "GET /v1/admin/users/m1": () =>
+        json(
+          200,
+          detail({ ban, user: { ...detail().user, status: "banned" } }),
+        ),
+    });
+
+    renderDetail("admin");
+
+    expect(
+      await screen.findByRole("button", { name: t("admin.user.unban") }),
+    ).toBeInTheDocument();
   });
 
   it("freezes behind a confirmation that asks why", async () => {

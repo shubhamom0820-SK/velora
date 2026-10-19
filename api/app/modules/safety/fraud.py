@@ -96,6 +96,17 @@ def jumped(km: float, since_last: timedelta) -> bool:
     return km > JUMP_KM and since_last <= JUMP_WITHIN
 
 
+# --- Possible-minor flags: when a human looks (P-72, D-991, D-1050) -----------------
+
+# Two flags on one person within 30 days put them in front of the admins: one
+# is a photo, two from different photos a pattern. Never an action on them.
+MINOR_FLAGS_TO_REVIEW: Final = 2
+MINOR_FLAGS_WINDOW: Final = timedelta(days=30)
+# An admin's decision on them, in `audit_log`: only flags after the newest one
+# count, so two new flags bring them back (D-1050), never one more photo.
+MINOR_REVIEWED: Final = "minor_flags.decided"
+
+
 # --- The score -----------------------------------------------------------------------
 
 DECAY: Final = timedelta(days=7)

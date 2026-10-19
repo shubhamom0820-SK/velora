@@ -6488,6 +6488,32 @@ and a Knot is permanent and untouched.
 **Rejected:** refusing his sends to someone not `done` (a new error and changes across threads and
 messages, for a state a real woman leaves within minutes).
 
+### D-1050 · Who decides on possible-minor flags, and what brings someone back — Locked
+**The decision (P-72's plan, the founder, 19 October 2026, on the advisor's recommendation,
+relayed):** completes D-991.
+- **After a decision, two new flags.** Any decision on a person (leave, freeze or ban as underage)
+  is a `minor_flags.decided` audit row, and only flags after the newest one count, still within
+  30 days. One more photo with sunglasses doesn't reopen a review that was settled; two new ones do.
+- **Who:** moderators and admins see the list (`/admin/minor-flags`); leaving someone (judged an
+  adult) and the underage ban are an admin's; a freeze is anyone's who may freeze (D-922).
+- **Told once, on entering the list** (the founder's change to the plan): the flag that puts them
+  on it, the second in 30 days or the second since a decision, tells every active admin (D-994).
+  A later flag while they still wait brings each admin's in-app row up to date, its count, scores
+  and times, and pushes nothing.
+- **An underage ban is never lifted, by the database or the panel.** The number's `underage` row
+  by migration 7c8a628fd3d7's trigger; where a plain `ban` row stood first and kept its reason
+  (D-991), by the account's `user.ban_underage` audit row, which `audit_log` can't lose: an unban is
+  `NOT_ALLOWED` `why: underage` either way. Before P-72 an unban set any banned account back to
+  `active` whether or not a row was lifted, which would have put an underage-banned account back in
+  everyone's deck with its number still barred.
+- **The payload names the person `subject_id`, never `user_id`:** the sender adds the first name of
+  whoever `user_id` names, and the in-app list hides a row about someone the reader blocked; an
+  admin's notification must do neither.
+
+**Rejected:** any new flag reopening a review (one young-looking photo after a "leave" would do it);
+a push for every flag (one review, many alerts); a moderator leaving someone (it closes a possible
+minor's review).
+
 ### D-960 · axe through Playwright, pinned, for the accessibility walk — Locked
 **The decision (T-9.11; the founder, 16 October 2026, on the advisor's recommendation, Claude in
 a separate chat, relayed by the founder):** `@axe-core/playwright` **4.13.0**, a devDependency

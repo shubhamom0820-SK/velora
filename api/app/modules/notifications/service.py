@@ -11,8 +11,11 @@ an active account only (`rules.TOLD`; a paused one is sent nothing, T-9.6):
   again when it sends, so a change in between still counts.
 
 A kind only a man is told (`rules.MEN_ONLY`: an hour running out, a balance) is
-never written for anyone else (D-554, P-460). A like to a man never names who
-(D-542): the payload loses `user_id` here, before anything is written.
+never written for anyone else (D-554, P-460), and one only an admin is told
+(`rules.ADMINS_ONLY`, D-994) is never written for anyone but an admin, whatever
+their settings say: `notify_admins` tells every active one. A like to a man
+never names who (D-542): the payload loses `user_id` here, before anything is
+written.
 """
 
 from __future__ import annotations
@@ -26,6 +29,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core import clock, events
 from app.core.config import Settings
+from app.core.enums import Role
 from app.core.errors import AppError
 from app.core.pagination import Cursor, PageParams
 from app.modules.admin import service as admin_service
@@ -54,8 +58,8 @@ async def notify(
     row = await repository.recipient(session, user_id, rules.PREF_FOR[kind])
     if row is None:
         return False
-    status, gender, wanted, subscribed = row
-    if not rules.told(status) or not rules.reaches(kind, gender):
+    status, gender, role, wanted, subscribed = row
+    if not rules.told(status) or not rules.reaches(kind, gender, role):
         return False
     if kind is Kind.LIKE and not likes_rules.sees_everyone(gender):
         payload = {key: value for key, value in payload.items() if key != "user_id"}
@@ -65,6 +69,32 @@ async def notify(
         repository.add_push(session, user_id, str(kind), payload)
         events.wake_push(session, user_id)
     return True
+
+
+async def notify_admins(
+    session: AsyncSession, kind: Kind, payload: dict[str, Any]
+) -> int:
+    """Tell every active admin about `kind`, an admins-only kind (D-994), in
+    the caller's transaction: how many were told."""
+    if kind not in rules.ADMINS_ONLY:
+        raise ValueError(f"{kind} is not a kind for the admins")
+    told = 0
+    for admin_id in await repository.active_ids_with_role(session, Role.ADMIN):
+        told += await notify(session, admin_id, kind, payload)
+    return told
+
+
+async def update_admins(
+    session: AsyncSession, kind: Kind, field: str, payload: dict[str, Any]
+) -> int:
+    """Each admin's newest in-app `kind` row about `payload[field]`, brought up
+    to date with `payload`, in the caller's transaction: nothing pushed, nothing
+    new written (P-72). How many rows."""
+    if kind not in rules.ADMINS_ONLY:
+        raise ValueError(f"{kind} is not a kind for the admins")
+    return await repository.update_newest_about(
+        session, str(kind), field, str(payload[field]), payload
+    )
 
 
 async def balance_fell(

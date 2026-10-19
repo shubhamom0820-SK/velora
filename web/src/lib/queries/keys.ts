@@ -104,5 +104,6 @@ export const queryKeys = {
     ["admin", "thread", id, reason] as const,
   adminAudit: (action: string) => ["admin", "audit", action] as const,
   adminFreezes: () => ["admin", "freezes"] as const,
+  adminMinorFlags: () => ["admin", "minor-flags"] as const,
   adminClaims: () => ["admin", "claims"] as const,
 };

@@ -846,6 +846,40 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/admin/users/{user_id}/minor-decision": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Decide Minor */
+        post: operations["decide_minor_v1_admin_users__user_id__minor_decision_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/admin/minor-flags": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Minor Flags */
+        get: operations["minor_flags_v1_admin_minor_flags_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/admin/users/{user_id}/credits": {
         parameters: {
             query?: never;
@@ -1826,7 +1860,9 @@ export interface components {
         };
         /**
          * AdminBan
-         * @description The number's standing ban, if any: `ban` an admin's, `underage` D-072's.
+         * @description The number's standing ban, if any: `ban` an admin's, `underage` D-072's
+         *     or an admin's underage ban (D-991). `permanent` when it is underage, by its
+         *     row or by the account's record: nothing lifts it.
          */
         AdminBan: {
             /** Reason */
@@ -1836,6 +1872,8 @@ export interface components {
              * Format: date-time
              */
             created_at: string;
+            /** Permanent */
+            permanent: boolean;
         };
         /**
          * AdminFraud
@@ -1984,6 +2022,63 @@ export interface components {
             /** Claims Open */
             claims_open: number;
             revenue: components["schemas"]["AdminRevenue"] | null;
+        };
+        /**
+         * AdminMinorFlag
+         * @description A person on the possible-minor list (P-72, D-991).
+         */
+        AdminMinorFlag: {
+            /** Flags */
+            flags: number;
+            /** Scores */
+            scores: number[];
+            /** Times */
+            times: string[];
+            /**
+             * First At
+             * Format: date-time
+             */
+            first_at: string;
+            /**
+             * Last At
+             * Format: date-time
+             */
+            last_at: string;
+            user: components["schemas"]["AdminUser"];
+        };
+        /**
+         * AdminMinorFlagPage
+         * @description `Page<AdminMinorFlag>`: the newest flag first.
+         */
+        AdminMinorFlagPage: {
+            /** Items */
+            items: components["schemas"]["AdminMinorFlag"][];
+            /** Next Cursor */
+            next_cursor: string | null;
+        };
+        /**
+         * AdminMinorFlags
+         * @description A person's possible-minor flags waiting for a human (D-991): two or more
+         *     in 30 days, after any decision on them (D-1050). Each a model's score for
+         *     one photo, oldest first, never the photo (D-093 deleted it).
+         */
+        AdminMinorFlags: {
+            /** Flags */
+            flags: number;
+            /** Scores */
+            scores: number[];
+            /** Times */
+            times: string[];
+            /**
+             * First At
+             * Format: date-time
+             */
+            first_at: string;
+            /**
+             * Last At
+             * Format: date-time
+             */
+            last_at: string;
         };
         /**
          * AdminPhoto
@@ -2211,6 +2306,7 @@ export interface components {
             /** Balance */
             balance: number;
             ban: components["schemas"]["AdminBan"] | null;
+            minor_flags: components["schemas"]["AdminMinorFlags"] | null;
             /** Photos */
             photos: components["schemas"]["AdminPhoto"][];
             fraud: components["schemas"]["AdminFraud"] | null;
@@ -3091,6 +3187,24 @@ export interface components {
             items: components["schemas"]["Message"][];
             /** Next Cursor */
             next_cursor: string | null;
+        };
+        /**
+         * MinorDecision
+         * @description What an admin decides about a person on the possible-minor list (D-991):
+         *     an adult, left as they are; frozen, which D-906's unfreeze reverses; or
+         *     banned as underage, which nothing lifts.
+         * @enum {string}
+         */
+        MinorDecision: "adult" | "freeze" | "underage";
+        /**
+         * MinorDecisionRequest
+         * @description `adult` and `underage` an admin's, `freeze` staff's (D-1050); the reason
+         *     kept in audit_log (D-991).
+         */
+        MinorDecisionRequest: {
+            decision: components["schemas"]["MinorDecision"];
+            /** Reason */
+            reason: string;
         };
         /**
          * Notification
@@ -5587,6 +5701,71 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    decide_minor_v1_admin_users__user_id__minor_decision_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                user_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["MinorDecisionRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    minor_flags_v1_admin_minor_flags_get: {
+        parameters: {
+            query?: {
+                cursor?: string | null;
+                limit?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AdminMinorFlagPage"];
+                };
             };
             /** @description Validation Error */
             422: {
