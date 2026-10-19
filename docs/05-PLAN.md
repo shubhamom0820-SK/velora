@@ -7553,3 +7553,17 @@ The number comes from the session's own block, given in its brief, from P-100 up
   `scripts/ci-gate-test` that a stale local `main` never goes green for an older commit, and the
   /done text's manual-path step 4 checked against it. Filed by Claude after landing T-9.10, at
   the founder's direction, 19 October 2026, from T-9.10's block (P-930 to P-939).
+- [ ] P-866 · Make T-9.11's accessibility walk shorter, so CI's E2E fits comfortably. **Before
+  REL-1** (the founder, 19 October 2026). Worst case: every landing's CI run outlasts
+  `scripts/ci-gate`'s wait and each session waits it out twice, or a run near the limit is cut
+  off and read as a failure, so landings slow and gates get re-run by habit. Measured landing
+  T-9.11: `e2e/a11y.spec.ts` takes 3.6 min on each project, against the plan's 1 to 2 (two
+  sign-ups, then 14 `(app)` screens walked as him and again as her, 9 admin screens as staff, and
+  his PIN paced under the API's 10 checks a minute); CI's runs for `806bd7d` and `74c9d46` took
+  about 23 minutes, past the gate's 20, and both went green on the gate's second wait. Fix: walk
+  each `(app)` screen as one person (`walkers` in `e2e/a11y-routes.ts`, its test changed to
+  match), keeping both only where the screen differs by gender (wallet, the chat's countdown,
+  the deck's prices), and fewer full loads, so fewer PIN unlocks to pace; measure the spec before
+  and after, both projects, and record both. The gate's own wait (20 to 35 minutes) is the
+  Proposed-tasks session's, with P-881: not this. Filed by Claude after T-9.11 landed, at the
+  founder's direction; its block, P-860 to P-869.
