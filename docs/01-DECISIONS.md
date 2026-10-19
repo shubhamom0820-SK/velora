@@ -6917,3 +6917,45 @@ circle a launcher may crop to.
 
 **Why `id` apart from `start_url`:** moving where the app opens never makes an installed copy a
 different app.
+
+### D-970 · Pillow moves to 13.0.0: its own release notes are the advisory — Locked
+**The decision (T-9.13; D-092's third condition, under the founder's answer of 18 October 2026,
+relayed: stay on 12.3.0 only if no advisory affects it):** `pillow==13.0.0`, exactly, as D-092
+pins it. On 19 October 2026 OSV and GitHub's advisory database both listed nothing against
+12.3.0, but Pillow's own 13.0.0 release notes (16 October 2026) list security fixes whose CVEs
+"will be added as they are assigned": two Critical, among them "JPEG decoder buffer overflow from
+scanlines wider than tile extents", and High ones including "Unbounded Exif header replacement
+loop". There is no 12.3.x. Our uploads are decoded only as JPEG, PNG or WebP (`Image.open`'s
+`formats=`, `core/images.py`), which keeps the TIFF, PDF, EPS and WMF decoders out of reach, but
+the JPEG decoder and `exif_transpose` are exactly what every photo meets. 13.0's breaking changes
+(Python 3.10 dropped; I-mode PNG clipping; `fromarray`'s mode; `get_child_images`; `_show`;
+`ImageCmsProfile.product_*`; `ExifTags.IFD.Makernote`) touch none of our calls.
+
+**Proved on 13.0.0:** the image, moderation and verification tests, 95 of them, the D-092 three
+among them (a GPS-carrying photo stored with no location anywhere, two real bombs refused), pass;
+`t44-05`'s anchor moved to the new pin and is red in 1 of 1.
+
+**The lesson for the next check:** an advisory database lags the project. D-092's check reads the
+project's release notes too, not only OSV and GHSA.
+
+### D-971 · The dependency audits at T-9.13, and the two Highs left standing — Locked
+**The decision (T-9.13; 07-CHECKLISTS §E's last line; the founder's answer of 18 October 2026:
+`uvx pip-audit`, ephemeral, nothing added to `pyproject.toml`):**
+- **API:** `pip-audit` 2.10.1 over `uv export --no-dev` found `aiohttp` 3.14.3 (aiobotocore's,
+  for R2) with GHSA-2g87-pp6c-29x5 and CVE-2026-111064, both High, and CVE-2026-111063, Low. All
+  are aiohttp's server, which we never run, but the fix was the lock alone: `aiohttp` 3.14.5. Then
+  no known vulnerabilities, prod and dev.
+- **Web:** `pnpm audit` found five High. `next` 16.3.6 → 16.3.8 (and `eslint-config-next` with it,
+  both exact) closes Next's own (SSRF in Image Optimization; four Moderate, one Low) and, through
+  its tree, `sharp` 0.35.5 and `source-map-js` 1.2.2. **Two Highs stay, by this decision:**
+  `@grpc/grpc-js` < 1.13.6, which `@firebase/firestore` pins at `~1.9.0` even in `firebase`
+  13.0.0, the latest: it is gRPC's Node server and client, which a browser bundle never loads,
+  and we import only `firebase/app` and `firebase/auth` (`src/lib/firebase.ts`, the only file
+  ESLint lets touch the SDK). And `braces` ≤ 3.0.3, eslint's, with no patched version at all:
+  a development tool's, never shipped.
+- **Why not an override:** forcing `@grpc/grpc-js` past Firestore's `~1.9.0` changes a package we
+  never run to prove nothing, and an override outlives the reason for it. Firebase moving its pin
+  closes it; until then T-9.13 passes that line with these two named as exceptions, and P-871's
+  CI step carries them as an allowlist with their reasons.
+
+**Rejected:** a CI step for both audits now (filed as P-871, the founder's answer: a Proposed task).

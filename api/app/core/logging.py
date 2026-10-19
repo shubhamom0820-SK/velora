@@ -66,6 +66,32 @@ def configure_logging(*, json_logs: bool, level: str = "INFO") -> None:
 
     # Uvicorn and SQLAlchemy log through the stdlib; send them to the same sink.
     logging.basicConfig(format="%(message)s", stream=sys.stdout, level=level)
+    for name in _UVICORN_REQUEST_LINES:
+        logger = logging.getLogger(name)
+        if _NO_QUERY not in logger.filters:
+            logger.addFilter(_NO_QUERY)
+
+
+class _PathsWithoutQuery(logging.Filter):
+    """Uvicorn writes each request's path with its query: an HTTP request's on
+    `uvicorn.access`, a socket's (`"WebSocket /ws?ticket=…" [accepted]`) on
+    `uvicorn.error`. The socket's ticket is the one secret a URL carries by
+    design (T-7.4), so rule 15 keeps every query out of these lines (T-9.13,
+    P-780). A logger's own filters outlive uvicorn's dictConfig."""
+
+    def filter(self, record: logging.LogRecord) -> bool:
+        if isinstance(record.args, tuple):
+            record.args = tuple(
+                arg.split("?", 1)[0]
+                if isinstance(arg, str) and arg.startswith("/")
+                else arg
+                for arg in record.args
+            )
+        return True
+
+
+_UVICORN_REQUEST_LINES = ("uvicorn.access", "uvicorn.error")
+_NO_QUERY = _PathsWithoutQuery()
 
 
 class RequestIDMiddleware(BaseHTTPMiddleware):

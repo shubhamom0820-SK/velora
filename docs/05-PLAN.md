@@ -3987,19 +3987,53 @@ number** per account gets its 5 each, one Thread's worth, and is **accepted**, k
 - [x] **Commit:** `chore(ops): error tracking and alerts [T-9.12]`
 
 ### T-9.13 · Security review
-- [ ] **Needs:** T-9.9
+- [x] **Needs:** T-9.9
   **Runs last in Sprint 9** (the founder, 18 October 2026, on the advisor's recommendation,
   Claude in a separate chat, relayed): after T-9.12, T-9.11, T-9.7, P-70, P-71 and P-72 land, so
   the review covers all of Sprint 9's code.
-- [ ] **Pillow's pinned version against its CVEs** (D-092): an image parser reading hostile input;
+- [x] **Pillow's pinned version against its CVEs** (D-092): an image parser reading hostile input;
   update it if any has landed since it was pinned.
-- [ ] **The local-only test routes, D-963's role route first** (T-9.11, at the founder's
+  **Read 19 October 2026: moved to `pillow==13.0.0` (D-970).** OSV and GHSA listed nothing
+  against 12.3.0, but Pillow's own 13.0.0 notes list two Critical fixes, a JPEG decoder buffer
+  overflow among them, CVEs still being assigned, and no 12.3.x exists. The image, moderation
+  and verification tests pass on it (95), the D-092 three among them; `t44-05` follows the pin.
+- [x] **The local-only test routes, D-963's role route first** (T-9.11, at the founder's
   direction, 18 October 2026): `POST /v1/test/users/{id}/role` makes anyone an admin, so confirm
   every `/v1/test` route is still a 404 in the deployed image, from outside, on staging and
   production (not only `test_make_staff.py`'s settings), that none is in OpenAPI, and that nothing
   in the web bundle names one (`no-test-routes.test.ts` reads the source, not the build).
-- [ ] Walk the security checklist in `07-CHECKLISTS.md` line by line; fix findings; run Claude Code `/security-review` on the branch; commission the external review of auth + wallet + payments (budget line in cost doc).
-- [ ] **Commit:** `fix(security): review findings [T-9.13]`
+  **Read 19 October 2026:** `tests/modules/e2e/test_routes_gated.py` reads the whole route table,
+  whatever module a route is in: none of the four is served under staging, production, preview,
+  ci or an unlisted name, and none is in OpenAPI, served or contract (`t913-02`, `t913-03` red).
+  On staging, from outside, at `f75c542`: each is a 404 to POST and GET alike, where a served
+  route answers 401 or 405 (`out/t913-staging-probe.txt`); `/openapi.json` too. The production
+  build names none (`out/t913-bundle-scan.txt`, its planted control found). **Production from
+  outside waits for REL-1** (P-879).
+- [x] Walk the security checklist in `07-CHECKLISTS.md` line by line; fix findings; run Claude Code `/security-review` on the branch; commission the external review of auth + wallet + payments (budget line in cost doc).
+  **Walked 19 October 2026** (the line-by-line record, with each line's code and tests:
+  `out/t-9.13-security-review.md`). Lines 1, 2, 3, 5, 7, 11, 13, 14 and 15 pass. **Fixed:**
+  line 16, a socket's ticket in uvicorn's lines (on `uvicorn.error`, not the access log), now cut
+  from every request line by `core/logging.py`, proved through real uvicorn
+  (`test_ticket_never_logged.py`, `t913-01`). **Tests where a line held only by its code:** line
+  4 (the token in no storage, cookie or URL, web and API, `t913-07`), line 6 (`compare_digest`
+  and a re-serialised body at the route, `t913-04`, `t913-05`), line 8 (the blocked person can't
+  lift a block, `t913-06`). Line 17 (D-971): `aiohttp` 3.14.5, `next` 16.3.8; two Highs that never
+  ship stand, named. **Open:** line 9's R2 "never public" rests on the founder's report (P-877);
+  line 10's voice notes are stored as uploaded (P-874); line 12's App Check and billing are
+  P-68 and P-0.18. `/security-review` over Sprint 9 (`15c75a4^..HEAD`): nothing at confidence 8
+  or more; its two candidates are P-870 and P-872. The external review's scope brief is
+  `out/t-9.13-external-review-scope.md`; commissioning it is P-873, the founder's. There is no
+  cost doc in `docs/`. **Read since, to the same standard** (the founder, 19 and 20 October
+  2026): P-904, `e4fa282`, T-9.12's follow-up: nothing. P-163, `87e090c`: nothing; the undo is the
+  hand tool's only, an active admin's, its rows locked and audited in one transaction, no money
+  moved, each guard broken by `p163-1` to `p163-14`. P-450, `94a807f`, read on its branch before it
+  reached `main`: no vulnerability; its filters pass a money ask or an abuse word carrying a
+  zero-width character, a soft hyphen, full-width or Cyrillic letters, mixed scripts or an
+  underscore, and some common spellings ("phone pe", "bhej dena"); `mask()`, older, passes a
+  number with one zero-width space (each reproduced against `94a807f`'s `filters.py`): P-960 and
+  P-961. **P-450 lands after T-9.13** (the founder, 20 October 2026): its diff is read again once
+  it is on `main`, anything new filed in P-962 to P-969.
+- [x] **Commit:** `fix(security): review findings [T-9.13]`
 
 ### T-9.14 · Backups and restore drill
 - [ ] **Needs:** REL-1, which creates production's database (moved from T-2.6 on 3 October 2026)
@@ -7075,7 +7109,8 @@ The number comes from the session's own block, given in its brief, from P-100 up
   T-9.4, 9 October 2026.
 - [ ] P-755 · Turn staging push on after the founder sets the VAPID pair (STAGING.md §4). **After
   D-857 is decided in the founder's own words** (push stays off everywhere until then, the founder,
-  9 October 2026). Worst case: push stays off unnoticed, and every notification waits in a list
+  9 October 2026). **Needs P-872** (T-9.13): until then a sign-out leaves the browser subscribed.
+  Worst case: push stays off unnoticed, and every notification waits in a list
   people rarely open. That is P-631's and P-550's worst case again, built and then switched off.
   The steps: set `VAPID_PRIVATE_KEY` and `VAPID_PUBLIC_KEY` on both staging apps (STAGING.md §4),
   change `PUSH_PROVIDER` to `"webpush"` in `fly.api.toml` and `fly.worker.toml`, and change
@@ -7134,7 +7169,7 @@ The number comes from the session's own block, given in its brief, from P-100 up
   conversation's ⋯ menu, T-9.1's own sheets; the report sends the Thread as `thread_id`, a block
   is silent (D-862) and leaves the chat for `/chats`; both stay for a deleted account, which has
   no profile to open (`ConversationScreen.test.tsx`, three cases; `t712-web-19`, `t712-web-20`).
-- [ ] P-780 · The API's access log prints each socket's ticket. **Before beta.** Worst case: a
+- [x] P-780 · The API's access log prints each socket's ticket. **Before beta.** Worst case: a
   socket refused before it opens (another origin, 4403) leaves its ticket unspent in Fly's logs
   for up to its 30 seconds, and anyone reading those logs live could open that person's socket
   and hear their messages as they arrive. uvicorn's default access log writes every handshake's
@@ -7144,6 +7179,10 @@ The number comes from the session's own block, given in its brief, from P-100 up
   `uvicorn.access`), or turn it off where structlog already logs requests, with a test that
   reads the log. Filed by Claude building T-7.12, 9 October 2026; its session's block, P-780 to
   P-789.
+  **Closed by T-9.13** (the founder's answer, 18 October 2026): the socket's line is uvicorn's
+  `uvicorn.error`, not its access log, so a filter on `uvicorn.access` alone would have missed it.
+  `core/logging.py` cuts the query from both loggers' paths; `test_ticket_never_logged.py` reads
+  the lines real uvicorn writes (`t913-01`).
 - [ ] P-810 · Set a PIN after onboarding. **Before beta.** Worst case: someone who skipped the PIN
   at sign-up (D-069's `/me/pin/skip`) never gets the lock: the You tab offers "Lock now" only with
   a PIN (T-9.8), and nothing in the web sets one after onboarding, though `POST /auth/pin/set`
@@ -7566,7 +7605,8 @@ The number comes from the session's own block, given in its brief, from P-100 up
   every field. Fix: a border token at 3:1 or more for inputs (and the toggle's off track), checked
   in `contrast.test.ts` as a non-text pair, D-014's palette otherwise unchanged. Filed by Claude
   building T-9.11, 18 October 2026.
-- [ ] P-865 · The API's access log records the socket's ticket. **Before REL-1** (the founder,
+- [-] P-865 · The API's access log records the socket's ticket. **Dropped: P-780's duplicate,
+  closed with it by T-9.13** (the founder's answer, 18 October 2026). **Before REL-1** (the founder,
   18 October 2026). Worst case: anyone who can read the API's logs (Fly's log stream, a support
   export, a log drain) holds a ticket that opens a person's socket, their messages and events
   arriving live, for as long as it is still unused (single use, 30 s, T-7.4). Seen in T-9.11's
@@ -7772,3 +7812,103 @@ The number comes from the session's own block, given in its brief, from P-100 up
   `velora-web` for the event; if Chrome sends `report-to` and Sentry refuses it, the endpoint's
   query (`sentry_key`, `sentry_environment`, `sentry_release`) is the first thing to read. Filed by
   Claude closing T-9.12, 19 October 2026; its session's block.
+- [ ] P-870 · A moderator can freeze an admin. **Before a second staff account exists; small** (the
+  founder, 20 October 2026). Worst case: a moderator's account, its phone taken or its holder
+  turned, freezes every admin through `POST /admin/users/{id}/status`, a report's `freeze` or a
+  minor decision: each is signed out and refused at sign-in, only an admin can unfreeze
+  (`scoring.unfreeze`, `app.tools.unfreeze` both need an active admin), and the moderator goes on
+  reading Threads (D-924) until the founder repairs `users` by hand in SQL. `admin/panel.py`'s
+  `_freeze` checks the target's status, never their role; D-922 never considered a staff target.
+  Fix: refuse a freeze, a ban or an underage ban whose target's role is the actor's or above
+  (`FORBIDDEN`, nothing written), with a test; and decide a break-glass unfreeze that needs no
+  active admin. Found by T-9.13's `/security-review`, its filter's verdict an insider lockout, not a
+  data leak (7/10). Filed by Claude, 19 October 2026; its block, P-870 to P-879.
+- [ ] P-871 · `pip-audit` and `pnpm audit` in CI. **Before REL-1; small.** Worst case: a High
+  lands in a dependency the day after a review and nothing reads it until the next one, as
+  Pillow's 13.0 fixes sat three days unlisted by every database (D-970). T-9.13 ran both by hand
+  (D-971). Fix: a CI step, `uvx pip-audit` over `uv export --no-dev` and `pnpm audit
+  --audit-level high`, its two standing exceptions named in an allowlist with the reason each
+  stands, and red on anything else; a new dependency's pin is then the founder's (rule 4), not
+  the audit's. The founder's answer, 18 October 2026: a Proposed task, not T-9.13's. Filed by
+  Claude building T-9.13, 19 October 2026.
+- [ ] P-872 · Signing out leaves the browser subscribed to push. **Before P-755 turns push on**
+  (on its Needs line). Worst case: on a shared or borrowed phone, after she signs out, whoever
+  uses it next sees her notifications as they arrive, by name ("Kabir messaged you") unless Hide
+  names is on. `logout()` (`web/src/lib/session.ts`) and `sign_out_everywhere` touch no
+  subscription, and the sender asks nothing of sessions; deletion already drops them
+  (`account/service.py`). Fix: the web unsubscribes and sends `DELETE /v1/push/subscriptions`
+  before signing out, and the API drops a user's subscriptions with `sign_out_everywhere` (a ban,
+  a freeze, five wrong PINs), with tests on both sides. Found by T-9.13's `/security-review`
+  (latent while push is off; its filter, 6/10). Filed by Claude, 19 October 2026.
+- [ ] P-873 · Commission the external review of auth, wallet and payments. **The founder's
+  call: before real money at scale, not a beta blocker** (the founder, 18 October 2026). Worst
+  case: a flaw in how Velas are bought or spent that our own tests share the blind spot of, found
+  by a user first. The scope brief, ready to send: `out/t-9.13-external-review-scope.md`. Its
+  budget has no line in `docs/` (T-9.13 named a "cost doc" that doesn't exist). Filed by Claude
+  building T-9.13, 19 October 2026.
+- [ ] P-874 · Voice notes: stored as uploaded, and read whole. **Before REL-1** (the founder, 20
+  October 2026). Worst case: her recording reaches him with whatever her browser or a tool wrote
+  into its container (an MP4's `udta` box can hold a device name or a location), the one upload
+  never re-encoded; and a note grown after its size check is read whole into the API's memory
+  (`messages/service.py`'s `check_voice`: `head()`, then `get_bytes()`), where photos read at most
+  their limit plus one. Fix: rewrite the container keeping the audio track alone, or decide in a
+  D-number that its metadata may stand; read with `read_prefix(MAX + 1)`. Found by T-9.13's walk (§E
+  9 and 10). Filed by Claude, 19 October 2026.
+- [ ] P-875 · A socket's ticket, twice more. **Before REL-1** (the founder, 20 October 2026). Worst
+  case: (1) Caddy's error log, written when the API can't be reached (a deploy, a crash), records
+  the request's URI with its query, so `/ws?ticket=…` can still reach a log (read from Caddy's
+  source, not seen); (2) a ticket issued just before a ban or freeze and redeemed after its
+  `close_sockets` opens a socket that stays open (`realtime/service.py` never re-reads the account
+  at redemption). Fix: Caddy's `log` with the query dropped, or the ticket out of the URL altogether
+  (`Sec-WebSocket-Protocol`); and the account's status read when a ticket is taken, with a test of
+  each. Found by T-9.13's walk. Filed by Claude, 19 October 2026.
+- [ ] P-876 · The walk's smaller gaps. **Before beta; none blocks.** Limits declared but never
+  hit by a test: photo show-face, the voice upload URL, message unlock and media, verification
+  start, notification prefs and reads; the likes reveal (it spends Velas) and an admin's credit
+  have only the default 300 a minute; no WebP bomb case beside the PNG and JPEG ones;
+  `photos/repository.py`'s `set_positions` updates by id alone, its ownership the service's
+  set-equality check only. Worst case: one of these regresses with no test to see it. Found by
+  T-9.13's walk. Filed by Claude, 19 October 2026.
+- [ ] P-877 · The edges the walk could only read. **Before REL-1.** Worst case: R2's private
+  bucket is reachable without a signature (an `r2.dev` URL switched on, a custom domain) and every
+  pending photo and voice note is public, which today rests on the founder's report (STAGING.md,
+  PRODUCTION.md) and `storage_probe`, which never tries an anonymous GET against R2 itself. Also
+  noted: the API sets no CSP of its own (`default-src 'none'; frame-ancestors 'none'` is cheap,
+  its JSON only); admin pages carry Razorpay's hosts on Razorpay builds, needlessly. Fix: the probe
+  tries an unsigned GET of a private key at R2's own endpoint and expects a refusal. Found by
+  T-9.13's walk (§E 9, 15). Filed by Claude, 19 October 2026.
+- [ ] P-878 · Staging answered 404 to every `/v1` route for a few minutes. **Investigation; before
+  REL-1** (the founder, 20 October 2026: production would have it on every deploy). Worst case:
+  production does the same after a deploy and every signed-in person is told "Not found" until it
+  passes, with no alert, since `/healthz` stayed 200. Seen by T-9.13, about 17:28 to 17:31Z on 19
+  October 2026, after `f75c542`'s staging deploy had finished at 17:23Z: `/v1/me`, `/v1/prices`,
+  `/v1/blocks` and the rest all `404 NOT_FOUND` in our error shape, so our app answered without its
+  routers; at 17:32Z every route answered as it should (`out/t913-staging-probe.txt`). Cause not
+  found. Filed by Claude building T-9.13, 19 October 2026.
+- [ ] P-879 · Every `/v1/test` route probed from outside on production. **At REL-1** (T-9.11's
+  box on T-9.13 asks for it there; production doesn't exist until then). Worst case: production's
+  image serves D-963's role route and anyone makes themselves an admin; `test_routes_gated.py`
+  proves it by settings, not the deployed image. Fix: REL-1's smoke check asks each test route by
+  POST and GET and expects the 404 of a path that doesn't exist, beside a served route's 401 or
+  405, as T-9.13 did on staging. Filed by Claude building T-9.13, 19 October 2026.
+- [ ] P-960 · The message filters and the number mask match a normalised copy. **Before REL-1**
+  (the founder, 20 October 2026). Worst case: a man asks her for money, or sends abuse, or slips
+  his number past the mask, with a character she can't see or a letter that looks the same, and
+  every filter passes it: `"pay\u200btm kar do"`, `"ch\u00adutiya"`, `"ｐａｙｔｍ kar do"`, `"pаise
+  bhejo"` (a Cyrillic а), `"पैसे bhejo"`, `"paise_bhejo"`, and `mask()` leaving `"9876\u200b543210"`
+  unmasked (each reproduced by T-9.13 against P-450's `94a807f`). Fix: `refusal()` and `mask()`
+  read one matching copy, its zero-width and soft-hyphen characters stripped (ZWJ and ZWNJ only
+  there, never in the stored body, where Devanagari needs them), NFKC applied, confusable Cyrillic
+  and full-width letters folded to Latin, and separators such as `_` read as spaces; the message is
+  stored and shown as written. Tests: each reproduction above must be caught; ordinary Hindi and
+  English, Devanagari with its joiners among them, must pass. Filed by Claude building T-9.13, 20
+  October 2026, at the founder's direction; its block, P-960 to P-969.
+- [ ] P-961 · Five more entries in the filters' word list (D-981, the founder's). **Before
+  REL-1.** Worst case: the commonest ways of asking for money pass because they are spelled the
+  ordinary way. Add "chootiya" to the abuse words, and as money asks only these forms: "paise bhej
+  dena" and "paise bhej do", "paise de do" and "paise dena" asked of someone (`de do`, `dena` after
+  `paise` as a request), "phonepe kar do", "phone pe bhej do". **Never bare "phone pe" nor bare
+  "paise dena"** (the founder, 20 October 2026). Must pass: "phone pe baat karte hain", "paise dena
+  padega", "bill ke paise dena hai". Each entry a caught test and an ordinary sentence, as D-981
+  asks, and a break case. Filed by Claude building T-9.13, 20 October 2026, at the founder's
+  direction.

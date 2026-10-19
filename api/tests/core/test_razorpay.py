@@ -202,6 +202,26 @@ def test_any_other_signature_is_refused(signature: str) -> None:
     assert _verifier().verify_webhook(BODY, signature) is False
 
 
+def test_the_signature_is_compared_in_constant_time(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Through `hmac.compare_digest`, never `==` (T-9.13, §E), as the CSRF and
+    OTP checks are (`tests/core/test_security.py`): a timing test couldn't tell
+    the two apart, so what's checked is which comparison ran, and on what."""
+    compared: list[tuple[bytes, bytes]] = []
+    real = hmac.compare_digest
+
+    def spy(a: bytes, b: bytes) -> bool:
+        compared.append((a, b))
+        return real(a, b)
+
+    monkeypatch.setattr(hmac, "compare_digest", spy)
+    signature = _signature(WEBHOOK_SECRET, BODY)
+
+    assert _verifier().verify_webhook(BODY, signature) is True
+    assert compared == [(signature.encode(), signature.encode())]
+
+
 @pytest.mark.critical
 def test_without_the_secret_every_signature_is_refused_naming_the_setting(
     captured_logs: CapturedLogs,

@@ -16,7 +16,7 @@ dependencies = [
     "phonenumberslite>=9.0.40",
     # Exactly, never >= (D-092): it parses hostile images on the worker. Update it
     # when a CVE lands; T-9.13's security review checks this line.
-    "pillow==12.3.0",
+    "pillow==13.0.0",
     "pydantic-settings>=2.15.0",
     "pyjwt>=2.15.1",
     "redis>=5.3.1",

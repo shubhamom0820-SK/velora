@@ -767,7 +767,7 @@ T44: list[tuple[Case, list[str]]] = [
             id="t44-05-pillow-pinned-with-d-092-3",
             what="Pillow pinned with >= (D-092 3)",
             edits=[
-                ("pyproject.toml", '"pillow==12.3.0",', '"pillow>=12.3.0",'),
+                ("pyproject.toml", '"pillow==13.0.0",', '"pillow>=13.0.0",'),
             ],
             expect=["test_pillow_is_pinned_exactly_and_the_pin_is_what_runs"],
         ),
@@ -13840,6 +13840,114 @@ P72: list[Case] = [
     ),
 ]
 
+# --- T-9.13: the security review's own guards ---------------------------------
+
+LOGGING913 = "app/core/logging.py"
+MAIN913 = "app/main.py"
+E2E913 = "app/modules/e2e/router.py"
+SAFETY_REPO913 = "app/modules/safety/repository.py"
+DEPS913 = "app/core/deps.py"
+PAYMENTS913 = "app/core/providers/payments.py"
+PAYMENTS_ROUTER913 = "app/modules/payments/router.py"
+T913_SELECTION = [
+    "tests/modules/realtime/test_ticket_never_logged.py",
+    "tests/modules/e2e/test_routes_gated.py",
+    "tests/core/test_razorpay.py",
+    "tests/modules/payments/test_webhook.py",
+    "tests/modules/safety/test_blocks.py",
+    "tests/modules/users/test_me.py",
+]
+
+T913: list[Case] = [
+    Case(
+        id="t913-01-a-sockets-ticket-logged",
+        what="rule 15: uvicorn's request lines left with their query, a socket's ticket in them (P-780)",
+        edits=[
+            (
+                LOGGING913,
+                "            logger.addFilter(_NO_QUERY)\n",
+                "            pass\n",
+            )
+        ],
+        expect=[
+            "test_a_sockets_ticket_is_never_in_its_line",
+            "test_an_http_requests_query_is_never_in_its_line",
+        ],
+    ),
+    Case(
+        id="t913-02-test-routes-served-everywhere",
+        what="D-963: the E2E's routes mounted with no gate, the role route making anyone an admin",
+        edits=[
+            (
+                MAIN913,
+                "    if settings.ENV in E2E_SERVED_IN and settings.SMS_PROVIDER in E2E_SERVED_FOR:\n",
+                "    if True:\n",
+            )
+        ],
+        expect=["test_no_test_route_is_served_anywhere_else"],
+    ),
+    Case(
+        id="t913-03-test-routes-in-the-schema",
+        what="the E2E's routes in OpenAPI, so the contract and the web's types name them",
+        edits=[
+            (
+                E2E913,
+                '\nrouter = APIRouter(prefix="/test", tags=["test"], include_in_schema=False)\n',
+                '\nrouter = APIRouter(prefix="/test", tags=["test"])\n',
+            )
+        ],
+        expect=["test_no_test_route_is_in_openapi_even_where_served"],
+    ),
+    Case(
+        id="t913-04-the-signature-compared-with-equals",
+        what="§E: the webhook's signature compared with ==, its time telling how much matched",
+        edits=[
+            (
+                PAYMENTS913,
+                '    return hmac.compare_digest(\n        _sign(secret, body).encode(), signature.encode("utf-8", "surrogateescape")\n    )\n',
+                '    return _sign(secret, body).encode() == signature.encode("utf-8", "surrogateescape")\n',
+            )
+        ],
+        expect=["test_the_signature_is_compared_in_constant_time"],
+    ),
+    Case(
+        id="t913-05-the-webhook-re-serialised-before-its-check",
+        what="§E: the route parsing the body and verifying a re-serialisation, not the bytes Razorpay signed",
+        edits=[
+            (
+                PAYMENTS_ROUTER913,
+                "    await webhooks.receive(session, providers.payments, await request.body(), signature)\n",
+                '    import json\n\n    body = json.dumps(json.loads(await request.body()), separators=(",", ":")).encode()\n    await webhooks.receive(session, providers.payments, body, signature)\n',
+            )
+        ],
+        expect=["test_the_same_event_re_serialised_is_refused_under_its_signature"],
+    ),
+    Case(
+        id="t913-06-a-block-lifted-by-either-person",
+        what="IDOR sweep: an unblock matching the pair either way, so the blocked person lifts it",
+        edits=[
+            (
+                SAFETY_REPO913,
+                "            Block.blocker_id == blocker_id,\n            Block.blocked_id == blocked_id,\n            Block.unblocked_at.is_(None),\n        )\n        .values(unblocked_at=now)\n",
+                "            Block.blocker_id.in_([blocker_id, blocked_id]),\n            Block.blocked_id.in_([blocker_id, blocked_id]),\n            Block.unblocked_at.is_(None),\n        )\n        .values(unblocked_at=now)\n",
+            )
+        ],
+        expect=["test_the_blocked_person_cant_lift_a_block_placed_on_them"],
+    ),
+    Case(
+        id="t913-07-the-token-read-from-the-url",
+        what="§E: the access token taken from ?access_token= when no header carries one",
+        edits=[
+            (
+                DEPS913,
+                '    scheme, _, token = (request.headers.get("Authorization") or "").partition(" ")\n',
+                '    scheme, _, token = (request.headers.get("Authorization") or "Bearer " + request.query_params.get("access_token", "")).partition(" ")\n',
+            )
+        ],
+        expect=["test_a_token_anywhere_but_the_header_is_auth_required"],
+    ),
+]
+
 
 # --- P-904: the alert script's scopes, and T-9.12's test error ------------------
 
@@ -14111,6 +14219,7 @@ CASES: list[tuple[Case, list[str]]] = (
     + [(c, P72_SELECTION) for c in P72]
     + [(c, P904_SELECTION) for c in P904]
     + [(c, P163_SELECTION) for c in P163]
+    + [(c, T913_SELECTION) for c in T913]
 )
 
 # The fifty-connection fixture's own message when Postgres refuses a connection.

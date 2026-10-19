@@ -118,6 +118,34 @@ async def test_a_bad_or_missing_signature_credits_nothing(
 
 
 @pytest.mark.critical
+async def test_the_same_event_re_serialised_is_refused_under_its_signature(
+    db: AsyncSession,
+    client: AsyncClient,
+    make_user: MakeUser,
+    fake_providers: FakeProviders,
+) -> None:
+    """The signature is the raw body's, byte for byte (T-9.13, §E): the same
+    JSON spaced another way, under the signature its first bytes had, is
+    another body and credits nothing, as a verifier that parsed first and
+    signed a re-serialisation would not see."""
+    man, token = await make_user()
+    payment_id, order_id = await order(client, token)
+    signed = fake_providers.payments.sign(captured(order_id))
+    respaced = json.dumps(json.loads(signed.body), indent=2).encode()
+    assert respaced != signed.body and json.loads(respaced) == json.loads(signed.body)
+
+    response = await client.post(
+        WEBHOOK,
+        content=respaced,
+        headers={"Content-Type": "application/json", SIGNATURE: signed.signature},
+    )
+
+    await _refused(response)
+    assert (await _row(db, payment_id)).status == PaymentStatus.CREATED
+    assert await _ledger(db, man.id) == []
+
+
+@pytest.mark.critical
 async def test_with_razorpay_and_no_secret_every_webhook_is_refused(
     db: AsyncSession,
     app: FastAPI,

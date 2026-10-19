@@ -176,6 +176,24 @@ async def test_a_token_under_another_scheme_is_auth_required(
     ).status_code == 200
 
 
+async def test_a_token_anywhere_but_the_header_is_auth_required(
+    db: AsyncSession, client: AsyncClient, make_user: MakeUser
+) -> None:
+    """Never from a URL, a cookie or a body (T-9.13, 07-CHECKLISTS §E): a URL
+    is logged, kept in history and sent on as a Referer (D-024)."""
+    _, token = await make_user()
+
+    for name in ("access_token", "token", "authorization"):
+        response = await client.get("/v1/me", params={name: token})
+        assert _error(response)["code"] == "AUTH_REQUIRED", name
+    response = await client.get("/v1/me", headers={"Cookie": f"access_token={token}"})
+    assert _error(response)["code"] == "AUTH_REQUIRED"
+    # The same token in the header is good, so the refusals were for where it was.
+    assert (
+        await client.get("/v1/me", headers={"Authorization": f"Bearer {token}"})
+    ).status_code == 200
+
+
 async def test_an_expired_token_is_token_expired(
     db: AsyncSession, client: AsyncClient, make_user: MakeUser, clock: ModuleType
 ) -> None:

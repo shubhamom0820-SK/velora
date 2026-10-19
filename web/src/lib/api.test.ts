@@ -75,6 +75,25 @@ describe("api", () => {
     );
   });
 
+  it("keeps the access token in memory: never in storage, a cookie or a URL", async () => {
+    // T-9.13, 07-CHECKLISTS §E: the header is the token's only way out (D-024).
+    const token = "jwt-t913-only-in-memory";
+    fetchMock.mockImplementation(async () => reply(200, { status: "ok" }));
+
+    useSession.getState().signIn(token, { fresh: true });
+    await api.get("/v1/wallet/ledger", { query: { cursor: "c", limit: 5 } });
+    await api.post("/v1/ws/ticket");
+
+    const stored = [localStorage, sessionStorage].flatMap((store) =>
+      Object.keys(store).map((key) => `${key}=${store.getItem(key) ?? ""}`),
+    );
+    expect(stored.filter((entry) => entry.includes(token))).toEqual([]);
+    expect(document.cookie).not.toContain(token);
+    const urls = fetchMock.mock.calls.map(([url]) => String(url));
+    expect(urls).toHaveLength(2);
+    expect(urls.filter((url) => url.includes(token))).toEqual([]);
+  });
+
   it("sends a body as JSON with its content type", async () => {
     fetchMock.mockResolvedValue(reply(204));
     // No POST route exists yet (T-3 adds them), so this reaches past the types.

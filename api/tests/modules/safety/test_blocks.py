@@ -152,6 +152,27 @@ async def test_unblocking_twice_or_someone_never_blocked_is_204(
     assert again.unblocked_at == lifted_at
 
 
+async def test_the_blocked_person_cant_lift_a_block_placed_on_them(
+    db: AsyncSession, client: AsyncClient, make_user: MakeUser
+) -> None:
+    """Only the blocker lifts a block (T-9.13's IDOR sweep): her unblocking
+    him is the 204 of someone she never blocked, and his block still stands,
+    so D-862's "nothing between them" holds."""
+    me, token = await make_user()
+    her, her_token = await make_user(Gender.FEMALE)
+    await photo(db, her, place=0)
+    her_id = her.id
+    await blocked(client, token, her_id)
+
+    await unblocked(client, her_token, me.id)
+
+    [standing] = await rows(db, me.id)
+    assert standing.unblocked_at is None
+    assert [item["user"]["id"] for item in (await _list(client, token))["items"]] == [
+        str(her_id)
+    ]
+
+
 async def test_only_one_block_stands_per_pair_in_the_database(
     db: AsyncSession, make_user: MakeUser
 ) -> None:
