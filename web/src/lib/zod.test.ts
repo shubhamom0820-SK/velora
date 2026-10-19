@@ -21,7 +21,7 @@ async function refused(filePath: string, code: string): Promise<number> {
   ).length;
 }
 
-describe("zod is imported only from @/lib/zod", { timeout: 30_000 }, () => {
+describe("zod only through @/lib/zod(-mini)", { timeout: 30_000 }, () => {
   it.each([
     "src/components/onboarding/NameStep.tsx",
     "src/lib/queries/onboarding.ts",
@@ -33,6 +33,34 @@ describe("zod is imported only from @/lib/zod", { timeout: 30_000 }, () => {
         'import { z } from "zod";\nexport const s = z.string();',
       ),
     ).toBe(1);
+  });
+
+  // Anchored, so a subpath can't slip past the setting (T-9.10).
+  it.each(["zod/mini", "zod/v4", "zod/v4/core"])(
+    "refuses %s outside the two modules",
+    async (from) => {
+      expect(
+        await refused(
+          "src/lib/ws.ts",
+          `import { string } from "${from}";\nexport const s = string();`,
+        ),
+      ).toBe(1);
+    },
+  );
+
+  it("allows @/lib/zod-mini, and zod/mini inside it", async () => {
+    expect(
+      await refused(
+        "src/lib/ws.ts",
+        'import { z } from "@/lib/zod-mini";\nexport const s = z.string();',
+      ),
+    ).toBe(0);
+    expect(
+      await refused(
+        "src/lib/zod-mini.ts",
+        'import { string } from "zod/mini";\nexport const s = string();',
+      ),
+    ).toBe(0);
   });
 
   it("allows @/lib/zod, and zod inside it", async () => {

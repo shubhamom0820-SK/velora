@@ -19,6 +19,9 @@ import {
 } from "@/lib/testing/fakeGeolocation";
 import { resetSession, useSession } from "@/store/session";
 
+import { filtersOf } from "@/components/discover/filterParams";
+import { HOME_FEED, useDiscover } from "@/lib/queries/discover";
+
 import { AppGate } from "./AppGate";
 import { OnboardingGate } from "./OnboardingGate";
 import { RELOCK_AFTER_HIDDEN_MS } from "./PinLock";
@@ -196,6 +199,167 @@ describe("the app's gate (T-3.10)", () => {
 
     expect(await screen.findByRole("alert")).toBeInTheDocument();
     expect(nav.replace).not.toHaveBeenCalled();
+  });
+});
+
+describe("the deck's first page, started alongside /me (T-9.10, D-1033)", () => {
+  const page = { items: [], next_cursor: null, swipes_left: 50 };
+
+  /** A child of the gate reading the deck's query, as DiscoverScreen does. */
+  function DeckProbe() {
+    const feed = useDiscover(
+      HOME_FEED,
+      filtersOf(new URLSearchParams(window.location.search)),
+    );
+    return <p>{feed.isSuccess ? "Feed read" : "Feed waiting"}</p>;
+  }
+
+  afterEach(() => {
+    window.history.replaceState(null, "", "/");
+  });
+
+  it("asks for the feed before /me has answered, on /discover", async () => {
+    nav.pathname = "/discover";
+    let answerMe: (response: Response) => void = () => {};
+    const api_ = fakeApi({
+      "POST /v1/auth/refresh": restored,
+      "GET /v1/me": () => new Promise((done) => (answerMe = done)),
+      "GET /v1/discover": () => json(200, page),
+    });
+
+    renderGate(
+      <AppGate>
+        <DeckProbe />
+      </AppGate>,
+    );
+
+    await waitFor(() => expect(api_.sent()).toContain("GET /v1/discover"));
+    expect(screen.queryByText(/Feed/)).not.toBeInTheDocument();
+    act(() => answerMe(json(200, me("done"))));
+
+    // The deck reads the page already asked for: one request, never two.
+    expect(await screen.findByText("Feed read")).toBeInTheDocument();
+    expect(api_.sent().filter((sent) => sent === "GET /v1/discover")).toEqual([
+      "GET /v1/discover",
+    ]);
+  });
+
+  it("sends it with the access token, never before there is one", async () => {
+    nav.pathname = "/discover";
+    const api_ = fakeApi({
+      "POST /v1/auth/refresh": restored,
+      "GET /v1/me": () => json(200, me("done")),
+      "GET /v1/discover": () => json(200, page),
+    });
+
+    renderGate(
+      <AppGate>
+        <Secret />
+      </AppGate>,
+    );
+
+    await waitFor(() => expect(api_.sent()).toContain("GET /v1/discover"));
+    const sent = api_.sent();
+    expect(sent.indexOf("POST /v1/auth/refresh")).toBeLessThan(
+      sent.indexOf("GET /v1/discover"),
+    );
+    const feed = api_.calls.find((call) => call.path === "/v1/discover");
+    expect(feed?.headers.get("Authorization")).toBe("Bearer t");
+  });
+
+  it("asks with the filters in the address, the deck's own key", async () => {
+    nav.pathname = "/discover";
+    window.history.replaceState(null, "", "/discover?verified=true");
+    const api_ = fakeApi({
+      "POST /v1/auth/refresh": restored,
+      "GET /v1/me": () => json(200, me("done")),
+      "GET /v1/discover": () => json(200, page),
+    });
+
+    renderGate(
+      <AppGate>
+        <DeckProbe />
+      </AppGate>,
+    );
+
+    expect(await screen.findByText("Feed read")).toBeInTheDocument();
+    const feeds = api_.calls.filter((call) => call.path === "/v1/discover");
+    expect(feeds).toHaveLength(1);
+    expect(feeds[0]?.query.get("verified")).toBe("true");
+  });
+
+  it("asks for no feed anywhere but /discover", async () => {
+    nav.pathname = "/chats";
+    const api_ = fakeApi({
+      "POST /v1/auth/refresh": restored,
+      "GET /v1/me": () => json(200, me("done")),
+    });
+
+    renderGate(
+      <AppGate>
+        <Secret />
+      </AppGate>,
+    );
+
+    expect(await screen.findByText("Behind the gate")).toBeInTheDocument();
+    expect(api_.sent()).not.toContain("GET /v1/discover");
+  });
+
+  it("asks for no feed when there is no session", async () => {
+    nav.pathname = "/discover";
+    const api_ = fakeApi({
+      "POST /v1/auth/refresh": () => envelope(401, "AUTH_REQUIRED"),
+    });
+
+    renderGate(
+      <AppGate>
+        <Secret />
+      </AppGate>,
+    );
+
+    await waitFor(() => expect(nav.replace).toHaveBeenCalledWith("/login"));
+    expect(api_.sent()).toEqual(["POST /v1/auth/refresh"]);
+  });
+
+  it("shows nothing of a feed refused to an unfinished onboarding, and goes to its step", async () => {
+    nav.pathname = "/discover";
+    const api_ = fakeApi({
+      "POST /v1/auth/refresh": restored,
+      "GET /v1/me": () => json(200, me("seeking")),
+      "GET /v1/discover": () =>
+        envelope(403, "ONBOARDING_INCOMPLETE", { step: "seeking" }),
+    });
+
+    renderGate(
+      <AppGate>
+        <DeckProbe />
+      </AppGate>,
+    );
+
+    await waitFor(() =>
+      expect(nav.replace).toHaveBeenCalledWith("/onboarding/looking-for"),
+    );
+    expect(api_.sent()).toContain("GET /v1/discover");
+    expect(screen.queryByText(/Feed/)).not.toBeInTheDocument();
+  });
+
+  it("shows nothing of a feed refused to a frozen account, which is signed out as before", async () => {
+    nav.pathname = "/discover";
+    const api_ = fakeApi({
+      "POST /v1/auth/refresh": restored,
+      "GET /v1/me": () => envelope(403, "ACCOUNT_FROZEN"),
+      "GET /v1/discover": () => envelope(403, "ACCOUNT_FROZEN"),
+    });
+
+    renderGate(
+      <AppGate>
+        <DeckProbe />
+      </AppGate>,
+    );
+
+    await waitFor(() => expect(nav.replace).toHaveBeenCalledWith("/login"));
+    expect(api_.sent()).toContain("GET /v1/discover");
+    expect(screen.queryByText(/Feed/)).not.toBeInTheDocument();
   });
 });
 

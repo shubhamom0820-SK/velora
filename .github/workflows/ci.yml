@@ -226,6 +226,13 @@ jobs:
           APP_ENV: ci
         run: pnpm build
 
+      # T-9.10, D-1034: every (app) route's first-load JavaScript under 250 KB
+      # gzipped, from the build just made. Fails closed if Next's list of
+      # first-load files is missing or leaves a route out.
+      - name: Bundle budget (250 KB gzipped per (app) route)
+        working-directory: web
+        run: node scripts/bundle-budget.mts
+
 
   # T-3.13 (06-TESTING's step 4): the user journeys in Playwright, after lint,
   # unit tests and the build passed. A production build of the web against the

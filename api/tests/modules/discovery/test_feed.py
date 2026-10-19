@@ -559,6 +559,26 @@ async def test_before_onboarding_is_done_it_is_onboarding_incomplete(
     }
 
 
+async def test_a_frozen_account_is_refused_the_feed(
+    db: AsyncSession, client: AsyncClient, make_user: MakeUser
+) -> None:
+    """The web asks for the feed alongside `/me`, before it knows who is asking
+    (T-9.10, D-1033), so the server's refusal is the only guard: a frozen
+    account is refused here as on every route (D-067), never shown a card."""
+    user, token = await make_user()
+    assert (await discover(client, token)).status_code == 200
+
+    user.status = UserStatus.FROZEN
+    await db.flush()
+    response = await discover(client, token)
+
+    assert response.status_code == 403
+    assert error(response) == {
+        "code": "ACCOUNT_FROZEN",
+        "message": "This account is frozen while we look into it.",
+    }
+
+
 # --- Swipes left today (T-6.5) ---------------------------------------------------------
 
 

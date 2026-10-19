@@ -45,6 +45,13 @@ type SwipeCardProps = {
   stamps?: ReactNode;
   /** Stops the name's link when the press was a drag, not a tap. */
   onNameClick?: (event: MouseEvent<HTMLAnchorElement>) => void;
+  /**
+   * Behind the top card, until its photo has settled (T-9.10, D-1031): the
+   * photo's place drawn empty, its file not yet asked for.
+   */
+  deferPhoto?: boolean;
+  /** The photo loaded or failed. */
+  onPhotoSettled?: () => void;
 };
 
 /**
@@ -53,7 +60,13 @@ type SwipeCardProps = {
  * photo. Everything here is what the API sent (T-6.2's `Card`); React escapes
  * it, and nothing is drawn as HTML.
  */
-export function SwipeCard({ card, stamps, onNameClick }: SwipeCardProps) {
+export function SwipeCard({
+  card,
+  stamps,
+  onNameClick,
+  deferPhoto = false,
+  onPhotoSettled,
+}: SwipeCardProps) {
   const photo = card.main_photo_url;
   // D-393: no shown face, no badge. The server's rule already says so; the
   // card holds to it too, so a badge can never sit on a silhouette.
@@ -69,13 +82,15 @@ export function SwipeCard({ card, stamps, onNameClick }: SwipeCardProps) {
       className="rounded-swipe bg-surface shadow-2 relative flex size-full flex-col overflow-hidden select-none"
     >
       <div className="bg-surface-2 relative h-3/5 shrink-0">
-        {photo ? (
+        {deferPhoto ? null : photo ? (
           // A plain <img>, as Avatar's: the photo host is the CSP's (T-4.6).
           // eslint-disable-next-line @next/next/no-img-element
           <img
             src={photo}
             alt=""
             draggable={false}
+            onLoad={onPhotoSettled}
+            onError={onPhotoSettled}
             className="size-full object-cover"
           />
         ) : (

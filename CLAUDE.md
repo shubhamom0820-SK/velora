@@ -103,8 +103,13 @@ D-920): `src/app/admin/` and `src/components/admin/`, shown only to `moderator` 
 and every call to one writes `audit_log`. One conversation is `/chats/[id]`
 (T-7.11, `src/components/conversation/`); `src/lib/voice-recorder.ts` is the only MediaRecorder,
 and `/dev/voice` records with it under `next dev` alone (P-520's recordings). `web/bench/` holds benchmarks run by
-hand, never in `make test`: T-6.5's deck frame rate (`pnpm exec playwright test -c bench`), and
-T-8.7's Razorpay CSP against its live Checkout (`-c bench/razorpay-csp.config.ts`). The app's header and bottom nav are
+hand, never in `make test`: T-6.5's deck frame rate (`pnpm exec playwright test -c bench
+deck-fps.spec.ts`), T-9.10's first load of `/discover` and the photos' sizes (`-c bench
+first-load.spec.ts`, D-1030, every byte through a loopback proxy), and T-8.7's Razorpay CSP against
+its live Checkout (`-c bench/razorpay-csp.config.ts`); 06-TESTING lists them. **Every `(app)`
+route's first-load JS stays under 250 KB gzipped:** `scripts/bundle-budget.mts`, in CI after the
+build (T-9.10, D-1034); the socket's client loads as the app mounts, not in the first load (D-1035),
+and the `(app)` pages' zod is `@/lib/zod-mini` (D-1032). The app's header and bottom nav are
 `src/components/shell/AppShell.tsx`, inside `(app)`'s gate and PIN lock (T-5.6): its sizes are the
 `--shell-*` tokens and its shape is that one file, which `look.test.ts` holds. Server data (T-1.18):
 `src/lib/api.ts` is the only code that calls `fetch`, and `src/lib/upload.ts` the only

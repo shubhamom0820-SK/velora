@@ -3856,9 +3856,52 @@ number** per account gets its 5 each, one Thread's worth, and is **accepted**, k
 - [x] **Commit:** `test(wallet): paid action audit and reconciliation [T-9.9]`
 
 ### T-9.10 · Performance pass
-- [ ] **Needs:** T-9.8
+- [x] **Needs:** T-9.8
 - [ ] On the ₹10k test phone over throttled 4G: first load of `/discover` < 3 s, swipe at 60 fps, JS bundle for `(app)` < 250 KB gzipped, images served at the right size. Fix the top 3 offenders.
-- [ ] **Commit:** `perf(web): mobile performance pass [T-9.10]`
+  **Open for the founder's reading on the test phone (P-930), and for right-sized photos
+  (P-931), both before launch** (the founder, 19 October 2026, landing T-9.10). No test phone yet (P-0.9), so everything was measured on the desktop stand-in the
+  founder chose (14 and 16 October 2026, D-1030): a production build in Chromium, a 412 × 915
+  screen at 2.625×, CPU 4×, DevTools' own Fast 4G (the pass/fail) and Slow 4G (the stress
+  reading), every byte through a loopback proxy, ten cold runs of each, interleaved. Before is
+  `main` at `74c9d46`, after is this branch on it, both 19 October 2026:
+  - **First load of `/discover` < 3 s on Fast 4G: met on the stand-in.** The top card's photo
+    shown at **1,916 to 2,100 ms** (median 1,970), from 2,908 to 3,000 ms before (median 2,932,
+    one run at the line). Slow 4G: **7,216 to 7,340 ms**, from 11,868 to 11,936 ms; over 3 s by
+    the HTML, about 250 KB of JS and two preflighted calls at 562 ms a round trip before any
+    photo, and recorded, not passed (D-1030). Kinder than the street: the stand-in API answers
+    at once and nothing is TLS (`web/bench/first-load.spec.ts`;
+    `out/t-9.10-first-load-before.log`, `out/t-9.10-first-load-after.log`).
+  - **JS for `(app)` < 250 KB gzipped: met, and held by CI** (`scripts/bundle-budget.mts`, the
+    web job, D-1034). Every `(app)` route **194.0 to 237.1 KB** (`/discover` 224.1, `/chats/[id]`
+    the largest), from 286.1 to 316.5 KB: all fourteen failed before (`out/t-9.10-budget-before.log`,
+    `out/t-9.10-budget-after.log`). 1 KB is 1,000 bytes.
+  - **Swipe at 60 fps: no change from T-6.5's** (`web/bench/deck-fps.spec.ts`, four sessions of
+    each side interleaved, `out/t-9.10-deck-fps*.log`). The flight 57.7 to 60 fps at 4× and 57.7
+    to 57.8 at 6× on both sides. **One finding:** one drag frame of 183.3 ms, in the first run of
+    one of this branch's four sessions, never on `main`'s; its other frames over 25 ms per session
+    5, 1, 1, 1 against `main`'s 0, 0, 1, 1. Unsettled whether the change causes it: P-932. The
+    phone's own reading is still P-500's.
+  - **Images at the right size: not met; P-931** (D-1030's 2× rule: a photo's natural width at
+    most twice the device pixels it fills). `/discover` 1.31 to 1.42× and `/people/[id]` 1.18×
+    pass; `/discover/likes` 2.71× and `/chats` **10.16×** fail: twelve 281 KB photos into 48 × 48
+    avatars. Every photo is the one 1,600-pixel copy (D-092); a fix is the server's.
+  - **The top three offenders, fixed** (by what they cost the Fast 4G and Slow 4G first load):
+    1. **Three photos at once** where one shows: the two cards behind now ask for theirs only
+       once the top card's has loaded or failed (D-1031). Photos started before the top one
+       arrived: 3, now 1.
+    2. **zod with every locale on every `(app)` page**, about 63 KB gzipped, from the socket's
+       schemas: `zod/mini` by named imports (`src/lib/zod-mini.ts`, D-1032), and the socket's
+       client fetched as the app mounts, not in the first load (D-1035, the founder's answer, 19
+       October 2026, when `/discover` was still 250.9 KB).
+    3. **The feed waited for `/me`**, two round trips with their preflights: on `/discover` the
+       gate starts the deck's first page alongside `/me` (D-1033). The server is the guard: a
+       frozen account is refused the feed (`test_a_frozen_account_is_refused_the_feed`, new) as an
+       unfinished onboarding is (`ONBOARDING_INCOMPLETE`, tested since T-6.2).
+  - **Broken once each:** the web's seventeen (`node scripts/break-guards.mts t910-web`,
+    `out/t-9.10-web-breaks.log`), 17 of 17 red, the tree byte for byte as it was; the API's one
+    (`uv run python -m tests.break_guards t910-`, `out/t-9.10-api-breaks.log`), red in 1 of 1, no
+    file differing after.
+- [x] **Commit:** `perf(web): mobile performance pass [T-9.10]`
 
 ### T-9.11 · Accessibility pass
 - [x] **Needs:** T-9.8
@@ -7452,3 +7495,47 @@ The number comes from the session's own block, given in its brief, from P-100 up
   exit 4 and go through P-842's one more try, while anything GitHub answered (an HTTP status) stays
   5; tests in `scripts/ci-gate-test` for each. Filed by Claude building P-842, at the founder's
   direction, 19 October 2026, from this session's block (P-880 to P-889).
+- [ ] P-930 · T-9.10 on the test phone, read by the founder. **Before launch** (the founder, 19
+  October 2026), **once P-0.9's phone is bought.** Worst case: `/discover` loads in under 2 s on
+  a desktop slowed four times and takes far longer on the phones men in Phagwara carry, over the
+  4G they actually get, and the first screen of the paid product feels broken before anyone
+  swipes. T-9.10's readings are a desktop
+  stand-in (`web/bench/first-load.spec.ts`, D-1030), kinder than the street: no TLS, an API that
+  answers at once. On the phone, by Chrome's remote debugging over USB: `/discover` cold, ten
+  times, on DevTools' Fast 4G and on the phone's own 4G in the launch city, its LCP from the
+  performance panel; record the range in T-9.10's tick, beside the stand-in's. T-9.10's box waits
+  for this, P-931 and P-500. Filed by Claude building T-9.10, 19 October 2026, at the founder's
+  direction; its block, P-930 to P-939.
+- [ ] P-931 · Right-sized photos. **Before launch** (the founder, 16 October 2026). Worst case: a
+  man opening Chats on mobile data downloads twelve 281 KB photos, about 3.4 MB, to fill twelve
+  48-pixel avatars (10.16 times the pixels they show, T-9.10's bench), every time the list is
+  fresh; Liked you 2.71 times. On a prepaid pack that is money, and on a slow line it is the list
+  arriving last. Every approved photo is one 1,600-pixel copy (D-092). Fix: the worker writes
+  smaller copies beside each public photo (sizes from the screens' boxes at 3×: about 160, 480
+  and 960 pixels), their keys in `core/storage_keys.py`, and the API returns them where it
+  returns `main_photo_url` and `photo_urls`. **Every deletion path deletes them too:** D-093's
+  minor (every copy, read back as gone), `delete_files`, the erasure (D-503) and a ban; a copy
+  that outlives its photo is the worst of it. Existing photos backfilled. Proved by T-9.10's
+  bench, every screen within D-1030's 2×. Filed by Claude building T-9.10, 19 October 2026.
+- [ ] P-932 · One 183 ms frame in the deck's first drag. **Before beta, with P-500.** Worst case:
+  the first swipe after the deck loads stutters, the one that sets how the app feels. Seen once
+  in four sessions of `web/bench/deck-fps.spec.ts` on T-9.10's branch, in its first run at 4×,
+  never in four of `main`'s (`out/t-9.10-deck-fps*.log`); unsettled whether T-9.10's change
+  causes it. A likely cause, unproved: the photos behind the top card (D-1031) first decoded when
+  the drag uncovers them. Settle it with a Chrome performance trace of a first drag on each
+  side; if it is the decode, decode them before they are shown (`img.decode()`, or
+  `decoding="async"`), and measure again. Filed by Claude building T-9.10, 19 October 2026.
+- [ ] P-933 · The first load measured against staging. **Before beta.** Worst case: production's
+  first load is a second slower than T-9.10's reading and nobody knows, since the bench's API
+  answers at once and nothing in it is TLS: each origin's handshake (the API and the CDN, one or
+  two round trips each, 165 to 562 ms on the presets) and the API's database time in Mumbai are
+  missing. Run `first-load.spec.ts`'s readings against staging's web, API and CDN (the same
+  presets, the phone's screen), and try `preconnect` to the API and the CDN, which the bench can't
+  measure. Filed by Claude building T-9.10, 19 October 2026.
+- [ ] P-934 · The deck's frame bench serves a 480 × 600 photo, and says 1,200 pixels. **Small;
+  with P-500.** Worst case: T-6.5's and T-9.10's 60 fps readings decode a photo with a
+  seventh of a real one's pixels (51 KB against 281 KB, `chari_2017.jpg`), so a decode that
+  drops frames on a real 1,280 × 1,600 photo never shows. `deck-fps.spec.ts`'s comment says "a
+  real 1,200-pixel photo".
+  Fix: serve `bench/fixtures/photo-1600.jpg` (T-9.10's, through our own re-encode), correct the
+  comment, read it again. Filed by Claude building T-9.10, 19 October 2026.

@@ -6547,3 +6547,117 @@ security review reads it (its note in 05-PLAN).
 
 **Rejected:** walking only the 404 a non-staff person gets (the screens a moderator uses
 unchecked), and checking admin components in jsdom alone (no contrast, no real focus).
+
+### D-1030 · T-9.10 is measured on a desktop stand-in, Fast 4G its pass/fail — Locked
+**The decision (T-9.10; the founder, 14 and 16 October 2026, on the advisor's recommendation,
+Claude in a separate chat, relayed by the founder):** until the test phone exists (P-0.9),
+T-9.10's numbers come from `web/bench/first-load.spec.ts`, run by hand: a production build in
+Chromium, a 412 × 915 screen at 2.625× (T-6.5's), the CPU slowed 4×, and DevTools' own network
+presets as its source defines them (`front_end/core/sdk/NetworkManager.ts`, read 14 October 2026):
+
+| Preset | Down | Up | Latency | Role |
+|---|---|---|---|---|
+| Fast 4G | 9 Mbps × 0.9 | 1.5 Mbps × 0.9 | 60 ms × 2.75 | pass/fail: < 3 s |
+| Slow 4G ("Fast 3G" before) | 1.6 Mbps × 0.9 | 750 kbps × 0.9 | 150 ms × 3.75 | recorded beside it, never passed |
+
+Ten cold runs of each, interleaved, a fresh browser context each. **The first load** is when the
+top card shows its photo: the later of the largest contentful paint and that photo's arrival in
+the browser's resource timing. A run fails unless the largest paint is one of the deck's photos,
+the top one arrived and the feed was asked for. Not the paint alone: when three photos land
+together, Chrome sometimes names a card behind as the largest paint (`bench/3.jpg`, seen 19
+October 2026), though the top one is bigger on screen.
+
+**Every byte over a socket:** a loopback proxy forwards the web to `next start` and answers the
+API and the CDN, because DevTools' throttling never touches what Playwright's `route.fulfill`
+answers (a 247 KB photo in 31 ms at Slow 4G, against 1,950 ms through a socket, 14 October
+2026). Chrome's throttling also lets CORS preflights through untouched (each `OPTIONS` and its
+`GET` reached the server in the same millisecond), so the stand-in holds each preflight for the
+preset's latency, as a round trip would cost. The photo is real: NASA's portrait of Raja Chari
+(public domain, the SHA-1 Commons publishes) through our own `reencode`, 1,280 × 1,600 and 281 KB
+(`bench/fixtures/make_photo.py`).
+
+**Images at the right size, by a 2× rule:** a photo passes when its natural width is at most
+twice the device pixels it fills (for `object-cover`, the box's larger scale × the pixel ratio),
+read for every photo on `/discover`, `/chats`, `/discover/likes` and `/people/[id]`.
+
+**Why:** the plan's phone doesn't exist yet, and a reading nobody can repeat is worse than a
+stand-in that says what it is. Fast 4G is the preset DevTools calls 4G; on Slow 4G, the HTML,
+the JS and two preflighted calls cost more than 3 s before any photo, so a pass there would need a
+different architecture, not a performance pass. **What it misses, each kinder than the street:**
+no TLS (one or two round trips per origin), an API that answers at once, and a desktop CPU slowed
+by a factor rather than a phone's (P-930, P-933).
+
+### D-1031 · The cards behind ask for their photos once the top card's has settled — Locked
+**The decision (T-9.10; the founder, 16 October 2026, approving T-9.10's plan, on the advisor's
+recommendation, relayed):** the deck's two cards behind the top one render their photo's place
+empty, asking for nothing, until the top card's photo has loaded or failed; then they ask, and
+from then on they always do (settled once, settled for the deck's life). A top card with no photo
+settles at once. A waiting card never says "No photo yet": it has one.
+
+**Why:** asked for together, the three photos shared the line and arrived together, so the one
+on screen took three times as long, the first load's largest wait (Slow 4G: 742 KB at once).
+`fetchPriority` was tried first, high for the top and low for the two behind, and measured to
+change nothing: the three still finished within 20 ms of each other (14 October 2026).
+
+### D-1032 · The `(app)` pages' socket schemas use `zod/mini`, by named imports — Locked
+**The decision (T-9.10; the founder, 16 October 2026, approving T-9.10's plan, relayed):**
+`src/lib/zod-mini.ts` imports from `zod/mini` by name, sets `jitless` as `@/lib/zod` does
+(T-3.11), and exports the few functions the socket's envelope and events use, as `z`, with
+`Infer` for a schema's type. `@/lib/zod` stays for the forms (`zodResolver` reads the full
+build). ESLint refuses any import starting `zod` (`zod/mini`, `zod/v4`, `zod/v4/core` among
+them) outside those two modules.
+
+**Why:** `@/lib/zod` exports zod's whole `z` namespace, which no bundler can trim, so every
+`(app)` page carried zod with every one of its locales (German among them), about 63 KB gzipped of
+a 250 KB budget. Named imports of the small build keep only what is used. No new dependency:
+`zod/mini` ships in the `zod` package already pinned.
+
+### D-1033 · On `/discover`, the deck's first page is asked for alongside `/me` — Locked
+**The decision (T-9.10; the founder, 16 October 2026, on the advisor's recommendation,
+relayed):** `AppGate` calls `useEarlyFeed` (`src/components/discover/useEarlyFeed.ts`): once the
+session has an access token, and only on `/discover`, it prefetches the deck's first page under
+the deck's own key (`discoverQuery`, the home feed and the address's filters), so the deck reads
+it, and a request still on its way is shared, never sent twice. Nothing is shown from it: the
+gate still decides what renders.
+
+**The server is the guard:** an unfinished onboarding is refused (`ONBOARDING_INCOMPLETE`) and
+the gate sends it to its step as before; a frozen or banned account is refused as its `/me` is
+(D-067), and the web signs it out as before. `test_a_frozen_account_is_refused_the_feed` is new
+(the founder asked for it, 16 October 2026); the onboarding refusal was already tested.
+
+**Why:** the feed waited for `/me` before, two round trips, each with its CORS preflight: by the
+presets' latency, about 1.1 s at Slow 4G and 0.33 s at Fast 4G. That is arithmetic, not a reading:
+the three fixes were measured together, never this one alone. **Not in `useSignedInMe`:** `/login`'s
+redirect reads it too (P-850), and `/login` must never fetch a feed.
+
+### D-1034 · Every `(app)` route's first-load JS under 250 KB gzipped, held in CI — Locked
+**The decision (T-9.10; the founder, 16 October 2026, approving T-9.10's plan, relayed):**
+`web/scripts/bundle-budget.mts` runs in CI's web job after `pnpm build`. For every page under
+`src/app/(app)`, it sums the files Next lists as that route's first load in
+`.next/diagnostics/route-bundle-stats.json`, each gzipped at zlib's default level (the one `next
+start` serves with), and fails at 250 KB or more, 1 KB being 1,000 bytes. **Fails closed:** no
+list, an `(app)` route missing from it, a route listed with no files, or a listed file missing
+from the build is a failure, never a pass with less counted.
+
+**Why:** a budget only a person checks is gone the first time nobody does. The list is Next's
+internal file, not a documented one, and Next skips a missing file without a word; the check
+fails loudly if either changes. On 19 October 2026 the files it lists for `/discover` were the
+very ones a phone downloaded, the browser's own requests read beside them. **T-9.12's Sentry**
+must fit under it, or the build fails, which is the point (the founder, 16 October 2026); the cap
+stays at 250 KB. `/chats/[id]` is closest, at 237.1 KB.
+
+### D-1035 · The socket's client is fetched as the app mounts, not in the first load — Locked
+**The decision (T-9.10; the founder, 19 October 2026, choosing between three measured options):**
+`Realtime` (`src/components/realtime/Realtime.tsx`) imports `@/lib/ws` and
+`@/lib/queries/realtime` when it mounts, in its effect, and opens the socket once they arrive. If
+the app is left before they arrive, nothing opens. The conversation screen still imports
+`@/lib/ws` itself, for typing, so `/chats/[id]` loads it at once as before.
+
+**Why:** with `zod/mini` alone, `/discover` was still 250.9 KB on 19 October 2026, `main` having
+grown since the plan was measured: `zod/mini`'s core is 24.5 KB gzipped, to check six small
+messages. Fetched after the first load, every `(app)` route came to 194.0 to 237.1 KB. The socket
+already waited for the gate.
+
+**Rejected:** hand-written checks for the six messages instead of zod (about the same saving, and
+a departure from the pinned stack's Zod for one module), and leaving `/discover` over budget (CI's
+check would refuse every build).

@@ -10,6 +10,7 @@ import { t } from "@/i18n/t";
 import { ApiError } from "@/lib/api";
 import { creditsText } from "@/lib/credits";
 import {
+  HOME_FEED,
   useDiscover,
   useSuperLike,
   useSwipe,
@@ -71,7 +72,7 @@ export function DiscoverScreen() {
   );
   const filterCount = activeCount(filters);
   const [filtersOpen, setFiltersOpen] = useState(false);
-  const [feed, setFeed] = useState<Feed>("foryou");
+  const [feed, setFeed] = useState<Feed>(HOME_FEED);
 
   const me = useMe().data;
   const isMan = me?.gender === "male";

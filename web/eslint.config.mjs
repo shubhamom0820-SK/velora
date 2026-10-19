@@ -11,12 +11,14 @@ const NO_FETCH =
   "Server data goes through src/lib: the api client and the TanStack Query hooks in src/lib/queries (CLAUDE.md rule 14).";
 const TRANSPORTS = ["fetch", "XMLHttpRequest", "WebSocket"];
 
-// zod only through src/lib/zod.ts, which turns its eval probe off: production's
-// CSP reports the probe as a violation (T-3.11).
+// zod only through src/lib/zod.ts, or zod/mini through src/lib/zod-mini.ts,
+// both of which turn its eval probe off: production's CSP reports the probe as
+// a violation (T-3.11). Anchored, so `zod/mini` and `zod/v4` are caught too
+// (T-9.10).
 const ZOD = {
-  name: "zod",
+  regex: "^zod(/|$)",
   message:
-    "Import z from @/lib/zod, which sets jitless: production's CSP reports zod's eval probe (T-3.11).",
+    "Import z from @/lib/zod, or @/lib/zod-mini on the (app) pages (T-9.10): both set jitless, since production's CSP reports zod's eval probe (T-3.11).",
 };
 
 // The Firebase SDK only through src/lib/firebase.ts (T-3.14): it loads the SDK
@@ -58,21 +60,18 @@ const eslintConfig = defineConfig([
   // to them, so two blocks would leave the later one's ban alone in force.
   {
     files: ["src/**/*.{js,jsx,mjs,ts,tsx}"],
-    ignores: ["src/lib/zod.ts", "src/lib/firebase.ts"],
+    ignores: ["src/lib/zod.ts", "src/lib/zod-mini.ts", "src/lib/firebase.ts"],
     rules: {
-      "no-restricted-imports": [
-        "error",
-        { paths: [ZOD], patterns: [FIREBASE] },
-      ],
+      "no-restricted-imports": ["error", { patterns: [ZOD, FIREBASE] }],
     },
   },
   {
-    files: ["src/lib/zod.ts"],
+    files: ["src/lib/zod.ts", "src/lib/zod-mini.ts"],
     rules: { "no-restricted-imports": ["error", { patterns: [FIREBASE] }] },
   },
   {
     files: ["src/lib/firebase.ts"],
-    rules: { "no-restricted-imports": ["error", { paths: [ZOD] }] },
+    rules: { "no-restricted-imports": ["error", { patterns: [ZOD] }] },
   },
   // Override default ignores of eslint-config-next.
   globalIgnores([

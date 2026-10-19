@@ -57,6 +57,12 @@ type Leaving = {
  * renders nothing (the 60 fps check). Released past 100 px or flicked it
  * swipes (`swipeOf`); a swiped card flies off on its own layer while the next
  * is already on top.
+ *
+ * The two cards behind ask for their photos only once the top card's photo
+ * has loaded, or failed (T-9.10, D-1031): asked for together, three photos
+ * share the line and arrive together, so the one on screen took three times
+ * as long, the first load's largest wait. Once settled it stays settled: by
+ * then the next photos are what a swipe shows, and they load straight away.
  */
 export function Deck({ cards, onSwipe, onOpen, ref }: DeckProps) {
   const reduced = useReducedMotion();
@@ -64,6 +70,10 @@ export function Deck({ cards, onSwipe, onOpen, ref }: DeckProps) {
   const frame = useRef<HTMLDivElement>(null);
   const flights = useRef(0);
   const top = cards[0];
+  const [settled, setSettled] = useState(false);
+  // A top card without a photo has nothing to wait for (set while rendering,
+  // React's pattern for state that follows the props).
+  if (!settled && top && top.main_photo_url === null) setSettled(true);
 
   const decide = useCallback(
     (
@@ -113,7 +123,7 @@ export function Deck({ cards, onSwipe, onOpen, ref }: DeckProps) {
               zIndex: RENDERED - index - 1,
             }}
           >
-            <SwipeCard card={card} />
+            <SwipeCard card={card} deferPhoto={!settled} />
           </div>
         ))
         .reverse()}
@@ -124,6 +134,7 @@ export function Deck({ cards, onSwipe, onOpen, ref }: DeckProps) {
           reduced={reduced}
           onDecide={(direction, from) => decide(top, direction, from)}
           onOpen={() => onOpen(top)}
+          onPhotoSettled={() => setSettled(true)}
         />
       )}
       {leaving.map((one) => (
@@ -146,9 +157,17 @@ type TopCardProps = {
     from: readonly [number, number],
   ) => boolean;
   onOpen: () => void;
+  /** Its photo loaded or failed: the cards behind may ask for theirs. */
+  onPhotoSettled: () => void;
 };
 
-function TopCard({ card, reduced, onDecide, onOpen }: TopCardProps) {
+function TopCard({
+  card,
+  reduced,
+  onDecide,
+  onOpen,
+  onPhotoSettled,
+}: TopCardProps) {
   const [{ x, y }, spring] = useSpring(() => ({ x: 0, y: 0 }));
   // Set by a drag, read by the name's link: a drag that ends on the name is
   // not a tap on it.
@@ -188,6 +207,7 @@ function TopCard({ card, reduced, onDecide, onOpen }: TopCardProps) {
     >
       <SwipeCard
         card={card}
+        onPhotoSettled={onPhotoSettled}
         onNameClick={(event) => {
           if (dragged.current) event.preventDefault();
           dragged.current = false;

@@ -267,6 +267,26 @@ the API's one process.
 
 There are no pull requests (D-044): "every push" is the trigger, through `/done`'s gate.
 
+## Benchmarks, run by hand
+
+Never in `make test` or CI; each prints its readings, and the plan's tick cites the log.
+`api/bench/` holds the API's (T-4.11's liveness probe, T-6.2's feed at 50k profiles, T-7.4's
+1,000 sockets). `web/bench/` holds the web's, each against a production build it starts itself
+(`pnpm exec playwright test -c bench <file>`, from `web/`):
+
+- `deck-fps.spec.ts` (T-6.5): the deck's frames while a card is dragged and flies off, CPU 4× and
+  6×, ten runs of each.
+- `first-load.spec.ts` (T-9.10, D-1030): `/discover`'s first load on DevTools' Fast 4G (the
+  pass/fail, < 3 s) and Slow 4G (recorded) at 4× CPU, ten cold runs of each, and the photos four
+  screens are sent against D-1030's 2× rule. **Every byte through a loopback proxy:**
+  DevTools' throttling never touches what `route.fulfill` answers, and lets CORS preflights
+  through untouched, so the stand-in API holds each for the preset's latency. A bench that
+  mocks the network with `route.fulfill` measures nothing about the network.
+- `razorpay-csp.spec.ts` (T-8.7, its own config): the CSP against Razorpay's live Checkout.
+
+**A benchmark proves the work ran** (T-6.5): each run asserts what it measured happened (the
+swipe sent, the card moved, the deck's photo the paint), so an idle page can't pass for it.
+
 ## What not to test
 
 Third-party SDK internals, Tailwind classes, exact copy text (test by role/label instead),
@@ -275,7 +295,8 @@ and anything already enforced by the type checker.
 ## CI order
 
 `.github/workflows/ci.yml` (T-1.20) runs on every push: `api` (full-history secrets scan, lint,
-migrate, pytest), `web` (lint, vitest, `next build`), `image` (the API image: no `.env` inside,
+migrate, pytest), `web` (lint, vitest, `next build`, then the bundle budget: every `(app)` route's first-load JS
+under 250 KB gzipped, `scripts/bundle-budget.mts`, D-1034), `image` (the API image: no `.env` inside,
 serves, fails fast) and `repo` (types are fresh, every pre-commit hook, the gates' own tests) in
 parallel, then `e2e` (Playwright, T-3.13) after `api` and `web`. `/done` fast-forwards `main` only
 when the run for that exact commit passed (D-044). **Minutes (P-282, D-410):** on `main` a first
@@ -290,7 +311,7 @@ has its test beside it, run by `repo`. Within each job:
 
 1. Lint first, failing fast: ruff + mypy · eslint + tsc + prettier
 2. `pytest -m critical`, then the rest of pytest (`make test-api`) · vitest
-3. `next build`
+3. `next build`, then the bundle budget (T-9.10)
 4. Playwright (from T-3.13, only if 1–3 pass)
 
 CI runs pytest in file order. `pytest --shuffle-seed N` runs it in the order seed N gives (P-48's

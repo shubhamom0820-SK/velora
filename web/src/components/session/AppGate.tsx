@@ -1,7 +1,9 @@
 "use client";
 
+import { usePathname } from "next/navigation";
 import type { ReactNode } from "react";
 
+import { useEarlyFeed } from "@/components/discover/useEarlyFeed";
 import { LocationRefresh } from "@/components/location/LocationRefresh";
 import { placeOf, stepPath } from "@/lib/onboarding";
 
@@ -14,9 +16,12 @@ import { useReplace, useSignedInMe } from "./useSignedInMe";
  * to /login, an unfinished onboarding to its step. T-5.6 adds the header and
  * nav inside this, never replacing it (decided planning T-3.10 to T-3.13).
  * Opening it refreshes a stale location, if the browser allows (T-4.10).
+ * On `/discover` it starts the deck's first page alongside `/me` (T-9.10,
+ * D-1033), shown only once the gate lets someone in.
  */
 export function AppGate({ children }: { children: ReactNode }) {
   const gate = useSignedInMe();
+  useEarlyFeed(usePathname() === "/discover");
   const target =
     gate.kind === "signed-out"
       ? "/login"

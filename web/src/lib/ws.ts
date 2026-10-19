@@ -1,5 +1,5 @@
 import { api, apiBaseUrl } from "@/lib/api";
-import { z } from "@/lib/zod";
+import { type Infer, z } from "@/lib/zod-mini";
 
 /**
  * The app's one socket to the API (T-7.12, 02-ARCHITECTURE §6, D-881): the
@@ -48,7 +48,7 @@ const Envelope = z.object({
   id: z.string(),
   data: z.record(z.string(), z.unknown()),
 });
-export type RealtimeEvent = z.infer<typeof Envelope>;
+export type RealtimeEvent = Infer<typeof Envelope>;
 
 /** Attempt `attempt`'s wait (0 for the first retry), with `random` in [0, 1). */
 export function backoffDelay(attempt: number, random: number): number {

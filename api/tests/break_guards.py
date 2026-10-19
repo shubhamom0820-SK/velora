@@ -13277,6 +13277,29 @@ T911: list[Case] = [
 ]
 
 
+# --- T-9.10: the feed asked for before /me has answered (D-1033) ---------------
+
+T910_SELECTION = [
+    "tests/modules/discovery/test_feed.py",
+    "tests/modules/users/test_me.py",
+]
+
+T910: list[Case] = [
+    Case(
+        id="t910-1-a-frozen-account-signs-in",
+        what="a frozen account let through the request's status check",
+        edits=[
+            (
+                "app/modules/users/service.py",
+                "MAY_SIGN_IN = frozenset({UserStatus.ACTIVE, UserStatus.PAUSED})\n",
+                "MAY_SIGN_IN = frozenset({UserStatus.ACTIVE, UserStatus.PAUSED, UserStatus.FROZEN})\n",
+            )
+        ],
+        expect=["test_a_frozen_account_is_refused_the_feed"],
+    ),
+]
+
+
 CASES: list[tuple[Case, list[str]]] = (
     [(c, T51_SELECTION) for c in T51]
     + [(c, T54_SELECTION) for c in T54]
@@ -13343,6 +13366,7 @@ CASES: list[tuple[Case, list[str]]] = (
     + [(c, T713_SELECTION) for c in T713]
     + [(c, T99_SELECTION) for c in T99]
     + [(c, T911_SELECTION) for c in T911]
+    + [(c, T910_SELECTION) for c in T910]
 )
 
 # The fifty-connection fixture's own message when Postgres refuses a connection.

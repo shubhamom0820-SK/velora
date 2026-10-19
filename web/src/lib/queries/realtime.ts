@@ -1,7 +1,7 @@
 import type { InfiniteData, QueryClient } from "@tanstack/react-query";
 
 import type { RealtimeEvent } from "@/lib/ws";
-import { z } from "@/lib/zod";
+import { z } from "@/lib/zod-mini";
 import type { components } from "@/types/api";
 
 import { queryKeys } from "./keys";
@@ -31,7 +31,7 @@ const MessageRead = z.object({
   up_to_message_id: z.string(),
   read_at: z.string(),
 });
-const WalletUpdated = z.object({ balance: z.number().int() });
+const WalletUpdated = z.object({ balance: z.int() });
 const AlbumDecided = z.object({ user_id: z.string() });
 
 const typingTimers = new Map<string, ReturnType<typeof setTimeout>>();

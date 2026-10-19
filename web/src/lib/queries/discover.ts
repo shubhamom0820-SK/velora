@@ -1,4 +1,8 @@
-import { useInfiniteQuery, useMutation } from "@tanstack/react-query";
+import {
+  infiniteQueryOptions,
+  useInfiniteQuery,
+  useMutation,
+} from "@tanstack/react-query";
 
 import { api } from "@/lib/api";
 import type { components } from "@/types/api";
@@ -21,15 +25,22 @@ export type DiscoverFilters = {
 /** How many cards a page asks for: the deck asks for the next at 5 left. */
 export const DISCOVER_PAGE_SIZE = 20;
 
+/** The feed `/discover` opens on, and the one the gate starts early (D-1033). */
+export const HOME_FEED: Feed = "foryou";
+
 /**
  * The deck (`GET /discover`, T-6.2), a page at a time by the API's cursor,
  * which carries the instant the scroll began (D-491). Never asked again on
  * focus or on a timer: a refetch would rank the scroll afresh under the
  * person mid-swipe, and everyone already swiped is gone from it anyway.
  * Each page also says a man's swipes left today (`swipes_left`, T-6.5).
+ *
+ * The options alone, so the app's gate can start the first page while `/me`
+ * is still on its way (`useEarlyFeed`, T-9.10, D-1033) under the same key the
+ * deck then reads.
  */
-export function useDiscover(feed: Feed, filters: DiscoverFilters) {
-  return useInfiniteQuery({
+export function discoverQuery(feed: Feed, filters: DiscoverFilters) {
+  return infiniteQueryOptions({
     queryKey: queryKeys.discover(feed, filters),
     queryFn: ({ pageParam, signal }) =>
       api.get("/v1/discover", {
@@ -49,6 +60,10 @@ export function useDiscover(feed: Feed, filters: DiscoverFilters) {
     refetchOnReconnect: false,
     staleTime: Infinity,
   });
+}
+
+export function useDiscover(feed: Feed, filters: DiscoverFilters) {
+  return useInfiniteQuery(discoverQuery(feed, filters));
 }
 
 export type SwipeVariables = {
