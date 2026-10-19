@@ -4032,7 +4032,12 @@ number** per account gets its 5 each, one Thread's worth, and is **accepted**, k
   underscore, and some common spellings ("phone pe", "bhej dena"); `mask()`, older, passes a
   number with one zero-width space (each reproduced against `94a807f`'s `filters.py`): P-960 and
   P-961. **P-450 lands after T-9.13** (the founder, 20 October 2026): its diff is read again once
-  it is on `main`, anything new filed in P-962 to P-969.
+  it is on `main`, anything new filed in P-962 to P-969. **Read again at `43f0f0a`**, P-450 as it
+  landed, 20 October 2026: `filters.py` and `test_filters.py` byte for byte `94a807f`'s, the rest
+  its rebase (its break cases beside P-163's and T-9.13's, every block still in `CASES`) and
+  P-884's entry; nothing new to file. P-960 stands: each of its reproductions still passes, and
+  `mask()` still leaves a number with a zero-width space. P-961 narrowed to what `43f0f0a` doesn't
+  catch.
 - [x] **Commit:** `fix(security): review findings [T-9.13]`
 
 ### T-9.14 · Backups and restore drill
@@ -7909,12 +7914,14 @@ The number comes from the session's own block, given in its brief, from P-100 up
   stored and shown as written. Tests: each reproduction above must be caught; ordinary Hindi and
   English, Devanagari with its joiners among them, must pass. Filed by Claude building T-9.13, 20
   October 2026, at the founder's direction; its block, P-960 to P-969.
-- [ ] P-961 · Five more entries in the filters' word list (D-981, the founder's). **Before
-  REL-1.** Worst case: the commonest ways of asking for money pass because they are spelled the
-  ordinary way. Add "chootiya" to the abuse words, and as money asks only these forms: "paise bhej
-  dena" and "paise bhej do", "paise de do" and "paise dena" asked of someone (`de do`, `dena` after
-  `paise` as a request), "phonepe kar do", "phone pe bhej do". **Never bare "phone pe" nor bare
-  "paise dena"** (the founder, 20 October 2026). Must pass: "phone pe baat karte hain", "paise dena
+- [ ] P-961 · More entries in the filters' word list (D-981, the founder's). **Before REL-1.**
+  Worst case: the commonest ways of asking for money pass because they are spelled the ordinary
+  way. The founder's list (20 October 2026): "chootiya" to the abuse words, and as money asks only
+  these forms: "paise bhej dena" and "paise bhej do", "paise de do" and "paise dena" asked of
+  someone, "phonepe kar do", "phone pe bhej do". **P-450 as landed (`43f0f0a`) already catches
+  "paise bhej do", "paise de do" and "phonepe kar do"** (T-9.13's second read, 20 October 2026);
+  still to add: "chootiya", "paise bhej dena", "phone pe bhej do", and "paise dena" only where it
+  asks. **Never bare "phone pe" nor bare "paise dena"** (the founder). Must pass, and do today: "phone pe baat karte hain", "paise dena
   padega", "bill ke paise dena hai". Each entry a caught test and an ordinary sentence, as D-981
   asks, and a break case. Filed by Claude building T-9.13, 20 October 2026, at the founder's
   direction.
