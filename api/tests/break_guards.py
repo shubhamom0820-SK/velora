@@ -13866,6 +13866,179 @@ P904: list[Case] = [
     ),
 ]
 
+# --- P-163: undoing a selfie match the review found wrong (D-993, D-995, D-1051) --
+
+P163_SELECTION = [
+    "tests/modules/verification/test_undo.py",
+    "tests/tools/test_selfie_review.py",
+]
+VERIFY_SERVICE163 = "app/modules/verification/service.py"
+WOMAN163 = "test_a_woman_goes_back_to_the_selfie_step_without_the_badge"
+
+P163: list[Case] = [
+    Case(
+        id="p163-1-she-stays-done",
+        what="D-993: a woman left at `done` after the undo",
+        edits=[
+            (
+                VERIFY_SERVICE163,
+                "        user.onboarding_step = OnboardingStep.SELFIE\n",
+                "        pass\n",
+            )
+        ],
+        expect=[WOMAN163, "test_an_undo_sends_her_back_and_says_so"],
+    ),
+    Case(
+        id="p163-2-is-verified-kept",
+        what="`is_verified` left true",
+        edits=[(VERIFY_SERVICE163, "    user.is_verified = False\n", "")],
+        expect=[WOMAN163, "test_a_man_keeps_done_and_loses_only_the_badge"],
+    ),
+    Case(
+        id="p163-3-selfie-match-kept",
+        what="the old `selfie_match` left on her photos",
+        edits=[(VERIFY_SERVICE163, "            if key != SELFIE_MATCH\n", "")],
+        expect=[WOMAN163],
+    ),
+    Case(
+        id="p163-4-sockets-left-open",
+        what="D-995: her sockets left open while she is back",
+        edits=[
+            (VERIFY_SERVICE163, "        events.close_sockets(session, user.id)\n", "")
+        ],
+        expect=[WOMAN163],
+    ),
+    Case(
+        id="p163-5-a-man-sent-back",
+        what="D-993: a man sent back to the selfie step",
+        edits=[
+            (
+                VERIFY_SERVICE163,
+                "    if onboarding_rules.needs_a_match(user.gender) and before is OnboardingStep.DONE:\n",
+                "    if before is OnboardingStep.DONE:\n",
+            )
+        ],
+        expect=[
+            "test_a_man_keeps_done_and_loses_only_the_badge",
+            "test_an_undo_for_a_man_says_he_stays",
+        ],
+    ),
+    Case(
+        id="p163-6-anyone-undoes",
+        what="an undo by someone who isn't an active admin",
+        edits=[
+            (
+                VERIFY_SERVICE163,
+                "    if admin.role is not Role.ADMIN or admin.status is not UserStatus.ACTIVE:\n",
+                "    if False:\n",
+            )
+        ],
+        expect=[
+            "test_only_an_active_admin_undoes_and_nothing_changes_otherwise[user-active]",
+            "test_only_an_active_admin_undoes_and_nothing_changes_otherwise[moderator-active]",
+            "test_only_an_active_admin_undoes_and_nothing_changes_otherwise[admin-frozen]",
+        ],
+    ),
+    Case(
+        id="p163-7-any-status-undone",
+        what="a pending or rejected verification undone",
+        edits=[
+            (
+                VERIFY_SERVICE163,
+                "    if verification.status is not ReviewStatus.APPROVED:\n        raise NotApproved(verification.status)\n",
+                "",
+            )
+        ],
+        expect=[
+            "test_only_an_approved_match_is_undone[pending]",
+            "test_only_an_approved_match_is_undone[rejected]",
+        ],
+    ),
+    Case(
+        id="p163-8-the-race-not-rechecked",
+        what="D-993: a comparison through an undo writes the old match back",
+        edits=[
+            (
+                VERIFY_SERVICE163,
+                "        if still is None or still[0].id != verification.id:\n",
+                "        if False:\n",
+            )
+        ],
+        expect=["test_a_comparison_running_through_an_undo_writes_no_match"],
+    ),
+    Case(
+        id="p163-9-same-undone",
+        what="D-1051: a match recorded `same` undone, contradicting P-160's record",
+        edits=[
+            (
+                VERIFY_SERVICE163,
+                '    if review.get("verdict") == "same":\n        raise VerdictSame\n',
+                "",
+            )
+        ],
+        expect=["test_a_match_recorded_same_is_refused_until_recorded_different"],
+    ),
+    Case(
+        id="p163-10-verdict-overwritten",
+        what="D-1051: a recorded verdict overwritten",
+        edits=[
+            (
+                VERIFY_SERVICE163,
+                '        "review": review or {"verdict": "different", "at": now.isoformat()},\n',
+                '        "review": {"verdict": "different", "at": now.isoformat()},\n',
+            )
+        ],
+        expect=["test_a_verdict_already_recorded_different_is_kept"],
+    ),
+    Case(
+        id="p163-11-the-selfie-left-approved",
+        what="the selfie left approved, so its reason never reaches her",
+        edits=[
+            (
+                VERIFY_SERVICE163,
+                "    selfie.status = ReviewStatus.REJECTED\n    selfie.reject_reason = rules.UNDONE\n",
+                "",
+            )
+        ],
+        expect=[WOMAN163, "test_an_undo_sends_her_back_and_says_so"],
+    ),
+    Case(
+        id="p163-12-undone-named-to-her",
+        what="`undone` told to her by name, not as `other`",
+        edits=[
+            (
+                "app/modules/verification/rules.py",
+                "    {NO_FACE, MANY_FACES, NO_MATCH, NO_PHOTOS, UNREADABLE, UNAVAILABLE}\n",
+                "    {NO_FACE, MANY_FACES, NO_MATCH, NO_PHOTOS, UNREADABLE, UNAVAILABLE, UNDONE}\n",
+            ),
+        ],
+        expect=[WOMAN163],
+    ),
+    Case(
+        id="p163-13-the-audit-action-renamed",
+        what="the audit row written under another action",
+        edits=[
+            (
+                VERIFY_SERVICE163,
+                'UNDO: Final = "verification.undo"\n',
+                'UNDO: Final = "verification.undone"\n',
+            )
+        ],
+        expect=[WOMAN163],
+    ),
+    Case(
+        id="p163-14-a-blank-reason",
+        what="an undo with no reason for the audit log",
+        edits=[
+            ("app/tools/selfie_review.py", "    if not reason:\n", "    if False:\n")
+        ],
+        expect=[
+            "test_an_undo_it_wont_do_says_why_and_changes_nothing[blank-reason-2---reason can't be empty]"
+        ],
+    ),
+]
+
+
 CASES: list[tuple[Case, list[str]]] = (
     [(c, T51_SELECTION) for c in T51]
     + [(c, T54_SELECTION) for c in T54]
@@ -13937,6 +14110,7 @@ CASES: list[tuple[Case, list[str]]] = (
     + [(c, T912_SELECTION) for c in T912]
     + [(c, P72_SELECTION) for c in P72]
     + [(c, P904_SELECTION) for c in P904]
+    + [(c, P163_SELECTION) for c in P163]
 )
 
 # The fifty-connection fixture's own message when Postgres refuses a connection.

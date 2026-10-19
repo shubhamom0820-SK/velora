@@ -6514,6 +6514,30 @@ relayed):** completes D-991.
 a push for every flag (one review, many alerts); a moderator leaving someone (it closes a possible
 minor's review).
 
+### D-1051 · The selfie undo lives in the founder's review tool, and records the verdict — Locked
+**The decision (P-163's plan, the founder, 19 October 2026, on the advisor's recommendation,
+relayed):** completes D-993.
+- **Where:** `python -m app.tools.selfie_review --undo <verification id> --by <admin id> --reason
+  "…"`, beside `--verdict`. No panel button: an admin must see the selfie to undo it, and the tool
+  is the only place the selfie is shown (D-264, D-925). `--by` is an active admin, named in
+  `audit_log` (`verification.undo`) with the reason, as `unfreeze` names its admin (D-906).
+- **What it does:** only an approved verification; it and its selfie rejected, the selfie's reason
+  `undone`, which is no owner reason, so the person reads `other` ("We couldn't use this selfie.
+  Try again."); `is_verified` cleared; every `selfie_match` that selfie gave a photo removed. A
+  woman at `done` goes back to `selfie`, signed in, her sockets closed; a man keeps `done` (D-993).
+- **The verdict:** an undo is the "different" finding, so it records `different` in the selfie's
+  review record where no verdict is, and never overwrites one; one recorded `same` is refused until
+  it is recorded `different`, so P-160's data never contradicts what was done.
+- **A comparison through an undo writes nothing:** `match_photo` checks, under the user's lock, that
+  the kept selfie is still the verification it compared for. Else the old match would outlive the
+  undo, and `badge_of`, which doesn't ask which verification a match came from, would show it again
+  once a new selfie is approved.
+- **Pushes while she's back stay:** `notify()` still pushes his messages to her while she's at the
+  selfie step (D-995 covers her routes and sockets, not pushes). They bring her back to retake it.
+
+**Rejected:** a panel button (an admin would undo without seeing the selfie); holding her pushes
+until she's `done` again (one more rule, for a state she leaves in minutes).
+
 ### D-960 · axe through Playwright, pinned, for the accessibility walk — Locked
 **The decision (T-9.11; the founder, 16 October 2026, on the advisor's recommendation, Claude in
 a separate chat, relayed by the founder):** `@axe-core/playwright` **4.13.0**, a devDependency

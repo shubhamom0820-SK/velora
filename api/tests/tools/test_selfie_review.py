@@ -5,15 +5,17 @@ verdict written where P-160 will read it; links for his eyes, never a log's."""
 from __future__ import annotations
 
 import io
+import uuid
 
 import pytest
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.enums import Gender
+from app.core.enums import Gender, OnboardingStep, Role
 from app.core.providers.facematch import FaceMatch, FakeFaceMatch
 from app.core.providers.storage import FakeStorage
 from app.core.queue import FakeQueue
 from app.modules.photos.models import Photo
+from app.modules.users.models import User
 from app.modules.verification import service
 from app.modules.verification.models import Verification
 from app.tools import selfie_review
@@ -199,3 +201,105 @@ async def test_no_link_or_key_reaches_a_log(
     for leak in (selfie.raw_key, "fake-storage://", "/p/"):
         assert leak not in captured_logs.text
     captured_logs.assert_listening()
+
+
+# --- The undo (P-163, D-993, D-1051) ----------------------------------------------------
+
+UNDO_REASON = "Review: the selfie isn't the face photo's person."
+
+
+async def _admin_id(make_user: MakeUser) -> str:
+    admin, _ = await make_user(Gender.FEMALE)
+    admin.role = Role.ADMIN
+    return str(admin.id)
+
+
+async def test_an_undo_sends_her_back_and_says_so(
+    db: AsyncSession, make_user: MakeUser
+) -> None:
+    storage = FakeStorage()
+    by = await _admin_id(make_user)
+    verification, selfie, _ = await _decided(
+        db, make_user, storage, Gender.FEMALE, 0.92
+    )
+    user = await fresh(db, User, verification.user_id)
+    user.onboarding_step = OnboardingStep.DONE
+    await db.flush()
+
+    code, printed = await _review(
+        db,
+        storage,
+        "--undo",
+        str(verification.id),
+        "--by",
+        by,
+        "--reason",
+        UNDO_REASON,
+    )
+
+    assert code == 0, printed
+    assert printed == (
+        f"selfie_review: {verification.id} undone: the badge is gone, and "
+        f"{verification.user_id} is back at the selfie step, signed in, to take it "
+        f"again. Recorded in audit_log as {by}.\n"
+    )
+    assert (await fresh(db, Photo, selfie.id)).reject_reason == "undone"
+
+
+async def test_an_undo_for_a_man_says_he_stays(
+    db: AsyncSession, make_user: MakeUser
+) -> None:
+    storage = FakeStorage()
+    by = await _admin_id(make_user)
+    verification, _, _ = await _decided(db, make_user, storage, Gender.MALE, 0.92)
+    user = await fresh(db, User, verification.user_id)
+    user.onboarding_step = OnboardingStep.DONE
+    await db.flush()
+
+    code, printed = await _review(
+        db, storage, "--undo", str(verification.id), "--by", by, "--reason", "why"
+    )
+
+    assert code == 0, printed
+    assert f"{verification.user_id} stays at done" in printed
+
+
+@pytest.mark.parametrize(
+    ("case", "code", "says"),
+    [
+        ("bad-id", 2, "--undo and --by are both ids"),
+        ("no-by", 2, "--undo and --by are both ids"),
+        ("blank-reason", 2, "--reason can't be empty"),
+        ("not-admin", 1, "isn't an active admin. Nothing changed."),
+        ("nobody", 1, "no verification"),
+        ("rejected", 1, "is rejected: only an approved match is undone"),
+        ("same", 1, "Record it as different first"),
+    ],
+)
+async def test_an_undo_it_wont_do_says_why_and_changes_nothing(
+    db: AsyncSession, make_user: MakeUser, case: str, code: int, says: str
+) -> None:
+    storage = FakeStorage()
+    by = await _admin_id(make_user)
+    similarity = 0.1 if case == "rejected" else 0.92
+    verification, _, _ = await _decided(
+        db, make_user, storage, Gender.FEMALE, similarity
+    )
+    verification_id = str(verification.id)
+    if case == "same":
+        await _review(db, storage, "--verdict", verification_id, "same")
+    if case == "not-admin":
+        nobody, _ = await make_user(Gender.FEMALE)
+        by = str(nobody.id)
+    argv = {
+        "bad-id": ["--undo", "nope", "--by", by, "--reason", UNDO_REASON],
+        "no-by": ["--undo", verification_id, "--reason", UNDO_REASON],
+        "blank-reason": ["--undo", verification_id, "--by", by, "--reason", " "],
+        "nobody": ["--undo", str(uuid.uuid4()), "--by", by, "--reason", UNDO_REASON],
+    }.get(case, ["--undo", verification_id, "--by", by, "--reason", UNDO_REASON])
+    before = (await fresh(db, Verification, uuid.UUID(verification_id))).status
+
+    got, printed = await _review(db, storage, *argv)
+
+    assert (got, says in printed) == (code, True), printed
+    assert (await fresh(db, Verification, uuid.UUID(verification_id))).status is before

@@ -66,6 +66,10 @@ NO_PHOTOS: Final[Reason] = "no_photos"  # no approved face photo, or no face fou
 UNREADABLE: Final[Reason] = "unreadable"  # not an image the pipeline can read
 UNAVAILABLE: Final[Reason] = "unavailable"  # storage or the worker failed, finally
 OTHER: Final = "other"
+# An approved selfie an admin undid after the founder's review (P-163, D-993).
+# Never one of `OWNER_REASONS`: the person reads `other`, "We couldn't use this
+# selfie. Try again.", which accuses nobody.
+UNDONE: Final = "undone"
 
 # The reasons an owner hears by name (D-263): every one of the above, each
 # something they can act on. Anything else, a reason added later included,

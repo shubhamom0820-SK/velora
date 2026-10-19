@@ -53,7 +53,8 @@ velora/
     app/modules/<name>/ router.py service.py repository.py schemas.py models.py
     app/workers/        ARQ worker (main.py, `python -m app.workers`) + tasks/
     app/tools/          checks run by hand inside a deployed machine (storage_probe, T-4.1;
-                        sightengine_shape, T-4.4; selfie_review, the founder's, T-4.5, D-264;
+                        sightengine_shape, T-4.4; selfie_review, the founder's, T-4.5, D-264, and his
+                        undo of a match it finds wrong, P-163, D-1051;
                         unfreeze, the founder's, lifting any freeze, T-9.2, D-906; roundtrip_probe,
                         Postgres and Redis round trips from where the API runs, and
                         socket_probe, a real WebSocket through the public host, P-49)

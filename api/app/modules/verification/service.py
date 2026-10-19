@@ -33,14 +33,16 @@ from uuid import UUID
 import structlog
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core import clock, images
+from app.core import clock, events, images
 from app.core.config import Settings
-from app.core.enums import OnboardingStep, PhotoKind, ReviewStatus
+from app.core.enums import OnboardingStep, PhotoKind, ReviewStatus, Role, UserStatus
 from app.core.errors import AppError
 from app.core.images import SNIFF_BYTES, sniff
 from app.core.providers.facematch import FaceMatch, FaceMatchProvider
 from app.core.providers.storage import ObjectNotFound, StorageProvider
 from app.core.queue import VERIFY_SELFIE, Queue
+from app.modules.admin import service as admin_service
+from app.modules.onboarding import rules as onboarding_rules
 from app.modules.photos import repository as photos_repository
 from app.modules.photos.models import Photo
 from app.modules.photos.service import MAX_UPLOAD_BYTES, queue_match
@@ -517,6 +519,12 @@ async def match_photo(
             locked = None
         if locked is None or locked.status is not ReviewStatus.APPROVED:
             return "no longer shown while it was compared: left as it is"
+        # P-163: an undo while this compared leaves nothing to vouch for; its
+        # match written now would outlive it, and `badge_of` doesn't ask which
+        # verification a match came from.
+        still = await repository.kept_selfie(session, user.id)
+        if still is None or still[0].id != verification.id:
+            return "the selfie was undone while it was compared: left as it is"
         locked.moderation = {
             **(locked.moderation or {}),
             SELFIE_MATCH: {
@@ -649,7 +657,8 @@ async def record_verdict(
 ) -> bool:
     """Write the founder's verdict into the selfie's record: whether the
     selfie and the face photo show the same person. Changes nothing else:
-    undoing a decision is P-163's. False if there is no such verification."""
+    undoing a decision is `undo`'s (P-163). False if there is no such
+    verification."""
     async with sessions() as session, session.begin():
         selfie = await repository.selfie_of(session, verification_id)
         if selfie is None:
@@ -662,3 +671,122 @@ async def record_verdict(
         "verification.reviewed", verification_id=str(verification_id), verdict=verdict
     )
     return True
+
+
+# --- Undoing a match the review found wrong (P-163, D-993, D-995, D-1051) ---------------
+
+UNDO: Final = "verification.undo"
+
+
+class NotAnAdmin(Exception):
+    """`by` isn't an active admin: nothing changed."""
+
+
+class NotApproved(Exception):
+    """Only an approved verification is undone: nothing changed."""
+
+    def __init__(self, status: ReviewStatus) -> None:
+        super().__init__(status.value)
+        self.status = status
+
+
+class VerdictSame(Exception):
+    """The founder recorded `same` for it: an undo would contradict the
+    record P-160 measures with, so it is recorded `different` first."""
+
+
+@dataclass(frozen=True)
+class Undone:
+    user_id: UUID
+    step_before: OnboardingStep
+    step_after: OnboardingStep
+    photos_cleared: int
+
+
+async def undo(
+    session: AsyncSession, verification_id: UUID, *, by: UUID, reason: str
+) -> Undone:
+    """Undo an approved selfie match, in the caller's transaction (D-993): the
+    verification and its selfie rejected (`undone`), `is_verified` cleared, and
+    every `selfie_match` this selfie gave a photo removed, so no badge outlives
+    it. Someone whose finishing needs a match goes back to the `selfie` step
+    and their sockets close; they stay signed in, to take it again. A man keeps
+    `done`: for him only the badge goes. Threads are left as they are (D-995),
+    and a referral's reward stays paid. The verdict is recorded `different`
+    where none is; a recorded `same` is `VerdictSame`. One `audit_log` row as
+    `by`, an active admin. LookupError if there is no such verification."""
+    admin = await _active_admin(session, by)
+    found = await repository.by_id(session, verification_id)
+    if found is None:
+        raise LookupError("no such verification")
+    user = await users_service.locked_user(session, found.user_id)
+    verification = await repository.for_update(session, user.id, verification_id)
+    if verification is None or verification.selfie_photo_id is None:
+        raise LookupError("no such verification")
+    if verification.status is not ReviewStatus.APPROVED:
+        raise NotApproved(verification.status)
+    selfie = await photos_repository.photo_for_update(
+        session, user.id, verification.selfie_photo_id
+    )
+    if selfie is None:
+        raise LookupError("no such selfie")
+    record = selfie.moderation or {}
+    review = record.get("review") or {}
+    if review.get("verdict") == "same":
+        raise VerdictSame
+    now = clock.now()
+
+    verification.status = ReviewStatus.REJECTED
+    selfie.status = ReviewStatus.REJECTED
+    selfie.reject_reason = rules.UNDONE
+    selfie.moderation = {
+        **record,
+        "review": review or {"verdict": "different", "at": now.isoformat()},
+        "undone": {"by": str(admin.id), "at": now.isoformat()},
+    }
+    user.is_verified = False
+    matched = await repository.photos_matched_by(session, user.id, verification.id)
+    for photo in matched:
+        photo.moderation = {
+            key: value
+            for key, value in (photo.moderation or {}).items()
+            if key != SELFIE_MATCH
+        }
+    before = user.onboarding_step
+    if onboarding_rules.needs_a_match(user.gender) and before is OnboardingStep.DONE:
+        user.onboarding_step = OnboardingStep.SELFIE
+        events.close_sockets(session, user.id)
+    await admin_service.audit(
+        session,
+        admin.id,
+        UNDO,
+        {
+            "reason": reason,
+            "verification_id": str(verification.id),
+            "step_before": before.value,
+            "step_after": user.onboarding_step.value,
+            "photos_cleared": len(matched),
+        },
+        target=("user", user.id),
+    )
+    log.info(
+        "verification.undone",
+        verification_id=str(verification.id),
+        step_after=user.onboarding_step.value,
+    )
+    return Undone(
+        user_id=user.id,
+        step_before=before,
+        step_after=user.onboarding_step,
+        photos_cleared=len(matched),
+    )
+
+
+async def _active_admin(session: AsyncSession, user_id: UUID) -> User:
+    try:
+        admin = await users_service.locked_user(session, user_id)
+    except LookupError:
+        raise NotAnAdmin from None
+    if admin.role is not Role.ADMIN or admin.status is not UserStatus.ACTIVE:
+        raise NotAnAdmin
+    return admin

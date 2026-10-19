@@ -239,6 +239,25 @@ async def photos_by_id(session: AsyncSession, photo_ids: Sequence[UUID]) -> list
     return list(await session.scalars(select(Photo).where(Photo.id.in_(photo_ids))))
 
 
+async def photos_matched_by(
+    session: AsyncSession, user_id: UUID, verification_id: UUID
+) -> list[Photo]:
+    """The user's photos whose `selfie_match` came from this verification
+    (D-393), locked."""
+    rows = await session.scalars(
+        select(Photo)
+        .where(
+            Photo.user_id == user_id,
+            Photo.moderation["selfie_match"]["verification_id"].astext
+            == str(verification_id),
+        )
+        .order_by(Photo.id)
+        .with_for_update()
+        .execution_options(populate_existing=True)
+    )
+    return list(rows)
+
+
 async def selfie_of(session: AsyncSession, verification_id: UUID) -> Photo | None:
     """A verification's selfie, locked: the review writes its verdict there."""
     photo: Photo | None = await session.scalar(

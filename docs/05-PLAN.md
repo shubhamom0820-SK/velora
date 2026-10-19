@@ -5981,7 +5981,7 @@ The number comes from the session's own block, given in its brief, from P-100 up
   **Closed (18 October 2026, D-992): answered by D-910.** Since 9 October the badge follows the
   main photo alone, this item's first option; the other photos stay unchecked, and
   `selfie_review` keeps marking `mixed` profiles for the founder to look at. Nothing to build.
-- [ ] P-163 · Let the founder undo a decision his review finds wrong. **Before real users** (on
+- [x] P-163 · Let the founder undo a decision his review finds wrong. **Before real users** (on
   T-9.15's Needs line, and REL-1's if its tag includes T-4.5). Worst case: he records "different" for a woman's approved
   selfie, and she stays live with the badge until someone edits production's database by hand.
   T-4.5 records the verdict (D-264) and changes nothing else. Fix: an action that rejects the
@@ -5992,6 +5992,17 @@ The number comes from the session's own block, given in its brief, from P-100 up
   open Threads while she is back are checked in the plan. Not built yet. The plan's answers (18
   October: Threads as they are, D-995; a man may skip back to `done`; the referral reward stays
   paid) are in D-993; built after P-72.
+  **Built (19 October 2026, D-1051):** `selfie_review --undo <id> --by <admin> --reason`
+  (`verification.service.undo`): an approved verification and its selfie rejected (`undone`, read
+  by her as `other`), `is_verified` cleared, every `selfie_match` it gave removed, a woman at `done`
+  back at `selfie`, signed in, her sockets closed, a man left at `done`, one `verification.undo`
+  audit row as the admin; the verdict recorded `different` where none was, a recorded `same`
+  refused. `match_photo` re-checks the kept selfie under the lock, so a comparison through an undo
+  writes nothing. D-995 held as code: his Thread with her still lists, without the badge, and takes
+  his message; hers refuse her `ONBOARDING_INCOMPLETE`. Held by `test_undo.py` and
+  `test_selfie_review.py`, and break cases `p163-1` to `p163-14`, all red
+  (`out/p163-break-guards.log`; the first run, `out/p163-break-guards-first.log`, read `p163-6` and
+  `p163-7` as not red only because their expected ids were misspelt: both failed 4 and 3 tests).
 - [ ] P-164 · Widen `verifications.similarity` to hold a cosine exactly (`numeric(6,5)`), if
   anything ever wants it there. **No deadline.** Worst case if never done: none; the exact numbers
   live in the selfie's `moderation` record (D-263), and the column stays empty. A migration, so P-65

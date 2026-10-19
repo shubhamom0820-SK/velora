@@ -4,6 +4,9 @@ machine:
     flyctl ssh console -a velora-api-staging -C "python -m app.tools.selfie_review"
     flyctl ssh console -a velora-api-staging -C \\
         "python -m app.tools.selfie_review --verdict <verification id> same"
+    flyctl ssh console -a velora-api-staging -C \\
+        "python -m app.tools.selfie_review --undo <verification id> \\
+         --by <your user id> --reason '<why>'"
 
 **Why a person looks at every one.** The threshold is SFace's published number
 on celebrities' photos, not ours (D-260), and face matching alone doesn't stop
@@ -17,8 +20,14 @@ whose other photos didn't match ("mixed", P-162). `--near` narrows it to those.
 **Each verdict is a measurement.** `--verdict <id> same|different` writes into
 the selfie's record whether the selfie and the photos show the same person.
 Those verdicts, gathered from real decisions as they are made, are the data
-P-160 needs to measure the threshold. It changes nothing else: undoing a
-decision is P-163's.
+P-160 needs to measure the threshold. It changes nothing else.
+
+**An undo acts** (P-163, D-993, D-1051): `--undo <id> --by <admin> --reason`
+rejects an approved match the review found wrong, here and nowhere else, since
+only here is the selfie seen. The badge goes; a woman goes back to the selfie
+step to take it again, signed in; a man keeps `done`. It records the verdict
+`different` where none is, and refuses one recorded `same`. `--by` is an active
+admin, named in `audit_log` with the reason.
 
 **It prints links, deliberately, unlike `storage_probe`.** The founder has to
 see each selfie, and a selfie is never public: each is a signed link to the
@@ -70,6 +79,15 @@ def parse(argv: Sequence[str]) -> argparse.Namespace:
         metavar=("VERIFICATION_ID", "same|different"),
         help="record whether the selfie and the photos show the same person",
     )
+    parser.add_argument(
+        "--undo",
+        metavar="VERIFICATION_ID",
+        help="undo an approved match the review found wrong (P-163)",
+    )
+    parser.add_argument("--by", help="with --undo: your own id, an active admin")
+    parser.add_argument(
+        "--reason", help="with --undo: why, for the audit log (not shown to them)"
+    )
     return parser.parse_args(list(argv))
 
 
@@ -81,6 +99,8 @@ async def run(
     settings: Settings,
     out: TextIO,
 ) -> int:
+    if args.undo:
+        return await _undo(args, sessions=sessions, out=out)
     if args.verdict:
         return await _verdict(args.verdict, sessions=sessions, out=out)
     since = clock.now() - timedelta(days=args.days)
@@ -116,6 +136,56 @@ async def _verdict(given: Sequence[str], *, sessions: Sessions, out: TextIO) -> 
         out.write(f"selfie_review: no verification {verification_id}.\n")
         return 1
     out.write(f"selfie_review: {verification_id} recorded as {verdict}.\n")
+    return 0
+
+
+async def _undo(args: argparse.Namespace, *, sessions: Sessions, out: TextIO) -> int:
+    try:
+        verification_id, by = UUID(args.undo), UUID(args.by or "")
+    except ValueError:
+        out.write("selfie_review: --undo and --by are both ids (UUIDs).\n")
+        return 2
+    reason = (args.reason or "").strip()
+    if not reason:
+        out.write("selfie_review: --reason can't be empty: the audit log keeps it.\n")
+        return 2
+    try:
+        async with sessions() as session, session.begin():
+            undone = await verification_service.undo(
+                session, verification_id, by=by, reason=reason
+            )
+    except verification_service.NotAnAdmin:
+        out.write(f"selfie_review: {by} isn't an active admin. Nothing changed.\n")
+        return 1
+    except LookupError:
+        out.write(
+            f"selfie_review: no verification {verification_id}. Nothing changed.\n"
+        )
+        return 1
+    except verification_service.NotApproved as refused:
+        out.write(
+            f"selfie_review: {verification_id} is {refused.status.value}: only an "
+            "approved match is undone. Nothing changed.\n"
+        )
+        return 1
+    except verification_service.VerdictSame:
+        out.write(
+            f"selfie_review: {verification_id} is recorded as same. Record it as "
+            f"different first (--verdict {verification_id} different). Nothing "
+            "changed.\n"
+        )
+        return 1
+    back = undone.step_after is not undone.step_before
+    out.write(
+        f"selfie_review: {verification_id} undone: the badge is gone"
+        + (
+            f", and {undone.user_id} is back at the selfie step, signed in, to take "
+            "it again"
+            if back
+            else f"; {undone.user_id} stays at {undone.step_after.value}"
+        )
+        + f". Recorded in audit_log as {by}.\n"
+    )
     return 0
 
 
