@@ -7573,3 +7573,22 @@ The number comes from the session's own block, given in its brief, from P-100 up
   and after, both projects, and record both. The gate's own wait (20 to 35 minutes) is the
   Proposed-tasks session's, with P-881: not this. Filed by Claude after T-9.11 landed, at the
   founder's direction; its block, P-860 to P-869.
+- [x] P-882 · `scripts/ci-gate` waits long enough for a run with the E2E. **Now; small.** Worst
+  case: every landing whose run includes the E2E exits 3 ("didn't finish"), on a run that goes
+  green, and each session waits and runs the gate again, or stops to ask. The gate waited 20
+  minutes; since T-9.11's accessibility walk joined the E2E, a branch's whole run took 23, 21, 25
+  and 25 minutes (18-19 October 2026; 12 to 18 before it), its E2E starting only once the API's
+  job is done. P-842's landing exited 3 that way on run 39160922836. Filed by Claude at the
+  founder's direction, 19 October 2026, from this session's block (P-880 to P-889). **Done 19
+  October 2026:** `FINISH_TIMEOUT_DEFAULT=2100` (35 minutes) in the gate, its reasons, P-866 and
+  P-883 in its comment; the gate's waiting line states its limit, and `ci-gate-test`'s
+  `default-wait` pins the literal (red with 1200).
+- [ ] P-883 · Lower `scripts/ci-gate`'s wait once P-866 has shortened the walk. **Needs:** P-866
+  landed. **Before more sessions land at once; small.** Worst case: the gate keeps waiting 35
+  minutes for a run that takes far less, so a run that hangs holds the landing lock that much
+  longer before anyone is told, while sessions queue behind it. P-882 raised it from 20 to fit
+  T-9.11's walk; P-866 shortens the walk and leaves the gate's wait to this. Fix: after P-866
+  lands, measure ten branch runs with the E2E from start to finish, set `FINISH_TIMEOUT_DEFAULT`
+  in `scripts/ci-gate` to the longest plus headroom, and `ci-gate-test`'s `default-wait` literal
+  with it. Filed by Claude at the founder's direction, 19 October 2026, from this session's block
+  (P-880 to P-889); narrowed the same day to the half P-866 doesn't cover.

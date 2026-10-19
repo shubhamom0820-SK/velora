@@ -62,7 +62,13 @@ fi
 # branch, so it 404s until the workflow file is on main.
 workflow="${CI_GATE_WORKFLOW_NAME:-CI}"
 appear_timeout="${CI_GATE_APPEAR_TIMEOUT:-180}"  # seconds for the run to show up
-finish_timeout="${CI_GATE_FINISH_TIMEOUT:-1200}" # seconds for it to finish
+# How long a run may take, in seconds (P-882). 35 minutes: since T-9.11's
+# accessibility walk joined the E2E, a branch's whole run took 21 to 25 minutes
+# (four runs, 18-19 October 2026; 12 to 18 before it), its E2E starting only
+# once the API's job is done, so 20 minutes exited 3 on runs that went green.
+# Shortening the walk is P-866; lowering this after it, measured, is P-883.
+FINISH_TIMEOUT_DEFAULT=2100
+finish_timeout="${CI_GATE_FINISH_TIMEOUT:-$FINISH_TIMEOUT_DEFAULT}"
 interval="${CI_GATE_INTERVAL:-10}"
 retry_wait="${CI_GATE_RETRY_WAIT:-30}" # seconds before the one more try (P-842)
 retried=0
@@ -128,7 +134,7 @@ while :; do
   sleep "$interval"
 done
 
-say "run $run is for $short; waiting for it to finish…"
+say "run $run is for $short; waiting up to ${finish_timeout}s for it to finish…"
 start=$SECONDS
 while :; do
   if ! line="$(gh run view "$run" --json status,conclusion,headSha,headBranch \

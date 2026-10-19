@@ -131,6 +131,11 @@ check() {
 scenario green "[$(run 11 "$sha" 2026-01-01T00:00:00Z)]" 11 completed success "$sha" ""
 expect green 0 "CI is green for ${sha:0:7} (run 11)"
 
+# The wait for a run, unset (P-882): 35 minutes, since T-9.11's walk made a
+# branch's whole run 21 to 25. The literal, never the script's constant.
+scenario default-wait "[$(run 11 "$sha" 2026-01-01T00:00:00Z)]" 11 completed success "$sha" ""
+expect default-wait 0 "waiting up to 2100s for it to finish" CI_GATE_FINISH_TIMEOUT=
+
 scenario appears-late "[$(run 11 "$sha" 2026-01-01T00:00:00Z)]" 11 completed success "$sha" ""
 echo 2 >"$work/appears-late/delay"
 expect appears-late 0 "CI is green for ${sha:0:7} (run 11)" CI_GATE_APPEAR_TIMEOUT=6
