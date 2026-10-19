@@ -7539,3 +7539,17 @@ The number comes from the session's own block, given in its brief, from P-100 up
   real 1,200-pixel photo".
   Fix: serve `bench/fixtures/photo-1600.jpg` (T-9.10's, through our own re-encode), correct the
   comment, read it again. Filed by Claude building T-9.10, 19 October 2026.
+- [ ] P-935 · `scripts/ci-gate main` vouches for the local `main`, not `origin/main`. **Before
+  REL-1** (the founder, 19 October 2026). Worst case: a session checks `main` after landing, the
+  gate prints "CI is green", and the green belongs to an older commit, while the commit just
+  landed on `origin/main` is red or never ran; nobody looks again, and a release is tagged on
+  trust in a check that read the wrong commit. The gate resolves its ref with `git rev-parse` and
+  never fetches (`sha="$(git rev-parse --verify "${ref}^{commit}")"`), so `main` is whatever the
+  checkout last pulled. Seen 19 October 2026, landing T-9.10: from the main checkout, still at
+  `74c9d46`, `scripts/ci-gate main` went green on run 39158733238, T-9.11's, while `origin/main`
+  was `10b6f6a`; that commit's own run (39226466374) was read from `gh run list --commit`. Fix:
+  for a branch argument, fetch it and gate `origin/<branch>`'s SHA, or refuse loudly, naming both
+  SHAs, when the local branch is behind or apart from `origin/<branch>`; tests in
+  `scripts/ci-gate-test` that a stale local `main` never goes green for an older commit, and the
+  /done text's manual-path step 4 checked against it. Filed by Claude after landing T-9.10, at
+  the founder's direction, 19 October 2026, from T-9.10's block (P-930 to P-939).
