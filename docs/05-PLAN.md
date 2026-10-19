@@ -3988,6 +3988,9 @@ number** per account gets its 5 each, one Thread's worth, and is **accepted**, k
 
 ### T-9.13 · Security review
 - [ ] **Needs:** T-9.9
+  **Runs last in Sprint 9** (the founder, 18 October 2026, on the advisor's recommendation,
+  Claude in a separate chat, relayed): after T-9.12, T-9.11, T-9.7, P-70, P-71 and P-72 land, so
+  the review covers all of Sprint 9's code.
 - [ ] **Pillow's pinned version against its CVEs** (D-092): an image parser reading hostile input;
   update it if any has landed since it was pinned.
 - [ ] **The local-only test routes, D-963's role route first** (T-9.11, at the founder's
