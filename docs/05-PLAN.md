@@ -7912,3 +7912,20 @@ The number comes from the session's own block, given in its brief, from P-100 up
   padega", "bill ke paise dena hai". Each entry a caught test and an ordinary sentence, as D-981
   asks, and a break case. Filed by Claude building T-9.13, 20 October 2026, at the founder's
   direction.
+- [ ] P-962 · A photo's blur and badge comparison are queued before moderation commits. **Before
+  REL-1; the next fix after T-9.13** (the founder, 20 October 2026). Worst case: a worker fast
+  enough runs `blur_photo` or `match_photo` before the approval is committed, reads the photo as
+  not yet approved, answers "nothing to blur" (or "not a shown photo: nothing to compare",
+  `verification/service.py:483`) and finishes for good under its fixed job id
+  (`blur_photo:{photo id}`, `match_photo:{photo id}`), so the photo never gets its blurred copy
+  for Liked you (D-543) or its badge comparison (D-393), and nothing tries again.
+  `photos/service.py` queues both inside moderation's transaction (`queue_match` at `:818`,
+  `queue_blur` at `:820`); the staff approval already queues after its commit
+  (`after_staff_decision`, from `admin/panel.py`), the shape to follow. Seen in CI run
+  39310142086, on T-9.13's `6568f3e`: the worker's log has `blur_photo` done "nothing to blur" at
+  0.03 s and `moderate_photo` "approved" at 0.20 s, and
+  `tests/workers/test_worker.py::test_a_photo_the_api_completes_is_moderated_by_the_worker_through_arq`
+  red on `blur_key is None`; it passed locally twice. Since T-6.7 (`ca913ba`, 8 October 2026). Fix:
+  enqueue only after the transaction commits, at both; a test that forces the job to
+  run first, before the commit, and proves the blur and the match still happen; and a break case.
+  Filed by Claude building T-9.13, 20 October 2026, at the founder's direction; its block.
