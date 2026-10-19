@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import copy
 import json
+import pathlib
 from typing import Any
 
 import httpx
@@ -358,3 +359,32 @@ async def test_a_missing_project_is_named_with_what_exists(
 
     assert code == 3
     assert "no project velora-web in velora (it has velora-api)" in out
+
+
+def test_the_tokens_scopes_are_exactly_what_it_calls_and_the_docs_say_so() -> None:
+    """P-904: the first token, made from the docs, lacked member:read."""
+    assert sa.SCOPES == (
+        "org:read",
+        "member:read",
+        "project:read",
+        "project:write",
+        "alerts:read",
+        "alerts:write",
+    )
+    runbook = (
+        pathlib.Path(__file__).resolve().parents[3] / "infra" / "OBSERVABILITY.md"
+    ).read_text()
+    for scope in sa.SCOPES:
+        assert f"`{scope}`" in runbook
+
+
+async def test_a_403_names_every_scope_it_needs(
+    capsys: pytest.CaptureFixture[str], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setenv(sa.TOKEN_VARIABLE, TOKEN)
+    transport = httpx.MockTransport(lambda _: httpx.Response(403, text="no"))
+
+    assert await sa.main_async(["--check"], transport=transport) == 3
+
+    err = capsys.readouterr().err
+    assert "it needs " + ", ".join(sa.SCOPES) in err

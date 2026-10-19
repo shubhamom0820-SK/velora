@@ -22,9 +22,15 @@ founder, 16 October 2026): no metric alert, one uptime monitor, email only.
 
 **The token** is read from `SENTRY_AUTH_TOKEN` and never printed, logged or put
 in an argument. It lives in the founder's Keychain (infra/OBSERVABILITY.md says
-how to run this with it); never in GitHub or the repo. Scopes: `org:read`,
-`project:read`, `project:write`, `alerts:read`, `alerts:write`; `--check` needs
-only the three reads.
+how to run this with it); never in GitHub or the repo. Scopes: exactly `SCOPES`
+below; `--check` needs only the four reads. `member:read` was missing here until
+P-904: the founder's first token, made from this list, was refused with 403 on
+`GET /organizations/<org>/members/`, which finds who gets the email.
+
+**Sentry makes default alerts on a new project** (seen 19 October 2026: two
+"Send a notification for high priority issues" and one "Send a notification
+when pull requests are ready"). They are not SPEC, so `--check` names each one;
+delete them in Sentry's UI. This never deletes anything itself.
 
 **Proven against a fake of Sentry's API only** (`tests/ops`), until the
 founder's first run: the alert and monitor endpoints are marked beta in
@@ -48,6 +54,16 @@ import httpx
 # Sentry's EU region (the founder's choice): its API lives on its own host.
 API: Final = "https://de.sentry.io/api/0"
 TOKEN_VARIABLE: Final = "SENTRY_AUTH_TOKEN"
+# The token's scopes, the minimum (P-904): each read is one this script makes,
+# member:read among them (who gets the email); the writes are --apply's.
+SCOPES: Final = (
+    "org:read",
+    "member:read",
+    "project:read",
+    "project:write",
+    "alerts:read",
+    "alerts:write",
+)
 
 # The two projects (infra/OBSERVABILITY.md): the API and the worker share one,
 # told apart by their `component` tag; the web has its own.
@@ -125,7 +141,7 @@ class Sentry:
             )
         if response.status_code == 403:
             raise Refused(
-                f"{method} {path}: 403, the token lacks a scope this needs (see the module's docstring)"
+                f"{method} {path}: 403, the token lacks a scope this needs; it needs {', '.join(SCOPES)}"
             )
         if response.status_code >= 400:
             raise Refused(

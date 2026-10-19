@@ -7725,3 +7725,14 @@ The number comes from the session's own block, given in its brief, from P-100 up
   record) or that P-72 now puts two in 30 days in front of an admin. A published page's words are
   the founder's to choose, so this files the gap rather than editing the page. Found by Claude
   building P-72, 19 October 2026; its session's block.
+- [x] P-904 · `scripts/sentry-alerts`' scopes lacked `member:read`, and nothing sent §4's test
+  errors. **Found at the founder's first run, 19 October 2026; fixed the same day.** Worst case:
+  each token made from the docs is refused with 403 on `GET /organizations/<org>/members/`, so
+  `--apply` never runs and no alert exists. The founder's second token, with `member:read` added,
+  ran `--apply`; Sentry's three default alerts were then reported as not in SPEC and he deleted
+  them, after which `--check` exited 0 ("Sentry is exactly SPEC."). **Closed:** the scopes are one
+  constant, `SCOPES` in `api/ops/sentry_alerts.py`, named in its 403 message and in
+  `infra/OBSERVABILITY.md` §2, which now also says Sentry makes default alerts on a new project and
+  that they must be deleted; and `app/tools/sentry_probe.py` sends one error as the API or the
+  worker from inside its container, through the alert's own path, printing its event id
+  (OBSERVABILITY §4). Filed by Claude closing T-9.12; its session's block.

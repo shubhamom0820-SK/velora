@@ -55,8 +55,11 @@ into the project, nothing more. The API's is kept in Secret Manager anyway.
 
 Sentry's side is code (D-1005): `api/ops/sentry_alerts.py` says what must exist, and the script
 applies it or checks it. **The token** is a Sentry personal token, kept in the founder's Keychain,
-service `velora-sentry-alerts`, never in GitHub or the repo. Scopes, the minimum: `org:read`,
-`project:read`, `project:write`, `alerts:read`, `alerts:write` (`--check` needs only the reads).
+service `velora-sentry-alerts`, never in GitHub or the repo. Scopes, the minimum (`SCOPES` in the
+module): `org:read`, `member:read`, `project:read`, `project:write`, `alerts:read`, `alerts:write`
+(`--check` needs only the four reads). Without `member:read` Sentry refuses `GET
+/organizations/<org>/members/` with 403, which is how the script finds who gets the email (the
+founder's first token, 19 October 2026; P-904).
 
 ```
 SENTRY_AUTH_TOKEN="$(security find-generic-password -s velora-sentry-alerts -w)" scripts/sentry-alerts --apply
@@ -77,7 +80,10 @@ What SPEC is:
   production's for the production checklist (P-901). `/readyz` pings Redis, which Upstash doesn't
   charge (D-091).
 - **Scrubbing on Sentry's side** on both projects: IP addresses never stored, the data scrubber on.
-- Nothing else. Sentry's own default alert fails `--check` by name: delete it in Sentry.
+- Nothing else. **Sentry makes default alerts on every new project**, and `--check` names each
+  as not in SPEC: delete them in Sentry's UI (the script never deletes). Seen on 19 October 2026:
+  two "Send a notification for high priority issues" and one "Send a notification when pull
+  requests are ready", deleted by the founder, after which `--check` exited 0.
 
 ## 3. What reaches Sentry (D-1002)
 
@@ -104,7 +110,17 @@ variable, and an exception by its type and stack, never its message.
 ## 4. Checking it on staging, after the first deploy
 
 1. Sentry → Releases: the deployed commit's SHA, in both projects.
-2. A test error from each component, then its email; record each in the plan.
+2. A test error from each component, then its email; record each in the plan. The API's and the
+   worker's, from inside their containers on the VM (`app/tools/sentry_probe.py`, P-904), which
+   prints the event's id:
+
+   ```
+   gcloud compute ssh velora-api-staging --project=velora-ic-staging --zone=asia-south1-a --tunnel-through-iap
+   sudo docker compose -p velora exec -T api python -m app.tools.sentry_probe --component api
+   sudo docker compose -p velora exec -T worker python -m app.tools.sentry_probe --component worker
+   ```
+
+   The web's: an error thrown in a staging page's console, which the SDK's own handler catches.
 3. A CSP violation reaching `velora-web` (the security endpoint): a page's console can make one,
    such as an image from a host the policy refuses.
 4. `scripts/sentry-alerts --check`: exit 0.

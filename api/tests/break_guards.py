@@ -13841,6 +13841,31 @@ P72: list[Case] = [
 ]
 
 
+# --- P-904: the alert script's scopes, and T-9.12's test error ------------------
+
+P904_SELECTION = ["tests/ops/test_sentry_alerts.py", "tests/tools/test_sentry_probe.py"]
+
+P904: list[Case] = [
+    Case(
+        id="p904-01-member-read-dropped",
+        what="P-904: member:read out of the scopes again, so a token made from the docs is refused",
+        edits=[("ops/sentry_alerts.py", '    "member:read",\n', "")],
+        expect=["test_the_tokens_scopes_are_exactly_what_it_calls_and_the_docs_say_so"],
+    ),
+    Case(
+        id="p904-02-the-probe-sends-nothing",
+        what="P-904: the probe reporting success with no error logged, so §4 proves nothing",
+        edits=[
+            (
+                "app/tools/sentry_probe.py",
+                '    log.error(EVENT, note="T-9.12\'s test error (infra/OBSERVABILITY.md §4)")\n',
+                '    log.info(EVENT, note="T-9.12\'s test error (infra/OBSERVABILITY.md §4)")\n',
+            )
+        ],
+        expect=["test_it_sends_one_error_as_its_component_and_names_it[api]"],
+    ),
+]
+
 CASES: list[tuple[Case, list[str]]] = (
     [(c, T51_SELECTION) for c in T51]
     + [(c, T54_SELECTION) for c in T54]
@@ -13911,6 +13936,7 @@ CASES: list[tuple[Case, list[str]]] = (
     + [(c, P851_SELECTION) for c in P851]
     + [(c, T912_SELECTION) for c in T912]
     + [(c, P72_SELECTION) for c in P72]
+    + [(c, P904_SELECTION) for c in P904]
 )
 
 # The fifty-connection fixture's own message when Postgres refuses a connection.
