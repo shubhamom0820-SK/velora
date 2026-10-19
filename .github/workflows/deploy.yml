@@ -143,7 +143,8 @@ jobs:
         run: |
           repo="$GCP_REGION-docker.pkg.dev/$PROJECT/velora/api"
           gcloud auth configure-docker "$GCP_REGION-docker.pkg.dev" --quiet
-          docker build --platform linux/amd64 -t "$repo:$SHA" api
+          # GIT_SHA: the image's Sentry release (T-9.12), the commit the gate passed.
+          docker build --platform linux/amd64 --build-arg "GIT_SHA=$SHA" -t "$repo:$SHA" api
           docker push "$repo:$SHA"
 
       - name: The image's digest, from the registry
@@ -265,6 +266,10 @@ jobs:
       - name: vercel pull
         run: pnpm dlx "vercel@$VERCEL_CLI_VERSION" pull --yes --environment=production
       - name: vercel build
+        env:
+          # The web's Sentry release (T-9.12): the commit the gate passed. A
+          # build that sends to Sentry refuses to finish without it.
+          NEXT_PUBLIC_SENTRY_RELEASE: ${{ needs.gate.outputs.sha }}
         run: pnpm dlx "vercel@$VERCEL_CLI_VERSION" build --prod
       - name: vercel deploy
         # --archive=tgz: a few archive parts per deploy, not one upload per file. The

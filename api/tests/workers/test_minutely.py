@@ -12,7 +12,7 @@ from typing import Any
 import pytest
 
 from app.workers import main as worker
-from app.workers.minutely import EVERY_S, Minutely
+from app.workers.minutely import EVERY_S, FAILING_AFTER, Minutely
 from app.workers.tasks import thread_clock
 from tests.conftest import CapturedLogs
 
@@ -83,6 +83,69 @@ async def test_a_failed_minute_is_logged_and_the_next_one_runs(
     assert "10.0.0.1" not in captured_logs.text
     ran = [e for e in captured_logs.events if e.get("event") == "minutely.ran"]
     assert [e.get("expired") for e in ran] == [3]
+
+
+def test_the_third_failure_in_a_row_is_an_alert() -> None:
+    """T-9.12's "any job failing 3×", for the loops ARQ doesn't run."""
+    assert FAILING_AFTER == 3
+
+
+async def test_three_failures_in_a_row_log_one_error_and_the_recovery_says_so(
+    captured_logs: CapturedLogs,
+) -> None:
+    """Fail, fail, fail, fail, work, fail, fail, fail: an error at the third of
+    each streak only, so a loop down all day is one alert, not 1,440."""
+    script = iter([False, False, False, False, True, False, False, False])
+
+    async def work() -> dict[str, int]:
+        if not next(script):
+            raise ConnectionError("database at 10.0.0.1 went away")
+        return {}
+
+    _, sleep = _sleeps(after=8)
+    loop = Minutely(work, name="thread_clock", sleep=sleep)
+
+    with pytest.raises(Stop):
+        await loop.run()
+
+    lines = [
+        (each["event"], each.get("log_level"), each.get("failures"))
+        for each in captured_logs.events
+        if each.get("event") in ("minutely.failing", "minutely.recovered")
+    ]
+    assert lines == [
+        ("minutely.failing", "error", 3),
+        ("minutely.recovered", "info", 4),
+        ("minutely.failing", "error", 3),
+    ]
+    failing = [e for e in captured_logs.events if e["event"] == "minutely.failing"]
+    assert {(e["work"], e["error"]) for e in failing} == {
+        ("thread_clock", "ConnectionError")
+    }
+    assert "10.0.0.1" not in captured_logs.text
+    assert loop.failures_in_a_row == 3
+
+
+async def test_a_streak_shorter_than_three_is_no_alert(
+    captured_logs: CapturedLogs,
+) -> None:
+    script = iter([False, False, True, False, False, True])
+
+    async def work() -> dict[str, int]:
+        if not next(script):
+            raise ConnectionError
+        return {}
+
+    _, sleep = _sleeps(after=6)
+
+    with pytest.raises(Stop):
+        await Minutely(work, name="thread_clock", sleep=sleep).run()
+
+    assert not [
+        e
+        for e in captured_logs.events
+        if e.get("event") in ("minutely.failing", "minutely.recovered")
+    ]
 
 
 async def test_an_idle_minute_writes_no_line(captured_logs: CapturedLogs) -> None:

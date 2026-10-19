@@ -32,6 +32,15 @@ const FIREBASE = {
     "Use @/lib/firebase, which loads the SDK on demand and keeps Firebase's user in memory (T-3.14).",
 };
 
+// The Sentry SDK only through src/lib/sentry.ts (T-9.12): it decides what an
+// event may carry (nothing personal, D-1003), and it is loaded only by a build
+// that reports, so local and ci bundles hold none of it.
+const SENTRY = {
+  regex: "^@sentry(/|$)",
+  message:
+    "Use @/lib/sentry, which keeps people's data out of every event and loads only where the build reports (T-9.12).",
+};
+
 const eslintConfig = defineConfig([
   ...nextVitals,
   ...nextTs,
@@ -55,23 +64,39 @@ const eslintConfig = defineConfig([
       ],
     },
   },
-  // Each library that must come through one module of ours (T-3.11, T-3.14).
+  // Each library that must come through one module of ours (T-3.11, T-3.14,
+  // T-9.12).
   // One rule for both: flat config replaces a rule's options rather than adding
   // to them, so two blocks would leave the later one's ban alone in force.
   {
     files: ["src/**/*.{js,jsx,mjs,ts,tsx}"],
-    ignores: ["src/lib/zod.ts", "src/lib/zod-mini.ts", "src/lib/firebase.ts"],
+    // sentry.test.ts reads what the SDK would send, through its transport.
+    ignores: [
+      "src/lib/zod.ts",
+      "src/lib/zod-mini.ts",
+      "src/lib/firebase.ts",
+      "src/lib/sentry.ts",
+      "src/lib/sentry.test.ts",
+    ],
     rules: {
-      "no-restricted-imports": ["error", { patterns: [ZOD, FIREBASE] }],
+      "no-restricted-imports": ["error", { patterns: [ZOD, FIREBASE, SENTRY] }],
     },
   },
   {
     files: ["src/lib/zod.ts", "src/lib/zod-mini.ts"],
-    rules: { "no-restricted-imports": ["error", { patterns: [FIREBASE] }] },
+    rules: {
+      "no-restricted-imports": ["error", { patterns: [FIREBASE, SENTRY] }],
+    },
   },
   {
     files: ["src/lib/firebase.ts"],
-    rules: { "no-restricted-imports": ["error", { patterns: [ZOD] }] },
+    rules: { "no-restricted-imports": ["error", { patterns: [ZOD, SENTRY] }] },
+  },
+  {
+    files: ["src/lib/sentry.ts", "src/lib/sentry.test.ts"],
+    rules: {
+      "no-restricted-imports": ["error", { patterns: [ZOD, FIREBASE] }],
+    },
   },
   // Override default ignores of eslint-config-next.
   globalIgnores([

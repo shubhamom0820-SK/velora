@@ -16,7 +16,7 @@ from httpx import ASGITransport, AsyncClient
 from app.core.config import Settings
 from app.core.providers.storage import S3Storage
 from app.main import close_resources, contract_openapi, create_app
-from tests.keys import r2_settings, random_keys, vapid_settings
+from tests.keys import r2_settings, random_keys, sentry_settings, vapid_settings
 
 # D-045: outside local, every provider must be a real one.
 _REAL_PROVIDERS = {
@@ -31,6 +31,7 @@ _REAL_PROVIDERS = {
     **r2_settings(),
     "PUSH_PROVIDER": "webpush",
     **vapid_settings(),
+    **sentry_settings(),
 }
 
 

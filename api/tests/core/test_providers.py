@@ -31,7 +31,7 @@ from app.core.providers.sms import (
 )
 from app.core.providers.storage import FakeStorage, ObjectNotFound, S3Storage
 from tests.conftest import CapturedLogs
-from tests.keys import r2_settings, random_keys, vapid_settings
+from tests.keys import r2_settings, random_keys, sentry_settings, vapid_settings
 
 PHONE = "+919812345678"
 
@@ -52,6 +52,7 @@ _REAL = {
     **r2_settings(),
     "PUSH_PROVIDER": "webpush",
     **vapid_settings(),
+    **sentry_settings(),
 }
 
 

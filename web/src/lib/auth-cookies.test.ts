@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 
 import config, { configFor } from "../../next.config";
+import { SENTRY_BUILD } from "./testing/sentryEnv";
 
 import { authCookieSuffix, csrfCookieName, readCookie } from "./auth-cookies";
 
@@ -38,8 +39,8 @@ describe("next.config puts the suffix into the build", () => {
     ["ci", "local"],
   ])("APP_ENV=%s builds with AUTH_COOKIE_SUFFIX=%s", (appEnv, suffix) => {
     expect(
-      configFor("phase-production-build", { APP_ENV: appEnv }).env
-        ?.AUTH_COOKIE_SUFFIX,
+      configFor("phase-production-build", { APP_ENV: appEnv, ...SENTRY_BUILD })
+        .env?.AUTH_COOKIE_SUFFIX,
     ).toBe(suffix);
   });
 
@@ -51,6 +52,9 @@ describe("next.config puts the suffix into the build", () => {
 
   it("reads the process's APP_ENV when Next calls it with its own second argument", () => {
     vi.stubEnv("APP_ENV", "staging");
+    for (const [name, value] of Object.entries(SENTRY_BUILD)) {
+      vi.stubEnv(name, value);
+    }
     try {
       // How Next calls it (next.config's own docs): (phase, { defaultConfig }).
       const call = config as unknown as (

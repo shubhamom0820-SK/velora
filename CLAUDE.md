@@ -47,7 +47,8 @@ velora/
   api/                  FastAPI app
     app/core/           config, db, redis, events, security, errors, deps, providers (fakes local-only),
                         storage_keys, pagination (every list's page and cursor, D-270), audio
-                        (what a voice note is and how long, by its bytes, D-620), vapid (Web
+                        (what a voice note is and how long, by its bytes, D-620), observability
+                        (errors and alerts to Sentry: the log line is the report, T-9.12, D-1002), vapid (Web
                         Push's keys and token; `python -m app.core.vapid` pipes a new pair, D-856)
     app/modules/<name>/ router.py service.py repository.py schemas.py models.py
     app/workers/        ARQ worker (main.py, `python -m app.workers`) + tasks/
@@ -56,6 +57,9 @@ velora/
                         unfreeze, the founder's, lifting any freeze, T-9.2, D-906; roundtrip_probe,
                         Postgres and Redis round trips from where the API runs, and
                         socket_probe, a real WebSocket through the public host, P-49)
+    ops/                checks run by hand from a laptop against outside services, never in the
+                        image: sentry_alerts, Sentry's alert, uptime monitor and scrubbing as code
+                        (scripts/sentry-alerts, T-9.12, D-1005)
     alembic/            migrations
     seed/               make seed: dev data, local stack only, never in the image (D-064)
     bench/              benchmarks run by hand, never in the image nor `make test`: liveness/,
@@ -67,11 +71,13 @@ velora/
   infra/                docker-compose.yml, fly.api.toml + fly.worker.toml + STAGING.md (staging's
                         runbook), fly.api.production.toml + PRODUCTION.md (production's: released by tag),
                         gce/ (the Mumbai VMs, P-49: startup.sh, compose.yml, Caddyfile, deploy, each
-                        environment's settings and secret names; Fly's files go with P-920)
+                        environment's settings and secret names; Fly's files go with P-920),
+                        OBSERVABILITY.md (Sentry: its secrets' places, its alerts, T-9.12)
   scripts/              ci-gate, push-gate, release-gate, ci-vouch + ci-e2e-needed (CI's minutes,
                         D-410), with-tools, staging-smoke, check-image-no-env,
                         check-image-no-bench-tools, migrate-with-url, check-caddy-client-ip (D-1021's
-                        guard), gcp-secrets (secrets into Secret Manager and the Keychain, P-49)
+                        guard), gcp-secrets (secrets into Secret Manager and the Keychain, P-49),
+                        sentry-alerts (T-9.12)
   Makefile
 ```
 
@@ -91,7 +97,10 @@ where photos live by `APP_ENV`, each bucket by its path, for the CSP (T-4.6).
 `src/lib/firebase.ts` is the only code that touches the Firebase SDK (ESLint enforces it), loaded
 on demand by a Firebase build's `/login`;
 `src/lib/firebase-config.ts` holds the public web config by `APP_ENV`, staging and production only,
-so local and ci builds can't reach Firebase (D-085). `src/components/ui/` holds the shared primitives (T-1.19),
+so local and ci builds can't reach Firebase (D-085). `src/lib/sentry.ts` is the only code that
+touches the Sentry SDK (ESLint enforces it), loaded on demand by `src/instrumentation-client.ts` and
+`src/instrumentation.ts` only on builds that report, staging and production (`src/lib/sentry-config.ts`,
+which refuses such a build without its DSN and release); local and ci builds hold none of it (T-9.12). `src/components/ui/` holds the shared primitives (T-1.19),
 each with a vitest test beside it; `/dev/ui` shows them all under `next dev` and 404s everywhere
 else. Feature components go in `src/components/<feature>/`. A person's profile has one route,
 `/people/[id]` (the deck's tap, T-6.5; T-6.8's screen). **A new `(app)` or admin page joins
@@ -149,7 +158,8 @@ make worker      # ARQ worker only: moderate_photo, delete_files, verify_selfie,
                  # once a minute in its own loop, not ARQ's, the Thread's clock: expire_threads and
                  # warn_expiring (T-7.6, D-640); and every 10 minutes in another, recompute_fraud,
                  # which scores and may freeze (T-9.2, D-900); and pushes, never ARQ jobs: push_outbox sent on a
-                 # wake (wake:send_push) and in that minute (T-9.4, D-850)
+                 # wake (wake:send_push) and in that minute (T-9.4, D-850); every 5 minutes, in a third
+                 # loop, the queue's depth, an error past 1,000 jobs (T-9.12, D-1004)
 make models      # fetch the face models into api/models, checked by SHA-256 (D-088; needed
                  # where FACEMATCH_PROVIDER=sface, and by the face-match tests)
 make seed        # dev data: 20 profiles, test users (local only; a re-run changes nothing, infra-reset starts over)

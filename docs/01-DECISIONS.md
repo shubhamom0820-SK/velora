@@ -6686,3 +6686,114 @@ already waited for the gate.
 **Rejected:** hand-written checks for the six messages instead of zod (about the same saving, and
 a departure from the pinned stack's Zod for one module), and leaving `/discover` over budget (CI's
 check would refuse every build).
+
+### D-1000 · Sentry for errors and alerts, both SDKs pinned, errors only — Locked
+**Amends D-038's "Sentry SDK deferred"** (Locked, not edited): T-9.12 wires it, so it arrives.
+**The decision (T-9.12; the dependencies approved by the founder on the advisor's recommendation
+(Claude, in a separate chat), 16 October 2026):**
+- **`sentry-sdk==2.72.0`** for the API and the worker, and **`@sentry/nextjs` 11.7.0** for the
+  web, both pinned exactly. Not 11.8.0, the newest: it was a day old, inside pnpm's
+  `minimumReleaseAge`, and `pnpm add` passed it only by writing fifteen exemptions into
+  `pnpm-workspace.yaml`. The policy stands; the version waits. Errors and alerts only: no tracing, no replay, no sessions, no
+  profiling. The Python SDK sends from a thread of its own, so rule 7's event loop never waits on
+  it.
+- **Sentry's EU region, the free Developer plan** (the founder's account, created for this task;
+  its trial's features aren't relied on): one user, email alerts, one uptime monitor, no metric
+  alerts. So "5xx > 1% for 5 min" is built as an alert on each 5xx (D-1002), not a rate.
+- **Two projects**, `velora-api` (the API and the worker, told apart by a `component` tag, `api`
+  or `worker`) and `velora-web` (`web-browser`, `web-server`).
+- **Source maps aren't uploaded** (the founder's call): the web's stacks are minified until P-900.
+
+**The bundle, measured against T-9.10's budget** (19 October 2026, `scripts/bundle-budget.mts`,
+D-1034's measure: Next's first-load list, gzipped, 1 KB = 1,000 bytes; staging-shaped builds of
+`main` at `bb9eaf1` and of T-9.12 on it, `out/t9.12-bundle-budget.log`): the SDK is loaded on
+demand after the page, so each `(app)` route's first load gains 0.3 KB and one file, the
+instrumentation's few lines: `/discover` 224.4 to 224.7 KB, the heaviest, `/chats/[id]`, 237.3 to
+237.6 KB, every route under 250 KB. The SDK's own chunk, 80,788 bytes gzipped, follows only on
+builds that report. Local and CI builds hold no Sentry code at all, so CI's budget, on a CI build,
+measures none of this: the reporting builds' figure is the one above.
+
+### D-1001 · Where Sentry reports, a deploy without it refuses to start — Locked
+**The decision (T-9.12; the founder, 16 October 2026: "refuse to start on staging/production
+without it"):** an allowlist, staging and production (rule 16; `config.SENTRY_IN`,
+`sentry-config.ts`'s `SENTRY_IN`). There, the API and the worker refuse to start without
+`SENTRY_DSN` and `SENTRY_RELEASE`, and a web build refuses to finish without
+`NEXT_PUBLIC_SENTRY_DSN` and `NEXT_PUBLIC_SENTRY_RELEASE`, each naming what's missing and never
+its value; malformed ones are refused everywhere. Anywhere else nothing is sent, whatever the
+variables say.
+- **Release is the commit.** The Dockerfile's `GIT_SHA` build argument becomes `SENTRY_RELEASE`;
+  the deploy workflows pass the gate's commit, to the VM's image build (P-49) as the build argument and to `vercel build`
+  as `NEXT_PUBLIC_SENTRY_RELEASE`; CI builds the image with it and reads it back.
+**Why:** an alert channel nobody configured fails silently, the gap D-066, D-078 and P-381 each
+named; the refusal makes forgetting it fail at deploy instead. **The cost:** staging can't deploy
+this commit until the secrets are set (infra/OBSERVABILITY.md), so it doesn't land before.
+
+### D-1002 · The log line is the report — Locked
+**The decision (T-9.12):** one structlog processor (`core/observability.report_to_sentry`) sends
+every line at error level, and three warnings, to Sentry: `otp_daily_cap_half_used` (D-066),
+`payments.turnover` (at warning from ₹15 lakh, error from ₹20 lakh; info below goes nowhere,
+P-381) and `payments.webhook_refused` (a signature that didn't match, or none). A failure is
+reported where it is already logged, so nothing has a second call to forget. Each message is one
+issue per event name and level (the turnover's warning and its error are two, so the second still
+alerts); an exception is grouped by its stack. What reaches Sentry, by source:
+- **Every 5xx:** an unhandled 500 is `unhandled_exception`, with its route; a deliberate 5xx from
+  a `/v1` route is `app_error_5xx` with its code. The probes' 503 is the uptime monitor's, never an
+  event: the VM's healthcheck asks `/readyz` every 15 seconds (P-49), as Fly's did.
+- **Any job failing for good:** each job's own error line on its last try (D-090's
+  `storage.delete_failed` among them); ARQ's own lines for a job that raised (never retried), timed
+  out or was picked up past its tries, routed to `job.failed` (`ReportJobFailures`); and the third
+  failure in a row of a loop the worker runs itself (`minutely.failing`, once a streak, and
+  `minutely.recovered` when it ends).
+- **Queue depth past 1,000** (D-1004), and **the ledger's reconciliation** once T-9.9 logs its
+  mismatch at error level, as `wallet.ledger_mismatch` (T-9.9's own name, relayed by the
+  founder, 18 October 2026).
+- **The web:** what the browser didn't catch, and Next's `onRequestError` on the server.
+
+**One alert, on issues** (D-1005): an email when an issue is new, regresses after being resolved,
+or reappears after being archived. So an issue left open stays one email; resolving it once dealt
+with is what re-arms it. **Rejected:** a rate alert on 5xx (the free plan has none); a reporting
+call beside each log line (two places to keep in step).
+
+### D-1003 · Nothing personal goes to Sentry, whose region isn't India — Locked
+**The tension, plainly:** D-048 keeps Indian users' data in India, and Sentry has no Indian
+region; the founder chose the EU. So events carry no personal data (the founder, 16 October 2026),
+and this is how:
+- **Nothing reads a request.** The API runs no framework integration: no headers, cookies, query
+  strings, bodies, users or IP addresses; no breadcrumbs; no frame locals (`data_collection` all
+  off). The web drops the SDK's breadcrumbs, HttpContext and sessions, and every collection setting.
+- **An exception goes by its type and stack, never its message**, which can carry a row's values
+  (a Postgres DETAIL) or what a page showed. The cost: the web's minified stacks without a message
+  say little until source maps (P-900).
+- **A scrubber is the last step** on both sides: it removes `request`, `user`, `breadcrumbs` and
+  `extra`, blanks every exception's message, and, on the web's server, the path asked for (the
+  route's pattern stays: `/share/[username]`, never the username).
+- **What does go:** the log line's own fields, which rule 15 already keeps clean, and internal ids
+  (a `banned_identities` row, an export, a user's UUID), which name a row, not a person, as D-090
+  reasoned. Sentry's side scrubs too: IP addresses never stored and its data scrubber on, on both
+  projects (D-1005 checks it).
+- **Tested by planting** a phone number, an OTP, a bearer token and a cookie in a real request and
+  a real exception, and finding none in what the transport would send (`tests/core/
+  test_observability.py`, `web/src/lib/sentry.test.ts`), and in Chromium against a staging build
+  (`out/t9.12-web-bundle-and-browser.log`).
+**Revisit at P-0.7's DPDP session**, beside D-048.
+
+### D-1004 · The queue's depth, every 5 minutes, in the worker's own loop — Locked
+**The decision (T-9.12; every 5 minutes the founder's call, 16 October 2026):** a third loop of
+D-640's kind reads ARQ's queue with one `ZCARD` every 5 minutes and logs `queue.depth_high` at
+error level as it crosses 1,000 jobs, and `queue.depth_normal` as it comes back under: one alert a
+backlog, not one a reading. **The cost:** 8,640 Redis commands a month, about 1.7% of Upstash
+Free's 500,000 (D-091 left about 239,000 for traffic). **Rejected:** every minute (43,200, 8.6%);
+an ARQ cron (about 20 commands a run).
+
+### D-1005 · Sentry's own set-up is code, checked exactly — Locked
+**The decision (T-9.12):** `scripts/sentry-alerts` (`api/ops/sentry_alerts.py`) holds Sentry's
+side as SPEC and applies it (`--apply`) or checks it (`--check`, read only), through Sentry's API
+in the EU region: both projects scrubbing (D-1003); exactly one uptime monitor, on staging's
+`/readyz` every 60 seconds (P-901 moves it to production's); and exactly one alert, the email of
+D-1002, watching both projects' errors and the uptime monitor. Anything else fails `--check` by
+name, Sentry's own default alert included; nothing is ever deleted from here. The token comes from
+`SENTRY_AUTH_TOKEN` only, kept in the founder's Keychain, never in GitHub or the repo, never
+printed. **Proven against a fake of the API only** (`tests/ops`) until the founder's first run:
+Sentry's documentation marks the alert and monitor endpoints beta, and the uptime one isn't
+documented at all (its fields read from Sentry's source, 16 October 2026), so a changed shape
+fails loudly with Sentry's answer. `--check` must still pass once the plan's trial ends.

@@ -8,6 +8,10 @@ import { authCookieSuffix } from "./src/lib/auth-cookies";
 import { assertKnownAppEnv } from "./src/lib/build-env";
 import { checkoutPathFor } from "./src/lib/checkout-path";
 import { firebaseConfigFor } from "./src/lib/firebase-config";
+import {
+  assertSentryConfigured,
+  sentryConfigFor,
+} from "./src/lib/sentry-config";
 import { signInPathFor } from "./src/lib/sign-in-path";
 import {
   AT_USERNAME,
@@ -66,15 +70,21 @@ export function buildsTheSite(
  * firebase-config.ts) go into the browser's code here, from APP_ENV. A build
  * always has the first two, since it refused an unknown APP_ENV above, and the
  * config only where APP_ENV is staging or production; elsewhere they're empty,
- * and nothing signs in.
+ * and nothing signs in. Sentry's config the same way (T-9.12): staging and
+ * production only, and a build of either refuses to finish without it.
  */
 export function configFor(
   phase: string,
   env: Readonly<Record<string, string | undefined>> = process.env,
 ): NextConfig {
-  if (buildsTheSite(phase)) assertKnownAppEnv(env);
+  if (buildsTheSite(phase)) {
+    assertKnownAppEnv(env);
+    // T-9.12: a build that reports to Sentry refuses to finish without it.
+    assertSentryConfigured(env);
+  }
   const dev = phase === PHASE_DEVELOPMENT_SERVER;
   const firebase = firebaseConfigFor(env);
+  const sentry = sentryConfigFor(env);
   return {
     ...nextConfig,
     env: {
@@ -86,6 +96,9 @@ export function configFor(
       // D-085: the Firebase project a Firebase build signs in with, as JSON;
       // empty for local and ci, which never reach Firebase.
       FIREBASE_WEB_CONFIG: firebase ? JSON.stringify(firebase) : "",
+      // T-9.12: where this build reports its errors, as JSON; empty for local
+      // and ci, whose bundles then hold no Sentry code at all.
+      SENTRY_WEB_CONFIG: sentry ? JSON.stringify(sentry) : "",
       // D-541: the nonce routes' CSP, from this build's environment as the
       // static one is, with a slot src/proxy.ts fills per response.
       CSP_WITH_NONCE: policyWithNonceSlot(env),

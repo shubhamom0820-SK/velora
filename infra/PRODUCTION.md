@@ -127,6 +127,12 @@ repo's public test keys, but it can't know a copy of staging's.
   staging's pair. Push is off until D-857 is decided (`PUSH_PROVIDER = "off"`, no keys needed).
   Before switching to `"webpush"`, set the pair, or production refuses to start. Keychain
   accounts `vapid-private-key`, `vapid-public-key`.
+- **Sentry (T-9.12, D-1001):** `SENTRY_DSN`, the `velora-api` project's DSN, in Secret Manager
+  in `velora-ic-prod` (**empty as of 18 October 2026: P-921's checklist**), and
+  `NEXT_PUBLIC_SENTRY_DSN`, the `velora-web` project's, on the `velora-production` Vercel project
+  as Config. The same Sentry projects as staging's; the environment tells them apart. Without them
+  the VM's deploy stops, production refuses to start and the web to build
+  (infra/OBSERVABILITY.md §1).
 - **The second copy lives in Apple Passwords, synced through iCloud,** never only on this Mac (the
   founder, 3 October 2026). A Keychain on one laptop is one laptop away from every production
   key being unrecoverable. Only the founder reads its contents; nobody else ever asks for them.

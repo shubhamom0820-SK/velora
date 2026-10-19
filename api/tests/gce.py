@@ -41,3 +41,14 @@ def worker_env(name: str) -> dict[str, str]:
     secrets aside: the shared settings, then compose.yml's own for the worker."""
     own: dict[str, str] = compose()["services"]["worker"].get("environment", {})
     return {**gce_env(name), **own}
+
+
+def secret_names(service: str) -> dict[str, bool]:
+    """`infra/gce/secrets.<service>` as the deploy reads it: each Secret Manager
+    name, and whether it is required (no trailing `?`), comments skipped."""
+    names: dict[str, bool] = {}
+    for line in (GCE / f"secrets.{service}").read_text().splitlines():
+        if not line or line.startswith("#"):
+            continue
+        names[line.removesuffix("?")] = not line.endswith("?")
+    return names

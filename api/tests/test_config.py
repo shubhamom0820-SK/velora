@@ -11,8 +11,8 @@ import yaml  # type: ignore[import-untyped]
 from pydantic import ValidationError
 
 from app.core.config import PUBLIC_TEST_KEYS, Settings
-from tests.gce import gce_env
-from tests.keys import r2_settings, random_keys, vapid_settings
+from tests.gce import gce_env, secret_names
+from tests.keys import r2_settings, random_keys, sentry_settings, vapid_settings
 
 _ALL_VARS = [
     "ENV",
@@ -34,6 +34,8 @@ _ALL_VARS = [
     "FACEMATCH_PROVIDER",
     "STORAGE_PROVIDER",
     "PUSH_PROVIDER",
+    "SENTRY_DSN",
+    "SENTRY_RELEASE",
 ]
 
 
@@ -73,6 +75,7 @@ _DEPLOYED = {
     **_FIREBASE,
     # What webpush needs (T-9.4).
     **vapid_settings(),
+    **sentry_settings(),
     # What s3 storage needs (T-4.1).
     **r2_settings(),
     "REDIS_URL": "rediss://default:x@redis.example:6379/0",
@@ -179,6 +182,7 @@ def test_local_may_use_fakes_and_real_providers() -> None:
             **_FIREBASE,
             **r2_settings(),
             **vapid_settings(),
+            **sentry_settings(),
         ).PAYMENTS_PROVIDER
         == "razorpay"
     )
@@ -585,6 +589,7 @@ def test_stagings_env_block_passes_settings() -> None:
         "R2_SECRET_ACCESS_KEY": "staging-token-secret",
         # The VAPID pair: two Secret Manager slots (T-9.4, D-856).
         **vapid_settings(),
+        **sentry_settings(),
         **gce_env("staging"),
     }
 
@@ -616,6 +621,7 @@ def test_productions_env_block_passes_settings() -> None:
         "R2_SECRET_ACCESS_KEY": "production-token-secret",
         # The VAPID pair: two Secret Manager slots (T-9.4, D-856).
         **vapid_settings(),
+        **sentry_settings(),
         **gce_env("production"),
     }
 
@@ -773,3 +779,74 @@ def test_registering_for_gst_refuses_to_start_until_p350_builds_it(
     message = str(excinfo.value)
     assert "GST_REGISTERED=true needs P-350's task first" in message
     assert "D-482" in message
+
+
+# --- Sentry (T-9.12, D-1001) ---------------------------------------------------
+
+
+@pytest.mark.parametrize("env", ["staging", "production"])
+@pytest.mark.parametrize(
+    "missing",
+    [("SENTRY_DSN",), ("SENTRY_RELEASE",), ("SENTRY_DSN", "SENTRY_RELEASE")],
+    ids=["dsn", "release", "both"],
+)
+def test_a_deploy_without_sentry_refuses_to_start(
+    env: str, missing: tuple[str, ...]
+) -> None:
+    """Without either, every alert would go nowhere and nothing would fail."""
+    values = {k: v for k, v in _DEPLOYED.items() if k not in missing}
+
+    message = _error(ENV=env, **values)
+
+    assert f"ENV={env} needs {' and '.join(missing)}" in message
+    present = {"SENTRY_DSN", "SENTRY_RELEASE"} - set(missing)
+    for name in present:
+        assert name not in message
+
+
+def test_a_deploy_with_sentry_starts() -> None:
+    for env in ("staging", "production"):
+        settings = _settings(ENV=env, **_DEPLOYED)
+        assert settings.SENTRY_DSN and settings.SENTRY_RELEASE
+
+
+def test_local_needs_neither() -> None:
+    settings = _settings()
+
+    assert (settings.SENTRY_DSN, settings.SENTRY_RELEASE) == ("", "")
+
+
+@pytest.mark.parametrize(
+    "dsn",
+    [
+        "https://0123456789abcdef0123456789abcdef@o0.ingest.de.sentry.io/",
+        "http://0123456789abcdef0123456789abcdef@o0.ingest.de.sentry.io/1",
+        "https://0123456789abcdef0123456789abcdef@sentry.example.com/1",
+        "https://o0.ingest.de.sentry.io/1",
+        '"https://0123456789abcdef0123456789abcdef@o0.ingest.de.sentry.io/1"',
+    ],
+    ids=["no project", "plain http", "not sentry", "no key", "quoted"],
+)
+def test_a_malformed_dsn_is_refused_without_echoing_it(dsn: str) -> None:
+    message = _error(SENTRY_DSN=dsn)
+
+    assert "SENTRY_DSN isn't a Sentry DSN" in message
+    assert dsn not in message
+    assert "0123456789abcdef" not in message
+
+
+@pytest.mark.parametrize("release", ["abc123", "A" * 40, "g" * 40, "0" * 41], ids=str)
+def test_a_release_that_isnt_a_full_sha_is_refused(release: str) -> None:
+    message = _error(SENTRY_RELEASE=release)
+
+    assert "SENTRY_RELEASE must be a commit's full SHA" in message
+
+
+@pytest.mark.parametrize("service", ["api", "worker"])
+def test_the_vms_deploy_requires_the_dsn_as_the_app_does(service: str) -> None:
+    """D-1001 on the Mumbai VMs (P-49): the app refuses to start without
+    SENTRY_DSN on staging and production, so the deploy must stop on an empty
+    Secret Manager slot first, never render the env file without it."""
+    assert secret_names(service).get("SENTRY_DSN") is True
+    # The release is the image's own, never a secret to fetch.
+    assert "SENTRY_RELEASE" not in secret_names(service)

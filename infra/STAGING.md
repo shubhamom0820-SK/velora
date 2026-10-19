@@ -484,6 +484,10 @@ compared by SHA-256 prefix across Secret Manager, the Keychain, Fly's API and Fl
 18 October 2026: all 16 the same. A new value is a new version (`gcloud secrets versions add NAME
 --data-file=-`, piped), read at the next deploy.
 
+**Sentry's DSN (T-9.12, D-1001):** `SENTRY_DSN`, the `velora-api` project's, is **required** in
+both lists, so `deploy` stops on an empty slot before either container starts, as the app itself
+would refuse. The web's `NEXT_PUBLIC_SENTRY_DSN` is a Vercel variable (`infra/OBSERVABILITY.md` §1).
+
 **The VM itself:** `infra/gce/startup.sh` runs at every boot from the instance's metadata: Docker
 from Docker's repository (its key checked by fingerprint), rotating logs, unattended security
 updates with a reboot at 04:00 IST when one is needed, the registry's login. Changing the file

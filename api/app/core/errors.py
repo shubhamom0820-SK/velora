@@ -20,7 +20,7 @@ from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
-from app.core.headers import cors_headers, security_headers
+from app.core.headers import VERSIONED_PREFIX, cors_headers, security_headers
 
 log = structlog.get_logger(__name__)
 
@@ -88,6 +88,13 @@ def envelope(
 
 async def _handle_app_error(request: Request, exc: Exception) -> JSONResponse:
     assert isinstance(exc, AppError)
+    # A deliberate 5xx from a /v1 route is still a failure someone must hear of
+    # (T-9.12, D-1002): a gateway down, keys missing, the SMS cap spent. At
+    # error level, so it goes to Sentry. The probes' NOT_READY is the uptime
+    # check's, and the VM's healthcheck asks /readyz every 15 seconds: not
+    # reported here.
+    if exc.status >= 500 and request.url.path.startswith(VERSIONED_PREFIX):
+        log.error("app_error_5xx", code=exc.code, status=exc.status)
     return JSONResponse(
         status_code=exc.status,
         content=envelope(exc.code, exc.message, exc.details),
@@ -125,10 +132,16 @@ async def _handle_http_exception(request: Request, exc: Exception) -> JSONRespon
 async def _handle_unexpected(request: Request, exc: Exception) -> JSONResponse:
     """Last resort: log with the request id, tell the client nothing.
 
-    T-9.12 adds Sentry here; the exception is already bound to the request id by
-    the logging middleware, so reporting is a one-line addition.
+    The line is the report: at error level, with the exception, it goes to
+    Sentry as it is logged (T-9.12, `core/observability.py`), once.
     """
-    log.exception("unhandled_exception", exc_type=type(exc).__name__)
+    # The route, named again: the logging middleware has unbound it by now.
+    log.exception(
+        "unhandled_exception",
+        exc_type=type(exc).__name__,
+        method=request.method,
+        path=request.url.path,
+    )
     # Starlette builds this response outside every middleware, so it carries
     # the API's security headers (P-42) and, for an allowed origin, its CORS
     # headers (P-61) only if it adds them itself.

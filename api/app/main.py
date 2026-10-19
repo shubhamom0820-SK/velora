@@ -23,6 +23,7 @@ from app.core.headers import (
     SecurityHeadersMiddleware,
 )
 from app.core.logging import RequestIDMiddleware, configure_logging
+from app.core.observability import init_sentry
 from app.core.providers import build_providers
 from app.core.queue import ArqQueue
 from app.core.redis import build_redis
@@ -111,6 +112,8 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     settings = settings or get_settings()
 
     configure_logging(json_logs=not settings.debug)
+    # Errors and alerts to Sentry, where ENV allows it (T-9.12).
+    init_sentry(settings, "api")
 
     # The schema and Swagger UI are served only where ENV is local: an allowlist
     # (rule 16), since a public schema of the wallet, payment and admin routes is

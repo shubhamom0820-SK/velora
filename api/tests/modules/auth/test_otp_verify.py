@@ -47,7 +47,7 @@ from app.modules.users.models import User
 from app.modules.wallet.models import Wallet
 from tests.conftest import MakeUser, make_test_settings
 from tests.infra import TEST_DATABASE_URL, TEST_REDIS_URL, session_for_the_app
-from tests.keys import r2_settings, random_keys, vapid_settings
+from tests.keys import r2_settings, random_keys, sentry_settings, vapid_settings
 
 pytestmark = pytest.mark.usefixtures("test_redis")
 
@@ -806,6 +806,7 @@ async def test_staging_and_production_on_firebase_serve_no_verify(env: str) -> N
         STORAGE_PROVIDER="s3",
         PUSH_PROVIDER="webpush",
         **vapid_settings(),  # type: ignore[arg-type]
+        **sentry_settings(),  # type: ignore[arg-type]
         **{
             **_DEPLOYED,
             **r2_settings(),

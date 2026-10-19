@@ -2317,6 +2317,100 @@ export const CASES: BreakCase[] = [
     run: ["src/components/you/EditProfile.test.tsx"],
     expect: ["an emptied bio as none", "a short bio as written"],
   },
+  // T-9.12: errors to Sentry, nothing personal in them, and the CSP's reports.
+  {
+    id: "t912-web-01-an-errors-message-sent",
+    file: "src/lib/sentry.ts",
+    old: '    exception.value = "";\n',
+    new: "    void exception;\n",
+    run: ["src/lib/sentry.test.ts"],
+    expect: [
+      "the scrubber drops the request, the user, breadcrumbs and messages",
+      "a browser error reaches the transport by its type and stack, and nothing of the page",
+    ],
+  },
+  {
+    id: "t912-web-02-breadcrumbs-kept",
+    file: "src/lib/sentry.ts",
+    old: '  "InboundFilters",\n',
+    new: '  "InboundFilters",\n  "Breadcrumbs",\n',
+    run: ["src/lib/sentry.test.ts"],
+    expect: [
+      "keeps exactly these of the SDK's own integrations, whatever it offers",
+    ],
+  },
+  {
+    id: "t912-web-03-the-path-asked-for-sent",
+    file: "src/lib/sentry.ts",
+    old: "  if (nextjs) delete nextjs.request_path;\n",
+    new: "",
+    run: ["src/lib/sentry.test.ts"],
+    expect: [
+      "the scrubber drops the request, the user, breadcrumbs and messages",
+      "a server's request error goes by its route's pattern, never the path or its headers",
+    ],
+  },
+  {
+    id: "t912-web-04-ingest-refused",
+    file: "src/lib/security-headers.ts",
+    old: "${pay(RAZORPAY.connect)}${sentry.connect}`",
+    new: "${pay(RAZORPAY.connect)}`",
+    run: [CSP_TEST],
+    expect: [
+      "staging: exactly the ingest host and the two reporting directives, on both policies",
+      "production: exactly the ingest host and the two reporting directives, on both policies",
+    ],
+  },
+  {
+    id: "t912-web-05-violations-silent",
+    file: "src/lib/security-headers.ts",
+    old: "    ...sentry.reporting,\n",
+    new: "",
+    run: [CSP_TEST],
+    expect: [
+      "staging: exactly the ingest host and the two reporting directives, on both policies",
+    ],
+  },
+  {
+    id: "t912-web-06-report-to-names-no-endpoint",
+    file: "src/lib/security-headers.ts",
+    old: '            key: "Reporting-Endpoints",\n',
+    new: '            key: "Report-To",\n',
+    run: [CSP_TEST],
+    expect: [
+      "staging: Reporting-Endpoints names the group the CSP reports to, on every response",
+    ],
+  },
+  {
+    id: "t912-web-07-ci-reports",
+    file: "src/lib/sentry-config.ts",
+    old: '= new Set([\n  "staging",\n',
+    new: '= new Set([\n  "ci",\n  "staging",\n',
+    run: ["src/lib/sentry-config.test.ts", CSP_TEST],
+    expect: [
+      "is staging and production only",
+      "APP_ENV=ci reports nothing, whatever the variables say",
+      "APP_ENV=ci: nothing of Sentry anywhere, even with its variables set",
+    ],
+  },
+  {
+    id: "t912-web-08-a-build-without-sentry-finishes",
+    file: "next.config.ts",
+    old: "    assertSentryConfigured(env);\n",
+    new: "",
+    run: ["src/lib/sentry-config.test.ts"],
+    expect: [
+      "next.config refuses such a build, and leaves next dev and start alone",
+    ],
+  },
+  {
+    id: "t912-web-09-the-sdk-anywhere",
+    file: "eslint.config.mjs",
+    old: '"no-restricted-imports": ["error", { patterns: [ZOD, FIREBASE, SENTRY] }],',
+    new: '"no-restricted-imports": ["error", { patterns: [ZOD, FIREBASE] }],',
+    run: ["src/lib/sentry-import-rule.test.ts"],
+    expect: ["refuses it in src/instrumentation-client.ts"],
+  },
 ];
 
 const WEB = join(import.meta.dirname, "..");

@@ -3930,12 +3930,24 @@ number** per account gets its 5 each, one Thread's worth, and is **accepted**, k
 - [x] **Commit:** `a11y(web): accessibility pass [T-9.11]`
 
 ### T-9.12 · Observability
-- [ ] **Needs:** T-1.22, and a **Sentry account** — not created yet: P-0.6 was ticked with it left to this task
+- [x] **Needs:** T-1.22, and a **Sentry account** — not created yet: P-0.6 was ticked with it left to this task
+  **The account exists** (the founder, 16 October 2026): EU region, the free Developer plan (D-1000).
 - [ ] Sentry in api, worker, web (release = git sha). Alerts: 5xx > 1% for 5 min, webhook signature failures, any job failing 3×, ledger reconciliation mismatch, queue depth > 1,000. Uptime check on `/readyz`.
-- [ ] Route D-066's OTP warning, logged at half of `otp_sms_daily_cap`, to the alert channel: until this task it lands only in Fly's logs, which nobody reads.
-- [ ] Route D-090's final failure to the alert channel: a minor's files that couldn't be deleted after three tries, logged at error level with the `banned_identities` id. Until this task that log line is all there is, which D-078 says is not enough.
-- [ ] **Widen the CSP here, and wire its reporting (D-059):** `connect-src` for Sentry's ingest host, and the CSP's reports (`report-to`, with `report-uri` as the fallback) sent to Sentry's security endpoint. Until then the enforced policy is silent: a violation in production stays invisible until a user complains.
-- [ ] **Commit:** `chore(ops): error tracking and alerts [T-9.12]`
+  **Built, not yet seen working; unticked until it is.** The SDKs, the release from `GIT_SHA`
+  (D-1000, D-1001), every alert line (D-1002, the 5xx as one alert per issue: the free plan has no
+  rate alert) and queue depth (D-1004) are code, tested by planting what must never leave
+  (`tests/core/test_observability.py`, `web/src/lib/sentry.test.ts`). The alert and the uptime
+  monitor on staging's `/readyz`, the Mumbai VM since P-49, exist only once the founder runs
+  `scripts/sentry-alerts --apply`, proved so far against a fake of Sentry's API only (D-1005). Tick
+  when `--check` exits 0 and `infra/OBSERVABILITY.md` §4's staging check is done: the release in
+  both projects, a test error from each component, and its email.
+- [x] Route D-066's OTP warning, logged at half of `otp_sms_daily_cap`, to the alert channel: until this task it lands only in Fly's logs, which nobody reads.
+  `otp_daily_cap_half_used` is one of the three warnings sent (`ALERTING_WARNINGS`, D-1002), held by `test_each_alerting_warning_is_sent` against the plan's literals.
+- [x] Route D-090's final failure to the alert channel: a minor's files that couldn't be deleted after three tries, logged at error level with the `banned_identities` id. Until this task that log line is all there is, which D-078 says is not enough.
+  `storage.delete_failed`, at error level, goes to Sentry with the id and nothing else (D-1002, D-1003); `test_each_alerting_error_is_an_issue_of_its_own` holds it.
+- [x] **Widen the CSP here, and wire its reporting (D-059):** `connect-src` for Sentry's ingest host, and the CSP's reports (`report-to`, with `report-uri` as the fallback) sent to Sentry's security endpoint. Until then the enforced policy is silent: a violation in production stays invisible until a user complains.
+  On builds that report, every page (`security-headers.ts`, exactly these additions, `security-headers.test.ts`). In Chromium against a staging build the SDK's envelope went out unblocked and a planted image raised `img-src` (`out/t9.12-web-bundle-and-browser.log`); the report's arrival at Sentry is the staging check's (`infra/OBSERVABILITY.md` §4), since Chrome sends it outside the page.
+- [x] **Commit:** `chore(ops): error tracking and alerts [T-9.12]`
 
 ### T-9.13 · Security review
 - [ ] **Needs:** T-9.9
@@ -6446,13 +6458,15 @@ The number comes from the session's own block, given in its brief, from P-100 up
   by Claude, 8 October 2026; its session's block, P-380 to P-389. **Closed by T-8.2 (D-522):** the
   capture decides it under the wallet's lock, and a race test forces two captures of one man into
   overlap and asserts one bonus.
-- [ ] P-381 · Route the daily turnover line to the alert channel. **In T-9.12.** Worst case:
+- [x] P-381 · Route the daily turnover line to the alert channel. **In T-9.12.** Worst case:
   turnover passes ₹20 lakh, `log_turnover` logs an error every morning to Fly's logs, which nobody
   reads and which rotate out in about 25 minutes, and registration is late, with penalty and
   interest from the first day over (P-350). Until T-9.12 the line is the only alarm (D-483), the
   same gap as D-066's OTP warning. The founder can read the figure meanwhile at
   `GET /v1/admin/turnover`. Filed by Claude building T-8.1, 8 October 2026; its session's block,
-  P-380 to P-389.
+  P-380 to P-389. **Closed by T-9.12 (D-1002):** `payments.turnover` goes to Sentry at warning from
+  ₹15 lakh and at error from ₹20 lakh, two issues so the second alerts though the first is open;
+  info below stays in the logs (`test_the_turnovers_warning_and_error_are_two_issues`).
 - [ ] P-382 · Require `RAZORPAY_KEY_ID`, `RAZORPAY_KEY_SECRET` and, since T-8.2,
   `RAZORPAY_WEBHOOK_SECRET` at startup where `PAYMENTS_PROVIDER` is `razorpay`. **When P-0.8 gives Velora a Razorpay account, before the
   keys go into Fly.** Worst case: a deploy with a key missing or mistyped starts cleanly, every
@@ -7328,7 +7342,10 @@ The number comes from the session's own block, given in its brief, from P-100 up
   only (D-075), and its smoke checks `api.veloraapp.co.in` with `EXPECT_API_VIA=Caddy`.
   Before it: production's `DATABASE_URL` (the `velora_api` role on `velora-prod` first), `REDIS_URL`,
   Razorpay's three and Sightengine's two into Secret Manager by `scripts/gcp-secrets production`,
-  and the Apple Passwords copies; the `production` environment's three GCP variables; the
+  and **`SENTRY_DSN`** (the `velora-api` Sentry project's DSN, empty in `velora-ic-prod` on 18
+  October 2026; required in `infra/gce/secrets.api` and `secrets.worker`, so the deploy stops
+  without it, T-9.12, D-1001), and the Apple Passwords copies; `NEXT_PUBLIC_SENTRY_DSN` on the
+  `velora-production` Vercel project, as Config (`infra/OBSERVABILITY.md` §1); the `production` environment's three GCP variables; the
   Cloudflare record `api` from Fly's CNAME to an A record for `34.180.56.204`, DNS only; the
   worker on (`/etc/velora/worker-on`); and `/privacy`'s "Every request you make is handled by our
   servers in Singapore" changed to Mumbai **in the same change** that moves production's path (the
@@ -7601,3 +7618,29 @@ The number comes from the session's own block, given in its brief, from P-100 up
   in `scripts/ci-gate` to the longest plus headroom, and `ci-gate-test`'s `default-wait` literal
   with it. Filed by Claude at the founder's direction, 19 October 2026, from this session's block
   (P-880 to P-889); narrowed the same day to the half P-866 doesn't cover.
+- [ ] P-900 · Upload the web's source maps to Sentry. **Before the first real users, or the first
+  web error nobody can read.** Worst case: a browser error in production arrives as a type and a
+  minified stack (`a.js:1:23456`), with its message blanked by design (D-1003), so nobody can tell
+  where it happened, and the fix waits for a user to describe it. Skipped in T-9.12 by the
+  founder's call (D-1000): it needs `withSentryConfig` and a `SENTRY_AUTH_TOKEN` with
+  `project:releases` in Vercel's build environment, a secret where today there is none; the maps
+  must be uploaded and then deleted from the deploy, never served. Filed by Claude building
+  T-9.12, 16 October 2026; its session's block, P-900 to P-909.
+- [ ] P-901 · Move the uptime monitor to production's `/readyz`. **On the production checklist,
+  before `v0.1.0`.** Worst case: production's API goes down and nothing says so, since the free
+  plan's one uptime monitor watches staging's `https://api.staging.veloraapp.co.in/readyz`
+  (D-1005, the founder, 16 October 2026). Change `UPTIME` in `api/ops/sentry_alerts.py` to
+  `https://api.veloraapp.co.in/readyz`, environment `production`, run `scripts/sentry-alerts
+  --apply` and `--check`, and add the line to 07-CHECKLISTS' production list. Filed by Claude
+  building T-9.12, 16 October 2026; its session's block.
+- [ ] P-903 · `AuditList.test.tsx`'s "names the system user as System, and filters by one action"
+  can exceed vitest's 5 s limit under load. **Before the next busy landing day.** Worst case: a
+  good commit's `make test` goes red at random and its landing waits, or a session learns to rerun
+  reds until green, which is how a real red gets through (P-891's kind). Seen once, 19 October 2026,
+  on T-9.12's rebased commit `a6d005a`: "Test timed out in 5000ms" in the web suite (`make test`,
+  1 failed, 1,918 passed), while other sessions ran checks on this machine; CI passed the same
+  commit, and the test passed in the morning's run. Alone, the same day, at load 2.6: 105, 105 and
+  106 ms in three runs, so the test isn't slow by itself; something in it waits on contention.
+  Fix it in that test: find what it waits on (a `findBy` timing out its retry, a fake timer, the
+  filter's debounce), never by raising the global `testTimeout`. Filed by Claude landing T-9.12;
+  its session's block, P-900 to P-909.

@@ -36,7 +36,7 @@ from app.core.vapid import (
 from app.modules.notifications import service
 from tests.conftest import make_test_settings
 from tests.gce import gce_env
-from tests.keys import r2_settings, random_keys
+from tests.keys import r2_settings, random_keys, sentry_settings
 from tests.modules.notifications.support import browser_keys
 
 # RFC 8291 §5 and Appendix A, whitespace removed.
@@ -277,6 +277,7 @@ def _deployed(env: str, **values: str) -> Settings:
         "STORAGE_PROVIDER": "s3",
         **r2_settings(),
         **random_keys(),
+        **sentry_settings(),
         **values,
     }
     return Settings(_env_file=None, **everything)  # type: ignore[arg-type]

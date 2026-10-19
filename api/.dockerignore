@@ -33,3 +33,7 @@ seed
 # onnxruntime, never reach production (D-381). CI checks the built image has
 # no /app/bench, and neither of them.
 bench
+
+# Checks run by hand from a laptop against outside services (T-9.12):
+# scripts/sentry-alerts. Nothing in the running app needs them.
+ops

@@ -77,7 +77,7 @@ from seed.run import (
 )
 from tests.conftest import MakeUser, make_test_settings
 from tests.infra import API_DIR, TEST_DATABASE_URL, requires_infra
-from tests.keys import r2_settings, random_keys, vapid_settings
+from tests.keys import r2_settings, random_keys, sentry_settings, vapid_settings
 
 REPO = API_DIR.parent
 BY_KEY = {person.key: person for person in PEOPLE}
@@ -104,6 +104,7 @@ def deployed_settings(env: str) -> Settings:
         STORAGE_PROVIDER="s3",
         PUSH_PROVIDER="webpush",
         **vapid_settings(),  # type: ignore[arg-type]
+        **sentry_settings(),  # type: ignore[arg-type]
         **r2_settings(),  # type: ignore[arg-type]
         **random_keys(),  # type: ignore[arg-type]
     )

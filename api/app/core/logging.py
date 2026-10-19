@@ -3,6 +3,10 @@
 Logs are JSON in every deployed environment and human-readable locally. Every
 line carries `request_id`, so one request can be followed end to end.
 
+Every line at error level, and the warnings that are alerts, also goes to
+Sentry where it is on (`core/observability.py`, T-9.12): what a line says is
+what Sentry is told.
+
 Rule 15: never log phone numbers, OTPs, tokens or message bodies. That is a
 discipline at each call site — this module cannot enforce it, so review for it.
 """
@@ -18,6 +22,8 @@ import structlog
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.requests import Request
 from starlette.responses import Response
+
+from app.core.observability import report_to_sentry
 
 REQUEST_ID_HEADER = "X-Request-ID"
 
@@ -38,6 +44,8 @@ def configure_logging(*, json_logs: bool, level: str = "INFO") -> None:
         structlog.processors.add_log_level,
         structlog.processors.TimeStamper(fmt="iso", utc=True),
         structlog.processors.StackInfoRenderer(),
+        # Before the exception is formatted into text: it reads exc_info itself.
+        report_to_sentry,
         structlog.processors.format_exc_info,
     ]
     renderer: structlog.types.Processor = (

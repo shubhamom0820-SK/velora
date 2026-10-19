@@ -39,6 +39,13 @@ themselves).
 - **A job's events are published** (P-592): `sessionmaker` hands out sessions
   that publish their committed events once closed, as `get_session` does a
   request's, so a credit or a decision made here reaches the person's sockets.
+- **The queue's depth every 5 minutes** (T-9.12, D-1004, `queue_depth`): a
+  third loop of the same kind, one `ZCARD` a run, 8,640 commands a month; past
+  1,000 jobs waiting it logs an error.
+- **Failures reach Sentry** (T-9.12, `core/observability.py`): a job's own
+  error line on its last try; ARQ's lines for a job that crashed, timed out or
+  ran out of tries, routed to an error-level `job.failed` by
+  `ReportJobFailures`; and a minute loop's third failure in a row.
 - **Logs keep rule 15.** ARQ logs each job's arguments as it starts it, and
   `delete_files`' arguments are storage keys: the worker logs the job's name and
   id instead. Its engine keeps query values out of errors (`hide_parameters`).
@@ -65,6 +72,7 @@ from app.core import facemodels
 from app.core.config import Settings, get_settings
 from app.core.db import build_engine, build_sessionmaker, publishing
 from app.core.logging import configure_logging
+from app.core.observability import init_sentry
 from app.core.providers import Providers, build_providers
 from app.core.queue import (
     BLUR_PHOTO,
@@ -84,7 +92,7 @@ from app.core.queue import (
 )
 from app.workers.minutely import Minutely
 from app.workers.tasks import log_turnover as log_turnover_job
-from app.workers.tasks import recompute_fraud, send_push, thread_clock
+from app.workers.tasks import queue_depth, recompute_fraud, send_push, thread_clock
 from app.workers.tasks import reconcile_ledger as reconcile_ledger_job
 from app.workers.tasks import verify_selfie as verify_selfie_job
 from app.workers.tasks.blur_photo import BLUR_TRIES, blur_photo
@@ -219,12 +227,14 @@ async def startup(ctx: MutableMapping[str, Any]) -> None:
     ctx["push_wake"] = asyncio.create_task(listen_for_pushes(ctx, settings).run())
     ctx["minutely"] = asyncio.create_task(each_minute(ctx).run())
     ctx["fraud"] = asyncio.create_task(every_ten_minutes(ctx).run())
+    ctx["queue_depth"] = asyncio.create_task(every_five_minutes(ctx).run())
     log.info(
         "worker.started",
         jobs=[job.name for job in JOBS],
         cron=[job.name for job in CRON_JOBS],
         minutely=[THREAD_CLOCK, SEND_PUSH],
         every_ten_minutes=[RECOMPUTE_FRAUD],
+        every_five_minutes=[QUEUE_DEPTH],
         poll_delay_s=settings.WORKER_POLL_DELAY_S,
         env=settings.ENV,
     )
@@ -279,9 +289,21 @@ def every_ten_minutes(ctx: MutableMapping[str, Any]) -> Minutely:
     return Minutely(work, name=RECOMPUTE_FRAUD, every_s=recompute_fraud.EVERY_S)
 
 
+# T-9.12 (D-1004): the queue's depth, every 5 minutes, in its own loop.
+QUEUE_DEPTH: Final = "queue_depth"
+
+
+def every_five_minutes(ctx: MutableMapping[str, Any]) -> Minutely:
+    return Minutely(
+        queue_depth.QueueDepth(ctx).run,
+        name=QUEUE_DEPTH,
+        every_s=queue_depth.EVERY_S,
+    )
+
+
 async def shutdown(ctx: MutableMapping[str, Any]) -> None:
     """Release what `startup` opened. Safe if it never ran."""
-    for task in ("minutely", "fraud", "wake", "push_wake"):
+    for task in ("minutely", "fraud", "queue_depth", "wake", "push_wake"):
         if task in ctx:
             ctx[task].cancel()
             with contextlib.suppress(asyncio.CancelledError):
@@ -334,6 +356,52 @@ class HideJobArguments(logging.Filter):
         return True
 
 
+# ARQ's lines for a job that has failed for good (arq 0.28, `run_job`): it
+# raised, which ARQ never retries, or timed out; or it was picked up past its
+# tries, after Retry or a cancelled run. Their arguments: timing, "<id>:<job>",
+# and the error's class and the error, or the tries.
+_JOB_FAILED = "%6.2fs ! %s failed, %s: %s"
+_JOB_OUT_OF_TRIES = "%6.2fs ! %s max retries %d exceeded"
+
+
+class ReportJobFailures(logging.Filter):
+    """T-9.12: ARQ logs a job's last failure through the stdlib, outside
+    structlog, so it would reach the container's log and nothing else. Each becomes
+    `job.failed` at error level, which goes to Sentry: the job's name and id,
+    and the error's class, never its message (D-1003). ARQ's own line stays."""
+
+    def filter(self, record: logging.LogRecord) -> bool:
+        if not isinstance(record.args, tuple):
+            return True
+        if record.msg == _JOB_FAILED and len(record.args) == 4:
+            _, ref, error, _ = record.args
+            job_id, _, job = str(ref).partition(":")
+            log.error(
+                "job.failed",
+                job=job,
+                job_id=job_id,
+                error=error,
+                exc_info=record.exc_info or False,
+            )
+        elif record.msg == _JOB_OUT_OF_TRIES and len(record.args) == 3:
+            _, ref, max_tries = record.args
+            job_id, _, job = str(ref).partition(":")
+            log.error(
+                "job.failed",
+                job=job,
+                job_id=job_id,
+                error="out of tries",
+                max_tries=max_tries,
+            )
+        return True
+
+
+def report_job_failures() -> None:
+    logger = logging.getLogger("arq.worker")
+    if not any(isinstance(f, ReportJobFailures) for f in logger.filters):
+        logger.addFilter(ReportJobFailures())
+
+
 def hide_job_arguments() -> None:
     logger = logging.getLogger("arq.worker")
     if not any(isinstance(f, HideJobArguments) for f in logger.filters):
@@ -353,6 +421,9 @@ def main(argv: Sequence[str] = ()) -> int:
         sys.stderr.write("worker: settings ready.\n")
         return 0
     configure_logging(json_logs=not settings.debug)
+    # Errors and alerts to Sentry, where ENV allows it (T-9.12).
+    init_sentry(settings, "worker")
     hide_job_arguments()
+    report_job_failures()
     run_worker(WorkerSettings, **worker_options(settings))  # type: ignore[arg-type]
     return 0

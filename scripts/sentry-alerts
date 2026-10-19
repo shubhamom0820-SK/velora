@@ -1,0 +1,16 @@
+#!/usr/bin/env bash
+# Sentry's side of T-9.12 (D-1005): its alert, its uptime monitor and its
+# projects' scrubbing, checked (--check) or applied (--apply) through Sentry's
+# API, from api/ops/sentry_alerts.py, which says exactly what SPEC is.
+#
+# The token is read from SENTRY_AUTH_TOKEN only, never an argument (arguments
+# show in ps to every process on the machine), and never printed. It lives in
+# the founder's Keychain, never in GitHub or the repo (infra/OBSERVABILITY.md):
+#
+#   SENTRY_AUTH_TOKEN="$(security find-generic-password -s velora-sentry-alerts -w)" scripts/sentry-alerts --check
+#
+# Exit codes: 0 Sentry is exactly SPEC; 1 it differs (each difference named);
+# 2 no token; 3 Sentry refused or didn't answer (in its own words).
+set -euo pipefail
+cd "$(dirname "$0")/../api"
+exec uv run --locked python -m ops.sentry_alerts "$@"

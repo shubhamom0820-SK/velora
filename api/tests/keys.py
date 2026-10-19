@@ -40,3 +40,12 @@ def vapid_settings() -> dict[str, str]:
     """Everything `PUSH_PROVIDER=webpush` needs (T-9.4): a fresh VAPID pair and
     a subject, pointing nowhere real."""
     return {**new_pair(), "VAPID_SUBJECT": "mailto:push@example.test"}
+
+
+def sentry_settings() -> dict[str, str]:
+    """What staging and production need for Sentry (T-9.12): a DSN shaped as
+    Sentry writes one, pointing at no real project, and a commit's SHA."""
+    return {
+        "SENTRY_DSN": f"https://{secrets.token_hex(16)}@o0.ingest.de.sentry.io/0",
+        "SENTRY_RELEASE": secrets.token_hex(20),
+    }

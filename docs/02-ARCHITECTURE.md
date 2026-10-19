@@ -229,8 +229,11 @@ socket of theirs and is never sent to a client (T-7.4).
 | `cleanup` | cron, daily 03:30 IST | purge expired OTP keys, old WS tickets, stale push subs |
 | `log_turnover` | cron, daily 03:30 UTC (09:00 IST) | the financial year's paid turnover, logged: warning from ₹15 lakh, error from ₹20 lakh (D-483, P-350). The worker's cron schedules are in UTC (`WorkerSettings.timezone`) |
 | `reconcile_ledger` | cron, daily 03:00 UTC (08:30 IST) | every wallet against the sum of its ledger, in one statement, so one snapshot (D-940): each mismatch a `wallet.ledger_mismatch` line at error level (`user_id`, `balance`, `ledger_sum`), which T-9.12 forwards to the alert channel; a clean run one `wallet.reconciled` line at info. Read-only: repaired by hand, from the ledger |
+| `queue_depth` | every 5 minutes in the worker's own loop, never an ARQ cron (D-1004) | ARQ's queue read with one `ZCARD`: past 1,000 jobs waiting, `queue.depth_high` at error level, once as it crosses, so it reaches Sentry; `queue.depth_normal` as it comes back under. 8,640 Redis commands a month |
 
 Every job is idempotent and safe to retry (max 3, exponential backoff).
+
+**A job that fails for good reaches Sentry** (T-9.12, D-1002): its own error line on its last try; ARQ's own lines for one that raised, timed out or was picked up past its tries, as `job.failed`; and a loop the worker runs itself failing three times in a row, as `minutely.failing`.
 
 The worker (T-4.4) is `python -m app.workers` (`make worker`): the API's image and `Settings`, the
 same database role, its own Fly app (`infra/fly.worker.toml`, D-095). It polls every
@@ -451,8 +454,10 @@ rule 3, T-8.2) or a charge no Velas were granted for (T-8.3, D-580).
 | `R2_ENDPOINT_URL` | api, worker | the local S3 (D-086), and only where `ENV` is local: refused anywhere else, an allowlist (rule 16), so storage goes to R2's own endpoint for `R2_ACCOUNT_ID` (T-4.1) |
 | `PUSH_PROVIDER` | api, worker | `webpush` \| `fake` |
 | `VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY`, `VAPID_SUBJECT` | api, worker | public key also in web |
-| `SENTRY_DSN` | all | |
-| `NEXT_PUBLIC_API_URL`, `NEXT_PUBLIC_WS_URL`, `NEXT_PUBLIC_VAPID_PUBLIC_KEY`, `NEXT_PUBLIC_SENTRY_DSN` | web | public by definition. No Razorpay key: Checkout opens with the `key_id` the order returns (T-8.7, D-761) |
+| `SENTRY_DSN` | api, worker | the `velora-api` project's DSN, in each environment's Secret Manager, required in `infra/gce/secrets.api` and `secrets.worker` (infra/OBSERVABILITY.md). Required where `ENV` is staging or production, which refuse to start without it, naming it; malformed is refused everywhere (T-9.12, D-1001). Nothing is sent anywhere else |
+| `SENTRY_RELEASE` | api, worker | the commit's full SHA, baked into the image from the Dockerfile's `GIT_SHA` build argument, which the deploys' image builds and CI pass. Never set by hand; required where `SENTRY_DSN` is (D-1001) |
+| `NEXT_PUBLIC_API_URL`, `NEXT_PUBLIC_WS_URL`, `NEXT_PUBLIC_VAPID_PUBLIC_KEY` | web | public by definition. No Razorpay key: Checkout opens with the `key_id` the order returns (T-8.7, D-761) |
+| `NEXT_PUBLIC_SENTRY_DSN`, `NEXT_PUBLIC_SENTRY_RELEASE` | web | the `velora-web` project's DSN, a Vercel Config variable (never Secret), and the commit's SHA, which the deploy workflows set. A staging or production build refuses to finish without both; local and ci builds ignore them and hold no Sentry code (T-9.12, D-1001) |
 
 The four keys above are checked for shape at startup, everywhere, and the repo's public test keys
 (`PUBLIC_TEST_KEYS` in `core/config.py`) are refused unless `ENV` is `local` (D-060).
@@ -509,9 +514,12 @@ secret is left empty. Real secret values are never committed.
   and CI builds and the static pages have none of it. **The socket (T-7.12, D-881)**: on the nonce routes only,
   `connect-src` adds the API's host as a socket, `wss://` for an `https://` API and `ws://` for the
   local `http://` one (`socketOrigin`); `web/e2e/csp.spec.ts` holds the browser to it both ways.
-  Each task that needs more widens it there,
-  deliberately: App Check (P-68), Sentry (T-9.12)
-  and analytics (T-10.2). This line changes with each.
+  **Sentry (T-9.12)**: on builds that report (staging and production, `sentry-config.ts`), on
+  every page, `connect-src` adds the project's ingest host, and the policy reports its violations
+  to the project's security endpoint, by `report-to` (with the `Reporting-Endpoints` header) and
+  `report-uri` for a browser with only that. Local and CI builds report nothing and keep the
+  policy as it was. Each task that needs more widens it there,
+  deliberately: App Check (P-68) and analytics (T-10.2). This line changes with each.
 - API headers (`app/core/headers.py`, P-42): `X-Content-Type-Options: nosniff` on every
   response and `Cache-Control: no-store` on every `/v1` response, 500s and CORS preflights
   included: a sign-in carries an access token, and `/me` on, one person's data.

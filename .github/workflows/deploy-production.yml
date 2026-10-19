@@ -118,8 +118,10 @@ jobs:
       # Rewritten by P-49.
       - name: flyctl deploy
         env:
+          # The image's Sentry release (T-9.12): the commit the gate passed.
+          GIT_SHA: ${{ needs.gate.outputs.sha }}
           FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
-        run: flyctl deploy api --config "$GITHUB_WORKSPACE/infra/fly.api.production.toml" --remote-only --ha=false
+        run: flyctl deploy api --config "$GITHUB_WORKSPACE/infra/fly.api.production.toml" --remote-only --ha=false --build-arg "GIT_SHA=$GIT_SHA"
 
   web:
     name: web — Vercel
@@ -158,6 +160,10 @@ jobs:
       - name: vercel pull
         run: pnpm dlx "vercel@$VERCEL_CLI_VERSION" pull --yes --environment=production
       - name: vercel build
+        env:
+          # The web's Sentry release (T-9.12): the commit the gate passed. A
+          # build that sends to Sentry refuses to finish without it.
+          NEXT_PUBLIC_SENTRY_RELEASE: ${{ needs.gate.outputs.sha }}
         run: pnpm dlx "vercel@$VERCEL_CLI_VERSION" build --prod
       - name: vercel deploy
         # --archive=tgz: a few archive parts per deploy, not one upload per file. The

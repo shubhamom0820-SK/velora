@@ -58,8 +58,14 @@
  *           script hosts, and inline styles, which its window's mobile layout
  *           needs. Static pages and local and CI builds keep the policy as it
  *           was. A real payment's check with test keys is P-661.
- *   T-9.12  Sentry: its connect host, and CSP reporting wired to it, so a
- *           violation in production is seen instead of silent.
+ *   T-9.12  Done: Sentry, on builds that report (staging and production,
+ *           sentry-config.ts), on every page: connect-src for its ingest host,
+ *           where the SDK sends errors, and the policy's own violations
+ *           reported to the project's security endpoint, by `report-to` (the
+ *           Reporting-Endpoints header) with `report-uri` for a browser that
+ *           has only that. Until now the enforced policy was silent: a page it
+ *           broke was seen only when someone complained. Local and CI builds
+ *           report nothing and keep the policy as it was.
  *   T-10.2  Analytics: its script and connect hosts.
  *   P-41    Avatar's inline size style: give it classes rather than widening
  *           style-src for every page.
@@ -72,6 +78,7 @@
 
 import { checkoutPathFor } from "./checkout-path";
 import { signInPathFor } from "./sign-in-path";
+import { sentryConfigFor } from "./sentry-config";
 import { photoStorageFor } from "./storage-origins";
 
 /** `process.env` at build time, or a stand-in in tests. */
@@ -209,6 +216,29 @@ function photoSources(env: BuildEnv): {
   };
 }
 
+/** The Reporting API's name for where violations go (`report-to`). */
+export const CSP_REPORT_GROUP = "csp-endpoint";
+
+/**
+ * Sentry's sources (T-9.12), on builds that report, on every page, the static
+ * ones too: an error or a violation can happen anywhere. A CSP error naming
+ * sentry.io is this, not Sentry's bug.
+ */
+function sentrySources(env: BuildEnv): {
+  connect: string;
+  reporting: string[];
+} {
+  const sentry = sentryConfigFor(env);
+  if (sentry === null) return { connect: "", reporting: [] };
+  return {
+    connect: ` ${sentry.ingestOrigin}`,
+    reporting: [
+      `report-uri ${sentry.securityEndpoint}`,
+      `report-to ${CSP_REPORT_GROUP}`,
+    ],
+  };
+}
+
 /**
  * The routes whose pages render other people's text, or will (D-541): the
  * sign-in routes and the app's. Each is served with a nonce instead of
@@ -290,6 +320,7 @@ export function contentSecurityPolicy(
   const api = apiOrigin(env);
   const firebase = signsInByFirebase(env);
   const photos = photoSources(env);
+  const sentry = sentrySources(env);
   // Checkout lives in the store sheet, on the app's routes: the nonce routes.
   const razorpay = nonce !== undefined && paysByRazorpay(env);
   // So does the socket (T-7.12): the app's routes, signed in.
@@ -316,7 +347,7 @@ export function contentSecurityPolicy(
       : []),
     // Media falls back to default-src 'self' on a build without storage.
     ...(photos.media ? [`media-src 'self'${photos.media}`] : []),
-    `connect-src 'self'${api ? ` ${api}` : ""}${socket ? ` ${socket}` : ""}${photos.connect}${extra(FIREBASE.connect)}${pay(RAZORPAY.connect)}`,
+    `connect-src 'self'${api ? ` ${api}` : ""}${socket ? ` ${socket}` : ""}${photos.connect}${extra(FIREBASE.connect)}${pay(RAZORPAY.connect)}${sentry.connect}`,
     // Frames fall back to default-src 'self' everywhere else; a Firebase build
     // keeps that and adds reCAPTCHA's, and a Razorpay build's nonce routes
     // Checkout's.
@@ -331,6 +362,8 @@ export function contentSecurityPolicy(
     "form-action 'self'",
     // A dating app is never framed: explicit, not left to a default.
     "frame-ancestors 'none'",
+    // Where a violation is reported, on builds that report (T-9.12).
+    ...sentry.reporting,
   ].join("; ");
 }
 
@@ -357,8 +390,19 @@ export function headerRules(
 
 /** Every header a static page is sent. */
 export function securityHeaders(env: BuildEnv = process.env): Header[] {
+  const sentry = sentryConfigFor(env);
   return [
     { key: "Content-Security-Policy", value: contentSecurityPolicy(env) },
+    // `report-to`'s endpoint (T-9.12), on builds that report: every response,
+    // the nonce routes' too, whose CSP names the same group.
+    ...(sentry
+      ? [
+          {
+            key: "Reporting-Endpoints",
+            value: `${CSP_REPORT_GROUP}="${sentry.securityEndpoint}"`,
+          },
+        ]
+      : []),
     { key: "X-Frame-Options", value: "DENY" },
     { key: "X-Content-Type-Options", value: "nosniff" },
     { key: "Referrer-Policy", value: "strict-origin-when-cross-origin" },

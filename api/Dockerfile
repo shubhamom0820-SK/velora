@@ -29,6 +29,11 @@ ENV PATH="/app/.venv/bin:$PATH" \
     PYTHONUNBUFFERED=1
 USER app
 EXPOSE 8000
+# The commit this image was built from, Sentry's release (T-9.12): both deploys
+# and CI pass it. Last, so a new commit rebuilds only this layer. Staging and
+# production refuse to start without it.
+ARG GIT_SHA=""
+ENV SENTRY_RELEASE=$GIT_SHA
 # Settings are checked once, before any worker starts: uvicorn restarts workers
 # that die, so a configuration error (a missing variable, a fake provider outside
 # local) would otherwise crash-loop forever inside a "running" machine instead

@@ -90,6 +90,14 @@ STORAGE_ENDPOINT_OVERRIDE_ALLOWED_IN: frozenset[str] = frozenset({"local"})
 # Where PUBLIC_CDN_URL may be plain http (the local S3's public bucket): an
 # allowlist again. Everywhere else it serves users' photos, over https only.
 PLAIN_HTTP_CDN_ALLOWED_IN: frozenset[str] = frozenset({"local"})
+# Where errors and alerts go to Sentry, and so where its DSN and the release
+# are required (T-9.12, D-1001): an allowlist (rule 16). Anywhere else nothing
+# is sent, whatever SENTRY_DSN says.
+SENTRY_IN: frozenset[str] = frozenset({"staging", "production"})
+# A DSN as Sentry writes it: https://<public key>@<ingest host>/<project id>.
+_SENTRY_DSN = re.compile(r"https://[0-9a-f]{32}@[a-z0-9.-]+\.sentry\.io/[0-9]+")
+# The release is the commit the image was built from (GIT_SHA, the Dockerfile).
+_GIT_SHA = re.compile(r"[0-9a-f]{40}")
 # An R2 account ID: 32 lowercase hex characters. Not a secret: it is the host
 # browsers upload to (T-4.6's CSP names it).
 _R2_ACCOUNT_ID = re.compile(r"[0-9a-f]{32}")
@@ -210,8 +218,12 @@ class Settings(BaseSettings):
     VAPID_PRIVATE_KEY: str = ""
     VAPID_SUBJECT: str = ""
 
-    # --- Observability. The SDK itself arrives in T-9.12. ---
+    # --- Observability (T-9.12): Sentry, where ENV is in SENTRY_IN ---
+    # Not a secret in the way a key is (the web's is in its bundle), but kept in
+    # Secret Manager on the VMs: with it anyone can send events into the project.
     SENTRY_DSN: str = ""
+    # The commit's SHA, baked into the image by the Dockerfile's GIT_SHA.
+    SENTRY_RELEASE: str = ""
 
     # A malformed URL fails here, when the image checks settings before uvicorn
     # starts, instead of in every worker at startup — which crash-loops a
@@ -420,6 +432,37 @@ class Settings(BaseSettings):
                 "so per-IP rate limits would key on an address anyone can choose "
                 "(D-056, D-890)."
             )
+        return self
+
+    @model_validator(mode="after")
+    def _sentry_where_required(self) -> Settings:
+        """Where errors go to Sentry, a deploy without its DSN or its release
+        refuses to start (D-1001): one missing would leave every alert silent,
+        and nothing else would fail. Names the setting, never its value."""
+        if self.SENTRY_DSN and not _SENTRY_DSN.fullmatch(self.SENTRY_DSN):
+            raise ValueError(
+                "SENTRY_DSN isn't a Sentry DSN: copy it whole from the project's "
+                "Client Keys page (https://<key>@<host>.sentry.io/<project>)"
+            )
+        if self.SENTRY_RELEASE and not _GIT_SHA.fullmatch(self.SENTRY_RELEASE):
+            raise ValueError(
+                "SENTRY_RELEASE must be a commit's full SHA, 40 lowercase hex "
+                "characters (the image's GIT_SHA build argument)"
+            )
+        if self.ENV in SENTRY_IN:
+            missing = [
+                name
+                for name in ("SENTRY_DSN", "SENTRY_RELEASE")
+                if not getattr(self, name)
+            ]
+            if missing:
+                raise ValueError(
+                    f"ENV={self.ENV} needs {' and '.join(missing)}: errors and "
+                    "alerts go to Sentry here, and without "
+                    f"{'them' if len(missing) > 1 else 'it'} they'd go nowhere "
+                    "(T-9.12). The DSN is in Secret Manager (infra/OBSERVABILITY.md); "
+                    "the release comes from the image's GIT_SHA build argument."
+                )
         return self
 
     @model_validator(mode="after")

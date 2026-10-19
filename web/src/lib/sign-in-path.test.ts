@@ -4,6 +4,8 @@ import { configFor } from "../../next.config";
 
 import { firebaseConfigFor } from "./firebase-config";
 import { policyWithNonceSlot } from "./security-headers";
+import { sentryConfigFor } from "./sentry-config";
+import { SENTRY_BUILD } from "./testing/sentryEnv";
 
 import { signInOpen, signInPath, signInPathFor } from "./sign-in-path";
 
@@ -48,7 +50,7 @@ describe("whether anyone can sign in: one flag for /login and the waitlist box",
 // velora-ic's, as firebase-config.ts holds it (D-065, D-085).
 const VELORA_IC = JSON.stringify(firebaseConfigFor({ APP_ENV: "production" }));
 
-// Four for the browser's code, and the nonce routes' CSP for src/proxy.ts
+// Five for the browser's code, and the nonce routes' CSP for src/proxy.ts
 // (D-541): public, the policy every such response sends, and inlined only
 // where code reads it, which is the proxy alone.
 describe("next.config builds exactly these values into the code", () => {
@@ -60,6 +62,9 @@ describe("next.config builds exactly these values into the code", () => {
         SIGN_IN_PATH: "firebase",
         CHECKOUT_PATH: "razorpay",
         FIREBASE_WEB_CONFIG: VELORA_IC,
+        SENTRY_WEB_CONFIG: JSON.stringify(
+          sentryConfigFor({ APP_ENV: "production", ...SENTRY_BUILD }),
+        ),
       },
     ],
     [
@@ -69,6 +74,9 @@ describe("next.config builds exactly these values into the code", () => {
         SIGN_IN_PATH: "firebase",
         CHECKOUT_PATH: "razorpay",
         FIREBASE_WEB_CONFIG: VELORA_IC,
+        SENTRY_WEB_CONFIG: JSON.stringify(
+          sentryConfigFor({ APP_ENV: "staging", ...SENTRY_BUILD }),
+        ),
       },
     ],
     [
@@ -78,6 +86,7 @@ describe("next.config builds exactly these values into the code", () => {
         SIGN_IN_PATH: "otp",
         CHECKOUT_PATH: "standin",
         FIREBASE_WEB_CONFIG: "",
+        SENTRY_WEB_CONFIG: "",
       },
     ],
     [
@@ -87,14 +96,16 @@ describe("next.config builds exactly these values into the code", () => {
         SIGN_IN_PATH: "otp",
         CHECKOUT_PATH: "standin",
         FIREBASE_WEB_CONFIG: "",
+        SENTRY_WEB_CONFIG: "",
       },
     ],
   ])("APP_ENV=%s", (appEnv, env) => {
-    expect(
-      configFor("phase-production-build", { APP_ENV: appEnv }).env,
-    ).toEqual({
+    // Every build is given Sentry's two variables: only staging and
+    // production use them (T-9.12).
+    const build = { APP_ENV: appEnv, ...SENTRY_BUILD };
+    expect(configFor("phase-production-build", build).env).toEqual({
       ...env,
-      CSP_WITH_NONCE: policyWithNonceSlot({ APP_ENV: appEnv }),
+      CSP_WITH_NONCE: policyWithNonceSlot(build),
     });
   });
 });

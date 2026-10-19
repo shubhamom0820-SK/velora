@@ -62,7 +62,7 @@ from tests.committed import fresh_man
 from tests.conftest import CapturedLogs, make_test_settings
 from tests.gce import compose, worker_env
 from tests.infra import TEST_DATABASE_URL, TEST_REDIS_URL, require_models
-from tests.keys import random_keys, vapid_settings
+from tests.keys import random_keys, sentry_settings, vapid_settings
 from tests.modules.verification.test_race import forget_photos
 
 PUBLIC, PRIVATE = "velora-public", "velora-private"
@@ -597,6 +597,7 @@ def test_the_workers_settings_start_with_its_secrets(env: str) -> None:
         "SIGHTENGINE_API_SECRET": f"{env}-secret",
         # The VAPID pair: two Secret Manager slots (T-9.4, D-856).
         **vapid_settings(),
+        **sentry_settings(),
         **worker_env(env),
     }
 

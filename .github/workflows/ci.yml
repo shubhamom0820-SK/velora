@@ -318,6 +318,10 @@ jobs:
     timeout-minutes: 15
     env:
       IMAGE: velora-api:ci
+      # T-9.12: staging and production refuse to start without a Sentry DSN. A
+      # placeholder, shaped as Sentry writes one: key all zeros, project 0, so
+      # anything sent is refused by Sentry and reaches no project.
+      SENTRY_DSN: https://00000000000000000000000000000000@o0.ingest.de.sentry.io/0
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -340,8 +344,18 @@ jobs:
       - name: Plant an api/.env the image must not contain
         run: printf 'JWT_SECRET=planted-by-ci\n' > api/.env
 
+      # GIT_SHA as both deploys pass it (T-9.12): the image's Sentry release.
       - name: Build the API image (the Dockerfile Fly builds)
-        run: docker build -t "$IMAGE" api
+        run: docker build --build-arg GIT_SHA="$GITHUB_SHA" -t "$IMAGE" api
+
+      # T-9.12: release = git sha. Read back from the image, not assumed from
+      # the flag: a Dockerfile that dropped it would start as an empty release,
+      # which staging refuses, and this says why first.
+      - name: The image's release is the commit it was built from
+        run: |
+          release="$(docker run --rm "$IMAGE" printenv SENTRY_RELEASE)"
+          echo "SENTRY_RELEASE=$release"
+          test "$release" = "$GITHUB_SHA"
 
       - name: No .env in any layer
         run: |
@@ -381,7 +395,7 @@ jobs:
           # Staging as fly.api.toml sets it, CLIENT_IP_HEADER included (D-056), and
           # R2 with a placeholder token, never used: nothing touches storage here.
           docker run -d --name api -p 127.0.0.1:8000:8000 \
-            -e ENV=staging -e DATABASE_URL -e REDIS_URL=rediss://ci:ci@127.0.0.1:6379/1 \
+            -e ENV=staging -e DATABASE_URL -e REDIS_URL=rediss://ci:ci@127.0.0.1:6379/1 -e SENTRY_DSN \
             -e JWT_SECRET -e PHONE_PEPPER -e PHONE_ENC_KEY -e CODE_PEPPER -e CLIENT_IP_HEADER=Fly-Client-IP \
             -e AUTH_PHONE_PROVIDER=firebase -e FIREBASE_PROJECT_ID=velora-ic \
             -e SMS_PROVIDER=msg91 -e PAYMENTS_PROVIDER=razorpay \
@@ -408,6 +422,29 @@ jobs:
           grep -q '"code":"NOT_FOUND"' <<<"$body"
           if grep -q '"paths"' <<<"$body"; then echo "::error::The 404 carries the schema."; exit 1; fi
           test "$(docker exec api id -u)" != 0
+
+      # T-9.12 (D-1001): everything staging needs but the DSN. Without it every
+      # alert would go nowhere and nothing else would fail.
+      - name: Staging without SENTRY_DSN refuses to start
+        run: |
+          set +e
+          output="$(timeout 60 docker run --rm -e ENV=staging -e DATABASE_URL \
+            -e REDIS_URL=rediss://ci:ci@127.0.0.1:6379/1 \
+            -e JWT_SECRET -e PHONE_PEPPER -e PHONE_ENC_KEY -e CODE_PEPPER -e CLIENT_IP_HEADER=Fly-Client-IP \
+            -e AUTH_PHONE_PROVIDER=firebase -e FIREBASE_PROJECT_ID=velora-ic \
+            -e SMS_PROVIDER=msg91 -e PAYMENTS_PROVIDER=razorpay \
+            -e MODERATION_PROVIDER=sightengine -e FACEMATCH_PROVIDER=sface \
+            -e STORAGE_PROVIDER=s3 -e PUSH_PROVIDER=webpush \
+            -e VAPID_PRIVATE_KEY -e VAPID_PUBLIC_KEY -e VAPID_SUBJECT=https://veloraapp.co.in/contact \
+            -e R2_ACCOUNT_ID=82f9b26266ddb6b491a623971f87d3c7 -e R2_ACCESS_KEY_ID=ci \
+            -e R2_SECRET_ACCESS_KEY=ci -e R2_BUCKET_PUBLIC=velora-staging-public \
+            -e R2_BUCKET_PRIVATE=velora-staging-private \
+            -e PUBLIC_CDN_URL=https://cdn.staging.veloraapp.co.in "$IMAGE" 2>&1)"
+          status=$?
+          set -e
+          echo "$output" | tail -n 5
+          test "$status" = 1
+          grep -q 'ENV=staging needs SENTRY_DSN' <<<"$output"
 
       # uvicorn restarts dying workers, so a config error must stop the container
       # before any start, not crash-loop inside it (D-045's refusal is one).
@@ -460,7 +497,7 @@ jobs:
           grep -qx 'ENV=production' production.env
           # R2's token is a Fly secret (infra/PRODUCTION.md §4): a placeholder here.
           docker run -d --name api-production -p 127.0.0.1:8001:8000 --env-file production.env \
-            -e DATABASE_URL -e REDIS_URL=rediss://ci:ci@127.0.0.1:6379/1 \
+            -e DATABASE_URL -e REDIS_URL=rediss://ci:ci@127.0.0.1:6379/1 -e SENTRY_DSN \
             -e R2_ACCESS_KEY_ID=ci -e R2_SECRET_ACCESS_KEY=ci -e VAPID_PRIVATE_KEY -e VAPID_PUBLIC_KEY \
             -e JWT_SECRET -e PHONE_PEPPER -e PHONE_ENC_KEY -e CODE_PEPPER "$IMAGE"
           for _ in $(seq 1 30); do curl -sf -o /dev/null http://127.0.0.1:8001/healthz && break; sleep 1; done
@@ -488,7 +525,7 @@ jobs:
           grep -qx 'ENV=staging' worker.env
           check() {
             docker run --rm --env-file worker.env \
-              -e DATABASE_URL -e REDIS_URL=rediss://ci:ci@127.0.0.1:6379/1 \
+              -e DATABASE_URL -e REDIS_URL=rediss://ci:ci@127.0.0.1:6379/1 -e SENTRY_DSN \
               -e R2_ACCESS_KEY_ID=ci -e R2_SECRET_ACCESS_KEY=ci -e VAPID_PRIVATE_KEY -e VAPID_PUBLIC_KEY \
               -e JWT_SECRET -e PHONE_PEPPER -e PHONE_ENC_KEY -e CODE_PEPPER \
               "$@" "$IMAGE" python -m app.workers --check 2>&1

@@ -10123,14 +10123,15 @@ T76: list[Case] = [
         edits=[
             (
                 MINUTELY,
+                # Re-anchored by T-9.12: the failure is counted first now.
                 (
                     "            except Exception as error:  # noqa: BLE001 — the next minute tries again\n"
-                    "                log.warning(\n"
+                    "                self.failures_in_a_row += 1\n"
                 ),
                 (
                     "            except Exception as error:  # noqa: BLE001 — the next minute tries again\n"
                     "                raise\n"
-                    "                log.warning(\n"
+                    "                self.failures_in_a_row += 1\n"
                 ),
             )
         ],
@@ -12524,6 +12525,241 @@ T92: list[Case] = [
     ),
 ]
 
+# --- T-9.12: errors and alerts to Sentry, nothing personal in them --------------
+
+T912_SELECTION = [
+    "tests/core/test_observability.py",
+    "tests/test_config.py",
+    "tests/workers/test_job_failures.py",
+    "tests/workers/test_minutely.py",
+    "tests/workers/test_queue_depth.py",
+    "tests/ops/test_sentry_alerts.py",
+]
+OBS912 = "app/core/observability.py"
+LOGGING912 = "app/core/logging.py"
+ERRORS912 = "app/core/errors.py"
+CONFIG912 = "app/core/config.py"
+WORKER912 = "app/workers/main.py"
+MINUTELY912 = "app/workers/minutely.py"
+DEPTH912 = "app/workers/tasks/queue_depth.py"
+ALERTS912 = "ops/sentry_alerts.py"
+
+T912: list[Case] = [
+    Case(
+        id="t912-01-an-exceptions-message-sent",
+        what="D-1003: the scrubber leaving an exception's message, which can carry a row's values",
+        edits=[(OBS912, '        exception["value"] = ""\n', "        pass\n")],
+        expect=[
+            "test_an_exception_goes_by_type_and_stack_never_its_message",
+            "test_the_scrubber_drops_what_names_a_person",
+        ],
+    ),
+    Case(
+        id="t912-02-frame-locals-sent",
+        what="D-1003: stack frames' variables collected, so a route's locals (a body) leave",
+        edits=[
+            (
+                OBS912,
+                '    "stack_frame_variables": False,\n',
+                '    "stack_frame_variables": True,\n',
+            )
+        ],
+        expect=["test_a_500_is_reported_once_and_nothing_of_the_request_goes"],
+    ),
+    Case(
+        id="t912-03-the-request-kept",
+        what="D-1003: the scrubber keeping what an SDK default attached: the request and the user",
+        edits=[
+            (
+                OBS912,
+                '    for key in ("request", "user", "breadcrumbs", "extra"):\n',
+                '    for key in ("breadcrumbs",):\n',
+            )
+        ],
+        expect=["test_the_scrubber_drops_what_names_a_person"],
+    ),
+    Case(
+        id="t912-04-the-otp-warning-silent",
+        what="D-066's half-cap warning dropped from the alerts: an attack's first sign silent again",
+        edits=[(OBS912, '        "otp_daily_cap_half_used",\n', "")],
+        expect=[
+            "test_the_warnings_that_are_alerts",
+            "test_each_alerting_warning_is_sent[otp_daily_cap_half_used]",
+        ],
+    ),
+    Case(
+        id="t912-05-every-warning-sent",
+        what="D-1002: every warning sent, so retries and loop hiccups bury the alerts",
+        edits=[
+            (
+                OBS912,
+                '        level == "warning" and name in ALERTING_WARNINGS\n',
+                '        level == "warning"\n',
+            )
+        ],
+        expect=["test_any_other_warning_and_anything_below_stay_in_the_logs"],
+    ),
+    Case(
+        id="t912-06-one-issue-per-name",
+        what="P-381: the turnover's ₹20 lakh error grouped with its ₹15 lakh warning, so it never alerts",
+        edits=[
+            (
+                OBS912,
+                "            scope.fingerprint = [name, level]\n",
+                "            scope.fingerprint = [name]\n",
+            )
+        ],
+        expect=["test_the_turnovers_warning_and_error_are_two_issues"],
+    ),
+    Case(
+        id="t912-07-reported-after-formatting",
+        what="the processor after format_exc_info: the exception is text by then, and goes as a message",
+        edits=[
+            (
+                LOGGING912,
+                "        report_to_sentry,\n        structlog.processors.format_exc_info,\n",
+                "        structlog.processors.format_exc_info,\n        report_to_sentry,\n",
+            )
+        ],
+        expect=[
+            "test_an_exception_goes_by_type_and_stack_never_its_message",
+            "test_a_500_is_reported_once_and_nothing_of_the_request_goes",
+        ],
+    ),
+    Case(
+        id="t912-08-sentry-on-locally",
+        what="rule 16: Sentry started where ENV is local too",
+        edits=[
+            (
+                OBS912,
+                "    if settings.ENV not in SENTRY_IN:\n",
+                '    if settings.ENV not in SENTRY_IN | {"local"}:\n',
+            )
+        ],
+        expect=["test_sentry_is_on_only_where_env_is_staging_or_production"],
+    ),
+    Case(
+        id="t912-09-a-deploy-without-sentry-starts",
+        what="D-1001: staging and production starting without the DSN, every alert going nowhere",
+        edits=[
+            (
+                CONFIG912,
+                "            if missing:\n                raise ValueError(\n                    f\"ENV={self.ENV} needs {' and '.join(missing)}: errors and \"\n",
+                "            if False:\n                raise ValueError(\n                    f\"ENV={self.ENV} needs {' and '.join(missing)}: errors and \"\n",
+            )
+        ],
+        expect=["test_a_deploy_without_sentry_refuses_to_start[dsn-staging]"],
+    ),
+    Case(
+        id="t912-10-any-dsn",
+        what="D-1001: a malformed DSN accepted, so the SDK starts disabled and sends nothing",
+        edits=[
+            (
+                CONFIG912,
+                "        if self.SENTRY_DSN and not _SENTRY_DSN.fullmatch(self.SENTRY_DSN):\n",
+                "        if False:\n",
+            )
+        ],
+        expect=["test_a_malformed_dsn_is_refused_without_echoing_it[plain http]"],
+    ),
+    Case(
+        id="t912-11-a-5xx-unreported",
+        what="D-1002: a deliberate 5xx (a gateway down, keys missing) never reaching Sentry",
+        edits=[
+            (
+                ERRORS912,
+                '        log.error("app_error_5xx", code=exc.code, status=exc.status)\n',
+                "        pass\n",
+            )
+        ],
+        expect=["test_a_deliberate_5xx_from_a_v1_route_is_reported"],
+    ),
+    Case(
+        id="t912-12-the-probes-5xx-reported",
+        what="D-1002: /readyz's NOT_READY an event, four a minute a machine in an outage",
+        edits=[
+            (
+                ERRORS912,
+                "    if exc.status >= 500 and request.url.path.startswith(VERSIONED_PREFIX):\n",
+                "    if exc.status >= 500:\n",
+            )
+        ],
+        expect=["test_a_probes_5xx_is_the_uptime_checks_not_an_event"],
+    ),
+    Case(
+        id="t912-13-out-of-tries-silent",
+        what="a job picked up past its tries leaving only ARQ's own warning, which reaches nobody",
+        edits=[
+            (
+                WORKER912,
+                "        elif record.msg == _JOB_OUT_OF_TRIES and len(record.args) == 3:\n",
+                "        elif False:\n",
+            )
+        ],
+        expect=["test_each_job_that_failed_for_good_is_one_error_by_name_and_class"],
+    ),
+    Case(
+        id="t912-14-a-loop-alerting-every-minute",
+        what="a loop down all day an alert every minute, 1,440 a day, the free plan's month in four",
+        edits=[
+            (
+                MINUTELY912,
+                "                if self.failures_in_a_row == FAILING_AFTER:\n",
+                "                if self.failures_in_a_row >= FAILING_AFTER:\n",
+            )
+        ],
+        expect=["test_three_failures_in_a_row_log_one_error_and_the_recovery_says_so"],
+    ),
+    Case(
+        id="t912-15-a-backlog-every-reading",
+        what="D-1004: a backlog an alert at every reading, not once as it crosses",
+        edits=[
+            (
+                DEPTH912,
+                "        if depth > DEPTH_LIMIT and not self.high:\n",
+                "        if depth > DEPTH_LIMIT:\n",
+            )
+        ],
+        expect=["test_crossing_1000_is_one_error_and_coming_back_one_info"],
+    ),
+    Case(
+        id="t912-16-the-depth-loop-never-starts",
+        what="the worker never starting the queue-depth loop",
+        edits=[
+            (
+                WORKER912,
+                '    ctx["queue_depth"] = asyncio.create_task(every_five_minutes(ctx).run())\n',
+                "",
+            )
+        ],
+        expect=["test_the_worker_starts_the_depth_loop_every_5_minutes_and_stops_it"],
+    ),
+    Case(
+        id="t912-17-extra-alerts-pass",
+        what="D-1005: --check passing with an alert SPEC doesn't name, Sentry's default among them",
+        edits=[(ALERTS912, "    if others:\n", "    if False:\n")],
+        expect=[
+            "test_check_fails_on_any_difference_and_says_which[sentrys default alert]"
+        ],
+    ),
+    Case(
+        id="t912-19-the-vm-deploys-without-the-dsn",
+        what="D-1001 on the VM: SENTRY_DSN optional again, so a deploy renders no DSN and the app refuses",
+        edits=[("../infra/gce/secrets.worker", "\nSENTRY_DSN\n", "\nSENTRY_DSN?\n")],
+        expect=["test_the_vms_deploy_requires_the_dsn_as_the_app_does[worker]"],
+    ),
+    Case(
+        id="t912-18-ip-addresses-unchecked",
+        what="D-1003: --check never reading the projects' own scrubbing",
+        edits=[
+            (ALERTS912, "    await _check_projects(sentry, org, report, apply)\n", "")
+        ],
+        expect=[
+            "test_check_fails_on_any_difference_and_says_which[ip addresses stored]"
+        ],
+    ),
+]
+
 # --- P-61: a 500 carries its CORS headers, for an allowed origin only ----------
 
 P61_SELECTION = ["tests/core/test_headers.py"]
@@ -13457,6 +13693,7 @@ CASES: list[tuple[Case, list[str]]] = (
     + [(c, T911_SELECTION) for c in T911]
     + [(c, T910_SELECTION) for c in T910]
     + [(c, P851_SELECTION) for c in P851]
+    + [(c, T912_SELECTION) for c in T912]
 )
 
 # The fifty-connection fixture's own message when Postgres refuses a connection.

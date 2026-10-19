@@ -21,6 +21,8 @@ import {
   socketOrigin,
   staticPolicySource,
 } from "./security-headers";
+import { sentryConfigFor } from "./sentry-config";
+import { SENTRY_BUILD } from "./testing/sentryEnv";
 import { socketUrl } from "./ws";
 
 const STAGING = {
@@ -545,5 +547,73 @@ describe("the socket (T-7.12, D-059): the API's own host, on the nonce routes al
 
     expect(socketOrigin()).toBe(`${opened.protocol}//${opened.host}`);
     expect(socketOrigin()).toBe("wss://api.example.test");
+  });
+});
+
+// --- T-9.12: Sentry's ingest host, and the policy's violations reported -----
+
+describe("Sentry in the CSP (T-9.12), on builds that report only", () => {
+  const sentry = (appEnv: string) => {
+    const config = sentryConfigFor({ APP_ENV: appEnv, ...SENTRY_BUILD });
+    if (config === null) throw new Error(`${appEnv} must report`);
+    return config;
+  };
+  const withConnect = (policy: string, origin: string) =>
+    policy.replace(/(connect-src [^;]*)/, `$1 ${origin}`);
+
+  it.each(["staging", "production"])(
+    "%s: exactly the ingest host and the two reporting directives, on both policies",
+    (appEnv) => {
+      const plain = { ...STAGING, APP_ENV: appEnv };
+      const reporting = { ...plain, ...SENTRY_BUILD };
+      const { ingestOrigin, securityEndpoint } = sentry(appEnv);
+      const added = [
+        `report-uri ${securityEndpoint}`,
+        "report-to csp-endpoint",
+      ].join("; ");
+
+      expect(contentSecurityPolicy(reporting)).toBe(
+        `${withConnect(contentSecurityPolicy(plain), ingestOrigin)}; ${added}`,
+      );
+      expect(policyWithNonceSlot(reporting)).toBe(
+        `${withConnect(policyWithNonceSlot(plain), ingestOrigin)}; ${added}`,
+      );
+    },
+  );
+
+  it.each(["staging", "production"])(
+    "%s: Reporting-Endpoints names the group the CSP reports to, on every response",
+    (appEnv) => {
+      const env = { ...STAGING, APP_ENV: appEnv, ...SENTRY_BUILD };
+      const expected = `csp-endpoint="${sentry(appEnv).securityEndpoint}"`;
+
+      expect(header(env, "Reporting-Endpoints")).toBe(expected);
+      const everyResponse = headerRules(env).find((r) => r.source === "/(.*)");
+      expect(
+        everyResponse?.headers.find((h) => h.key === "Reporting-Endpoints")
+          ?.value,
+      ).toBe(expected);
+    },
+  );
+
+  it.each(["local", "ci", undefined])(
+    "APP_ENV=%s: nothing of Sentry anywhere, even with its variables set",
+    (appEnv) => {
+      const env = { ...STAGING, APP_ENV: appEnv, ...SENTRY_BUILD };
+      const values = [
+        ...securityHeaders(env).map((h) => `${h.key}: ${h.value}`),
+        policyWithNonceSlot(env),
+      ].join("\n");
+
+      expect(values).not.toMatch(
+        /sentry|report-uri|report-to|Reporting-Endpoints/i,
+      );
+    },
+  );
+
+  it("a staging build missing either variable gets none of it either: its build refuses", () => {
+    const env = { ...STAGING, APP_ENV: "staging" };
+    expect(contentSecurityPolicy(env)).not.toMatch(/sentry|report/);
+    expect(header(env, "Reporting-Endpoints")).toBeUndefined();
   });
 });
