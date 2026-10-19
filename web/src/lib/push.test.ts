@@ -4,6 +4,7 @@ import {
   askedBefore,
   keyBytes,
   pushSupport,
+  register,
   rememberAsked,
   subscribe,
 } from "./push";
@@ -122,7 +123,10 @@ describe("subscribing", () => {
 
     const body = await subscribe("AAAA", win);
 
-    expect(register).toHaveBeenCalledWith("/sw.js", { scope: "/" });
+    expect(register).toHaveBeenCalledWith("/sw.js", {
+      scope: "/",
+      updateViaCache: "none",
+    });
     expect(manager.subscribe).toHaveBeenCalledWith(
       expect.objectContaining({ userVisibleOnly: true }),
     );
@@ -155,5 +159,45 @@ describe("the once-per-browser ask", () => {
     } as unknown as Window;
     expect(() => rememberAsked(blocked)).not.toThrow();
     expect(askedBefore(blocked)).toBe(false);
+  });
+});
+
+describe("registering the worker on every page (T-9.7)", () => {
+  it("registers /sw.js for the whole site, past the HTTP cache", async () => {
+    const win = browser();
+    const registerWorker = vi.fn().mockResolvedValue({});
+    Object.assign(win.navigator, {
+      serviceWorker: { register: registerWorker },
+    });
+
+    await register(win);
+
+    // A broken worker can't stick on a phone: every update check goes to
+    // the network, never to the browser's HTTP cache.
+    expect(registerWorker).toHaveBeenCalledExactlyOnceWith("/sw.js", {
+      scope: "/",
+      updateViaCache: "none",
+    });
+  });
+
+  it("does nothing without service workers or off a secure page", async () => {
+    await expect(register(browser({ push: false }))).resolves.toBeUndefined();
+    const insecure = browser({ secure: false });
+    const registerWorker = vi.fn();
+    Object.assign(insecure.navigator, {
+      serviceWorker: { register: registerWorker },
+    });
+    await register(insecure);
+    expect(registerWorker).not.toHaveBeenCalled();
+  });
+
+  it("swallows a refusal: the site works without its worker", async () => {
+    const win = browser();
+    Object.assign(win.navigator, {
+      serviceWorker: {
+        register: vi.fn().mockRejectedValue(new Error("SecurityError")),
+      },
+    });
+    await expect(register(win)).resolves.toBeUndefined();
   });
 });

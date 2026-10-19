@@ -700,6 +700,9 @@ waits on the founder's decisions, so it is a task of its own, outside the sprint
   photos step.
   **And P-180, with no condition:** CI required at GitHub before `main` moves (D-280). The landing
   guard protects only the clones that installed it; this protects every clone.
+  **And P-940, with no condition** (the founder, 19 October 2026): the app installed from staging
+  on a real Android phone in Chrome and on an iPhone, alongside P-930's test-phone check. Until
+  then the banner, the install and the offline page are seen only in tests and desktop Chromium.
   **And six that block only under their condition** (the founder, 3 and 4 October 2026), each
   condition written beside it so nobody reads it as unconditional and blocks a release that
   doesn't need it:
@@ -3799,9 +3802,31 @@ number** per account gets its 5 each, one Thread's worth, and is **accepted**, k
 - [x] **Commit:** `feat(settings): privacy and data rights [T-9.6]`
 
 ### T-9.7 · PWA
-- [ ] **Needs:** T-9.4
-- [ ] Web manifest (name, icons 192/512/maskable, theme colour from tokens, `display: standalone`), install prompt banner (Android `beforeinstallprompt`; iOS instructions), offline shell page.
-- [ ] **Commit:** `feat(web): installable pwa [T-9.7]`
+- [x] **Needs:** T-9.4
+- [x] Web manifest (name, icons 192/512/maskable, theme colour from tokens, `display: standalone`), install prompt banner (Android `beforeinstallprompt`; iOS instructions), offline shell page.
+- **Built as D-1040 to D-1043** (the founder's answers to T-9.7's plan, 19 October 2026, on the
+  advisor's recommendation, relayed). T-9.4's push box is still open (push is off until P-755);
+  nothing here needs push, so the founder let this start on it.
+  - **One worker, no cache** (D-1040): `/sw.js` stays the only service worker and gains a `fetch`
+    handler for this site's page loads alone, network first through navigation preload; only a
+    network failure gets the offline page, which the worker builds from `offline-page.ts` (the
+    lock screen's layout on `--chrome`, `tokens.css` embedded, no script, a CSP of its own by
+    hash). Nothing is ever cached. No Serwist, closing D-859's question.
+  - **Registered on every page** (D-1041), the landing page included, by `ServiceWorkerRegistrar`
+    in the root layout through `push.register()`. A broken worker can't stick on a phone:
+    `/sw.js` is `no-cache` and both registrations pass `updateViaCache: "none"`, each tested.
+  - **The banner** (D-1042): the prototype's strip, first on every `(app)` screen, on touch-first
+    devices only; Android's held `beforeinstallprompt`, or on an iPhone the Share steps. Closed
+    once, closed in that browser.
+  - **The manifest** (D-1043): `id` `/`, `start_url` `/discover`, both colours `--chrome`, three
+    icons rendered by `web/scripts/render-icons.mts` (08-DESIGN §7); the maskable V is held
+    inside the centre 80% pixel by pixel.
+  - **Broken once each** (`node scripts/break-guards.mts t97-web`, `out/t97-web-breaks.log`): ten
+    cases, 10 of 10 red, the tree byte for byte as it was. `e2e/pwa.spec.ts`: the manifest and
+    icons served, the one worker registered with `updateViaCache: "none"`, and the offline page
+    shown with the browser offline, with no CSP violation.
+  - **Not seen yet:** an install on a real phone (P-940).
+- [x] **Commit:** `feat(web): installable pwa [T-9.7]`
 
 ### T-9.8 · You tab complete
 - [x] **Needs:** T-9.6, T-8.8
@@ -7644,3 +7669,17 @@ The number comes from the session's own block, given in its brief, from P-100 up
   Fix it in that test: find what it waits on (a `findBy` timing out its retry, a fake timer, the
   filter's debounce), never by raising the global `testTimeout`. Filed by Claude landing T-9.12;
   its session's block, P-900 to P-909.
+- [ ] P-940 · Install the app on real phones, on staging. **Before REL-1** (the founder, 19 October
+  2026), alongside P-930's check on the test phone. Worst case: the banner never appears on a real
+  Android phone (Chrome fires `beforeinstallprompt` only on its own engagement rules, before or
+  after the page has drawn the banner) or an iPhone installs the app with the wrong name, icon or
+  colours, and the first people told to add it to their Home Screen can't, with every test green.
+  T-9.7 proved the manifest, the worker and the offline page in desktop Chromium (`e2e/pwa.spec.ts`)
+  and the banner in vitest; no phone has installed it. On staging: Chrome on an Android phone (the
+  banner appears, Install opens Chrome's dialog, the app opens standalone at `/discover` with the
+  V icon and a black title bar, and in airplane mode a reload shows "You're offline", whose "Try
+  again" loads the page once back online); Safari on an iPhone (the banner says the Share steps,
+  Add to Home Screen gives the V icon and the name, it opens standalone, and the offline page
+  shows the same way); closing the banner keeps it closed after a reload. Record each phone, its
+  OS and browser versions, and what it showed. Filed by Claude building T-9.7, 19 October 2026,
+  at the founder's direction; its block, P-940 to P-949.

@@ -1,9 +1,11 @@
 import { APP_NAME } from "./app";
 import { FALLBACK_ROUTE, ROUTES, TAGS, sentences } from "./notification-view";
+import { offlinePage } from "./offline-page";
 
 /**
  * The service worker's source (T-9.4, D-859), served at `/sw.js` by its route
- * handler: no library, no build step of its own. It does two things:
+ * handler: no library, no build step of its own. It is the site's only worker,
+ * the PWA's too (T-9.7). It does three things:
  *
  * - **push**: the payload is a kind and ids, never words; the words are
  *   `en.ts`'s, put here as data at build time, so the worker and the in-app
@@ -12,10 +14,15 @@ import { FALLBACK_ROUTE, ROUTES, TAGS, sentences } from "./notification-view";
  * - **notificationclick**: focuses a tab of this site on the notification's
  *   route, or opens one. The route is built from the tables below, a path on
  *   this site only, whatever the payload says.
+ * - **fetch** (T-9.7, D-1040): a page load on this site goes to the network,
+ *   through navigation preload, and only when the network fails does the
+ *   worker answer, with the offline page (`offline-page.ts`) it carries.
+ *   Nothing is cached, ever: no stale page, and no one's page shown to anyone
+ *   else. Every other request is left to the browser.
  *
- * Precaching and an offline page are T-9.7's (the PWA), not this.
+ * `tokensCss` is `tokens.css`, which the offline page is drawn with.
  */
-export function serviceWorkerSource(): string {
+export function serviceWorkerSource(tokensCss: string): string {
   const tables = {
     app: APP_NAME,
     sentences: sentences(),
@@ -26,6 +33,7 @@ export function serviceWorkerSource(): string {
   return `"use strict";
 // ${APP_NAME}'s service worker (T-9.4). Generated from web/src/lib/push-worker.ts.
 const TABLES = ${JSON.stringify(tables)};
+const OFFLINE = ${JSON.stringify(offlinePage(tokensCss))};
 
 function variantOf(kind, data) {
   if (kind === "like" && data.super === true) return "superLike";
@@ -107,7 +115,40 @@ self.addEventListener("notificationclick", (event) => {
   );
 });
 
+function offlineResponse() {
+  return new Response(OFFLINE.html, {
+    status: 503,
+    headers: {
+      "Content-Type": "text/html; charset=utf-8",
+      "Content-Security-Policy": OFFLINE.csp,
+      "Cache-Control": "no-store",
+    },
+  });
+}
+
+self.addEventListener("fetch", (event) => {
+  const request = event.request;
+  if (request.mode !== "navigate" || request.method !== "GET") return;
+  if (new URL(request.url).origin !== self.location.origin) return;
+  event.respondWith(
+    (async () => {
+      try {
+        const preloaded = await event.preloadResponse;
+        if (preloaded) return preloaded;
+        return await self.fetch(request);
+      } catch (_) {
+        return offlineResponse();
+      }
+    })(),
+  );
+});
+
 self.addEventListener("install", () => self.skipWaiting());
-self.addEventListener("activate", (event) => event.waitUntil(self.clients.claim()));
+self.addEventListener("activate", (event) => {
+  const preload = self.registration.navigationPreload;
+  event.waitUntil(
+    Promise.all([self.clients.claim(), preload ? preload.enable() : Promise.resolve()]),
+  );
+});
 `;
 }

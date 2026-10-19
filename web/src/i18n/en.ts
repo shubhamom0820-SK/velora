@@ -1411,6 +1411,21 @@ export const en = {
     failed: "We couldn't check your PIN. Check your connection and try again.",
     forgot: "Forgot your PIN? Sign out",
   },
+  // The install banner (T-9.7, D-1042), on phones only: Android's prompt, or
+  // on an iPhone the steps, since Safari has no prompt. The founder's words.
+  install: {
+    banner: "Add {app} to your Home Screen for a full-screen app",
+    action: "Install",
+    ios: "Add {app} to your Home Screen: tap Share, then Add to Home Screen.",
+    dismiss: "Close",
+  },
+  // The page the service worker shows when the network is gone (T-9.7,
+  // D-1040), laid out as the lock screen is. The founder's words.
+  offline: {
+    title: "You're offline",
+    body: "{app} needs a connection. Check yours and try again.",
+    retry: "Try again",
+  },
   // Thread and Knot are product nouns, not the brand: a rename changes {app}
   // and nothing else here (CLAUDE.md rule 17).
   landing: {

@@ -258,6 +258,11 @@ the API's one process.
 - **`/@username`** (`web/e2e/share.spec.ts`, D-544): served through the rewrite, with a nonce,
   never indexed, its canonical address the `@` one; and what follows an `@` but isn't a username
   is a 404.
+- **The PWA** (`web/e2e/pwa.spec.ts`, T-9.7, D-1040 to D-1043), signed out: the manifest linked
+  and served, its three icons there; `/sw.js` the one worker, registered from `/` with
+  `updateViaCache: "none"` and served `no-cache`; and with the browser offline, a page load
+  answered by the worker's offline page (503, no script, no CSP violation), whose "Try again"
+  loads the page once back online. A real phone's install is P-940's, by hand.
 - **Firefox** is Playwright's own build, run by hand (`E2E_FIREFOX=1 make e2e`), never in CI.
 - **Against staging, nightly,** is P-67, whose Needs line carries P-66, a Firebase project for
   staging alone. Staging signs in by Firebase, where Path B and the fake don't exist, so a run

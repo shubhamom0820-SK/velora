@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import type { ReactNode } from "react";
 
+import { InstallBanner } from "@/components/pwa/InstallBanner";
 import { Realtime } from "@/components/realtime/Realtime";
 import { AppGate } from "@/components/session/AppGate";
 import { SessionRestorer } from "@/components/session/SessionRestorer";
@@ -17,7 +18,9 @@ import { StoreSheet } from "@/components/wallet/StoreSheet";
  * PIN lock (T-3.10). The header and nav (T-5.6) sit inside `AppGate`, so they
  * appear only once the gate lets someone in, and the lock covers them too. So
  * does the store sheet (T-5.5), which any screen's mutation can open, and the
- * socket (T-7.12), open only while someone is let in.
+ * socket (T-7.12), open only while someone is let in. The install banner
+ * (T-9.7) is the first thing on every screen, under the header, as the
+ * prototype draws it.
  */
 export const metadata: Metadata = {
   robots: { index: false, follow: false },
@@ -34,7 +37,10 @@ export default function AppGroupLayout({ children }: { children: ReactNode }) {
     <>
       <SessionRestorer />
       <AppGate>
-        <AppShell>{children}</AppShell>
+        <AppShell>
+          <InstallBanner />
+          {children}
+        </AppShell>
         <StoreSheet />
         <Realtime />
       </AppGate>

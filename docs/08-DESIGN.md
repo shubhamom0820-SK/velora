@@ -315,6 +315,17 @@ holding a hex value.
 | `apple-icon.png` | 180 × 180: a V in `--chrome-ink` on `--chrome`, with margins, since iOS crops it to a rounded square. |
 | `favicon.ico` | The same V at 16, 32 and 48 px, filling more of its tile. White, not red: at 16 px red on black muddies, and white stays legible (the founder). Its PNGs are RGBA, which Next requires. |
 
+**The installed app's icons (T-9.7, D-1043)**, in `web/public/icons/`, named by the manifest. The
+same V, made by a committed script, `web/scripts/render-icons.mts` (run by hand on a Mac, from
+`web/`), from a page that reads `tokens.css`: `--chrome-ink`, bold, in the system font stack, on
+`--chrome`, Playwright's Chromium at scale 1. Rendered 19 October 2026.
+
+| File | What it shows |
+|---|---|
+| `icon-192.png` | 192 × 192: the apple icon's proportions, the V's font size 0.71 of the tile. |
+| `icon-512.png` | 512 × 512: the same. |
+| `icon-maskable-512.png` | 512 × 512, `purpose: maskable`: the V at 0.56 of the tile, so all of it sits inside the centre 80% circle a launcher may crop to (`manifest.test.ts` checks every pixel). |
+
 **Regenerated 8 October 2026 (T-7.6)** for "Threads last an hour", by Claude, the same way, from a
 page that reads `tokens.css` itself: the wordmark 42 px bold at 66 × 58; the headline at
 `--type-display-weight`, 100 px, line height 1.09, tracking −3 px, two centred lines from 206 px
@@ -323,7 +334,7 @@ scale 1, saved as JPEG quality 90 by Pillow (49.5 KB). Those numbers were fitted
 rendered with its own words they differ from it by 7.7 of 255 on average over the headline, against
 6.25 over the domain line, whose words didn't change.
 
-**Regenerate them** when the name changes (the wordmark and the V; rule 17), when the landing
+**Regenerate them** (and the three above, by their script) when the name changes (the wordmark and the V; rule 17), when the landing
 headline changes (it promises `thread_hours`, 03-SCHEMA §8; a test fails until the alt text
 matches it), when the theme changes (D-014), or when the domain does.
 

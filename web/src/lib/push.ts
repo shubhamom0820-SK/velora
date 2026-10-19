@@ -22,6 +22,17 @@ export type PushSubscriptionBody = {
 
 export const SERVICE_WORKER_URL = "/sw.js";
 
+/**
+ * How `/sw.js` is registered, here and in `subscribe()` alike (T-9.7):
+ * the whole site, and `updateViaCache: "none"`, so the browser checks for a
+ * new worker past its HTTP cache on every visit and a broken one can't stick
+ * on a phone. The route serves it `no-cache` for the same reason.
+ */
+export const REGISTRATION: RegistrationOptions = {
+  scope: "/",
+  updateViaCache: "none",
+};
+
 /** A window as far as push goes: either API may be missing. */
 type PushWindow = Window & {
   Notification?: typeof Notification;
@@ -32,7 +43,7 @@ function notificationOf(win: Window): typeof Notification | undefined {
   return (win as PushWindow).Notification;
 }
 
-function isIos(nav: Navigator): boolean {
+export function isIos(nav: Navigator): boolean {
   // iPadOS reports itself as a Mac, but a Mac has no touch screen.
   return (
     /iPad|iPhone|iPod/.test(nav.userAgent) ||
@@ -40,7 +51,8 @@ function isIos(nav: Navigator): boolean {
   );
 }
 
-function isInstalled(win: Window): boolean {
+/** Opened from the Home Screen (or as an installed app), not in a tab. */
+export function isInstalled(win: Window): boolean {
   const standalone = (win.navigator as Navigator & { standalone?: boolean })
     .standalone;
   return (
@@ -104,7 +116,7 @@ export async function subscribe(
   if (answer !== "granted") return null;
   const registration = await win.navigator.serviceWorker.register(
     SERVICE_WORKER_URL,
-    { scope: "/" },
+    REGISTRATION,
   );
   const ready = await win.navigator.serviceWorker.ready;
   const manager = (ready ?? registration).pushManager;
@@ -116,6 +128,24 @@ export async function subscribe(
       applicationServerKey: keyBytes(publicKey),
     }));
   return bodyOf(subscription);
+}
+
+/**
+ * Register `/sw.js` on every page (T-9.7, D-1041), so an installed app has
+ * its offline page from the first visit, not only once push is on. Nothing
+ * where the browser has no service workers or the page isn't secure, and a
+ * refusal is swallowed: the site works without its worker.
+ */
+export async function register(win: Window = window): Promise<void> {
+  if (!win.isSecureContext || !("serviceWorker" in win.navigator)) return;
+  try {
+    await win.navigator.serviceWorker.register(
+      SERVICE_WORKER_URL,
+      REGISTRATION,
+    );
+  } catch {
+    // Refused (a private window, a blocked site): the site works without it.
+  }
 }
 
 /** This browser's subscription, if it has one. */

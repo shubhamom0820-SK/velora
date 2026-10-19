@@ -1,5 +1,6 @@
 import type { Metadata, Viewport } from "next";
 
+import { ServiceWorkerRegistrar } from "@/components/pwa/ServiceWorkerRegistrar";
 import { ToastProvider } from "@/components/ui/ToastProvider";
 import { QueryProvider } from "@/lib/queries/QueryProvider";
 import { rootMetadata } from "@/lib/site";
@@ -21,6 +22,8 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
         <QueryProvider>
           <ToastProvider>{children}</ToastProvider>
         </QueryProvider>
+        {/* The PWA's worker, the push one (T-9.7, D-1041), on every page. */}
+        <ServiceWorkerRegistrar />
       </body>
     </html>
   );
