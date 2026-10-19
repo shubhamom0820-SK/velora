@@ -3958,15 +3958,26 @@ number** per account gets its 5 each, one Thread's worth, and is **accepted**, k
 ### T-9.12 · Observability
 - [x] **Needs:** T-1.22, and a **Sentry account** — not created yet: P-0.6 was ticked with it left to this task
   **The account exists** (the founder, 16 October 2026): EU region, the free Developer plan (D-1000).
-- [ ] Sentry in api, worker, web (release = git sha). Alerts: 5xx > 1% for 5 min, webhook signature failures, any job failing 3×, ledger reconciliation mismatch, queue depth > 1,000. Uptime check on `/readyz`.
-  **Built, not yet seen working; unticked until it is.** The SDKs, the release from `GIT_SHA`
+- [x] Sentry in api, worker, web (release = git sha). Alerts: 5xx > 1% for 5 min, webhook signature failures, any job failing 3×, ledger reconciliation mismatch, queue depth > 1,000. Uptime check on `/readyz`.
+  **Seen working on staging, 19 October 2026** (`out/t912-section4.log`, read back through Sentry's
+  API with the founder's token): `scripts/sentry-alerts --check` exited 0, "Sentry is exactly SPEC."
+  (the founder's `--apply` made the alert and the uptime monitor; P-904 fixed the scopes). On
+  staging at `e4fa282` (deploy run 39298153391), `app/tools/sentry_probe.py` sent a test error from
+  the API's container (`34b142d1…`) and the worker's (`e26b5971…`), both in `velora-api`, issue
+  `VELORA-API-1` (one group, `154714081`), each tagged with its component, `staging`, and release
+  `e4fa282556288491059a1e7ea003ebfe5d52c559`; an error thrown in a staging page (`78ec77cc…`) is in
+  `velora-web` with the same release, component `web-browser`. The alert fired at 18:00:43 UTC and
+  the founder received "VELORA-API-1 - sentry_probe" at 18:01:58 UTC; the worker's event joined that
+  issue, so it rightly sent no second email. Sentry's Releases page lists `e4fa282` under
+  `velora-api` only: a release is linked to the project whose event created it, and the web, with no
+  sessions (D-1003), adds none; counted as seen on the events, the founder's call
+  (`infra/OBSERVABILITY.md` §4). A CSP report's arrival is still unseen (P-905).
+  Built as: the SDKs, the release from `GIT_SHA`
   (D-1000, D-1001), every alert line (D-1002, the 5xx as one alert per issue: the free plan has no
   rate alert) and queue depth (D-1004) are code, tested by planting what must never leave
   (`tests/core/test_observability.py`, `web/src/lib/sentry.test.ts`). The alert and the uptime
   monitor on staging's `/readyz`, the Mumbai VM since P-49, exist only once the founder runs
-  `scripts/sentry-alerts --apply`, proved so far against a fake of Sentry's API only (D-1005). Tick
-  when `--check` exits 0 and `infra/OBSERVABILITY.md` §4's staging check is done: the release in
-  both projects, a test error from each component, and its email.
+  `scripts/sentry-alerts --apply` (D-1005).
 - [x] Route D-066's OTP warning, logged at half of `otp_sms_daily_cap`, to the alert channel: until this task it lands only in Fly's logs, which nobody reads.
   `otp_daily_cap_half_used` is one of the three warnings sent (`ALERTING_WARNINGS`, D-1002), held by `test_each_alerting_warning_is_sent` against the plan's literals.
 - [x] Route D-090's final failure to the alert channel: a minor's files that couldn't be deleted after three tries, logged at error level with the `banned_identities` id. Until this task that log line is all there is, which D-078 says is not enough.
@@ -7747,3 +7758,14 @@ The number comes from the session's own block, given in its brief, from P-100 up
   that they must be deleted; and `app/tools/sentry_probe.py` sends one error as the API or the
   worker from inside its container, through the alert's own path, printing its event id
   (OBSERVABILITY §4). Filed by Claude closing T-9.12; its session's block.
+- [ ] P-905 · See a CSP violation's report reach `velora-web`. **Before REL-1.** Worst case: the
+  enforced policy blocks something real in production and nobody hears, the gap D-059 named, with
+  every header test green: the reporting is wired (`report-to` with `Reporting-Endpoints`, and
+  `report-uri`, T-9.12) but no report has ever been seen arriving. On 19 October 2026, headless
+  Chromium raised `img-src https://csp-probe.invalid/…` on `staging.veloraapp.co.in` at 18:21:05
+  UTC and stayed 75 seconds; `velora-web` showed no report (`out/t912-section4.log`). Headless
+  Chrome may not upload Reporting API reports at all. Check from a real, headed Chrome (the
+  founder's, or Playwright headed) with DevTools' Application → Reporting API open, then read
+  `velora-web` for the event; if Chrome sends `report-to` and Sentry refuses it, the endpoint's
+  query (`sentry_key`, `sentry_environment`, `sentry_release`) is the first thing to read. Filed by
+  Claude closing T-9.12, 19 October 2026; its session's block.

@@ -109,7 +109,11 @@ variable, and an exception by its type and stack, never its message.
 
 ## 4. Checking it on staging, after the first deploy
 
-1. Sentry → Releases: the deployed commit's SHA, in both projects.
+1. Sentry → Releases: the deployed commit's SHA, in both projects. **Read it on the events**: each
+   event's release is the commit, but Sentry links a release only to the project whose event
+   created it, and the web sends no sessions (D-1003), so it adds none. A release the API's event
+   made first lists `velora-api` alone, while the web's events of that build carry it (seen 19
+   October 2026: `e4fa282`; the founder counts it as seen).
 2. A test error from each component, then its email; record each in the plan. The API's and the
    worker's, from inside their containers on the VM (`app/tools/sentry_probe.py`, P-904), which
    prints the event's id:
@@ -122,7 +126,9 @@ variable, and an exception by its type and stack, never its message.
 
    The web's: an error thrown in a staging page's console, which the SDK's own handler catches.
 3. A CSP violation reaching `velora-web` (the security endpoint): a page's console can make one,
-   such as an image from a host the policy refuses.
+   such as an image from a host the policy refuses. **Not yet seen** (P-905): headless Chromium
+   raised the violation on staging but no report reached Sentry in 75 seconds; check it from a
+   real, headed Chrome.
 4. `scripts/sentry-alerts --check`: exit 0.
 
 ## 5. Not yet
