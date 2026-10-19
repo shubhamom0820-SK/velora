@@ -21,7 +21,10 @@
 #   4  couldn't reach or authenticate with GitHub, twice: the only case for
 #      /done's manual path, and a bad token is the usual cause. The first time,
 #      the gate waits and makes the same request once more (P-842), saying so.
-#   5  GitHub answered, with an error: never a case for the manual path
+#      A network failure gh reports (a TLS timeout, a reset connection) is this
+#      case, even when GitHub answers a moment later (P-881).
+#   5  GitHub answered, with an error (an HTTP status, a 5xx too, or text the
+#      gate doesn't know): never a case for the manual path, never retried
 #   6  no branch to read the run from: a bare commit needs --branch, and a
 #      detached HEAD (a rebase stopped part way, say) has none
 set -euo pipefail
@@ -72,16 +75,26 @@ trap 'rm -f "$errors"' EXIT
 # makes the same request again (P-842: a moment's trouble, seen on 4, 14 and 18
 # October 2026, cleared each time on the same run); it is said, with the time,
 # so each one is on the record. The second is final. Exit 5 is never retried.
+# What gh prints when a request got no answer at all (P-881): Go's transport
+# errors, and gh's own "error connecting to". Read only when no HTTP status is
+# in the text: a status means GitHub answered, whatever else the text says.
+NETWORK_ERRORS='TLS handshake timeout|connection reset|connection refused|no such host|i/o timeout|Client\.Timeout exceeded|unexpected EOF|error connecting to'
+
 gh_failed() {
-  local what="$1"
-  if ! gh api rate_limit >/dev/null 2>&1; then
+  local what="$1" why=""
+  if ! grep -qE 'HTTP [0-9]{3}' "$errors" && grep -qE "$NETWORK_ERRORS" "$errors"; then
+    why="a network error: $(grep -m1 -E "$NETWORK_ERRORS" "$errors")"
+  elif ! gh api rate_limit >/dev/null 2>&1; then
+    why="'gh api rate_limit' fails too"
+  fi
+  if [[ -n "$why" ]]; then
     if ((retried == 0)); then
       retried=1
       say "couldn't reach GitHub while $what at $(date -u +%FT%TZ); trying once more in ${retry_wait}s (P-842)."
       sleep "$retry_wait"
       return 0
     fi
-    not_merging "couldn't reach or authenticate with GitHub, and once more after ${retry_wait}s, while $what ('gh api rate_limit' fails too)."
+    not_merging "couldn't reach or authenticate with GitHub, and once more after ${retry_wait}s, while $what ($why)."
     say "Check the token first: 'gh auth status'. If it's expired or missing, 'gh auth login' and run scripts/ci-gate again."
     exit 4
   fi

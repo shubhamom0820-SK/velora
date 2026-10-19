@@ -62,7 +62,8 @@ finished, went green. P-842 made the one retry the gate's own.
 
 **It is never for a red run, or for anything GitHub answered.** Exit 1 (CI failed, was cancelled,
 or ran for another commit) means the commit is not good: fix it on the branch and run `/done`
-again. Exit 5 means GitHub answered with an error: read it and fix the cause. Exit 6 means it found
+again. Exit 5 means GitHub answered with an error: read it and fix the cause. A network failure (a TLS
+timeout, a reset connection) is exit 4, never 5, since P-881. Exit 6 means it found
 no branch to read: HEAD is detached (a rebase stopped part way?); finish or abort the rebase, back on
 the task branch, and run `/done` again. Exit 2 or 3 (no run
 appeared, or it didn't finish) means wait and run `scripts/ci-gate` again; if it keeps happening,

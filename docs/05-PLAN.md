@@ -7483,7 +7483,7 @@ The number comes from the session's own block, given in its brief, from P-100 up
   with a test that a socket's ticket, and a query on any other path, never reach the log line.
   Filed by Claude building T-9.11, 18 October 2026, at the founder's direction; its block, P-860
   to P-869.
-- [ ] P-881 · `scripts/ci-gate` reads a network failure as "couldn't reach" (exit 4), not "GitHub
+- [x] P-881 · `scripts/ci-gate` reads a network failure as "couldn't reach" (exit 4), not "GitHub
   answered" (exit 5). **Before more sessions land at once; small.** Worst case: a TLS timeout or a
   dropped connection while the gate reads a run exits 5, "never a case for the manual path" and
   never retried (P-842), so a session either stops a good landing or reruns a gate whose exit is
@@ -7495,6 +7495,12 @@ The number comes from the session's own block, given in its brief, from P-100 up
   exit 4 and go through P-842's one more try, while anything GitHub answered (an HTTP status) stays
   5; tests in `scripts/ci-gate-test` for each. Filed by Claude building P-842, at the founder's
   direction, 19 October 2026, from this session's block (P-880 to P-889).
+  **Done 19 October 2026:** `NETWORK_ERRORS` in the gate: gh's text for a request that got no
+  answer, read only when the text has no HTTP status; it goes through P-842's one more try, and
+  exit 4 names the error. A 5xx and text the gate doesn't know stay 5. `ci-gate-test` holds eight
+  transport texts clearing, one persisting, a 502, an HTTP 404 that says "timeout", unknown text
+  and a refused token (each transport case red on the gate before it; the HTTP rule checked by a
+  break).
 - [ ] P-930 · T-9.10 on the test phone, read by the founder. **Before launch** (the founder, 19
   October 2026), **once P-0.9's phone is bought.** Worst case: `/discover` loads in under 2 s on
   a desktop slowed four times and takes far longer on the phones men in Phagwara carry, over the
