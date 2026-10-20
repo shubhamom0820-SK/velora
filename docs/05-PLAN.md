@@ -7925,7 +7925,7 @@ The number comes from the session's own block, given in its brief, from P-100 up
   padega", "bill ke paise dena hai". Each entry a caught test and an ordinary sentence, as D-981
   asks, and a break case. Filed by Claude building T-9.13, 20 October 2026, at the founder's
   direction.
-- [ ] P-962 · A photo's blur and badge comparison are queued before moderation commits. **Before
+- [x] P-962 · A photo's blur and badge comparison are queued before moderation commits. **Before
   REL-1; the next fix after T-9.13** (the founder, 20 October 2026). Worst case: a worker fast
   enough runs `blur_photo` or `match_photo` before the approval is committed, reads the photo as
   not yet approved, answers "nothing to blur" (or "not a shown photo: nothing to compare",
@@ -7954,3 +7954,31 @@ The number comes from the session's own block, given in its brief, from P-100 up
   retry line keeps naming what and when. `ci-gate-test`: a listing flake then a reading flake
   passes, and a read that fails twice in a row exits 4. Filed by Claude at the founder's
   direction, 19 October 2026, from this session's block (P-880 to P-889).
+- [ ] P-980 · Showing the face photo queues its copy's moderation before the copy is committed.
+  **Before REL-1** (the founder, 20 October 2026): a copy stuck pending leaves a person unable to
+  pass the photos step. Worst case: `photos.service.show_face_photo` adds the public copy's row and
+  queues `moderate_photo` for it inside the same transaction (`photos/service.py:561`); a worker
+  fast enough runs the job before the row is committed, finds no such photo ("no such photo: its
+  user was refused, and it went with them") and finishes for good under `moderate_photo:{copy
+  id}`, so the copy stays pending and nothing moderates it. P-962's hazard, on a row that doesn't
+  exist yet; found reading for P-962, not seen happen. `complete` (`:310`) also queues inside its
+  transaction, but its row is already committed as pending and the job waits on the user's row
+  lock, so it decides correctly. Fix: queue after the commit, as D-1080 does; a test whose queue
+  runs the job the moment it is queued, on its own connection (P-962's `RunsAtOnce`), proving the
+  copy is decided; and a break case. Filed by Claude building P-962, 20 October 2026, at the
+  founder's direction; its block, P-980 to P-989.
+- [ ] P-981 · A sweep re-queues the blur and the badge comparison for approved photos missing them.
+  **Before REL-1** (the founder, 20 October 2026). Worst case: Redis fails between moderation's
+  commit and its enqueue (D-1080), so an approved public photo has no blurred copy and, with a
+  selfie kept and a face in it, no comparison; nothing tries again, and her card carries no badge
+  though her selfie matched. P-300's sweep would find a missing comparison, but it is only one of
+  P-300's two options (the other, more tries, finds nothing that was never queued), it is before
+  REL-1 only if REL-1's tag includes T-6.2, and it never covers the blur. A missing blur is queued
+  again only when the photo is next due in someone's Liked you (`likes.service`). Fix: a periodic
+  sweep on the worker, in one of its own loops as D-640's are, for approved public photos with no
+  `blur_key`, and for approved public photos with `faces >= 1`, a kept selfie and no `selfie_match`
+  for that verification, queued a few at a time; it can close P-300 too. Watch ARQ's result keys:
+  a job id is refused while the last run's result is kept (arq's default, an hour), so the sweep
+  skips photos approved within that hour or queues under an id of its own. Its cost in Redis
+  commands against D-091's budget is part of the plan. Filed by Claude building P-962, 20 October
+  2026, at the founder's direction; its block.

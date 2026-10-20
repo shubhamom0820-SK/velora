@@ -416,7 +416,9 @@ rule 3, T-8.2) or a charge no Velas were granted for (T-8.3, D-580).
    same for every shown photo already there. `POST /v1/photos/{id}/show` makes a public copy of
    the face photo through steps 3 to 5, never approved at once (T-4.4's rule, P-79).
    Every approved public photo is also queued as `blur_photo` (T-6.7, D-543): the blurred copy a
-   man sees in Liked you until he pays to reveal who it is.
+   man sees in Liked you until he pays to reveal who it is. Both are queued once the approval is
+   committed, never inside its transaction, so a job that runs at once reads it approved (P-962,
+   D-1080).
 6. Only `approved` photos are ever returned to other users; the face photo and the selfie never
    are.
 

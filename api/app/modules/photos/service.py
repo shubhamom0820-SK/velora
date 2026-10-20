@@ -675,8 +675,9 @@ async def moderate(
     the outcome recorded with the user's row locked, as every photo change is:
     - approved: a public photo's copy goes to the public bucket, from the
       bytes that were scored, never from the private copy, which a second PUT
-      could have replaced since; and, if it shows a face and a selfie is kept,
-      it is queued for comparison with that selfie, for the badge (D-393); a
+      could have replaced since; and, once the decision is committed (P-962),
+      it is queued for its blurred copy (D-543) and, if it shows a face and a
+      selfie is kept, for comparison with that selfie, for the badge (D-393); a
       private photo's, from the same bytes, to `scored_key` in the private
       bucket, which no upload URL covers, so a PUT inside the URL's 5 minutes
       never changes what T-8.4's album shows (P-79, D-700);
@@ -731,11 +732,14 @@ async def moderate(
         raise TryAgain("moderation.failed_photo", str(failure)) from None
     reason = moderation_rules.verdict(scores, photo.kind)
 
-    outcome = await _record(
-        sessions, photo, reason, clean, scores, storage, queue, settings
-    )
-    if outcome is not None:
-        return outcome
+    recorded = await _record(sessions, photo, reason, clean, scores, storage, settings)
+    if recorded.stopped is not None:
+        return recorded.stopped
+    # Committed: only now can a job read the approval (P-962, D-1080).
+    if recorded.match:
+        await queue_match(queue, photo)
+    if recorded.blur:
+        await queue_blur(queue, photo.id)
     log.info(
         "moderation.decided",
         photo_id=str(photo.id),
@@ -746,6 +750,18 @@ async def moderate(
     return reason or ReviewStatus.APPROVED.value
 
 
+@dataclass(frozen=True)
+class _Recorded:
+    """What `_record` did: `stopped`, what stopped it, if the photo stopped
+    waiting for a decision; else what `moderate` queues once it is committed
+    (P-962): a job queued inside the transaction can run before the commit,
+    read the photo as pending, and finish for good under its fixed id."""
+
+    stopped: str | None = None
+    match: bool = False
+    blur: bool = False
+
+
 async def _record(
     sessions: Sessions,
     photo: Photo,
@@ -753,11 +769,9 @@ async def _record(
     clean: images.Reencoded,
     scores: Scores,
     storage: StorageProvider,
-    queue: Queue,
     settings: Settings,
-) -> str | None:
-    """Write the decision, unless the photo stopped waiting for one: None when
-    written, else what stopped it."""
+) -> _Recorded:
+    """Write the decision, unless the photo stopped waiting for one."""
     async with sessions() as session, session.begin():
         try:
             user = await users_service.locked_user(session, photo.user_id)
@@ -769,10 +783,14 @@ async def _record(
             # Refused while this ran: the rows went, and D-078's deletion may
             # have run before the copy above was written. Don't leave it.
             await storage.delete(settings.R2_BUCKET_PRIVATE, photo.raw_key)
-            return "its user was refused while it was checked: its file removed"
+            return _Recorded(
+                "its user was refused while it was checked: its file removed"
+            )
         if locked.status is not ReviewStatus.PENDING:
             # Removed by its owner meanwhile (T-4.3): nothing is published.
-            return f"{locked.status.value} while it was checked: left as it is"
+            return _Recorded(
+                f"{locked.status.value} while it was checked: left as it is"
+            )
         # A shown copy keeps which face photo it was made from (T-4.12).
         made_from = (locked.moderation or {}).get(FROM_PHOTO_ID)
         locked.moderation = {
@@ -789,12 +807,12 @@ async def _record(
                 model=MINOR_MODEL,
             )
             await safety_service.escalate_possible_minor(session, locked.user_id)
-            return None
+            return _Recorded()
         locked.width, locked.height = clean.width, clean.height
         if reason is not None:
             locked.status = ReviewStatus.REJECTED
             locked.reject_reason = reason
-            return None
+            return _Recorded()
         if locked.kind is PhotoKind.PUBLIC:
             key = public_photo_key(locked.id)
             await _stored(
@@ -814,11 +832,10 @@ async def _record(
         locked.status = ReviewStatus.APPROVED
         if locked.kind is PhotoKind.PUBLIC:
             await onboarding_service.refresh_completeness(session, user)
-        if locked.kind is PhotoKind.PUBLIC and scores.minors and user.is_verified:
-            await queue_match(queue, locked)
-        if locked.kind is PhotoKind.PUBLIC:
-            await queue_blur(queue, locked.id)
-    return None
+        public = locked.kind is PhotoKind.PUBLIC
+        return _Recorded(
+            match=public and bool(scores.minors) and user.is_verified, blur=public
+        )
 
 
 async def _refuse_unreadable(

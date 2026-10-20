@@ -7003,3 +7003,29 @@ typed as one code point or two.
 
 **Rejected:** refusing in a Thread's first messages only (`/terms` promises it for every
 message); a bare "do" after money (it refuses money cut twice).
+
+### D-1080 · A moderation approval's jobs are queued once it is committed — Locked
+**The decision (P-962's plan, the founder, 20 October 2026, on the advisor's recommendation,
+relayed):** `photos.service.moderate` queues `blur_photo` (D-543) and `match_photo` (D-393) after
+`_record`'s transaction has committed, never inside it, as the staff approval
+(`after_staff_decision`) and the selfie's decision (`verify`) already did. `_record` decides under
+the user's lock whether each is due and says so; `moderate` queues them. **This amends D-393's
+mechanism**, whose prose is left as written: where it says "on approval `_record` queues
+`match_photo`", `moderate` now queues it once `_record` has committed.
+- **Why:** a job queued inside the transaction can run before the commit. It reads the photo as
+  still pending, answers "nothing to blur" or "not a shown photo: nothing to compare", and
+  finishes for good under its fixed job id, so the photo never gets its blur or its comparison.
+  Seen in CI run 39310142086: `blur_photo` done at 0.03 s, `moderate_photo` approved at 0.20 s.
+- **What it gives up:** Redis failing between the commit and the enqueue leaves the photo approved
+  and published with neither job queued, and nothing retries. ARQ doesn't retry a job that raised
+  anything but `Retry` (arq 0.28's `worker.py`), and a later run of `moderate_photo` answers
+  "already approved: nothing to do". **Not re-queued there** (the founder). It is seen: ARQ's
+  failure line reaches Sentry as `job.failed` (D-1002). Before this, the same failure rolled the
+  approval back and left the photo pending, also with no retry. A missing blur is queued when the
+  photo is next due, blurred, in someone's Liked you (`likes.service`), the only place it is shown;
+  a missing comparison waits for P-981's sweep.
+
+**Rejected:** re-queuing both when `moderate` finds the photo already approved (it widens the
+task, and a sweep covers every way a job goes missing, not only this one); queuing before the
+commit with a delay, as D-090's deletion is (a guess at how long a commit takes, and still wrong
+when it takes longer).

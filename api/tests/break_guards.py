@@ -3177,7 +3177,7 @@ T412: list[tuple[Case, list[str]]] = [
             edits=[
                 (
                     PHOTOS412,
-                    "        if locked.kind is PhotoKind.PUBLIC and scores.minors and user.is_verified:\n            await queue_match(queue, locked)\n",
+                    "    if recorded.match:\n        await queue_match(queue, photo)\n",
                     "",
                 )
             ],
@@ -14185,6 +14185,64 @@ P450: list[Case] = [
 ]
 
 
+# --- P-962: the blur and the match queued only once moderation commits (D-1080) -----
+
+P962_SELECTION = ["tests/modules/photos/test_queued_after_commit.py"]
+P962_TEST = "test_a_job_run_the_moment_it_is_queued_still_blurs_and_compares"
+# Each case puts one job back inside `_record`'s transaction, where it was.
+P962_QUEUE_INSIDE = [
+    (
+        PHOTOS412,
+        "    recorded = await _record(sessions, photo, reason, clean, scores, storage, settings)\n",
+        "    recorded = await _record(sessions, photo, reason, clean, scores, storage, settings, queue)\n",
+    ),
+    (
+        PHOTOS412,
+        "    storage: StorageProvider,\n    settings: Settings,\n) -> _Recorded:\n",
+        "    storage: StorageProvider,\n    settings: Settings,\n    queue: Queue,\n) -> _Recorded:\n",
+    ),
+]
+
+P962: list[Case] = [
+    Case(
+        id="p962-01-the-blur-queued-before-the-commit",
+        what="P-962: blur_photo queued inside the transaction, so a fast worker finds nothing to blur",
+        edits=[
+            *P962_QUEUE_INSIDE,
+            (
+                PHOTOS412,
+                "        public = locked.kind is PhotoKind.PUBLIC\n",
+                "        public = locked.kind is PhotoKind.PUBLIC\n        if public:\n            await queue_blur(queue, locked.id)\n",
+            ),
+            (
+                PHOTOS412,
+                "    if recorded.blur:\n        await queue_blur(queue, photo.id)\n",
+                "",
+            ),
+        ],
+        expect=[P962_TEST],
+    ),
+    Case(
+        id="p962-02-the-match-queued-before-the-commit",
+        what="P-962: match_photo queued inside the transaction, so a fast worker finds no shown photo",
+        edits=[
+            *P962_QUEUE_INSIDE,
+            (
+                PHOTOS412,
+                "        public = locked.kind is PhotoKind.PUBLIC\n",
+                "        public = locked.kind is PhotoKind.PUBLIC\n        if public and scores.minors and user.is_verified:\n            await queue_match(queue, locked)\n",
+            ),
+            (
+                PHOTOS412,
+                "    if recorded.match:\n        await queue_match(queue, photo)\n",
+                "",
+            ),
+        ],
+        expect=[P962_TEST],
+    ),
+]
+
+
 CASES: list[tuple[Case, list[str]]] = (
     [(c, T51_SELECTION) for c in T51]
     + [(c, T54_SELECTION) for c in T54]
@@ -14259,6 +14317,7 @@ CASES: list[tuple[Case, list[str]]] = (
     + [(c, P163_SELECTION) for c in P163]
     + [(c, T913_SELECTION) for c in T913]
     + [(c, P450_SELECTION) for c in P450]
+    + [(c, P962_SELECTION) for c in P962]
 )
 
 # The fifty-connection fixture's own message when Postgres refuses a connection.
