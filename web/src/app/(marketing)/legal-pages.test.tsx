@@ -137,6 +137,19 @@ describe("/privacy", () => {
     ).toBeInTheDocument();
   });
 
+  // D-1020, P-921: the API left Singapore for Mumbai; nothing on the page may
+  // still say Singapore.
+  it("says every request is handled in Mumbai, and never Singapore (D-1020)", () => {
+    render(<PrivacyPage />);
+
+    expect(
+      screen.getByText(
+        "Every request you make is handled by our servers in Mumbai, India.",
+      ),
+    ).toBeInTheDocument();
+    expect(document.body).not.toHaveTextContent(/singapore/i);
+  });
+
   it("says what fraud scoring reads and that it can freeze an account (T-9.2)", () => {
     render(<PrivacyPage />);
 

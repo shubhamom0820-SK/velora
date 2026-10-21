@@ -22,7 +22,7 @@ Values never go in an argument or on screen.
 | Environment | Project | `SENTRY_DSN` |
 |---|---|---|
 | staging | `velora-ic-staging` | set (the founder, 18 October 2026) |
-| production | `velora-ic-prod` | **empty: P-921's checklist** |
+| production | `velora-ic-prod` | **empty: P-921's checklist** (`infra/PRODUCTION.md` §4, set by `scripts/gcp-secrets production`, which calls it required) |
 
 `infra/gce/secrets.api` and `secrets.worker` name it **required** (no trailing `?`), so the VM's
 `deploy` stops with "SENTRY_DSN has no value in Secret Manager" before either container starts,

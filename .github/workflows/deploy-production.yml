@@ -1,7 +1,7 @@
 # Production release (T-2.6, D-075). A deliberate act: pushing a tag `v*` on a
 # commit of main releases that commit, and nothing else does.
 #
-#   gate → migrate (as the owner, from here) → api (Fly) → web (Vercel) → smoke
+#   gate → image (staging's, copied) → migrate (as the owner) → vm (Mumbai VM) → web (Vercel) → smoke
 #
 # The gate (scripts/release-gate) is the /done gate extended to the live site:
 # the commit is on main, CI passed for it, and staging deployed it with its
@@ -15,9 +15,12 @@
 # (infra/PRODUCTION.md). Third-party actions are pinned to a commit SHA, as in
 # deploy.yml. A push event runs the workflow file at the tagged commit.
 #
-# TEMPORARY, the api and migrate jobs: P-49 moves the API off Fly to a VM in
-# Mumbai before Sprint 4 and rewrites both, with the API's app, secrets and DNS
-# record. The gate, web and smoke jobs stay.
+# The API and the worker run on production's Mumbai VM (P-921, D-1020, D-1022),
+# from the exact image staging ran: `image` copies it from staging's registry to
+# production's by digest, and fails unless the digest is unchanged. The VM's jobs
+# sign in to Google Cloud without a key, by Workload Identity Federation, as
+# production's deploy account, which may read staging's registry and nothing else
+# of staging's (infra/PRODUCTION.md).
 name: Deploy production
 run-name: Release ${{ github.ref_name }}
 
@@ -35,9 +38,13 @@ permissions:
   actions: read # scripts/release-gate reads CI's and staging's runs
 
 env:
+  GCP_REGION: asia-south1
+  GCP_ZONE: asia-south1-a
+  # Where staging's images are; not a secret.
+  STAGING_GCP_PROJECT: velora-ic-staging
+  PRODUCTION_VM: velora-api-prod
   UV_VERSION: "0.12.13"
   NODE_VERSION: "24"
-  FLYCTL_VERSION: "0.4.110"
   VERCEL_CLI_VERSION: "61.1.0"
 
 jobs:
@@ -73,9 +80,62 @@ jobs:
           SHA: ${{ steps.commit.outputs.sha }}
         run: scripts/release-gate "$SHA"
 
+  # The image staging deployed for this commit (D-075: production only gets what
+  # staging proved), copied into production's registry. Staging pushes a plain
+  # Docker manifest; skopeo's --preserve-digests copies its bytes unchanged, where
+  # `docker buildx imagetools create` would wrap it in a new index with a new
+  # digest (seen 21 October 2026). The digest is read back from production's
+  # registry and must equal staging's. Before migrate, so a failed copy changes
+  # nothing. Staging keeps its 10 newest images: an older commit's is gone, and
+  # this stops, saying to deploy it to staging again first (infra/PRODUCTION.md).
+  image:
+    name: image — staging's, copied to production's registry
+    needs: gate
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    environment: production
+    permissions:
+      contents: read
+      id-token: write # GitHub's token, exchanged for the deploy account's (WIF)
+    outputs:
+      image: ${{ steps.copy.outputs.image }}
+    steps:
+      - uses: google-github-actions/auth@7c6bc770dae815cd3e89ee6cdf493a5fab2cc093 # v3.0.0
+        with:
+          workload_identity_provider: ${{ vars.GCP_WIF_PROVIDER }}
+          service_account: ${{ vars.GCP_DEPLOY_SA }}
+
+      - uses: google-github-actions/setup-gcloud@aa5489c8933f4cc7a4f7d45035b3b1440c9c10db # v3.0.1
+
+      # skopeo is the runner image's own (ubuntu-24.04 lists Skopeo 1.13.3); it
+      # reads the registry's credentials from Docker's config, as docker push does.
+      - name: Copy staging's image of this commit, its digest unchanged
+        id: copy
+        env:
+          SHA: ${{ needs.gate.outputs.sha }}
+          PROJECT: ${{ vars.GCP_PROJECT_ID }}
+        run: |
+          src="$GCP_REGION-docker.pkg.dev/$STAGING_GCP_PROJECT/velora/api"
+          dst="$GCP_REGION-docker.pkg.dev/$PROJECT/velora/api"
+          skopeo --version || { echo "::error::No skopeo on this runner."; exit 1; }
+          gcloud auth configure-docker "$GCP_REGION-docker.pkg.dev" --quiet
+          digest="$(gcloud artifacts docker images describe "$src:$SHA" --format='value(image_summary.digest)' || true)"
+          if [[ ! "$digest" =~ ^sha256:[0-9a-f]{64}$ ]]; then
+            echo "::error::Staging's registry has no image for $SHA: it keeps its 10 newest. Deploy this commit to staging again (Actions → Deploy staging, its full SHA), then tag again."
+            exit 1
+          fi
+          skopeo copy --preserve-digests "docker://$src@$digest" "docker://$dst:$SHA"
+          copied="$(gcloud artifacts docker images describe "$dst:$SHA" --format='value(image_summary.digest)')"
+          if [[ "$copied" != "$digest" ]]; then
+            echo "::error::The copy's digest is '$copied', not staging's $digest: production would run an image staging never ran."
+            exit 1
+          fi
+          echo "image: $dst@$digest (staging's, unchanged)"
+          echo "image=$dst@$digest" >> "$GITHUB_OUTPUT"
+
   migrate:
     name: migrate — as the owner, from CI
-    needs: gate
+    needs: [gate, image]
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     environment: production
@@ -92,40 +152,57 @@ jobs:
           cache-dependency-glob: api/uv.lock
 
       # Supabase's session pooler, IPv4, as staging. The owner's credentials
-      # exist only here, never beside the app (D-046). Rewritten by P-49.
+      # exist only here, never on the VM beside the app (D-046).
       - name: alembic upgrade head
         env:
           MIGRATION_DATABASE_URL: ${{ secrets.PRODUCTION_MIGRATION_DATABASE_URL }}
         run: scripts/migrate-with-url
 
-  api:
-    name: api — Fly (until P-49)
-    needs: [gate, migrate]
+  # Production's Mumbai VM, as staging's `vm` job: infra/gce at this commit
+  # copied over IAP, then infra/gce/deploy as root (secrets from Secret Manager,
+  # the worker's settings checked, the API replaced and healthy or put back). The
+  # worker runs only where /etc/velora/worker-on exists (infra/PRODUCTION.md).
+  vm:
+    name: vm — production's Mumbai VM
+    needs: [gate, migrate, image]
     runs-on: ubuntu-24.04
     timeout-minutes: 20
     environment: production
+    permissions:
+      contents: read
+      id-token: write
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           ref: ${{ needs.gate.outputs.sha }}
           persist-credentials: false
 
-      - uses: superfly/flyctl-actions/setup-flyctl@fc53c09e1bc3be6f54706524e3b82c4f462f77be # v1.5
+      - uses: google-github-actions/auth@7c6bc770dae815cd3e89ee6cdf493a5fab2cc093 # v3.0.0
         with:
-          version: ${{ env.FLYCTL_VERSION }}
+          workload_identity_provider: ${{ vars.GCP_WIF_PROVIDER }}
+          service_account: ${{ vars.GCP_DEPLOY_SA }}
 
-      # One machine, which the connection budget assumes (infra/PRODUCTION.md).
-      # Rewritten by P-49.
-      - name: flyctl deploy
+      - uses: google-github-actions/setup-gcloud@aa5489c8933f4cc7a4f7d45035b3b1440c9c10db # v3.0.1
+
+      - name: Deploy to the VM, over IAP
         env:
-          # The image's Sentry release (T-9.12): the commit the gate passed.
-          GIT_SHA: ${{ needs.gate.outputs.sha }}
-          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
-        run: flyctl deploy api --config "$GITHUB_WORKSPACE/infra/fly.api.production.toml" --remote-only --ha=false --build-arg "GIT_SHA=$GIT_SHA"
+          SHA: ${{ needs.gate.outputs.sha }}
+          IMAGE: ${{ needs.image.outputs.image }}
+          PROJECT: ${{ vars.GCP_PROJECT_ID }}
+        run: |
+          rel="$RUNNER_TEMP/velora-release-$SHA"
+          mkdir -p "$rel"
+          git archive "$SHA" infra/gce | tar -x -C "$rel" --strip-components=2
+          gcloud compute scp --project="$PROJECT" --zone="$GCP_ZONE" --tunnel-through-iap \
+            --recurse --quiet "$rel" "$PRODUCTION_VM:/tmp/"
+          gcloud compute ssh "$PRODUCTION_VM" --project="$PROJECT" --zone="$GCP_ZONE" \
+            --tunnel-through-iap --quiet --ssh-key-expire-after=30m \
+            --command "sudo bash /tmp/velora-release-$SHA/deploy production '$IMAGE' $SHA"
 
+  # After the VM, so the web goes live only once the API it calls is current.
   web:
     name: web — Vercel
-    needs: [gate, api]
+    needs: [gate, vm]
     runs-on: ubuntu-24.04
     timeout-minutes: 20
     environment: production
@@ -172,9 +249,11 @@ jobs:
         # workflows, so staging proves what production runs (D-075).
         run: pnpm dlx "vercel@$VERCEL_CLI_VERSION" deploy --prebuilt --prod --archive=tgz
 
+  # Caddy must be what answers at api.veloraapp.co.in: a record left on Fly, or
+  # anything else, fails here.
   smoke:
     name: smoke — production, from the outside
-    needs: [gate, web]
+    needs: [gate, vm, web]
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     environment: production
@@ -188,4 +267,5 @@ jobs:
         env:
           API_URL: ${{ vars.PRODUCTION_API_URL }}
           WEB_URL: ${{ vars.PRODUCTION_WEB_URL }}
+          EXPECT_API_VIA: Caddy
         run: scripts/staging-smoke "$API_URL" "$WEB_URL"

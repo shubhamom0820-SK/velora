@@ -33,7 +33,7 @@ Permanence is granted by the other person, never bought.
 | Cache/queue | Redis + ARQ |
 | HTTP out | httpx (async) — never `requests` |
 | Storage | Cloudflare R2 via aioboto3, presigned URLs only |
-| Hosting | Vercel (web) · one Compute Engine VM per environment in `asia-south1` (api + worker), Docker Compose and Caddy (P-49, D-1020): staging's since P-49, Fly's staging apps idle, not deployed, until P-920 removes them; production's at P-921, until then Fly.io `sin` · Supabase `ap-south-1` · Upstash Mumbai — data stays in India (D-048) |
+| Hosting | Vercel (web) · one Compute Engine VM per environment in `asia-south1` (api + worker), Docker Compose and Caddy (P-49, D-1020): staging's since P-49, Fly's staging apps idle, not deployed, until P-920 removes them; production's releases deploy to its VM since P-921 (staging's image, by digest), Fly's empty `velora-api` until P-920 · Supabase `ap-south-1` · Upstash Mumbai — data stays in India (D-048) |
 | Tooling | uv, ruff, mypy, pytest, pnpm, eslint, prettier, vitest + Testing Library, Playwright, pre-commit, gitleaks — D-039, D-042 |
 
 ## Repo layout

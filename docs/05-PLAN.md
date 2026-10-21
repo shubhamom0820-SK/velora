@@ -7471,6 +7471,31 @@ The number comes from the session's own block, given in its brief, from P-100 up
   18 October 2026.
   **Production's Fly path must be replaced before P-920's second commit removes it** (the founder,
   18 October 2026); the release gate also refuses today without Vercel Pro and Supabase Pro.
+  **Built, 21 October 2026 (the founder's approval of the plan, on the advisor's recommendation,
+  relayed; Claude in block P-970 to P-979, D-1070 to D-1079):**
+  - `deploy-production.yml`: Fly's job gone; `image` copies the image staging deployed for the
+    tagged commit from staging's registry to production's with `skopeo copy --preserve-digests`
+    and fails unless production's registry reports the same digest, before `migrate`; `vm` deploys
+    it to `velora-api-prod`; `web` after `vm`; `smoke` with `EXPECT_API_VIA=Caddy`. Not
+    `docker buildx imagetools create`, which the approved plan named: staging pushes a plain
+    Docker v2 manifest, which it wraps in a new index with a new digest (seen on a loopback
+    registry, 21 October 2026); skopeo 1.13.3, the runner image's own, copied it byte for byte.
+  - `/privacy`: "Every request you make is handled by our servers in Mumbai, India.", pinned by
+    `legal-pages.test.tsx` with no "Singapore" anywhere on the page.
+  - `scripts/gcp-secrets`: `SENTRY_DSN` required in both comparisons, as the deploy requires it
+    (T-9.12); `gcp-secrets-test` holds it. Its `:` split was already fixed (281bde0, P-49): broken
+    back to `:` on purpose, the test failed with the 18 October symptom (`out/p-921-break-runs.log`).
+  - `infra/PRODUCTION.md` rewritten for the VM: the release's copy and its 10-image window, the
+    budget (17 of 20), secrets in Secret Manager, §1 and §2 for both cases (create, or use what
+    exists), velora-prod checked to hold no data before any migration, R2's token rotated and the
+    old revoked, §4 the VM, the worker after the first migration, the rehearsal, §6's `api` A record.
+  **The founder's steps** are `infra/PRODUCTION.md` §1 to §7. **Razorpay refused the account** (21
+  October 2026), so production deploys with payments off once P-971 lands; the rehearsal waits for
+  it, not for Razorpay. **Ticks when** this lands and `main`'s staging deploy is green; the
+  founder's §1 to §7 are done; and the rehearsal (§4) passes from outside: the same digest in
+  production's registry, Caddy's certificate for `api.veloraapp.co.in`, `Via: 1.1 Caddy`,
+  `/readyz` ok, `/v1/admin/metrics` a 401 with no data, the schema and docs hidden, only 80 and
+  443 open. The worker and the workflow's first run are REL-1's.
 - [ ] P-922 · Nobody is told when a VM is down. **Before real users.** Worst case: production's
   only VM stops, or Caddy can't renew its certificate, and the first to notice is a user. Fly
   didn't alert either. An uptime check on `/readyz` from outside (Google Cloud Monitoring's, or
@@ -7982,3 +8007,19 @@ The number comes from the session's own block, given in its brief, from P-100 up
   skips photos approved within that hour or queues under an id of its own. Its cost in Redis
   commands against D-091's budget is part of the plan. Filed by Claude building P-962, 20 October
   2026, at the founder's direction; its block.
+- [ ] P-970 · Production gets a Sightengine account of its own. **Before real traffic.** Worst
+  case: staging's testing and production's real photos share one account's quota and one set of
+  keys, so a staging burst stops production's moderation (new photos stuck at `pending`), and a
+  staging key leak exposes production's moderation too. Until then production uses staging's
+  account (the founder, 21 October 2026; `infra/PRODUCTION.md` §4). Fix: a production account,
+  its two values into the Keychain (`velora-production`) and Secret Manager by `scripts/gcp-secrets
+  production`, the next release. Filed by Claude building P-921, 21 October 2026, at the founder's
+  direction; its block.
+- [ ] P-971 · Production deploys with payments explicitly off. **Before P-921's rehearsal, so before
+  REL-1.** Worst case without it: production can't deploy at all, since Razorpay refused the account
+  (21 October 2026) and the VM's deploy requires its three keys; or someone stores placeholder keys
+  to get past the check, and men tap a pack and meet a 503. **Planned, not approved yet** (Claude
+  building P-921, at the founder's request): `PAYMENTS_PROVIDER=off`, an allowlist value as push's
+  (D-856); keys required at startup when it is `razorpay` (closing P-382); the deploy's required
+  secret list following the setting; and the store saying purchases are coming soon, told by the
+  server. Filed by Claude building P-921, 21 October 2026; its block.

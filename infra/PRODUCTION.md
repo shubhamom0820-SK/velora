@@ -5,26 +5,25 @@
 > is public and crawled, takes real sign-ups, and is plainly commercial. Production itself was
 > built and proved in T-2.6; everything else can be set up ahead of the release.
 >
-> **The API's half is temporary.** Fly has no region in India, so the API runs in Singapore
-> while Postgres and Redis are in Mumbai. P-49 moves it to a Compute Engine VM in Mumbai before
-> Sprint 4 and redoes every Fly part of this page (the end of this page lists them).
+> **Mumbai (P-921, D-1020):** the API and the worker run on a Compute Engine VM in Mumbai,
+> `velora-api-prod`, beside Postgres and Redis, exactly as staging's do since P-49. A release
+> deploys the image staging ran, by its digest. Fly's `velora-api` is not deployed any more and
+> goes with P-920.
+>
+> **Payments: Razorpay refused the account** (21 October 2026: "Dating or matrimony platform.
+> Razorpay doesn't currently support this category."). Other gateways are being applied to, which
+> may take weeks. Production deploys only with payments explicitly off until one is live: P-971
+> builds that. Until it lands, the VM's deploy stops at the missing Razorpay keys (§4).
 
 How production is set up, released and checked (T-2.6, D-074, D-075). It copies staging's shape
 (`infra/STAGING.md`): this page names production's pieces and says what differs. Where it says "as
 staging", follow `infra/STAGING.md` with these names.
 
-> **Moving to Mumbai (P-49, D-1020): not yet deployed to.** Production's Google Cloud project
-> `velora-ic-prod` and its VM `velora-api-prod` (`e2-medium`, `asia-south1-a`, static IP
-> `34.180.56.204`) exist, with WIF for GitHub's `production` environment and 16 Secret Manager
-> slots: the four keys and a VAPID pair generated fresh (18 October 2026), R2's pair set, the
-> database, Redis, Razorpay and Sightengine values not yet. Nothing deploys there, and
-> `api.veloraapp.co.in` still points at Fly, until P-921. This page describes Fly until then.
-
 ## What runs where
 
 | Piece | Where | Name |
 |---|---|---|
-| API | Fly.io, `sin`, **until P-49** | app `velora-api` → `https://api.veloraapp.co.in` |
+| API and worker | Compute Engine, Mumbai (`asia-south1-a`; D-1020), project `velora-ic-prod` | VM `velora-api-prod`, `e2-medium`, static IP `34.180.56.204`, behind Caddy → `https://api.veloraapp.co.in` (§4) |
 | Web | Vercel, its own project | `velora-production` → `https://veloraapp.co.in`; `www.` and the project's own address, `velora-production-one.vercel.app`, redirect there (308) |
 | DNS | Cloudflare | zone `veloraapp.co.in`, records DNS-only (§6) |
 | Postgres | Supabase, Mumbai (`ap-south-1`) | project `velora-prod`, in an organisation of its own |
@@ -40,8 +39,8 @@ release, the moment production is public and holds real sign-ups.
 |---|---|---|
 | Vercel, team `knot11` | Hobby, $0 | **Pro, $20**, covering staging's project too (P-0.15). Hobby is "non-commercial personal use only" in Vercel's own terms |
 | Supabase `velora-prod` | Free, $0 | **Pro, $25** in its own organisation, whose included compute covers this one project (P-0.16). Free keeps no backups |
-| Fly `velora-api` | $0: no machine until the first release | **Temporary:** one `shared-cpu-1x` machine with 512 MB, about $3 to $4 at Fly's published rate, the second Fly machine on the bill after staging's. It goes when P-49 moves the API |
-| Upstash `velora-prod` | free tier | Fly's `/readyz` check alone pings Redis every 15 s, about 173,000 commands a month: check that against the free allowance when creating it |
+| The VM `velora-api-prod` | about $35.25 at list prices (D-1020): the `e2-medium` $29.40, its disk and static IP; Secret Manager and Artifact Registry under $1 each | the same: it runs from the day it exists |
+| Upstash `velora-prod` | free tier | the API's healthcheck (`infra/gce/compose.yml`, every 15 s) pings Redis, about 173,000 commands a month: check that against the free allowance when creating it |
 | R2 | $0: the buckets exist, empty (T-4.1) | at Cloudflare's R2 rates, not yet read against what photos will cost: check before the release |
 
 ## How a release happens
@@ -62,8 +61,17 @@ A release is deliberate: a tag `v*` on a commit of `main`. Nothing else deploys 
      the token expires within 30 days**. And it **refuses while either paid plan is missing**:
      the Vercel team must be on Pro (P-0.15), and velora-prod's Supabase organisation, read
      through the project itself, on a paid plan with backups (P-0.16).
-   - **migrate**, **api**, **web**: as staging, with production's secrets.
-   - **smoke** runs `scripts/staging-smoke` against production, bodies included. Its canonical
+   - **image** copies the image staging deployed for that commit from staging's registry to
+     production's, by `skopeo copy --preserve-digests`, and **fails unless production's registry
+     reports the same digest**: production runs the bytes staging ran. Staging's registry keeps
+     only its 10 newest images, so an older commit's may be gone: the job then says so, and the
+     fix is to deploy that commit to staging again (Actions → Deploy staging, its full SHA) and
+     push the tag again. Before **migrate**, so a failed copy changes nothing.
+   - **migrate**: as staging, with production's owner credentials.
+   - **vm** runs `infra/gce/deploy production` on the VM over IAP, as staging's `vm` job (§4).
+   - **web**, after **vm**: as staging, with production's project.
+   - **smoke** runs `scripts/staging-smoke` against production, bodies included, with
+     `EXPECT_API_VIA=Caddy`, so `api.veloraapp.co.in` must be the VM's Caddy. Its canonical
      check fails if the web was built for any other address: a valid but wrong `APP_ENV`
      (`next build` already refuses an unknown one).
 
@@ -86,6 +94,8 @@ Each blocks the release, not the build:
   (see "The keys" below).
 - **DNS for the apex and `www`** (§6), added on release day: before then nothing should answer
   at `veloraapp.co.in`.
+- **The worker, after the release's migration, never before** (§4): its minute loops read tables
+  an unmigrated database doesn't have.
 - **P-70, P-71 and P-69,** found building T-3.14, all on REL-1's Needs line: the phone screen
   saying, before anything is typed, that it takes Indian mobile numbers only, so a foreign
   number's digits never text a stranger in India; `/privacy` naming reCAPTCHA, which `/login`
@@ -108,20 +118,32 @@ beside them, so none blocks a release that doesn't need it:
 
 ## Database connections: the budget
 
-Staging's table, unchanged: 2 workers × (`DB_POOL_SIZE` 5 + `DB_MAX_OVERFLOW` 2) = **14**, one
-machine (`--ha=false`), and `velora_api` capped at **20** on the role. Redo the sum whenever
-workers, machines or pools change.
+Staging's table (`infra/STAGING.md`), unchanged: the API's 2 uvicorn workers × (`DB_POOL_SIZE` 5
++ `DB_MAX_OVERFLOW` 2) = **14**, set in `infra/gce/production.env`, and the worker's 1 process ×
+(2 + 1) = **3**, set in `infra/gce/compose.yml`: **17**, under `velora_api`'s cap of **20** on
+the role. One VM, one API container, one worker. Redo the sum whenever workers, containers or
+pools change.
 
 ## Secrets
 
 The rules are staging's ("How secrets get set"): never printed, never an argument, never from the
-clipboard. Generate everything fresh; **never copy a value from staging**. Startup refuses the
-repo's public test keys, but it can't know a copy of staging's.
+clipboard. **They live in Secret Manager in `velora-ic-prod`, stored in `asia-south1` only**
+(D-1022), one secret per setting, the names in `infra/gce/secrets.api` and `secrets.worker`; the
+VM reads them at each deploy into root-only files. **`scripts/gcp-secrets production`** (the
+founder, on his Mac, from the repo root) puts them there with the Keychain's copy, every copy
+compared by SHA-256 prefix, and refuses a generated key that equals staging's. Generate
+everything fresh; **never copy a value from staging**. Startup refuses the repo's public test
+keys, but it can't know a copy of staging's. **Two deliberate exceptions, accounts not keys:**
+R2's account (its token is production's own, §3) and Sightengine's, shared with staging for now
+(the founder, 21 October 2026; production's own account before real traffic, P-970).
 
 - **The Keychain service is `velora-production`**, with the same accounts as staging's:
   `db-owner`, `velora-api-db`, `jwt-secret`, `phone-pepper`, `phone-enc-key`, `code-pepper`.
-- **After setting the four keys,** read their shapes on the machine (lengths only) and compare
-  each with its stored copy by SHA-256, first 8 hex characters, as T-3.1 did for staging.
+- **The four keys and the VAPID pair were generated fresh on 18 October 2026** by
+  `scripts/gcp-secrets production` (P-49), into the Keychain and Secret Manager, each compared by
+  SHA-256 prefix and checked to differ from staging's. Production has never served a user and
+  Fly's `velora-api` held nothing, so nothing was encrypted under any earlier key (the founder,
+  21 October 2026).
 - **Web Push's pair (T-9.4, D-856):** `VAPID_PRIVATE_KEY` and `VAPID_PUBLIC_KEY`, made fresh by
   staging's commands (STAGING.md §4) with `velora-production` and the production app, never
   staging's pair. Push is off until D-857 is decided (`PUSH_PROVIDER = "off"`, no keys needed).
@@ -140,7 +162,7 @@ repo's public test keys, but it can't know a copy of staging's.
 ## The keys: what exists, what each protects, what losing one costs
 
 Read this before touching any key during an incident. It lists consequences, never values. The
-values live in three places: Fly's secrets for `velora-api` (they move, unchanged, with P-49), the
+values live in three places: Secret Manager in `velora-ic-prod` (D-1022), the
 Keychain service `velora-production` on the founder's Mac, and **Apple Passwords, synced through
 iCloud** (named by the founder on 3 October 2026, with iCloud sync confirmed on in System
 Settings). The Passwords copy depends on the founder's Apple Account, not on this Mac, so it
@@ -161,22 +183,59 @@ a leaked one first, then make a new one:
 
 | Secret | What it opens | Replace by |
 |---|---|---|
-| `DATABASE_URL` (`velora_api`'s password) | Rows, as the app | A new password on the role in Supabase, then Fly's secret |
+| `DATABASE_URL` (`velora_api`'s password) | Rows, as the app | A new password on the role in Supabase, then a new version in Secret Manager (`scripts/gcp-secrets production`) and the next deploy |
 | `PRODUCTION_MIGRATION_DATABASE_URL` (the owner) | The whole database, including switching off the ledger's guards (D-046) | A new database password in Supabase, then GitHub's secret |
-| `REDIS_URL` | Rate limits and sign-in codes | Upstash's credential reset, then Fly's secret |
+| `REDIS_URL` | Rate limits and sign-in codes | Upstash's credential reset, then a new version in Secret Manager and the next deploy |
 | `VERCEL_TOKEN` | Deploying anything to the production site | A new one-year token, then GitHub's secret |
-| `FLY_API_TOKEN` | Deploying anything to `velora-api` | `fly tokens create deploy -a velora-api` **with a shorter expiry than Fly's default of 20 years**, set at REL-1 (the founder, 4 October 2026: here the consequence is real; staging's keep the default on purpose), piped into GitHub's secret |
+| `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY` | Production's two buckets, read and write | A new token in Cloudflare scoped to them (§3), into Secret Manager, then revoke the old one |
 | `SUPABASE_ACCESS_TOKEN` | Reading velora-prod and its organisation, nothing else (scoped) | A new scoped token, then GitHub's secret |
+
+**No deploy key exists** (D-1022): GitHub's `production` jobs sign in by Workload Identity
+Federation, as `velora-deploy-prod`, which is root on the VM and may read staging's registry, and
+nothing else. To stop all deploys at once, remove that account's `workloadIdentityUser` binding.
 
 ## First-time setup
 
 ### 1. Supabase
 
-A new **organisation of its own**, so that upgrading it to Pro (P-0.16) pays for this project
-alone, and in it the project `velora-prod`, region Mumbai, on Free until the release. Then staging's
-steps 2 to 7 exactly: the extensions, the Data API off, the two connection strings, the roles
-(`velora_api` with a fresh password, `connection limit 20`), and both SQL checks after the first
-release.
+**If `velora-prod` doesn't exist yet,** create a new **organisation of its own**, so that
+upgrading it to Pro (P-0.16) pays for this project alone, and in it the project `velora-prod`,
+region Mumbai (`ap-south-1`), on Free until the release. Keep the database password in the
+Keychain (service `velora-production`, account `db-owner`) and Apple Passwords.
+
+**If it exists, use it.** Either way, **before anything else, and before any migration, check
+it holds no data** (the founder, 21 October 2026): in its SQL editor, this lists every table in
+`public` that has rows, and must return **no rows**. Any row it returns is data production was
+never meant to hold: stop there and tell Claude before going further.
+
+```sql
+select table_name, row_count from (
+  select table_name, (xpath('/row/n/text()', query_to_xml(
+           format('select count(*) as n from public.%I', table_name), false, true, '')))[1]::text::bigint as row_count
+  from information_schema.tables
+  where table_schema = 'public' and table_type = 'BASE TABLE'
+) as counted
+where row_count > 0;
+```
+
+Then staging's steps 2 to 5 (`infra/STAGING.md` §1), with production's names: the extensions
+(`postgis`, `pg_trgm`, `citext`); the Data API **off**; the two connection strings, as
+`postgresql+asyncpg://…?ssl=require`, the **direct** one (`db.<ref>.supabase.co:5432`, the
+app's, as `velora_api`: the VM reaches it over IPv6) and the **session pooler** (the owner's,
+for migrations, `PRODUCTION_MIGRATION_DATABASE_URL`, §7); and the two roles, by staging's SQL
+exactly, `velora_api` with a fresh password and `connection limit 20`:
+
+```sql
+create role velora_app nologin;
+create role velora_api login connection limit 20 password '<generated>' in role velora_app;
+alter role velora_api set search_path = public, extensions;
+```
+
+Generate the password into the Keychain first, never on screen (service `velora-production`,
+account `velora-api-db`; `openssl rand -hex 32`, stored by `security -i` reading the command on
+stdin, as staging's), then paste it into the SQL editor only. The direct URL then goes into Secret
+Manager at `scripts/gcp-secrets production`'s hidden prompt (§4). Staging's steps 6 and 7, the
+role's checks and the API roles' grants, run after the release's first migration.
 
 Then, for the release gate (D-075), a **scoped access token** (Account → Access Tokens), never a
 classic one, which carries the account's full power over every project. It needs read access to
@@ -188,7 +247,10 @@ a variable (§7).
 
 ### 2. Upstash
 
-Redis database `velora-prod`, region Mumbai, TLS on. Copy its `rediss://…` URL.
+**If `velora-prod` doesn't exist yet,** create the Redis database `velora-prod`, region Mumbai,
+TLS on. **If it exists, use it**, after checking it is in Mumbai with TLS on. Either way, its
+`rediss://…` URL goes into Secret Manager at `scripts/gcp-secrets production`'s hidden prompt
+(§4), never on screen.
 
 ### 3. Cloudflare R2
 
@@ -197,19 +259,23 @@ line is as binding: `velora-prod-public` and `velora-prod-private`, location hin
 (APAC), Standard storage class.
 
 - **The public bucket is served only at `cdn.veloraapp.co.in`**, its custom domain
-  (`PUBLIC_CDN_URL` in `infra/fly.api.production.toml`); the private bucket has no domain.
+  (`PUBLIC_CDN_URL` in `infra/gce/production.env`); the private bucket has no domain.
 - **Minimum TLS 1.2 on that domain, not the default 1.0:** 1.0 is broken and these serve users'
   photos; 1.3 would have excluded older Android phones that only speak 1.2. Read from outside by
   Claude on 4 October 2026: 1.0 and 1.1 refused by the server, 1.2 and 1.3 accepted.
 - **One Account API token, Object Read & Write, scoped to these two buckets only**: it can't touch
   staging's (the founder's report; not yet proved by its effect, since the token isn't anywhere
   Claude can use it: see below). Staging's token is proved refused here (`infra/STAGING.md` §3).
-- **Its two values are not a Fly secret yet.** They go in before REL-1 (§4): until then
-  production's API, if started, refuses to start. They are in the login Keychain, service
-  `velora-prod`, accounts `r2-access-key-id` and `r2-secret-access-key` (the founder; the item
-  names read by Claude on 4 October 2026, never the values). The token's TTL is Forever, so
-  **it is rotated before the first production deploy** (the founder, on REL-1's list), and the
-  rotated values are the ones that go to Fly.
+- **Its two values are in Secret Manager** (`R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY`, from the
+  login Keychain, service `velora-prod`, accounts `r2-access-key-id` and `r2-secret-access-key`,
+  by `scripts/gcp-secrets production` on 18 October 2026). That token's TTL is Forever, so **it is
+  rotated before the first deploy to the VM** (the founder, 21 October 2026): in Cloudflare → R2 →
+  Manage API tokens, a new Account API token, **Object Read & Write, scoped to
+  `velora-prod-public` and `velora-prod-private` only**; its two values into the Keychain's two
+  accounts above, replacing the old ones (`security -i`, never on screen); `scripts/gcp-secrets
+  production` then stores them as new versions and compares every copy; and only then **revoke
+  the old token** in Cloudflare. Proved by its effect, as staging's: a write to staging's bucket
+  with the new token is refused.
 - **The private bucket's CORS rule, before REL-1** (T-4.6, on REL-1's Needs line): staging's
   (`infra/STAGING.md` §3) with production's origin, set by the founder in R2 →
   `velora-prod-private` → Settings → CORS policy, exactly:
@@ -217,23 +283,73 @@ line is as binding: `velora-prod-public` and `velora-prod-private`, location hin
   Without it no browser can upload a photo, so nobody gets past the photos step. Checked as
   staging's is, by a preflight from `https://veloraapp.co.in`.
 
-### 4. Fly (until P-49)
+### 4. The Mumbai VM (P-49, P-921, D-1020 to D-1023)
 
-1. The app `velora-api`, in the paid organisation. Its settings are in
-   `infra/fly.api.production.toml`; CI starts the image with them on every push.
-2. **Secrets:** `DATABASE_URL` (the direct connection, as `velora_api`), `REDIS_URL`,
-   `JWT_SECRET` (`openssl rand -hex 64`), and `PHONE_PEPPER`, `PHONE_ENC_KEY` and `CODE_PEPPER`
-   (`openssl rand -hex 32` each); and **before REL-1**, R2's token for production's pair,
-   `R2_ACCESS_KEY_ID` and `R2_SECRET_ACCESS_KEY` (§3), without which the API refuses to start
-   (T-4.1). The owner's credentials are not a Fly secret.
-3. A **deploy token for this app only**, into GitHub (§7).
+| Piece | Where | Name |
+|---|---|---|
+| Project | Google Cloud, billing account `01C4E8-84A5D8-4255F2`, no organisation (D-1023) | `velora-ic-prod` |
+| VM | Compute Engine `asia-south1-a`, `e2-medium`, Debian 12 | `velora-api-prod`, static IP `34.180.56.204` |
+| On it | Docker Compose (`infra/gce/compose.yml`): `api`, `worker` (only where `/etc/velora/worker-on` exists), `caddy` | Caddy serves the hosts in `infra/gce/production.edge.env` |
+| Images | Artifact Registry, `asia-south1` | `asia-south1-docker.pkg.dev/velora-ic-prod/velora/api`, copied from staging's by digest |
+| Secrets | Secret Manager, stored in `asia-south1` only | one per setting, the names in `infra/gce/secrets.api` and `secrets.worker` |
+
+Built by the founder's own commands on 16 to 18 October 2026 (P-49, `out/`): the VPC (TCP 80 and
+443 in, 22 from IAP only), the static IP, the deploy and VM accounts, the registry, Secret
+Manager's slots and WIF for GitHub's `production` environment. Everything else is staging's
+("The Mumbai VM", `infra/STAGING.md`), with production's names: how it deploys, getting in, the
+tools inside the API's container, and how the VM itself is set up.
+
+**Secrets:** `scripts/gcp-secrets production`, on the founder's Mac, from the repo root. It keeps
+what is set, asks at hidden prompts for the rest (Enter skips one not ready), and ends by comparing
+every copy. **Before a deploy can pass, every required name has a value:** `DATABASE_URL` (§1),
+`REDIS_URL` (§2), `SENTRY_DSN` (`infra/OBSERVABILITY.md` §1), R2's rotated pair (§3),
+Sightengine's two (staging's account for now: from the Keychain service `velora-staging`, P-970),
+and Razorpay's three until P-971 lets production deploy with payments off. The deploy names the
+first one missing (`… has no value in Secret Manager`) and changes nothing. Then copy every
+`velora-production` Keychain entry into Apple Passwords.
+
+**The worker:** off until the first release's migration has run, so its minute loops never meet
+an empty schema. Then, on the founder's word, over IAP:
+
+```
+gcloud compute ssh velora-api-prod --project=velora-ic-prod --zone=asia-south1-a --tunnel-through-iap \
+  --command "sudo touch /etc/velora/worker-on && sudo docker compose -p velora --project-directory /opt/velora/current -f /opt/velora/current/compose.yml --profile worker up -d worker"
+```
+
+Every later deploy keeps it running; removing the file and the next deploy stops it.
+
+**The rehearsal, before REL-1 (P-921):** the release gate refuses until both paid plans exist,
+so the workflow's first run would be the release itself. The founder runs its `image` and `vm`
+steps by hand from **Cloud Shell** (Google's network, his own account; never Docker Desktop,
+P-924), with the commit `main`'s staging deploy last ran, the worker off:
+
+```
+SHA=<main's commit, the full 40 hex, deployed to staging>
+src=asia-south1-docker.pkg.dev/velora-ic-staging/velora/api
+dst=asia-south1-docker.pkg.dev/velora-ic-prod/velora/api
+gcloud auth configure-docker asia-south1-docker.pkg.dev --quiet
+sudo apt-get install -y skopeo
+digest="$(gcloud artifacts docker images describe "$src:$SHA" --format='value(image_summary.digest)')"
+skopeo copy --preserve-digests "docker://$src@$digest" "docker://$dst:$SHA"
+[ "$(gcloud artifacts docker images describe "$dst:$SHA" --format='value(image_summary.digest)')" = "$digest" ] && echo "same digest" || echo "STOP: the digest changed"
+git clone --filter=blob:none https://github.com/shubhamom0820-SK/velora.git && cd velora && git checkout -q "$SHA"
+rel="/tmp/velora-release-$SHA"; mkdir -p "$rel" && git archive "$SHA" infra/gce | tar -x -C "$rel" --strip-components=2
+gcloud compute scp --project=velora-ic-prod --zone=asia-south1-a --tunnel-through-iap --recurse --quiet "$rel" velora-api-prod:/tmp/
+gcloud compute ssh velora-api-prod --project=velora-ic-prod --zone=asia-south1-a --tunnel-through-iap --command "sudo bash /tmp/velora-release-$SHA/deploy production '$dst@$digest' $SHA"
+```
+
+Then Claude checks from outside, read-only: Caddy's certificate for `api.veloraapp.co.in`,
+`Via: 1.1 Caddy`, `/readyz` with Postgres and Redis ok (it checks the connections, not the
+schema), `/v1/admin/metrics` refused with a 401 and no data, the schema and docs hidden, only 80
+and 443 answering. The web's checks wait for release day, when the apex gets its DNS.
 
 ### 5. Vercel
 
 1. The project `velora-production`, not connected to Git, framework Next.js, Node 24, in the team
    `knot11`.
 2. **Environment Variables → Production:** `NEXT_PUBLIC_API_URL` = `https://api.veloraapp.co.in`
-   and `APP_ENV` = `production`, **both Config, not Secret**. `next build` refuses an `APP_ENV`
+   and `APP_ENV` = `production`, **both Config, not Secret**; and `NEXT_PUBLIC_SENTRY_DSN`, the
+   `velora-web` project's DSN, also Config (`infra/OBSERVABILITY.md` §1, its command). `next build` refuses an `APP_ENV`
    it doesn't know, including the `[SENSITIVE]` that a Secret pulls back as.
 3. **Domains:** `veloraapp.co.in`; `www.veloraapp.co.in` redirecting to it (308); and the
    project's own `vercel.app` address redirecting to it. Left serving, that address would be an
@@ -245,12 +361,20 @@ line is as binding: `velora-prod-public` and `velora-prod-private`, location hin
 
 | Type | Name | Target | Read from | When |
 |---|---|---|---|---|
-| CNAME | `api` | `nwjo8lz.velora-api.fly.dev` | `fly certs setup api.veloraapp.co.in -a velora-api` | any time: nothing calls it until the release |
+| A | `api` | `34.180.56.204` (the VM's static IP), **DNS only**, no AAAA: the VM takes nothing in over IPv6 | `gcloud compute addresses list --project=velora-ic-prod` | before the rehearsal (§4): nothing calls it until the release |
 | CNAME | `@` (the apex) | `f5c6be5b7918e5ec.vercel-dns-017.com` | Vercel's API, `recommendedCNAME` rank 1 | release day |
 | CNAME | `www` | `f5c6be5b7918e5ec.vercel-dns-017.com` | the same, for `www.veloraapp.co.in` | release day |
 
-Each target was read by Claude on 3 October 2026, the Vercel ones with
+The Vercel targets were read by Claude on 3 October 2026 with
 `pnpm dlx vercel api "/v6/domains/<domain>/config?projectIdOrName=velora-production"`.
+
+**Moving `api` from Fly's CNAME (P-921), in Cloudflare → `veloraapp.co.in` → DNS:** edit the
+existing `api` CNAME (to `nwjo8lz.velora-api.fly.dev`) and set its TTL to 1 min; at least 10
+minutes later, delete it and add **A · `api` · `34.180.56.204` · DNS only · TTL 1 min**. Read it
+back: `dig +short api.veloraapp.co.in @1.1.1.1` and `@8.8.8.8` answer `34.180.56.204`. Caddy
+asks Let's Encrypt for the certificate as soon as the VM's first deploy runs and the name points
+there; until then its attempts fail and it retries on a backoff. When the rehearsal passes, the
+TTL can go back to Auto.
 
 - **Read each target from the platform; never assume it,** as staging's.
 - **DNS only (grey cloud),** as staging's.
@@ -271,13 +395,21 @@ an environment that doesn't exist creates it, without the rule.
 | Kind | Name | Value |
 |---|---|---|
 | Secret | `PRODUCTION_MIGRATION_DATABASE_URL` | the **session pooler** connection, as the owner |
-| Secret | `FLY_API_TOKEN` | Fly's deploy token for `velora-api` |
+| Secret | `FLY_API_TOKEN` | Fly's deploy token for `velora-api`: unused since P-921, removed by P-920 |
 | Secret | `VERCEL_TOKEN` | the one-year token above |
 | Secret | `VERCEL_ORG_ID`, `VERCEL_PROJECT_ID` | from the Vercel project |
 | Secret | `SUPABASE_ACCESS_TOKEN` | the scoped, read-only token (§1), for the gate's plan check |
 | Variable | `PRODUCTION_API_URL` | `https://api.veloraapp.co.in` |
 | Variable | `PRODUCTION_WEB_URL` | `https://veloraapp.co.in` |
 | Variable | `SUPABASE_PROJECT_REF` | `velora-prod`'s ref, from its URL |
+| Variable | `GCP_PROJECT_ID` | `velora-ic-prod` |
+| Variable | `GCP_WIF_PROVIDER` | the provider's full name: `gcloud iam workload-identity-pools providers describe velora --location=global --workload-identity-pool=github --project=velora-ic-prod --format='value(name)'` |
+| Variable | `GCP_DEPLOY_SA` | `velora-deploy-prod@velora-ic-prod.iam.gserviceaccount.com` |
+
+None of the three is secret: GitHub's token for this environment, from a `v*` tag only, is what
+WIF accepts (D-1022). Read on 21 October 2026, names only: the environment held `FLY_API_TOKEN`,
+`VERCEL_ORG_ID`, `VERCEL_PROJECT_ID`, `PRODUCTION_API_URL` and `PRODUCTION_WEB_URL`; the rest of
+this table is still to set.
 
 ### 8. Firebase: `velora-ic`, which staging shares
 
@@ -319,21 +451,24 @@ staging and production at once.**
 The smoke job is the check. By hand:
 
 ```
-scripts/staging-smoke https://api.veloraapp.co.in https://veloraapp.co.in
+EXPECT_API_VIA=Caddy scripts/staging-smoke https://api.veloraapp.co.in https://veloraapp.co.in
 ```
 
-The first release's own checks are T-2.6's Done-when.
+A configuration error stops the container with the message: read it in the `vm` job's log, or on
+the VM (`sudo docker compose -p velora logs api`). The first release's own checks are T-2.6's
+Done-when.
 
 ## Looking at selfies (D-264)
 
 Until P-160 measures the face-match threshold, the founder looks at every selfie decision
 (D-260: face matching alone doesn't stop a man holding a woman's photos and one real selfie of
-her). From his own terminal, behind Fly's login:
+her). From his own terminal, through IAP by his OS Login (§4):
 
 ```
-flyctl ssh console -a velora-api -C "python -m app.tools.selfie_review"
-flyctl ssh console -a velora-api -C "python -m app.tools.selfie_review --verdict <id> same"
-flyctl ssh console -a velora-api -C "python -m app.tools.selfie_review --undo <id> --by <your id> --reason '<why>'"
+gcloud compute ssh velora-api-prod --project=velora-ic-prod --zone=asia-south1-a --tunnel-through-iap
+sudo docker compose -p velora exec -T api python -m app.tools.selfie_review
+sudo docker compose -p velora exec -T api python -m app.tools.selfie_review --verdict <id> same
+sudo docker compose -p velora exec -T api python -m app.tools.selfie_review --undo <id> --by <your id> --reason '<why>'
 ```
 
 It lists each decision of the last 7 days without a verdict, newest first, with the selfie and
@@ -349,15 +484,3 @@ signed in, to take it again, and a man keeps `done`; `--by` is your own admin id
 
 The links print, unlike `storage_probe`'s output, on purpose (D-264): never paste them anywhere,
 and never run this into a log or a chat. Claude runs it only on its own test accounts' selfies.
-
-## What P-49 redoes
-
-Moving the API to Mumbai replaces, for production:
-
-- the Fly app `velora-api` and its machine, and `infra/fly.api.production.toml`;
-- its secrets, moved with the **same values**: new keys would make every stored phone number and
-  PIN unreadable;
-- the `api` record at Cloudflare;
-- the `api` and `migrate` jobs in `deploy-production.yml`, and §4 and the Fly line above.
-
-The web, the gate, the smoke check and the domains stay.

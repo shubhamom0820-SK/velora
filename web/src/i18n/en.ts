@@ -1673,8 +1673,10 @@ export const en = {
           "If you joined the waitlist, your email and city are stored in Mumbai, India, too.",
         // P-0.3: one Zoho Mail user in its India data centre (D-048 holds).
         mail: "If you write to our support or grievance address, your email is kept by Zoho, in India.",
+        // D-1020: the API and the worker run in Mumbai, staging since P-49 and
+        // production since P-921, which changed this line in the same commit.
         servers:
-          "Every request you make is handled by our servers in Singapore.",
+          "Every request you make is handled by our servers in Mumbai, India.",
         media:
           "Your photos, face photo, selfie, voice notes and private album are stored by Cloudflare, outside India.",
         // Deleted after the check: Sightengine's default, which T-4.4 must
